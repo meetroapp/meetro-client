@@ -1,4 +1,5 @@
 import { authFetch } from "./authFetch.js";
+import { normalizePreWorkDepositGate } from "./preWorkDepositApi.js";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -375,7 +376,7 @@ export function normalizeCanonicalVisitAuthority(
   const stateAllowed =
     purpose === "EVALUATION"
       ? ["AVAILABLE", "ACTIVE", "UNAVAILABLE"].includes(value.state)
-      : ["AVAILABLE", "ACTIVE"].includes(value.state);
+      : ["AVAILABLE", "ACTIVE", "LOCKED"].includes(value.state);
   const evaluationId = canonicalUuid(value.evaluationId, { nullable: true });
   const quoteId = canonicalUuid(value.quoteId, { nullable: true });
   const approvedQuoteDecisionId = canonicalUuid(
@@ -386,6 +387,9 @@ export function normalizeCanonicalVisitAuthority(
     value.issuedQuoteVersion == null
       ? null
       : positiveInteger(value.issuedQuoteVersion);
+  const deposit = purpose === "APPROVED_WORK"
+    ? normalizePreWorkDepositGate(value.deposit)
+    : null;
   const hasCompleteCapabilities =
     CUSTOMER_CAPABILITIES.every((capability) =>
       customerCapabilities?.includes(capability)
@@ -415,7 +419,9 @@ export function normalizeCanonicalVisitAuthority(
       (quoteId !== expectedSubjectId ||
         evaluationId ||
         !approvedQuoteDecisionId ||
-        !issuedQuoteVersion))
+        !issuedQuoteVersion ||
+        !deposit ||
+        (value.state === "LOCKED") !== deposit.schedulingLocked))
   ) {
     return null;
   }
@@ -429,6 +435,7 @@ export function normalizeCanonicalVisitAuthority(
     quoteId,
     approvedQuoteDecisionId,
     issuedQuoteVersion,
+    ...(purpose === "APPROVED_WORK" ? { deposit } : {}),
     customerCapabilities,
     professionalCapabilities,
     actions: Object.freeze({

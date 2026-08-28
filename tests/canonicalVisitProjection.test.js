@@ -71,6 +71,16 @@ function approvedAuthority(overrides = {}) {
     purpose: "APPROVED_WORK",
     state: "ACTIVE",
     activatedAt: createdAt,
+    deposit: {
+      state: "SATISFIED",
+      obligationId: "99999999-9999-4999-8999-999999999998",
+      requiredMinor: 51000,
+      appliedMinor: 51000,
+      remainingMinor: 0,
+      currency: "USD",
+      latestVersion: 3,
+      schedulingLocked: false,
+    },
     customerCapabilities,
     professionalCapabilities,
     actions: {
@@ -254,6 +264,90 @@ test("Approved Work AVAILABLE remains separate from ACTIVE professional intent",
     ),
     null
   );
+});
+
+test("Approved Work LOCKED consumes the server deposit gate and exposes no scheduling action", () => {
+  const authority = normalizeCanonicalVisitAuthority(
+    {
+      authority: approvedAuthority({
+        state: "LOCKED",
+        deposit: {
+          state: "PARTIALLY_SATISFIED",
+          obligationId: "99999999-9999-4999-8999-999999999998",
+          requiredMinor: 51000,
+          appliedMinor: 20000,
+          remainingMinor: 31000,
+          currency: "USD",
+          latestVersion: 2,
+          schedulingLocked: true,
+        },
+        actions: {
+          canActivate: false,
+          canProposeApprovedWorkVisit: false,
+        },
+      }),
+    },
+    { jobId: ids.job, purpose: "APPROVED_WORK", subjectId: ids.quote }
+  );
+  assert.equal(authority.state, "LOCKED");
+  assert.equal(authority.deposit.state, "PARTIALLY_SATISFIED");
+  assert.equal(authority.deposit.remainingMinor, 31000);
+  assert.deepEqual(authority.actions, { canActivate: false, canPropose: false });
+  assert.equal(
+    normalizeCanonicalVisitAuthority(
+      {
+        authority: approvedAuthority({
+          state: "LOCKED",
+          deposit: {
+            state: "DUE",
+            obligationId: null,
+            requiredMinor: 51000,
+            appliedMinor: 0,
+            remainingMinor: 51000,
+            currency: "USD",
+            latestVersion: null,
+            schedulingLocked: true,
+          },
+          actions: {
+            canActivate: false,
+            canProposeApprovedWorkVisit: true,
+          },
+        }),
+      },
+      { jobId: ids.job, purpose: "APPROVED_WORK", subjectId: ids.quote }
+    ),
+    null
+  );
+});
+
+test("Approved Work with no required deposit preserves server-controlled scheduling", () => {
+  const authority = normalizeCanonicalVisitAuthority(
+    {
+      authority: approvedAuthority({
+        state: "AVAILABLE",
+        activatedAt: null,
+        deposit: {
+          state: "NOT_REQUIRED",
+          obligationId: null,
+          requiredMinor: 0,
+          appliedMinor: 0,
+          remainingMinor: 0,
+          currency: "USD",
+          latestVersion: null,
+          schedulingLocked: false,
+        },
+        customerCapabilities: [],
+        professionalCapabilities: [],
+        actions: {
+          canActivate: true,
+          canProposeApprovedWorkVisit: false,
+        },
+      }),
+    },
+    { jobId: ids.job, purpose: "APPROVED_WORK", subjectId: ids.quote }
+  );
+  assert.equal(authority.deposit.state, "NOT_REQUIRED");
+  assert.deepEqual(authority.actions, { canActivate: true, canPropose: false });
 });
 
 test("Visit DTO is allowlisted and drops actor identity and sentinel fields", () => {

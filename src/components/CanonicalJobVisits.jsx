@@ -9,6 +9,8 @@ import {
 } from "../utils/canonicalVisitController.js";
 import { isCanonicalWorkCenterHydrationEnabled } from "../utils/workCenterCanonicalHydration.js";
 import { requestEvaluationVisitHandoff } from "../utils/evaluationVisitHandoff.js";
+import { formatDepositMoney } from "../utils/preWorkDepositApi.js";
+import ProfessionalDepositCard from "./ProfessionalDepositCard.jsx";
 
 const STATE_LABELS = Object.freeze({
   PROPOSED: "Pending customer confirmation",
@@ -21,6 +23,7 @@ const STATE_LABELS = Object.freeze({
 const AUTHORITY_LABELS = Object.freeze({
   AVAILABLE: "Ready to schedule",
   ACTIVE: "Scheduling active",
+  LOCKED: "Deposit required before scheduling",
   UNAVAILABLE: "Not available",
 });
 
@@ -497,6 +500,19 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                   <p role="alert" style={styles.error}>{subject.error}</p>
                 )}
 
+                {subject.purpose === "APPROVED_WORK" && (
+                  <ProfessionalDepositCard
+                    jobId={jobId}
+                    quoteId={subject.subjectId}
+                    visitAuthority={authority}
+                    setPage={setPage}
+                    onCanonicalChange={() => {
+                      reload();
+                      notifyCanonicalVisitChanged(jobId);
+                    }}
+                  />
+                )}
+
                 {authority && (
                   <>
                     {authority.state === "AVAILABLE" && (
@@ -509,6 +525,17 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                     {authority.state === "UNAVAILABLE" && (
                       <p style={styles.message}>
                         Scheduling is not available for this evaluation.
+                      </p>
+                    )}
+                    {authority.state === "LOCKED" && (
+                      <p style={styles.lockedNotice}>
+                        {Number.isSafeInteger(authority.deposit?.remainingMinor) &&
+                        authority.deposit?.currency
+                          ? `${formatDepositMoney(
+                              authority.deposit.remainingMinor,
+                              authority.deposit.currency
+                            )} deposit remaining before Approved Work scheduling can begin.`
+                          : "Scheduling is available after the required deposit is received."}
                       </p>
                     )}
                     <div style={styles.actionRow}>
@@ -926,6 +953,15 @@ const styles = {
     borderRadius: 10,
     background: "#f0fdf4",
     color: "#166534",
+    lineHeight: 1.45,
+  },
+  lockedNotice: {
+    margin: 0,
+    padding: 10,
+    borderRadius: 10,
+    background: "#fff7ed",
+    color: "#9a3412",
+    fontWeight: 700,
     lineHeight: 1.45,
   },
   actionRow: { display: "flex", flexWrap: "wrap", gap: 9, alignItems: "center" },

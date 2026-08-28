@@ -38,6 +38,17 @@ function payload(overrides = {}) {
         { code: "REVIEW_QUOTE", label: "Review proposal" },
       ],
       reasonCodes: ["APPROVED_QUOTE_PRESENT", "VISIT_SCHEDULE_AUTHORITY_ABSENT"],
+      deposit: {
+        obligationId: null,
+        materialized: false,
+        state: "NOT_REQUIRED",
+        currency: "USD",
+        requiredMinor: 0,
+        appliedMinor: 0,
+        remainingMinor: 0,
+        latestVersion: null,
+        schedulingLocked: false,
+      },
       freshness: {
         derivedAt: "2026-08-12T12:00:00.000Z",
         jobCreatedAt: "2026-08-10T12:00:00.000Z",
@@ -48,6 +59,7 @@ function payload(overrides = {}) {
         workstreamVersion: 0,
         activityVersion: 0,
         obligationVersion: 0,
+        depositVersion: 0,
         evaluationCount: 1,
         findingCount: 1,
         recommendationCount: 1,
@@ -131,11 +143,60 @@ test("normalizer preserves the approved deposit gate without claiming scheduling
     },
     availableActions: [{ code: "REVIEW_QUOTE", label: "Review proposal" }],
     reasonCodes: ["APPROVED_QUOTE_DEPOSIT_DUE", "PAYMENT_AUTHORITY_NOT_AVAILABLE"],
+    deposit: {
+      obligationId: null,
+      materialized: false,
+      state: "DUE",
+      currency: "USD",
+      requiredMinor: 51000,
+      appliedMinor: 0,
+      remainingMinor: 51000,
+      latestVersion: null,
+      schedulingLocked: true,
+    },
   }));
   assert.equal(liveJob.stage.code, "QUOTE_APPROVED_DEPOSIT_DUE");
   assert.equal(liveJob.blocker.code, "QUOTE_DEPOSIT_NOT_SATISFIED");
   assert.equal(liveJob.nextAction.code, "REVIEW_APPROVED_QUOTE_TERMS");
   assert.equal(hasCanonicalLiveJobAction(liveJob, "SCHEDULE_WORK"), false);
+  assert.equal(liveJob.deposit.state, "DUE");
+  assert.equal(liveJob.deposit.remainingMinor, 51000);
+});
+
+test("normalizer preserves partial server deposit truth and deposit freshness", () => {
+  const liveJob = normalizeCanonicalLiveJobProjection(payload({
+    stage: {
+      code: "QUOTE_APPROVED_DEPOSIT_DUE",
+      label: "Work approved — deposit partially received",
+    },
+    responsibility: { code: "PROFESSIONAL", label: "Professional" },
+    blocker: {
+      code: "QUOTE_DEPOSIT_NOT_SATISFIED",
+      label: "The approved proposal's deposit requirement is not yet satisfied.",
+    },
+    nextAction: {
+      code: "REVIEW_APPROVED_QUOTE_TERMS",
+      label: "Review approved proposal terms",
+      description: "310.00 USD remains due before approved-work scheduling can proceed.",
+    },
+    availableActions: [{ code: "REVIEW_QUOTE", label: "Review proposal" }],
+    reasonCodes: ["APPROVED_QUOTE_DEPOSIT_PARTIALLY_SATISFIED"],
+    deposit: {
+      obligationId: "22222222-2222-4222-8222-222222222222",
+      materialized: true,
+      state: "PARTIALLY_SATISFIED",
+      currency: "USD",
+      requiredMinor: 51000,
+      appliedMinor: 20000,
+      remainingMinor: 31000,
+      latestVersion: 2,
+      schedulingLocked: true,
+    },
+    freshness: { ...payload().liveJob.freshness, depositVersion: 2 },
+  }));
+  assert.equal(liveJob.deposit.appliedMinor, 20000);
+  assert.equal(liveJob.deposit.remainingMinor, 31000);
+  assert.equal(liveJob.freshness.depositVersion, 2);
 });
 
 test("unknown stages, actions, blockers, identity, and freshness fail closed", () => {
