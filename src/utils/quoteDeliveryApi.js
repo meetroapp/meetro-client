@@ -1,4 +1,5 @@
 import { authFetch } from "./authFetch.js";
+import { normalizeCustomerTermsSnapshot } from "./customerQuoteDetailApi.js";
 
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -129,6 +130,7 @@ export function normalizeQuoteDeliverySnapshot(
   value,
   { quoteId, jobId } = {}
 ) {
+  const hasCustomerTerms = Object.hasOwn(value || {}, "customerTermsSnapshot");
   if (
     containsPrivateField(value) ||
     !exactKeys(value, [
@@ -146,6 +148,7 @@ export function normalizeQuoteDeliverySnapshot(
       "decidedAt",
       "business",
       "job",
+      ...(hasCustomerTerms ? ["customerTermsSnapshot"] : []),
     ]) ||
     value.schemaVersion !== 1
   ) return null;
@@ -176,6 +179,9 @@ export function normalizeQuoteDeliverySnapshot(
   const jobService = exactKeys(value.job, ["title", "service"])
     ? text(value.job.service, 120, { nullable: true })
     : null;
+  const customerTermsSnapshot = hasCustomerTerms
+    ? normalizeCustomerTermsSnapshot(value.customerTermsSnapshot)
+    : null;
   const decisionTruth = {
     WAITING_ON_CUSTOMER: decidedAt == null,
     APPROVED: Boolean(decidedAt),
@@ -198,6 +204,7 @@ export function normalizeQuoteDeliverySnapshot(
     exclusions.some((item) => !item) ||
     !businessName ||
     !jobTitle ||
+    (hasCustomerTerms && !customerTermsSnapshot) ||
     (value.job.service != null && !jobService)
   ) return null;
 
@@ -216,6 +223,7 @@ export function normalizeQuoteDeliverySnapshot(
     decidedAt,
     business: Object.freeze({ displayName: businessName }),
     job: Object.freeze({ title: jobTitle, service: jobService }),
+    customerTermsSnapshot,
   });
 }
 

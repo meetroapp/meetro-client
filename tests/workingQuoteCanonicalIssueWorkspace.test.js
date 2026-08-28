@@ -98,8 +98,17 @@ test("issued result is canonical server evidence, not browser-local lifecycle au
   assert.match(confirm, /canonicalQuote: result\.canonicalQuote/);
   assert.match(confirm, /result\.delivery/);
   assert.doesNotMatch(confirm, /localStorage|sessionStorage|setItem|workflow_quote_sent/);
-  assert.match(workspace, /Waiting for customer response/);
+  assert.match(workspace, /workingQuoteDeliveryPresentation/);
+  assert.match(workspace, /quoteIssueState\?\.result\?\.deliveryEvidence/);
   assert.doesNotMatch(confirm, /customerDecision:\s*"APPROVED"/);
+});
+
+test("workspace never presents issuance alone as customer delivery", () => {
+  assert.match(workspace, /authorityPresentation\?\.badgeLabel/);
+  assert.match(workspace, /authorityPresentation\?\.statusText/);
+  assert.match(workspace, /activeQuoteAuthorityPresentation\.actionLabel/);
+  assert.doesNotMatch(workspace, /authorityState\?\.status === "ISSUED" \? "SENT"/);
+  assert.doesNotMatch(workspace, /activeIssuedQuote \? "Quote Sent"/);
 });
 
 test("failure and success copy remain truthful without exposing orchestration terminology", () => {

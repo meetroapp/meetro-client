@@ -87,7 +87,7 @@ function optionalText(value, maximum) {
   return normalized.length <= maximum ? normalized : null;
 }
 
-function normalizeCustomerTermsSnapshot(value) {
+export function normalizeCustomerTermsSnapshot(value) {
   if (
     !exactKeys(value, [
       "schemaVersion",

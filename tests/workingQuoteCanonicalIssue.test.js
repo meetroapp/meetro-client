@@ -7,6 +7,7 @@ import {
   importWorkingQuoteAsCanonicalDraft,
   issueAndSendWorkingQuote,
   normalizeWorkingQuoteReviewIdentity,
+  workingQuoteDeliveryPresentation,
   workingQuoteSendReadiness,
 } from "../src/utils/workingQuoteCanonicalIssue.js";
 
@@ -107,6 +108,35 @@ function reviewIdentity(overrides = {}) {
     ...overrides,
   };
 }
+
+test("presentation distinguishes working, issued-not-delivered, and delivered truth", () => {
+  const working = workingQuoteDeliveryPresentation();
+  assert.equal(working.state, "WORKING_DRAFT");
+  assert.equal(working.actionLabel, "Send Quote to Customer");
+
+  const issuedQuote = canonicalQuote({ status: "ISSUED", currentVersion: 2 });
+  const pending = workingQuoteDeliveryPresentation({ issuedQuote });
+  assert.equal(pending.state, "ISSUED_NOT_DELIVERED");
+  assert.equal(pending.delivered, false);
+  assert.equal(pending.badgeLabel, "ISSUED · DELIVERY PENDING");
+  assert.equal(pending.statusText, "Quote issued · Not delivered to customer.");
+  assert.equal(pending.actionLabel, "Delivery Pending");
+
+  const delivered = workingQuoteDeliveryPresentation({
+    issuedQuote,
+    deliveryEvidence: deliveryEvidence(),
+  });
+  assert.equal(delivered.state, "DELIVERED");
+  assert.equal(delivered.delivered, true);
+  assert.equal(delivered.badgeLabel, "SENT");
+  assert.equal(delivered.actionLabel, "Quote Sent");
+
+  const mismatched = workingQuoteDeliveryPresentation({
+    issuedQuote,
+    deliveryEvidence: { ...deliveryEvidence(), quoteId: crypto.randomUUID() },
+  });
+  assert.equal(mismatched.state, "ISSUED_NOT_DELIVERED");
+});
 
 test("saved Job-linked Quote readiness is one exact authoritative projection", () => {
   const savedQuote = {

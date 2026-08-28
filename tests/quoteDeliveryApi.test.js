@@ -12,6 +12,23 @@ import {
 
 const QUOTE_ID = "decf3f61-acd2-4756-b5fa-8d610eb9b8d0";
 const JOB_ID = "7e742dc1-e2a2-49c6-a493-11e351c80d54";
+const CUSTOMER_TERMS = Object.freeze({
+  schemaVersion: 1,
+  paymentTerms: "75% deposit",
+  estimatedDuration: "",
+  customerNotes: "Labor and standard materials included",
+  agreement: Object.freeze({
+    exclusions: Object.freeze([]),
+    additionalWorkTerms: "",
+    hiddenConditionsTerms: "",
+    diagnosticTerms: "",
+    customerResponsibilities: "",
+    warrantyTerms: "",
+    cancellationTerms: "",
+    acceptanceTerms: "",
+    preauthorizedAdditionalWorkLimit: "",
+  }),
+});
 
 function payload(overrides = {}) {
   return {
@@ -37,6 +54,7 @@ function payload(overrides = {}) {
         decidedAt: "2026-08-14T16:00:00.000Z",
         business: { displayName: "Handyman LLC" },
         job: { title: "Kitchen repair", service: "handyman" },
+        customerTermsSnapshot: CUSTOMER_TERMS,
       },
       actions: { canSendInMeetro: true },
       conversation: { id: 17 },
@@ -76,6 +94,8 @@ test("strict professional delivery projection accepts only exact customer-safe t
   assert.equal(delivery.conversationId, 17);
   assert.equal(delivery.existingDelivery, null);
   assert.equal(delivery.snapshot.totalMinor, 92000);
+  assert.equal(delivery.snapshot.customerTermsSnapshot.paymentTerms, "75% deposit");
+  assert.equal(Object.isFrozen(delivery.snapshot.customerTermsSnapshot.agreement), true);
   assert.equal(JSON.stringify(delivery).includes("materialsSubtotalMinor"), false);
 
   const leaking = payload();
@@ -85,6 +105,16 @@ test("strict professional delivery projection accepts only exact customer-safe t
     jobId: JOB_ID,
   }), null);
   assert.equal(normalizeProfessionalQuoteDelivery(payload({ quoteId: crypto.randomUUID() }), {
+    quoteId: QUOTE_ID,
+    jobId: JOB_ID,
+  }), null);
+
+  const unsafeTerms = payload();
+  unsafeTerms.delivery.snapshot.customerTermsSnapshot = {
+    ...CUSTOMER_TERMS,
+    internalApproval: "private",
+  };
+  assert.equal(normalizeProfessionalQuoteDelivery(unsafeTerms, {
     quoteId: QUOTE_ID,
     jobId: JOB_ID,
   }), null);

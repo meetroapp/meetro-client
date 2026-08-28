@@ -192,6 +192,50 @@ function validCommandKey(value, prefix) {
     uuid(normalized.slice(prefix.length + 1)) != null;
 }
 
+export function workingQuoteDeliveryPresentation({
+  issuedQuote = null,
+  deliveryEvidence = null,
+} = {}) {
+  const issued = issuedQuote?.status === "ISSUED" && Boolean(uuid(issuedQuote.id));
+  const delivered = Boolean(
+    issued &&
+    positiveInteger(deliveryEvidence?.messageId) &&
+    positiveInteger(deliveryEvidence?.conversationId) &&
+    uuid(deliveryEvidence?.quoteId) === uuid(issuedQuote.id) &&
+    uuid(deliveryEvidence?.jobId) === uuid(issuedQuote.jobId) &&
+    typeof deliveryEvidence?.sentAt === "string" &&
+    !Number.isNaN(Date.parse(deliveryEvidence.sentAt))
+  );
+  if (delivered) {
+    return Object.freeze({
+      state: "DELIVERED",
+      issued: true,
+      delivered: true,
+      badgeLabel: "SENT",
+      statusText: "Sent to customer · Waiting for customer response",
+      actionLabel: "Quote Sent",
+    });
+  }
+  if (issued) {
+    return Object.freeze({
+      state: "ISSUED_NOT_DELIVERED",
+      issued: true,
+      delivered: false,
+      badgeLabel: "ISSUED · DELIVERY PENDING",
+      statusText: "Quote issued · Not delivered to customer.",
+      actionLabel: "Delivery Pending",
+    });
+  }
+  return Object.freeze({
+    state: "WORKING_DRAFT",
+    issued: false,
+    delivered: false,
+    badgeLabel: "WORKING DRAFT",
+    statusText: null,
+    actionLabel: "Send Quote to Customer",
+  });
+}
+
 function validateDocument(document, jobId) {
   const documentId = uuid(document?.id);
   const documentVersion = positiveInteger(document?.version);
