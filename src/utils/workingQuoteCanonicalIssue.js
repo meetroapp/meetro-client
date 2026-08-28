@@ -117,6 +117,26 @@ export function normalizeWorkingDocumentCanonicalQuote(value, {
     : !Number.isNaN(Date.parse(value.issuedAt))
       ? new Date(value.issuedAt).toISOString()
       : null;
+  const decisionState = ["APPROVED", "DECLINED"].includes(value.decisionState)
+    ? value.decisionState
+    : null;
+  const decisionVersion = value.decisionVersion == null
+    ? null
+    : positiveInteger(value.decisionVersion);
+  const decidedAt = value.decidedAt == null
+    ? null
+    : !Number.isNaN(Date.parse(value.decidedAt))
+      ? new Date(value.decidedAt).toISOString()
+      : null;
+  const noDecision =
+    value.decisionState == null &&
+    value.decisionVersion == null &&
+    value.decidedAt == null;
+  const exactDecision =
+    decisionState != null &&
+    decisionVersion === currentVersion &&
+    decidedAt != null &&
+    value.status === "ISSUED";
   if (
     !id ||
     !normalizedJobId ||
@@ -136,9 +156,7 @@ export function normalizeWorkingDocumentCanonicalQuote(value, {
     current.totalMinor !== totalMinor ||
     (value.status === "DRAFT" && value.issuedAt != null) ||
     (value.status === "ISSUED" && !issuedAt) ||
-    value.decisionState != null ||
-    value.decisionVersion != null ||
-    value.decidedAt != null
+    (!noDecision && !exactDecision)
   ) return null;
   return Object.freeze({
     id,
@@ -151,6 +169,9 @@ export function normalizeWorkingDocumentCanonicalQuote(value, {
     totalMinor,
     currency: value.currency,
     issuedAt,
+    decisionState,
+    decisionVersion,
+    decidedAt,
     integrityHash: current.integrityHash,
     documentNumber: typeof value.documentNumber === "string"
       ? value.documentNumber
@@ -193,9 +214,44 @@ function validCommandKey(value, prefix) {
 }
 
 export function workingQuoteDeliveryPresentation({
-  issuedQuote = null,
+  canonicalQuote = null,
+  issuedQuote = canonicalQuote,
   deliveryEvidence = null,
+  hydrationState = "READY",
 } = {}) {
+  if (hydrationState === "LOADING") {
+    return Object.freeze({
+      state: "AUTHORITY_LOADING",
+      issued: false,
+      delivered: false,
+      badgeLabel: "VERIFYING STATUS",
+      statusText: "Checking current Quote status.",
+      actionLabel: "Checking…",
+      actionDisabled: true,
+    });
+  }
+  if (hydrationState === "ERROR") {
+    return Object.freeze({
+      state: "AUTHORITY_UNAVAILABLE",
+      issued: false,
+      delivered: false,
+      badgeLabel: "STATUS UNAVAILABLE",
+      statusText: "Unable to verify current Quote delivery status.",
+      actionLabel: "Unavailable",
+      actionDisabled: true,
+    });
+  }
+  if (canonicalQuote?.status === "DRAFT") {
+    return Object.freeze({
+      state: "CANONICAL_DRAFT",
+      issued: false,
+      delivered: false,
+      badgeLabel: "CANONICAL DRAFT",
+      statusText: "Canonical Quote prepared · Not issued.",
+      actionLabel: "Send Quote to Customer",
+      actionDisabled: false,
+    });
+  }
   const issued = issuedQuote?.status === "ISSUED" && Boolean(uuid(issuedQuote.id));
   const delivered = Boolean(
     issued &&
@@ -206,6 +262,28 @@ export function workingQuoteDeliveryPresentation({
     typeof deliveryEvidence?.sentAt === "string" &&
     !Number.isNaN(Date.parse(deliveryEvidence.sentAt))
   );
+  if (issued && issuedQuote.decisionState === "APPROVED") {
+    return Object.freeze({
+      state: "APPROVED",
+      issued: true,
+      delivered,
+      badgeLabel: "APPROVED",
+      statusText: "Approved by customer.",
+      actionLabel: "Quote Approved",
+      actionDisabled: true,
+    });
+  }
+  if (issued && issuedQuote.decisionState === "DECLINED") {
+    return Object.freeze({
+      state: "DECLINED",
+      issued: true,
+      delivered,
+      badgeLabel: "DECLINED",
+      statusText: "Declined by customer.",
+      actionLabel: "Quote Declined",
+      actionDisabled: true,
+    });
+  }
   if (delivered) {
     return Object.freeze({
       state: "DELIVERED",
@@ -214,6 +292,7 @@ export function workingQuoteDeliveryPresentation({
       badgeLabel: "SENT",
       statusText: "Sent to customer · Waiting for customer response",
       actionLabel: "Quote Sent",
+      actionDisabled: true,
     });
   }
   if (issued) {
@@ -223,7 +302,8 @@ export function workingQuoteDeliveryPresentation({
       delivered: false,
       badgeLabel: "ISSUED · DELIVERY PENDING",
       statusText: "Quote issued · Not delivered to customer.",
-      actionLabel: "Delivery Pending",
+      actionLabel: "Retry Sending",
+      actionDisabled: false,
     });
   }
   return Object.freeze({
@@ -233,6 +313,7 @@ export function workingQuoteDeliveryPresentation({
     badgeLabel: "WORKING DRAFT",
     statusText: null,
     actionLabel: "Send Quote to Customer",
+    actionDisabled: false,
   });
 }
 
@@ -503,8 +584,10 @@ export async function issueCanonicalWorkingQuote({
     !issuedQuote ||
     issuedQuote.status !== "ISSUED" ||
     issuedQuote.id !== quote.id ||
-    issuedQuote.relationshipId !== quote.relationshipId ||
-    issuedQuote.issuerParticipantId !== quote.issuerParticipantId ||
+    (quote.relationshipId != null &&
+      issuedQuote.relationshipId !== quote.relationshipId) ||
+    (quote.issuerParticipantId != null &&
+      issuedQuote.issuerParticipantId !== quote.issuerParticipantId) ||
     issuedQuote.currentVersion !== quote.currentVersion + 1 ||
     issuedQuote.totalMinor !== quote.totalMinor ||
     issuedQuote.currency !== quote.currency

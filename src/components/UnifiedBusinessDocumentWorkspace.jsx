@@ -49,6 +49,7 @@ import {
   workingQuoteDeliveryPresentation,
   workingQuoteSendReadiness,
 } from "../utils/workingQuoteCanonicalIssue.js";
+import { hydrateSavedQuoteAuthority } from "../utils/savedQuoteAuthorityHydration.js";
 import {
   copyBusinessDocumentShareMessage,
   downloadBusinessDocumentPdfArtifact,
@@ -1092,6 +1093,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   const newDocumentAttemptKeysRef = useRef({ quote: "", invoice: "" });
   const quoteIssueAttemptRef = useRef(null);
   const quoteIssueInFlightRef = useRef(false);
+  const quoteAuthorityRequestRef = useRef(0);
   const initialSavedDocumentOpenRef = useRef("");
   const quoteProposalApplyInFlightRef = useRef(false);
   const startNewInFlightRef = useRef(null);
@@ -1132,6 +1134,13 @@ export default function UnifiedBusinessDocumentWorkspace({
   const [numberingSetup, setNumberingSetup] = useState(null);
   const [deliveryState, setDeliveryState] = useState(null);
   const [quoteIssueState, setQuoteIssueState] = useState(null);
+  const [persistedQuoteAuthority, setPersistedQuoteAuthority] = useState({
+    stage: "idle",
+    documentId: "",
+    documentVersion: null,
+    authority: null,
+    error: "",
+  });
   const [deliveryHistory, setDeliveryHistory] = useState({ quote: [], invoice: [] });
   const [recoveryRecord, setRecoveryRecord] = useState(null);
   const [recovered, setRecovered] = useState(false);
@@ -1488,6 +1497,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       const identityKey = getAuthenticatedIdentitySnapshot().userId;
       if (identityKey) await deleteBusinessDocumentRecovery({ identityKey });
       setNotice(`Saved · ${new Date(document.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
+      if (documentType === "quote") void hydratePersistedQuoteAuthority(document);
       return document;
     } catch (error) {
       const errorMessage = error?.message || "We couldn't save your draft right now. Your work is still here.";
@@ -1699,6 +1709,72 @@ export default function UnifiedBusinessDocumentWorkspace({
     }
   }
 
+  function clearPersistedQuoteAuthority() {
+    quoteAuthorityRequestRef.current += 1;
+    setPersistedQuoteAuthority({
+      stage: "idle",
+      documentId: "",
+      documentVersion: null,
+      authority: null,
+      error: "",
+    });
+  }
+
+  async function hydratePersistedQuoteAuthority(document) {
+    if (
+      document?.documentType !== "QUOTE" ||
+      document?.status !== "WORKING_DRAFT" ||
+      !document?.id ||
+      !document?.version ||
+      !document?.jobId
+    ) {
+      clearPersistedQuoteAuthority();
+      return null;
+    }
+    const requestId = quoteAuthorityRequestRef.current + 1;
+    quoteAuthorityRequestRef.current = requestId;
+    setPersistedQuoteAuthority({
+      stage: "loading",
+      documentId: document.id,
+      documentVersion: document.version,
+      authority: null,
+      error: "",
+    });
+    try {
+      const authority = await hydrateSavedQuoteAuthority({ document, setPage });
+      const current = savedDocumentsRef.current.quote;
+      if (
+        quoteAuthorityRequestRef.current !== requestId ||
+        current?.id !== document.id ||
+        current?.version !== document.version
+      ) return null;
+      setPersistedQuoteAuthority({
+        stage: "ready",
+        documentId: document.id,
+        documentVersion: document.version,
+        authority,
+        error: "",
+      });
+      return authority;
+    } catch (error) {
+      const current = savedDocumentsRef.current.quote;
+      if (
+        quoteAuthorityRequestRef.current !== requestId ||
+        current?.id !== document.id ||
+        current?.version !== document.version
+      ) return null;
+      setPersistedQuoteAuthority({
+        stage: "error",
+        documentId: document.id,
+        documentVersion: document.version,
+        authority: null,
+        error: error?.message || "Unable to verify current Quote delivery status.",
+      });
+      setNotice("Unable to verify current Quote delivery status. Sending is unavailable until the status can be checked.");
+      return null;
+    }
+  }
+
   function applyRestoredDocument(document, { startedNew = false, noticeMessage = "" } = {}) {
     const restored = restoreBusinessDocumentDraft(document);
     const type = restored.documentType;
@@ -1759,6 +1835,7 @@ export default function UnifiedBusinessDocumentWorkspace({
     setSavedFilesOpen(false);
     setNotice(noticeMessage || `${displayDocumentNumber(document)} reopened. Continue editing this saved working draft.`);
     void refreshDeliveryHistory(type, document);
+    if (type === "quote") void hydratePersistedQuoteAuthority(document);
   }
 
   async function refreshDeliveryHistory(documentType, document = savedDocuments[documentType]) {
@@ -1815,6 +1892,7 @@ export default function UnifiedBusinessDocumentWorkspace({
     setQuoteIssueState(null);
     quoteIssueAttemptRef.current = null;
     quoteIssueInFlightRef.current = false;
+    if (documentType === "quote") clearPersistedQuoteAuthority();
     setRecoveryRecord(null);
     setRecovered(false);
     setNewContentAvailable(false);
@@ -2176,6 +2254,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       setSavedFingerprints((current) => ({ ...current, [type]: "" }));
       saveAttemptKeysRef.current[type] = "";
       setRecovered(false);
+      if (type === "quote") clearPersistedQuoteAuthority();
     }
     const identityKey = getAuthenticatedIdentitySnapshot().userId;
     if (identityKey) {
@@ -2349,6 +2428,11 @@ export default function UnifiedBusinessDocumentWorkspace({
     const recoveredSavedDocuments = snapshot.savedDocuments || { quote: null, invoice: null };
     savedDocumentsRef.current = { ...recoveredSavedDocuments };
     setSavedDocuments(recoveredSavedDocuments);
+    if (recoveredSavedDocuments.quote) {
+      void hydratePersistedQuoteAuthority(recoveredSavedDocuments.quote);
+    } else {
+      clearPersistedQuoteAuthority();
+    }
     const recoveredCustomerParties = {
       quote: normalizeBusinessDocumentCustomerParty(snapshot.payloads.quote?.customerParty),
       invoice: normalizeBusinessDocumentCustomerParty(snapshot.payloads.invoice?.customerParty),
@@ -2970,13 +3054,45 @@ export default function UnifiedBusinessDocumentWorkspace({
   async function beginGovernedQuoteIssue() {
     if (quoteIssueState?.busy || activeDocument !== "quote") return;
     const savedCandidate = savedDocumentsRef.current.quote || activeSaved || null;
+    const persistedMatches = Boolean(
+      savedCandidate &&
+      persistedQuoteAuthority.documentId === savedCandidate.id &&
+      persistedQuoteAuthority.documentVersion === savedCandidate.version
+    );
+    if (
+      savedCandidate &&
+      (!persistedMatches || persistedQuoteAuthority.stage !== "ready")
+    ) {
+      setNotice("Unable to verify current Quote delivery status. Sending is unavailable until the status can be checked.");
+      return;
+    }
+    const hydratedAuthority = savedCandidate
+      ? persistedQuoteAuthority.authority
+      : null;
+    const hydratedCanonicalQuote = hydratedAuthority?.canonicalQuote || null;
+    const hydratedDelivery = hydratedAuthority?.delivery || null;
+    const persistedCheckpoint = hydratedCanonicalQuote?.status === "ISSUED"
+      ? {
+          canonicalQuote: hydratedCanonicalQuote,
+          issuedQuote: hydratedCanonicalQuote,
+          delivery: hydratedDelivery,
+        }
+      : hydratedCanonicalQuote?.status === "DRAFT"
+        ? { canonicalQuote: hydratedCanonicalQuote }
+        : {};
+    const persistedDeliveryRetry = Boolean(
+      hydratedCanonicalQuote?.status === "ISSUED" &&
+      hydratedCanonicalQuote.decisionState == null &&
+      hydratedDelivery &&
+      !hydratedDelivery.existingDelivery
+    );
     const localTotal = deliveryTotal("quote", quote);
     setQuoteIssueState({
       stage: "hydrating",
       busy: true,
       error: "",
       errorPhase: "",
-      checkpoint: {},
+      checkpoint: persistedCheckpoint,
       result: null,
       document: savedCandidate,
       identity: null,
@@ -3001,7 +3117,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         busy: false,
         error: readiness.message,
         errorPhase: "IDENTITY",
-        checkpoint: {},
+        checkpoint: persistedCheckpoint,
         result: null,
         document: null,
         identity: null,
@@ -3029,7 +3145,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         busy: false,
         error: "We couldn't reload the exact saved quote. Nothing was sent.",
         errorPhase: "IDENTITY",
-        checkpoint: {},
+        checkpoint: persistedCheckpoint,
         result: null,
         document: savedCandidate,
         identity: null,
@@ -3055,7 +3171,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         busy: false,
         error: readiness.message,
         errorPhase: "IDENTITY",
-        checkpoint: {},
+        checkpoint: persistedCheckpoint,
         result: null,
         document,
         identity: null,
@@ -3090,7 +3206,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         busy: false,
         error: readiness.message,
         errorPhase: "IDENTITY",
-        checkpoint: {},
+        checkpoint: persistedCheckpoint,
         result: null,
         document,
         identity: null,
@@ -3115,9 +3231,15 @@ export default function UnifiedBusinessDocumentWorkspace({
     setQuoteIssueState({
       stage: "review",
       busy: false,
-      error: readiness.message,
-      errorPhase: readiness.ready ? "" : "IDENTITY",
-      checkpoint: {},
+      error: persistedDeliveryRetry
+        ? "The quote is issued, but it has not been delivered to the customer."
+        : readiness.message,
+      errorPhase: persistedDeliveryRetry
+        ? "DELIVERY"
+        : readiness.ready
+          ? ""
+          : "IDENTITY",
+      checkpoint: persistedCheckpoint,
       result: null,
       document,
       identity,
@@ -3185,6 +3307,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       }));
     } finally {
       quoteIssueInFlightRef.current = false;
+      void hydratePersistedQuoteAuthority(current.document);
     }
   }
 
@@ -3279,24 +3402,54 @@ export default function UnifiedBusinessDocumentWorkspace({
 
   const guardedSetPage = (page) => requestExit(() => setPage(page));
   const activeSavePresentation = savePresentations[activeDocument];
-  const issuedQuotePresentation = quoteIssueState?.result?.issuedQuote ||
-    quoteIssueState?.checkpoint?.issuedQuote || null;
-  const activeIssuedQuote =
+  const activeQuoteAuthorityMatches = Boolean(
     activeDocument === "quote" &&
     activeSaved &&
-    quoteIssueState?.document?.id === activeSaved.id &&
-    quoteIssueState.document.version === activeSaved.version
-      ? issuedQuotePresentation
-      : null;
-  const activeDeliveryEvidence =
-    activeIssuedQuote &&
+    persistedQuoteAuthority.documentId === activeSaved.id &&
+    persistedQuoteAuthority.documentVersion === activeSaved.version
+  );
+  const activeTransientQuoteMatches = Boolean(
+    activeDocument === "quote" &&
+    activeSaved &&
     quoteIssueState?.document?.id === activeSaved?.id &&
     quoteIssueState.document.version === activeSaved.version
-      ? quoteIssueState?.result?.deliveryEvidence || null
+  );
+  const activePersistedAuthority =
+    activeQuoteAuthorityMatches && persistedQuoteAuthority.stage === "ready"
+      ? persistedQuoteAuthority.authority
       : null;
+  const activeTransientCanonicalQuote = activeTransientQuoteMatches
+    ? quoteIssueState?.result?.issuedQuote ||
+      quoteIssueState?.checkpoint?.issuedQuote ||
+      quoteIssueState?.checkpoint?.canonicalQuote || null
+    : null;
+  const activeCanonicalQuote =
+    activeTransientCanonicalQuote || activePersistedAuthority?.canonicalQuote || null;
+  const activeIssuedQuote = activeCanonicalQuote?.status === "ISSUED"
+    ? activeCanonicalQuote
+    : null;
+  const activeDeliveryEvidence = activeTransientQuoteMatches
+    ? quoteIssueState?.result?.deliveryEvidence ||
+      quoteIssueState?.checkpoint?.delivery?.existingDelivery ||
+      activePersistedAuthority?.delivery?.existingDelivery || null
+    : activePersistedAuthority?.delivery?.existingDelivery || null;
+  const activeAuthorityHydrationState =
+    activeTransientCanonicalQuote ||
+    activeDocument !== "quote" ||
+    !activeSaved ||
+    !documentJobIds.quote
+      ? "READY"
+      : !activeQuoteAuthorityMatches ||
+          ["idle", "loading"].includes(persistedQuoteAuthority.stage)
+        ? "LOADING"
+        : persistedQuoteAuthority.stage === "error"
+          ? "ERROR"
+          : "READY";
   const activeQuoteAuthorityPresentation = workingQuoteDeliveryPresentation({
+    canonicalQuote: activeCanonicalQuote,
     issuedQuote: activeIssuedQuote,
     deliveryEvidence: activeDeliveryEvidence,
+    hydrationState: activeAuthorityHydrationState,
   });
   const saveLabel = activeSavePresentation.label;
   const startNewLabel = t(
@@ -3346,7 +3499,7 @@ export default function UnifiedBusinessDocumentWorkspace({
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
         </section>
         {documentPhotos.length ? <JobEvidencePanel photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onAddPhotos={() => onAddPhotos(activeDocument)} canAddPhotos={canAddPhotos} busy={photoBusy || currentAnalysisRequest.busy} /> : null}
-        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} jobLinked={Boolean(activeDocument === "quote" && job.customerLinkedFromJob)} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityPresentation={activeQuoteAuthorityPresentation} jobLinked={Boolean(job.customerLinkedFromJob)} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || Boolean(activeIssuedQuote)} onClick={() => void beginGovernedQuoteIssue()}>{quoteIssueState?.busy ? "Preparing…" : activeQuoteAuthorityPresentation.actionLabel}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
+        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} jobLinked={Boolean(activeDocument === "quote" && job.customerLinkedFromJob)} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityPresentation={activeQuoteAuthorityPresentation} jobLinked={Boolean(job.customerLinkedFromJob)} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || activeQuoteAuthorityPresentation.actionDisabled} onClick={() => void beginGovernedQuoteIssue()}>{quoteIssueState?.busy ? "Preparing…" : activeQuoteAuthorityPresentation.actionLabel}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}
       {photoReviewOpen && documentPhotos.length ? <PhotoReviewDialog photos={documentPhotos} assignments={photoAssignments} onCancel={() => setPhotoReviewOpen(false)} onApply={(assignments) => { setPhotoAssignments((current) => ({ ...current, ...Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...normalizeBusinessDocumentPhotoAssignment(assignment), documentType: activeDocument }])) })); setPhotoReviewOpen(false); }} /> : null}

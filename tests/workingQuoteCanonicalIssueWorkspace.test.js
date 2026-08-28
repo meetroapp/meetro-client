@@ -90,6 +90,24 @@ test("post-save reference is retained synchronously for immediate review and res
   assert.match(workspace, /savedDocumentsRef\.current\[documentType\] = document;[\s\S]*setSavedDocuments/);
   assert.match(workspace, /savedDocumentsRef\.current\[type\] = document;[\s\S]*setSavedDocuments/);
   assert.match(workspace, /businessDocumentRestoredSnapshotFingerprint\(document\)/);
+  assert.match(workspace, /if \(type === "quote"\) void hydratePersistedQuoteAuthority\(document\)/);
+  assert.match(workspace, /if \(documentType === "quote"\) void hydratePersistedQuoteAuthority\(document\)/);
+});
+
+test("saved Quote authority is persisted separately from transient command state and fails closed", () => {
+  const hydrate = block("async function hydratePersistedQuoteAuthority", "function applyRestoredDocument");
+  const begin = block("async function beginGovernedQuoteIssue", "async function confirmGovernedQuoteIssue");
+  assert.match(workspace, /const \[persistedQuoteAuthority, setPersistedQuoteAuthority\]/);
+  assert.match(hydrate, /stage: "loading"/);
+  assert.match(hydrate, /await hydrateSavedQuoteAuthority\(\{ document, setPage \}\)/);
+  assert.match(hydrate, /stage: "ready"/);
+  assert.match(hydrate, /stage: "error"/);
+  assert.match(workspace, /hydrationState: activeAuthorityHydrationState/);
+  assert.match(workspace, /activeQuoteAuthorityPresentation\.actionDisabled/);
+  assert.match(begin, /persistedCheckpoint/);
+  assert.match(begin, /issuedQuote: hydratedCanonicalQuote/);
+  assert.match(begin, /delivery: hydratedDelivery/);
+  assert.doesNotMatch(hydrate, /POST|canonical-quote|\/issue|send-in-meetro/);
 });
 
 test("issued result is canonical server evidence, not browser-local lifecycle authority", () => {

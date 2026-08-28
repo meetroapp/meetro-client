@@ -120,7 +120,8 @@ test("presentation distinguishes working, issued-not-delivered, and delivered tr
   assert.equal(pending.delivered, false);
   assert.equal(pending.badgeLabel, "ISSUED · DELIVERY PENDING");
   assert.equal(pending.statusText, "Quote issued · Not delivered to customer.");
-  assert.equal(pending.actionLabel, "Delivery Pending");
+  assert.equal(pending.actionLabel, "Retry Sending");
+  assert.equal(pending.actionDisabled, false);
 
   const delivered = workingQuoteDeliveryPresentation({
     issuedQuote,
