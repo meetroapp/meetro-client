@@ -37,6 +37,7 @@ function canonicalQuote({
   status = "DRAFT",
   currentVersion = 1,
   documentVersion = document.version,
+  decisionState = null,
 } = {}) {
   const issuedAt = status === "ISSUED" ? "2026-08-25T21:00:00.000Z" : null;
   return {
@@ -50,9 +51,9 @@ function canonicalQuote({
     currency: "USD",
     currentVersion,
     totalMinor: 92000,
-    decisionState: null,
-    decisionVersion: null,
-    decidedAt: null,
+    decisionState,
+    decisionVersion: decisionState ? currentVersion : null,
+    decidedAt: decisionState ? "2026-08-26T14:00:00.000Z" : null,
     documentNumber: "Q-0000009",
     sourceBusinessDocument: {
       documentId: IDS.document,
@@ -120,7 +121,7 @@ test("presentation distinguishes working, issued-not-delivered, and delivered tr
   assert.equal(pending.delivered, false);
   assert.equal(pending.badgeLabel, "ISSUED · DELIVERY PENDING");
   assert.equal(pending.statusText, "Quote issued · Not delivered to customer.");
-  assert.equal(pending.actionLabel, "Retry Sending");
+  assert.equal(pending.actionLabel, "Send in Meetro");
   assert.equal(pending.actionDisabled, false);
 
   const delivered = workingQuoteDeliveryPresentation({
@@ -130,7 +131,24 @@ test("presentation distinguishes working, issued-not-delivered, and delivered tr
   assert.equal(delivered.state, "DELIVERED");
   assert.equal(delivered.delivered, true);
   assert.equal(delivered.badgeLabel, "SENT");
-  assert.equal(delivered.actionLabel, "Quote Sent");
+  assert.equal(delivered.actionLabel, "Send Again");
+  assert.equal(delivered.actionDisabled, false);
+
+  const approved = workingQuoteDeliveryPresentation({
+    issuedQuote: canonicalQuote({ status: "ISSUED", currentVersion: 2, decisionState: "APPROVED" }),
+    deliveryEvidence: deliveryEvidence(),
+  });
+  assert.equal(approved.state, "APPROVED");
+  assert.equal(approved.actionLabel, "Send Copy Again");
+  assert.equal(approved.actionDisabled, false);
+
+  const declined = workingQuoteDeliveryPresentation({
+    issuedQuote: canonicalQuote({ status: "ISSUED", currentVersion: 2, decisionState: "DECLINED" }),
+    deliveryEvidence: deliveryEvidence(),
+  });
+  assert.equal(declined.state, "DECLINED");
+  assert.equal(declined.actionLabel, "Send Copy Again");
+  assert.equal(declined.actionDisabled, false);
 
   const mismatched = workingQuoteDeliveryPresentation({
     issuedQuote,
@@ -352,6 +370,7 @@ test("one governed action bridges the exact saved version, issues once, then del
   assert.deepEqual(fetchCalls[0], { quoteId: IDS.quote, jobId: IDS.job, setPage: undefined });
   assert.equal(sendCalls[0].delivery.expectedIssuedVersion, 2);
   assert.equal(sendCalls[0].idempotencyKey, keys.delivery);
+  assert.equal(sendCalls[0].deliveryIntent, "INITIAL");
   assert.equal(result.deliveryEvidence.conversationId, 341);
   assert.equal(calls.some(({ endpoint }) => /approve|decline|payment|schedule|invoice|complete/.test(endpoint)), false);
 });
@@ -463,6 +482,56 @@ test("hard-refresh recovery recognizes an existing delivery and cannot duplicate
   assert.equal(result.deliveryEvidence.messageId, existingDelivery.messageId);
   assert.equal(result.deliveryEvidence.replayed, true);
   assert.equal(sendCalls, 0);
+});
+
+test("intentional COPY skips bridge and issue, requires prior exact delivery, and preserves a terminal decision", async () => {
+  const existingDelivery = { ...deliveryEvidence(), replayed: true };
+  const issuedQuote = canonicalQuote({
+    status: "ISSUED",
+    currentVersion: 2,
+    decisionState: "APPROVED",
+  });
+  const checkpointDelivery = {
+    ...delivery(),
+    snapshot: {
+      ...delivery().snapshot,
+      businessStatus: "APPROVED",
+    },
+    existingDelivery,
+  };
+  const calls = [];
+  const result = await issueAndSendWorkingQuote({
+    document,
+    jobId: IDS.job,
+    commandKeys: keys,
+    checkpoint: {
+      canonicalQuote: issuedQuote,
+      issuedQuote,
+      delivery: checkpointDelivery,
+    },
+    deliveryIntent: "COPY",
+    authFetchImpl: async () => assert.fail("COPY must not bridge or issue"),
+    fetchDeliveryImpl: async () => assert.fail("COPY uses the exact checkpointed delivery authority"),
+    sendDeliveryImpl: async (input) => {
+      calls.push(input);
+      return { ...deliveryEvidence(), messageId: 72 };
+    },
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].deliveryIntent, "COPY");
+  assert.equal(calls[0].idempotencyKey, keys.delivery);
+  assert.equal(calls[0].delivery.expectedIssuedVersion, 2);
+  assert.equal(result.issuedQuote.decisionState, "APPROVED");
+  assert.equal(result.issuedQuote.currentVersion, 2);
+  assert.equal(result.deliveryEvidence.messageId, 72);
+
+  await assert.rejects(() => issueAndSendWorkingQuote({
+    document,
+    jobId: IDS.job,
+    commandKeys: keys,
+    checkpoint: { canonicalQuote: issuedQuote, issuedQuote },
+    deliveryIntent: "COPY",
+  }), { code: "QUOTE_COPY_REQUIRES_PRIOR_DELIVERY" });
 });
 
 test("bridge fails closed when an existing mapping does not match the reviewed Working Quote version", async () => {

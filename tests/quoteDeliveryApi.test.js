@@ -165,7 +165,10 @@ test("send command uses exact version and caller-owned retry key without optimis
   for (const call of calls) {
     assert.equal(call.endpoint, `/professional/quotes/${QUOTE_ID}/send-in-meetro`);
     assert.equal(call.options.headers["Idempotency-Key"], key);
-    assert.deepEqual(JSON.parse(call.options.body), { expectedIssuedVersion: 3 });
+    assert.deepEqual(JSON.parse(call.options.body), {
+      expectedIssuedVersion: 3,
+      deliveryIntent: "INITIAL",
+    });
   }
 });
 
@@ -189,6 +192,73 @@ test("already-delivered read evidence completes recovery without another POST", 
   assert.equal(calls, 0);
 });
 
+test("explicit COPY posts the same exact version, preserves replay identity, and permits a fresh deliberate command", async () => {
+  const recoveredEvidence = evidence({ replayed: true }).delivery;
+  const delivery = normalizeProfessionalQuoteDelivery(
+    payload({ existingDelivery: recoveredEvidence }),
+    { quoteId: QUOTE_ID, jobId: JOB_ID }
+  );
+  const calls = [];
+  const authFetchImpl = async (endpoint, options) => {
+    calls.push({ endpoint, options });
+    const key = options.headers["Idempotency-Key"];
+    return {
+      response: { ok: true, status: calls.length === 1 ? 201 : 200 },
+      data: evidence({
+        messageId: key.endsWith("222222222222") ? 72 : 73,
+        replayed: calls.length === 2,
+      }),
+    };
+  };
+  const firstKey = "quote-delivery-11111111-1111-4111-8111-111111111111";
+  const secondKey = "quote-delivery-22222222-2222-4222-8222-222222222222";
+  const first = await sendProfessionalQuoteInMeetro({
+    delivery,
+    deliveryIntent: "COPY",
+    idempotencyKey: firstKey,
+    authFetchImpl,
+  });
+  const replay = await sendProfessionalQuoteInMeetro({
+    delivery,
+    deliveryIntent: "COPY",
+    idempotencyKey: firstKey,
+    authFetchImpl,
+  });
+  const second = await sendProfessionalQuoteInMeetro({
+    delivery,
+    deliveryIntent: "COPY",
+    idempotencyKey: secondKey,
+    authFetchImpl,
+  });
+  assert.equal(first.messageId, replay.messageId);
+  assert.equal(replay.replayed, true);
+  assert.notEqual(second.messageId, first.messageId);
+  for (const call of calls) {
+    assert.equal(call.endpoint, `/professional/quotes/${QUOTE_ID}/send-in-meetro`);
+    assert.deepEqual(JSON.parse(call.options.body), {
+      expectedIssuedVersion: 3,
+      deliveryIntent: "COPY",
+    });
+  }
+});
+
+test("COPY fails client-side without exact prior delivery and performs no write", async () => {
+  const delivery = normalizeProfessionalQuoteDelivery(payload(), {
+    quoteId: QUOTE_ID,
+    jobId: JOB_ID,
+  });
+  let calls = 0;
+  await assert.rejects(() => sendProfessionalQuoteInMeetro({
+    delivery,
+    deliveryIntent: "COPY",
+    idempotencyKey: "quote-delivery-copy-without-prior",
+    authFetchImpl: async () => {
+      calls += 1;
+    },
+  }), { code: "INVALID_QUOTE_DELIVERY" });
+  assert.equal(calls, 0);
+});
+
 test("delivery evidence requires exact Quote, Job, Conversation and canonical state", () => {
   const expected = { quoteId: QUOTE_ID, jobId: JOB_ID, conversationId: 17 };
   assert.equal(normalizeQuoteDeliveryEvidence(evidence(), expected).messageId, 71);
@@ -200,7 +270,10 @@ test("UI retains one retry key after ambiguity, blocks concurrent taps, and hide
   const source = readFileSync("src/components/QuoteDeliveryActions.jsx", "utf8");
   assert.match(source, /if \(!pendingKeyRef\.current\)[\s\S]*createQuoteDeliveryIdempotencyKey/);
   assert.match(source, /await sendProfessionalQuoteInMeetro[\s\S]*pendingKeyRef\.current = ""/);
-  assert.match(source, /if \(sendPendingRef\.current \|\| pending \|\| sent \|\| !delivery\.canSendInMeetro\) return/);
+  assert.match(source, /if \(sendPendingRef\.current \|\| pending \|\| !delivery\.canSendInMeetro\) return/);
+  assert.match(source, /setCopyConfirmation\(confirmation\)/);
+  assert.match(source, /handleSend\("COPY"\)/);
+  assert.match(source, /quoteDeliveryAlreadyAcceptedMessage/);
   assert.match(source, /sendPendingRef\.current = true[\s\S]*finally[\s\S]*sendPendingRef\.current = false/);
   assert.match(source, /if \(quoteStatus !== "ISSUED"\) return null/);
   assert.doesNotMatch(source, /workflow_quote_sent|localStorage|sessionStorage/);

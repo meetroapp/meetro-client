@@ -165,6 +165,9 @@ import {
   readPendingEvaluationVisitHandoff,
 } from "../utils/evaluationVisitHandoff.js";
 import {
+  parseProfessionalWorkCenterRoute,
+} from "../utils/professionalWorkCenterRoute.js";
+import {
   appendWorkflowOverrideHistory,
   getPendingWorkflowDependencies,
   shouldWarnBeforeAction,
@@ -361,6 +364,12 @@ function ContractorDashboard({ setPage, language = "en" }) {
     useState(null);
   const appliedEvaluationVisitHandoffRef = useRef("");
   const [selectedWorkCenterQuoteId, setSelectedWorkCenterQuoteId] = useState("");
+  const workCenterRouteRecordRef = useRef(
+    parseProfessionalWorkCenterRoute(
+      typeof window === "undefined" ? "" : window.location.hash
+    )
+  );
+  const appliedWorkCenterRouteRef = useRef("");
   const [workCenterJobReturnSurface, setWorkCenterJobReturnSurface] = useState("jobs");
   const [isEditingCompletedEvaluation, setIsEditingCompletedEvaluation] = useState(false);
   const [isJobHistoryMode, setIsJobHistoryMode] = useState(false);
@@ -7080,6 +7089,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const serverQuotesSummary = professionalQuotesSource.confirmed?.summary;
   const serverQuotesTotal = serverQuotesSummary
     ? serverQuotesSummary.drafts +
+      serverQuotesSummary.deliveryPending +
       serverQuotesSummary.waitingOnCustomer +
       serverQuotesSummary.approved +
       serverQuotesSummary.declined
@@ -8509,6 +8519,27 @@ function ContractorDashboard({ setPage, language = "en" }) {
     legacyWorkCenterJobs,
     canonicalWorkCenterHydration.entries
   );
+
+  useEffect(() => {
+    const target = workCenterRouteRecordRef.current;
+    if (!target) return;
+    const token = `${target.jobId}:${target.quoteId}`;
+    if (appliedWorkCenterRouteRef.current === token) return;
+    const exactJob = workCenterJobs.find(
+      (job) =>
+        isCanonicalWorkCenterEntry(job) &&
+        String(job?.jobId || "").toLowerCase() === target.jobId
+    );
+    if (!exactJob) return;
+    appliedWorkCenterRouteRef.current = token;
+    setActiveTab("currentJobs");
+    setIsWorkCenterSectionOpen(false);
+    setSelectedJobDetailView("");
+    setIsJobHistoryMode(false);
+    setSelectedWorkCenterQuoteId(target.quoteId);
+    setWorkCenterJobReturnSurface("quotes");
+    setSelectedWorkCenterJob(exactJob);
+  }, [workCenterJobs]);
 
   useEffect(() => {
     if (!pendingEvaluationVisitHandoff) return;

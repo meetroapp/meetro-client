@@ -28,9 +28,11 @@ export default function QuoteDeliveryActions({
     status: "idle",
     evidence: null,
     error: "",
+    intent: null,
   });
   const [shareOpen, setShareOpen] = useState(false);
   const [shareNotice, setShareNotice] = useState("");
+  const [copyConfirmation, setCopyConfirmation] = useState(null);
   const pendingKeyRef = useRef("");
   const sendPendingRef = useRef(false);
 
@@ -73,31 +75,69 @@ export default function QuoteDeliveryActions({
   });
   const pending = sendState.status === "sending";
   const sent = sendState.status === "sent";
+  const existingDelivery = sendState.evidence || delivery.existingDelivery;
+  const businessStatus = delivery.snapshot.businessStatus;
+  const copyIntent = Boolean(existingDelivery);
+  const actionLabel = copyIntent
+    ? businessStatus === "WAITING_ON_CUSTOMER"
+      ? t("quoteDeliverySendAgain", language)
+      : t("quoteDeliverySendCopyAgain", language)
+    : t("quoteDeliverySendInMeetro", language);
+  const confirmation = businessStatus === "APPROVED"
+    ? {
+        title: t("quoteDeliveryAlreadyAcceptedTitle", language),
+        message: t("quoteDeliveryAlreadyAcceptedMessage", language),
+        actionLabel: t("quoteDeliverySendCopyAgain", language),
+      }
+    : businessStatus === "DECLINED"
+      ? {
+          title: t("quoteDeliveryAlreadyDeclinedTitle", language),
+          message: t("quoteDeliveryAlreadyDeclinedMessage", language),
+          actionLabel: t("quoteDeliverySendCopyAgain", language),
+        }
+      : {
+          title: t("quoteDeliveryAlreadyDeliveredTitle", language),
+          message: t("quoteDeliveryAlreadyDeliveredMessage", language),
+          actionLabel: t("quoteDeliverySendAgain", language),
+        };
 
-  async function handleSend() {
-    if (sendPendingRef.current || pending || sent || !delivery.canSendInMeetro) return;
+  async function handleSend(deliveryIntent = "INITIAL") {
+    if (sendPendingRef.current || pending || !delivery.canSendInMeetro) return;
     sendPendingRef.current = true;
     try {
       if (!pendingKeyRef.current) {
         pendingKeyRef.current = createQuoteDeliveryIdempotencyKey();
       }
-      setSendState({ status: "sending", evidence: null, error: "" });
+      setSendState({ status: "sending", evidence: null, error: "", intent: deliveryIntent });
       const evidence = await sendProfessionalQuoteInMeetro({
-        delivery,
+        delivery: deliveryIntent === "COPY" && existingDelivery
+          ? { ...delivery, existingDelivery }
+          : delivery,
         idempotencyKey: pendingKeyRef.current,
+        deliveryIntent,
         setPage,
       });
       pendingKeyRef.current = "";
-      setSendState({ status: "sent", evidence, error: "" });
+      setCopyConfirmation(null);
+      setSendState({ status: "sent", evidence, error: "", intent: deliveryIntent });
     } catch {
       setSendState({
         status: "error",
         evidence: null,
         error: t("quoteDeliverySendFailed", language),
+        intent: deliveryIntent,
       });
     } finally {
       sendPendingRef.current = false;
     }
+  }
+
+  function beginSend() {
+    if (copyIntent) {
+      setCopyConfirmation(confirmation);
+      return;
+    }
+    void handleSend("INITIAL");
   }
 
   function openConversation() {
@@ -154,13 +194,13 @@ export default function QuoteDeliveryActions({
         <button
           type="button"
           style={styles.primary}
-          onClick={handleSend}
-          disabled={pending || sent || !delivery.canSendInMeetro}
+          onClick={beginSend}
+          disabled={pending || !delivery.canSendInMeetro}
           aria-busy={pending}
         >
           {pending
             ? t("quoteDeliverySending", language)
-            : t("quoteDeliverySendInMeetro", language)}
+            : actionLabel}
         </button>
         <button
           type="button"
@@ -178,10 +218,36 @@ export default function QuoteDeliveryActions({
       {sendState.error && <p role="alert" style={styles.error}>{sendState.error}</p>}
       {sent && (
         <div role="status" style={styles.success}>
-          <span>{t("quoteDeliverySent", language)}</span>
+          <span>{t(sendState.intent === "COPY" ? "quoteDeliveryCopySent" : "quoteDeliverySent", language)}</span>
           <button type="button" style={styles.linkButton} onClick={openConversation}>
             {t("quoteDeliveryViewConversation", language)}
           </button>
+        </div>
+      )}
+
+      {copyConfirmation && (
+        <div role="dialog" aria-modal="true" aria-labelledby="quote-copy-confirmation-title" style={styles.confirmation}>
+          <strong id="quote-copy-confirmation-title" style={styles.title}>{copyConfirmation.title}</strong>
+          <p style={styles.notice}>{copyConfirmation.message}</p>
+          <div style={styles.actions}>
+            <button
+              type="button"
+              style={styles.secondary}
+              disabled={pending}
+              onClick={() => setCopyConfirmation(null)}
+            >
+              {t("quoteDeliveryCancel", language)}
+            </button>
+            <button
+              type="button"
+              style={styles.primary}
+              disabled={pending}
+              aria-busy={pending}
+              onClick={() => void handleSend("COPY")}
+            >
+              {pending ? t("quoteDeliverySending", language) : copyConfirmation.actionLabel}
+            </button>
+          </div>
         </div>
       )}
 
@@ -236,6 +302,14 @@ const styles = {
     color: "#1f5132",
     fontWeight: 800,
     cursor: "pointer",
+  },
+  confirmation: {
+    display: "grid",
+    gap: 12,
+    padding: 14,
+    border: "1px solid #cbd5e1",
+    borderRadius: 8,
+    background: "#f8faf8",
   },
   shareMenu: { display: "grid", gap: 8, minWidth: 0 },
   menuButton: {

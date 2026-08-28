@@ -10,6 +10,7 @@ import { formatLocaleCurrency, formatLocaleDate } from "../utils/localeFormat.js
 
 const GROUPS = Object.freeze([
   { classification: "DRAFT", titleKey: "professionalQuotesDrafts", descriptionKey: "professionalQuotesDraftsHelp" },
+  { classification: "DELIVERY_PENDING", titleKey: "professionalQuotesDeliveryPending", descriptionKey: "professionalQuotesDeliveryPendingHelp" },
   { classification: "WAITING_ON_CUSTOMER", titleKey: "professionalQuotesWaiting", descriptionKey: "professionalQuotesWaitingHelp" },
   { classification: "APPROVED", titleKey: "professionalQuotesApproved", descriptionKey: "professionalQuotesApprovedHelp" },
   { classification: "DECLINED", titleKey: "professionalQuotesDeclined", descriptionKey: "professionalQuotesDeclinedHelp", collapsed: true },
@@ -18,6 +19,7 @@ const GROUPS = Object.freeze([
 function statusLabel(classification, language) {
   return t({
     DRAFT: "professionalQuotesStatusDraft",
+    DELIVERY_PENDING: "professionalQuotesStatusDeliveryPending",
     WAITING_ON_CUSTOMER: "professionalQuotesStatusWaiting",
     APPROVED: "professionalQuotesStatusApproved",
     DECLINED: "professionalQuotesStatusDeclined",
@@ -142,6 +144,7 @@ export default function ProfessionalQuotesWorkspace({
           ariaLabel={t("workCenterQuotesTitle", language)}
           metrics={[
             { key: "drafts", icon: "quote", label: t("professionalQuotesDrafts", language), value: confirmed.summary.drafts },
+            { key: "delivery", icon: "warning", tone: "warning", label: t("professionalQuotesDeliveryPending", language), value: confirmed.summary.deliveryPending },
             { key: "waiting", icon: "history", tone: "warning", label: t("professionalQuotesWaiting", language), value: confirmed.summary.waitingOnCustomer },
             { key: "approved", icon: "completion", tone: "success", label: t("professionalQuotesApproved", language), value: confirmed.summary.approved },
             { key: "declined", icon: "warning", tone: "neutral", label: t("professionalQuotesDeclined", language), value: confirmed.summary.declined },

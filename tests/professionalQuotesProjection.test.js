@@ -43,7 +43,7 @@ function payload(overrides = {}) {
     success: true,
     code: "PROFESSIONAL_QUOTES_LOADED",
     classification: "all",
-    summary: { drafts: 1, waitingOnCustomer: 0, approved: 0, declined: 0 },
+    summary: { drafts: 1, deliveryPending: 0, waitingOnCustomer: 0, approved: 0, declined: 0 },
     quotes: [quote()],
     pagination: { limit: 50, hasMore: false, nextCursor: null },
     ...overrides,
@@ -75,12 +75,38 @@ test("status, decision, and lineage truth are validated without collapsing recor
     parentQuoteId: IDS.parent,
   });
   const normalized = normalizeProfessionalQuotes(payload({
-    summary: { drafts: 1, waitingOnCustomer: 0, approved: 1, declined: 0 },
+    summary: { drafts: 1, deliveryPending: 0, waitingOnCustomer: 0, approved: 1, declined: 0 },
     quotes: [additional, approved],
   }));
   assert.deepEqual(normalized.quotes.map(({ classification }) => classification), ["DRAFT", "APPROVED"]);
   assert.equal(normalized.quotes[0].lineageLabel, "Additional");
   assert.equal(normalized.quotes[1].status, "ISSUED");
+});
+
+test("issued delivery-pending remains distinct from delivered waiting-on-customer", () => {
+  const issuedAt = "2026-08-11T12:00:00.000Z";
+  const normalized = normalizeProfessionalQuotes(payload({
+    summary: { drafts: 0, deliveryPending: 1, waitingOnCustomer: 1, approved: 0, declined: 0 },
+    quotes: [
+      quote({
+        classification: "DELIVERY_PENDING",
+        status: "ISSUED",
+        issuedAt,
+        actions: { canViewQuote: true, canContinueDraft: false, canViewJob: true },
+      }),
+      quote({
+        id: "60000000-0000-4000-8000-000000000006",
+        classification: "WAITING_ON_CUSTOMER",
+        status: "ISSUED",
+        issuedAt,
+        actions: { canViewQuote: true, canContinueDraft: false, canViewJob: true },
+      }),
+    ],
+  }));
+  assert.deepEqual(
+    normalized.quotes.map(({ classification }) => classification),
+    ["DELIVERY_PENDING", "WAITING_ON_CUSTOMER"]
+  );
 });
 
 test("unknown, private, malformed, and customer-only authority fails closed", () => {

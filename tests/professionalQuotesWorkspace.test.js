@@ -38,8 +38,8 @@ test("Work Center Quotes count comes only from the confirmed server summary", ()
   assert.doesNotMatch(dashboard, /serverQuotesTotal\s*\|\|\s*quoteHistory\.length/);
 });
 
-test("global workspace preserves the four canonical classifications and business actions", () => {
-  for (const classification of ["DRAFT", "WAITING_ON_CUSTOMER", "APPROVED", "DECLINED"]) {
+test("global workspace preserves the five canonical classifications and business actions", () => {
+  for (const classification of ["DRAFT", "DELIVERY_PENDING", "WAITING_ON_CUSTOMER", "APPROVED", "DECLINED"]) {
     assert.match(workspace, new RegExp(`classification: "${classification}"`));
   }
   assert.match(workspace, /canContinueDraft/);

@@ -131,12 +131,14 @@ export function normalizeQuoteDeliverySnapshot(
   { quoteId, jobId } = {}
 ) {
   const hasCustomerTerms = Object.hasOwn(value || {}, "customerTermsSnapshot");
+  const hasQuoteNumber = Object.hasOwn(value || {}, "quoteNumber");
   if (
     containsPrivateField(value) ||
     !exactKeys(value, [
       "schemaVersion",
       "quoteId",
       "jobId",
+      ...(hasQuoteNumber ? ["quoteNumber"] : []),
       "lineageLabel",
       "businessStatus",
       "totalMinor",
@@ -158,6 +160,7 @@ export function normalizeQuoteDeliverySnapshot(
   const expectedQuoteId = quoteId == null ? normalizedQuoteId : uuid(quoteId);
   const expectedJobId = jobId == null ? normalizedJobId : uuid(jobId);
   const totalMinor = nonNegativeInteger(value.totalMinor);
+  const quoteNumber = hasQuoteNumber ? text(value.quoteNumber, 80) : "Quote";
   const currency = text(value.currency, 3);
   const issuedAt = timestamp(value.issuedAt);
   const decidedAt = timestamp(value.decidedAt, { nullable: true });
@@ -194,6 +197,7 @@ export function normalizeQuoteDeliverySnapshot(
     normalizedQuoteId !== expectedQuoteId ||
     normalizedJobId !== expectedJobId ||
     !LINEAGE_LABELS.has(value.lineageLabel) ||
+    !quoteNumber ||
     !BUSINESS_STATUSES.has(value.businessStatus) ||
     decisionTruth[value.businessStatus] !== true ||
     totalMinor == null ||
@@ -212,6 +216,7 @@ export function normalizeQuoteDeliverySnapshot(
     schemaVersion: 1,
     quoteId: normalizedQuoteId,
     jobId: normalizedJobId,
+    quoteNumber,
     lineageLabel: value.lineageLabel,
     businessStatus: value.businessStatus,
     totalMinor,
@@ -409,20 +414,28 @@ export function createQuoteDeliveryIdempotencyKey(
 export async function sendProfessionalQuoteInMeetro({
   delivery,
   idempotencyKey,
+  deliveryIntent = "INITIAL",
   setPage,
   authFetchImpl = authFetch,
 } = {}) {
+  const normalizedIntent = ["INITIAL", "COPY"].includes(deliveryIntent)
+    ? deliveryIntent
+    : null;
   if (
     delivery?.source !== "PROFESSIONAL_QUOTE_DELIVERY" ||
     delivery.canSendInMeetro !== true ||
     !positiveInteger(delivery.conversationId) ||
+    !normalizedIntent ||
+    (normalizedIntent === "COPY" && !delivery.existingDelivery) ||
     typeof idempotencyKey !== "string" ||
     !idempotencyKey.trim() ||
     idempotencyKey.length > 200
   ) {
     throw new QuoteDeliveryError({ status: 400, code: "INVALID_QUOTE_DELIVERY" });
   }
-  if (delivery.existingDelivery) return delivery.existingDelivery;
+  if (normalizedIntent === "INITIAL" && delivery.existingDelivery) {
+    return delivery.existingDelivery;
+  }
   const result = await authFetchImpl(
     `/professional/quotes/${delivery.quoteId}/send-in-meetro`,
     {
@@ -430,6 +443,7 @@ export async function sendProfessionalQuoteInMeetro({
       headers: { "Idempotency-Key": idempotencyKey.trim() },
       body: JSON.stringify({
         expectedIssuedVersion: delivery.expectedIssuedVersion,
+        deliveryIntent: normalizedIntent,
       }),
     },
     setPage

@@ -92,6 +92,52 @@ test("normalizer accepts durable Job completion and invoice handoff truth", () =
   assert.equal(hasCanonicalLiveJobAction(liveJob, "VIEW_JOB_HISTORY"), true);
 });
 
+test("normalizer keeps issued-undelivered responsibility with the professional", () => {
+  const liveJob = normalizeCanonicalLiveJobProjection(payload({
+    stage: { code: "QUOTE_DELIVERY_PENDING", label: "Proposal issued — delivery pending" },
+    responsibility: { code: "PROFESSIONAL", label: "Professional" },
+    blocker: {
+      code: "QUOTE_NOT_DELIVERED",
+      label: "The issued proposal has not been delivered to the customer.",
+    },
+    nextAction: {
+      code: "REVIEW_QUOTE_DELIVERY",
+      label: "Review proposal delivery",
+      description: "The proposal is issued but still needs canonical delivery to the customer.",
+    },
+    availableActions: [{ code: "REVIEW_QUOTE", label: "Review proposal" }],
+    reasonCodes: ["ISSUED_QUOTE_WITHOUT_QUALIFYING_DELIVERY"],
+  }));
+  assert.equal(liveJob.stage.code, "QUOTE_DELIVERY_PENDING");
+  assert.equal(liveJob.responsibility.code, "PROFESSIONAL");
+  assert.equal(liveJob.nextAction.code, "REVIEW_QUOTE_DELIVERY");
+});
+
+test("normalizer preserves the approved deposit gate without claiming scheduling readiness", () => {
+  const liveJob = normalizeCanonicalLiveJobProjection(payload({
+    stage: {
+      code: "QUOTE_APPROVED_DEPOSIT_DUE",
+      label: "Work approved — 75% deposit due",
+    },
+    responsibility: { code: "PROFESSIONAL", label: "Professional" },
+    blocker: {
+      code: "QUOTE_DEPOSIT_NOT_SATISFIED",
+      label: "The approved proposal's deposit requirement is not yet satisfied.",
+    },
+    nextAction: {
+      code: "REVIEW_APPROVED_QUOTE_TERMS",
+      label: "Review approved proposal terms",
+      description: "A 510.00 USD deposit is due before approved-work scheduling can proceed.",
+    },
+    availableActions: [{ code: "REVIEW_QUOTE", label: "Review proposal" }],
+    reasonCodes: ["APPROVED_QUOTE_DEPOSIT_DUE", "PAYMENT_AUTHORITY_NOT_AVAILABLE"],
+  }));
+  assert.equal(liveJob.stage.code, "QUOTE_APPROVED_DEPOSIT_DUE");
+  assert.equal(liveJob.blocker.code, "QUOTE_DEPOSIT_NOT_SATISFIED");
+  assert.equal(liveJob.nextAction.code, "REVIEW_APPROVED_QUOTE_TERMS");
+  assert.equal(hasCanonicalLiveJobAction(liveJob, "SCHEDULE_WORK"), false);
+});
+
 test("unknown stages, actions, blockers, identity, and freshness fail closed", () => {
   assert.equal(
     normalizeCanonicalLiveJobProjection(payload({

@@ -1,10 +1,12 @@
 import {
+  useCallback,
   useEffect,
   useRef,
   useState,
 } from "react";
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
+import ProfessionalQuoteDecisionAttentionCard from "../components/ProfessionalQuoteDecisionAttentionCard.jsx";
 import useLanguage from "../hooks/useLanguage";
 import {
   dismissAlert,
@@ -18,15 +20,21 @@ import {
   isCurrentAlertMutationCompletion,
 } from "../utils/alertCenterController";
 import { refreshAlertCounts } from "../utils/alertCountCoordinator";
+import { fetchCanonicalLiveJobProjection } from "../utils/canonicalLiveJobProjection.js";
 import {
   ALERT_CENTER_VIEWS,
   canAttemptCanonicalAlertDismiss,
   canMarkCanonicalAlertRead,
   getAlertConversationActionTarget,
+  getAlertWorkCenterActionTarget,
   getAlertCenterView,
   getAlertErrorKey,
   getAlertPresentation,
 } from "../utils/alertPresentation";
+import { fetchProfessionalQuotes } from "../utils/professionalQuotesProjection.js";
+import {
+  projectProfessionalQuoteDecisionAttentionList,
+} from "../utils/professionalQuoteDecisionAttention.js";
 import { t } from "../utils/language";
 
 function AlertCard({
@@ -38,11 +46,13 @@ function AlertCard({
   onDismiss,
   onMarkRead,
   onOpenConversation,
+  onOpenWorkCenter,
 }) {
   const presentation = getAlertPresentation(alert, language);
   const conversationTarget = getAlertConversationActionTarget(
     alert.destination
   );
+  const workCenterTarget = getAlertWorkCenterActionTarget(alert.destination);
   const canMarkRead = canMarkCanonicalAlertRead(alert);
   const canDismiss = canAttemptCanonicalAlertDismiss(alert);
   const isPending = Boolean(pendingOperation);
@@ -71,6 +81,19 @@ function AlertCard({
         <p className="alert-center-card__preview">{presentation.preview}</p>
       )}
 
+      {presentation.decisionFacts && (
+        <div className="alert-center-card__facts" data-alert-quote-decision="true">
+          <strong>{presentation.decisionFacts.customerLabel}</strong>
+          <span>{presentation.decisionFacts.projectTitle}</span>
+          <span>{presentation.decisionFacts.quoteNumber} · {presentation.decisionFacts.total}</span>
+          {presentation.decisionFacts.deposit && (
+            <span>{t("quoteDecisionDepositDue", language, {
+              amount: presentation.decisionFacts.deposit,
+            })}</span>
+          )}
+        </div>
+      )}
+
       <div className="alert-center-card__facts">
         {presentation.unreadCountText && (
           <span>{presentation.unreadCountText}</span>
@@ -93,7 +116,7 @@ function AlertCard({
         </p>
       )}
 
-      {(conversationTarget.ok || canMarkRead || canDismiss) && (
+      {(conversationTarget.ok || workCenterTarget.ok || canMarkRead || canDismiss) && (
         <div className="alert-center-card__actions">
           {conversationTarget.ok && (
             <button
@@ -102,6 +125,15 @@ function AlertCard({
               onClick={() => onOpenConversation(conversationTarget.route)}
             >
               {t("continueConversation", language)}
+            </button>
+          )}
+          {workCenterTarget.ok && (
+            <button
+              type="button"
+              className="alert-center-button alert-center-button--primary"
+              onClick={() => onOpenWorkCenter(workCenterTarget.route)}
+            >
+              {t("quoteDecisionOpenWorkCenter", language)}
             </button>
           )}
           {canMarkRead && (
@@ -147,8 +179,14 @@ function Notifications({ setPage }) {
   const [mutationErrors, setMutationErrors] = useState({});
   const [readAllPending, setReadAllPending] = useState(false);
   const [readAllErrorKey, setReadAllErrorKey] = useState("");
+  const [decisionAttentionState, setDecisionAttentionState] = useState({
+    status: "idle",
+    quotes: [],
+    liveJobs: [],
+  });
 
   const mountedRef = useRef(true);
+  const decisionAttentionGenerationRef = useRef(0);
   const mutationTokensRef = useRef(new Map());
   const readAllTokenRef = useRef(null);
   const controllerRef = useRef(null);
@@ -159,6 +197,38 @@ function Notifications({ setPage }) {
     });
   }
   const controller = controllerRef.current;
+
+  const refreshDecisionAttention = useCallback(async () => {
+    const generation = decisionAttentionGenerationRef.current + 1;
+    decisionAttentionGenerationRef.current = generation;
+    setDecisionAttentionState((current) => ({ ...current, status: "loading" }));
+    try {
+      const response = await fetchProfessionalQuotes({
+        classification: "approved",
+        limit: 50,
+        setPage: setPageRef.current,
+      });
+      const results = await Promise.all(response.quotes.map((quote) =>
+        fetchCanonicalLiveJobProjection({
+          jobId: quote.jobId,
+          setPage: setPageRef.current,
+        })
+      ));
+      if (decisionAttentionGenerationRef.current !== generation) return;
+      const liveJobs = [];
+      for (const result of results) {
+        if (result.projection) liveJobs.push(result.projection);
+      }
+      setDecisionAttentionState({
+        status: "ready",
+        quotes: response.quotes,
+        liveJobs,
+      });
+    } catch {
+      if (decisionAttentionGenerationRef.current !== generation) return;
+      setDecisionAttentionState({ status: "unavailable", quotes: [], liveJobs: [] });
+    }
+  }, []);
 
   useEffect(() => {
     const mutationTokens = mutationTokensRef.current;
@@ -171,6 +241,13 @@ function Notifications({ setPage }) {
       controller.deactivate();
     };
   }, [controller]);
+
+  useEffect(() => {
+    void refreshDecisionAttention();
+    return () => {
+      decisionAttentionGenerationRef.current += 1;
+    };
+  }, [refreshDecisionAttention]);
 
   const handleViewChange = (viewId) => {
     if (viewId === controller.getState().viewId) return;
@@ -284,6 +361,20 @@ function Notifications({ setPage }) {
   const view = getAlertCenterView(selectedView);
   const hasConfirmedAlerts = Boolean(snapshot?.alerts?.[0]);
   const isRefreshing = phase === "refreshing";
+  const durableDecisionQuoteIds = [];
+  for (const alert of snapshot?.alerts || []) {
+    if (alert.destination?.quoteId) {
+      durableDecisionQuoteIds.push(alert.destination.quoteId);
+    }
+  }
+  const decisionAttentionItems = selectedView === "attention"
+    ? projectProfessionalQuoteDecisionAttentionList({
+        quotes: decisionAttentionState.quotes,
+        liveJobs: decisionAttentionState.liveJobs,
+        durableAlertQuoteIds: durableDecisionQuoteIds,
+      })
+    : [];
+  const hasVisibleAttention = hasConfirmedAlerts || decisionAttentionItems.length > 0;
 
   return (
     <div className="app-page meetro-wide-page alert-center-page">
@@ -297,7 +388,10 @@ function Notifications({ setPage }) {
           type="button"
           className="alert-center-button alert-center-button--secondary"
           disabled={phase === "loading" || isRefreshing}
-          onClick={() => void controller.refresh()}
+          onClick={() => {
+            void controller.refresh();
+            void refreshDecisionAttention();
+          }}
         >
           {isRefreshing
             ? t("alertCenterRefreshing", language)
@@ -407,7 +501,7 @@ function Notifications({ setPage }) {
             aria-labelledby={`alert-center-tab-${selectedView}`}
             className="alert-center-panel"
           >
-            {!hasConfirmedAlerts ? (
+            {!hasVisibleAttention ? (
               <div className="alert-center-state-card alert-center-state-card--empty" role="status">
                 <span className="alert-center-state-icon" aria-hidden="true">
                   <MeetroIcon name="notifications" size={28} decorative />
@@ -416,6 +510,14 @@ function Notifications({ setPage }) {
               </div>
             ) : (
               <div className="alert-center-list">
+                {decisionAttentionItems.map((attention) => (
+                  <ProfessionalQuoteDecisionAttentionCard
+                    attention={attention}
+                    key={`canonical-decision:${attention.quoteId}`}
+                    language={language}
+                    onOpenWorkCenter={(route) => setPage(route)}
+                  />
+                ))}
                 {snapshot.alerts.map((alert, index) => (
                   <AlertCard
                     alert={alert}
@@ -427,6 +529,7 @@ function Notifications({ setPage }) {
                     onDismiss={(item) => runAlertMutation(item, "dismiss")}
                     onMarkRead={(item) => runAlertMutation(item, "read")}
                     onOpenConversation={(route) => setPage(route)}
+                    onOpenWorkCenter={(route) => setPage(route)}
                   />
                 ))}
               </div>

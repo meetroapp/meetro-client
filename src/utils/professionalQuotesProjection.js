@@ -5,12 +5,14 @@ const UUID_PATTERN =
 const FILTERS = Object.freeze([
   "all",
   "draft",
+  "delivery_pending",
   "waiting_on_customer",
   "approved",
   "declined",
 ]);
 const CLASSIFICATIONS = Object.freeze([
   "DRAFT",
+  "DELIVERY_PENDING",
   "WAITING_ON_CUSTOMER",
   "APPROVED",
   "DECLINED",
@@ -67,11 +69,12 @@ function integer(value, { minimum = 0, maximum = Number.MAX_SAFE_INTEGER } = {})
 }
 
 function normalizeSummary(value) {
-  if (!exactKeys(value, ["drafts", "waitingOnCustomer", "approved", "declined"])) {
+  if (!exactKeys(value, ["drafts", "deliveryPending", "waitingOnCustomer", "approved", "declined"])) {
     return null;
   }
   const summary = {
     drafts: integer(value.drafts),
+    deliveryPending: integer(value.deliveryPending),
     waitingOnCustomer: integer(value.waitingOnCustomer),
     approved: integer(value.approved),
     declined: integer(value.declined),
@@ -155,6 +158,8 @@ function normalizeQuote(value) {
   const actions = normalizeActions(value.actions, value.classification);
   const classificationTruth = {
     DRAFT: value.status === "DRAFT" && value.customerDecision == null && issuedAt == null && decidedAt == null,
+    DELIVERY_PENDING:
+      value.status === "ISSUED" && value.customerDecision == null && Boolean(issuedAt) && decidedAt == null,
     WAITING_ON_CUSTOMER:
       value.status === "ISSUED" && value.customerDecision == null && Boolean(issuedAt) && decidedAt == null,
     APPROVED:
@@ -232,6 +237,7 @@ export function normalizeProfessionalQuotes(
   if (!summary || !pagination || quotes.some((quote) => !quote)) return null;
   const expectedClassification = {
     draft: "DRAFT",
+    delivery_pending: "DELIVERY_PENDING",
     waiting_on_customer: "WAITING_ON_CUSTOMER",
     approved: "APPROVED",
     declined: "DECLINED",

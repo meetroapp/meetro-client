@@ -162,7 +162,7 @@ test("clean reopen resolves the exact source mapping and issued-without-delivery
   assert.equal(presentation.state, "ISSUED_NOT_DELIVERED");
   assert.equal(presentation.badgeLabel, "ISSUED · DELIVERY PENDING");
   assert.equal(presentation.statusText, "Quote issued · Not delivered to customer.");
-  assert.equal(presentation.actionLabel, "Retry Sending");
+  assert.equal(presentation.actionLabel, "Send in Meetro");
   assert.equal(presentation.actionDisabled, false);
 });
 
@@ -225,7 +225,8 @@ test("exact delivery and exact decisions hydrate without inventing state", async
       deliveryEvidence: authority.delivery.existingDelivery,
     });
     assert.equal(presentation.state, decisionState);
-    assert.equal(presentation.actionDisabled, true);
+    assert.equal(presentation.actionLabel, "Send Copy Again");
+    assert.equal(presentation.actionDisabled, false);
   }
 });
 

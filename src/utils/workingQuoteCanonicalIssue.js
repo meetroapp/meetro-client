@@ -263,25 +263,47 @@ export function workingQuoteDeliveryPresentation({
     !Number.isNaN(Date.parse(deliveryEvidence.sentAt))
   );
   if (issued && issuedQuote.decisionState === "APPROVED") {
+    if (!delivered) {
+      return Object.freeze({
+        state: "AUTHORITY_UNAVAILABLE",
+        issued: true,
+        delivered: false,
+        badgeLabel: "APPROVED · DELIVERY UNVERIFIED",
+        statusText: "Unable to verify the exact delivered Quote version.",
+        actionLabel: "Unavailable",
+        actionDisabled: true,
+      });
+    }
     return Object.freeze({
       state: "APPROVED",
       issued: true,
       delivered,
       badgeLabel: "APPROVED",
       statusText: "Approved by customer.",
-      actionLabel: "Quote Approved",
-      actionDisabled: true,
+      actionLabel: "Send Copy Again",
+      actionDisabled: false,
     });
   }
   if (issued && issuedQuote.decisionState === "DECLINED") {
+    if (!delivered) {
+      return Object.freeze({
+        state: "AUTHORITY_UNAVAILABLE",
+        issued: true,
+        delivered: false,
+        badgeLabel: "DECLINED · DELIVERY UNVERIFIED",
+        statusText: "Unable to verify the exact delivered Quote version.",
+        actionLabel: "Unavailable",
+        actionDisabled: true,
+      });
+    }
     return Object.freeze({
       state: "DECLINED",
       issued: true,
       delivered,
       badgeLabel: "DECLINED",
       statusText: "Declined by customer.",
-      actionLabel: "Quote Declined",
-      actionDisabled: true,
+      actionLabel: "Send Copy Again",
+      actionDisabled: false,
     });
   }
   if (delivered) {
@@ -291,8 +313,8 @@ export function workingQuoteDeliveryPresentation({
       delivered: true,
       badgeLabel: "SENT",
       statusText: "Sent to customer · Waiting for customer response",
-      actionLabel: "Quote Sent",
-      actionDisabled: true,
+      actionLabel: "Send Again",
+      actionDisabled: false,
     });
   }
   if (issued) {
@@ -302,7 +324,7 @@ export function workingQuoteDeliveryPresentation({
       delivered: false,
       badgeLabel: "ISSUED · DELIVERY PENDING",
       statusText: "Quote issued · Not delivered to customer.",
-      actionLabel: "Retry Sending",
+      actionLabel: "Send in Meetro",
       actionDisabled: false,
     });
   }
@@ -609,13 +631,18 @@ export async function issueAndSendWorkingQuote({
   jobId,
   commandKeys,
   checkpoint = {},
+  deliveryIntent = "INITIAL",
   setPage,
   authFetchImpl = authFetch,
   fetchDeliveryImpl = fetchProfessionalQuoteDelivery,
   sendDeliveryImpl = sendProfessionalQuoteInMeetro,
 } = {}) {
   const identity = validateDocument(document, jobId);
+  const normalizedDeliveryIntent = ["INITIAL", "COPY"].includes(deliveryIntent)
+    ? deliveryIntent
+    : null;
   if (
+    !normalizedDeliveryIntent ||
     !validCommandKey(commandKeys?.bridge, "working-quote-bridge") ||
     !validCommandKey(commandKeys?.issue, "working-quote-issue") ||
     !validCommandKey(commandKeys?.delivery, "working-quote-delivery")
@@ -623,6 +650,15 @@ export async function issueAndSendWorkingQuote({
     throw new WorkingQuoteCanonicalIssueError(
       "Stable Quote command identities are required.",
       { code: "QUOTE_COMMAND_IDENTITIES_REQUIRED" }
+    );
+  }
+  if (
+    normalizedDeliveryIntent === "COPY" &&
+    (!checkpoint?.issuedQuote || !checkpoint?.delivery?.existingDelivery)
+  ) {
+    throw new WorkingQuoteCanonicalIssueError(
+      "An exact prior Quote delivery is required before another copy can be sent.",
+      { code: "QUOTE_COPY_REQUIRES_PRIOR_DELIVERY", phase: "DELIVERY", checkpoint }
     );
   }
   let canonicalQuote = checkpoint.canonicalQuote || null;
@@ -694,7 +730,7 @@ export async function issueAndSendWorkingQuote({
         }
       );
     }
-    if (delivery.existingDelivery) {
+    if (delivery.existingDelivery && normalizedDeliveryIntent === "INITIAL") {
       return Object.freeze({
         canonicalQuote,
         issuedQuote,
@@ -705,6 +741,7 @@ export async function issueAndSendWorkingQuote({
     const deliveryEvidence = await sendDeliveryImpl({
       delivery,
       idempotencyKey: commandKeys.delivery,
+      deliveryIntent: normalizedDeliveryIntent,
       setPage,
     });
     if (

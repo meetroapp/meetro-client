@@ -41,9 +41,12 @@ import MaterialsWorkflowPresentation from "../components/workflows/presentations
 import RevisedQuoteWorkflowPresentation from "../components/workflows/presentations/RevisedQuoteWorkflowPresentation";
 import UniversalDocumentCard from "../components/documents/UniversalDocumentCard";
 import ConversationQuoteCard from "../components/ConversationQuoteCard";
+import ConversationQuoteDecisionEvent from "../components/ConversationQuoteDecisionEvent";
 import ConversationInvoiceCard from "../components/ConversationInvoiceCard";
 import CanonicalConversationVisitCard from "../components/CanonicalConversationVisitCard";
 import { buildCustomerQuoteReviewRoute } from "../utils/customerQuoteReviewRoute";
+import { buildProfessionalWorkCenterRoute } from "../utils/professionalWorkCenterRoute";
+import { projectCanonicalQuoteDecisionEvents } from "../utils/quoteDecisionPresentation.js";
 import { buildCustomerInvoiceReviewRoute } from "../utils/customerInvoiceReviewRoute";
 import { fetchCustomerJobQuotes } from "../utils/customerJobQuotesApi";
 import { fetchProfessionalQuotes } from "../utils/professionalQuotesProjection";
@@ -1327,22 +1330,23 @@ useEffect(() => {
       ? canonicalVisitContext.visit
       : null;
   const conversationTimelineItems = useMemo(() => {
+    const projectedMessages = projectCanonicalQuoteDecisionEvents(threadMessages);
     if (
       !isCanonicalThread ||
       isCanonicalEmergencyThread ||
       !canonicalJobId ||
       !renderCanonicalVisitInline
     ) {
-      return threadMessages;
+      return projectedMessages;
     }
     const insertionIndex = getConversationVisitTimelineIndex({
       visit: activeCanonicalVisit,
-      messages: threadMessages,
+      messages: projectedMessages,
     });
     return [
-      ...threadMessages.slice(0, insertionIndex),
+      ...projectedMessages.slice(0, insertionIndex),
       { id: "canonical-current-visit", type: "canonical_current_visit" },
-      ...threadMessages.slice(insertionIndex),
+      ...projectedMessages.slice(insertionIndex),
     ];
   }, [
     canonicalJobId,
@@ -6549,18 +6553,59 @@ const handleImageUpload = (event) => {
                   style={{
                     ...operationalRow,
                     justifyContent: mine ? "flex-end" : "flex-start",
+                    alignItems: mine ? "flex-end" : "flex-start",
+                    flexDirection: "column",
                     overscrollBehavior: "contain",
                   }}
                 >
                   <ConversationQuoteCard
                     quote={msg.quoteShare}
                     language={language}
-                    canReview={currentViewerRole === "homeowner"}
+                    canReview={
+                      currentViewerRole === "homeowner" &&
+                      msg.quoteShare.businessStatus === "WAITING_ON_CUSTOMER"
+                    }
                     onReview={() => {
                       const route = buildCustomerQuoteReviewRoute({
                         quoteId: msg.reference?.quoteId,
                         jobId: msg.reference?.jobId,
                         conversationId: canonicalConversationId,
+                      });
+                      if (route) setPage(route);
+                    }}
+                  />
+                </div>
+              );
+            }
+
+            if (msg.type === "quote_decision" && msg.quoteShare) {
+              return (
+                <div
+                  key={msg.id}
+                  className="meetro-message-enter canonical-quote-decision-row"
+                  style={{ ...operationalRow, justifyContent: "center" }}
+                >
+                  <ConversationQuoteDecisionEvent
+                    quote={msg.quoteShare}
+                    customerLabel={
+                      canonicalConversationDetail?.participants?.homeowner?.displayName ||
+                      "Customer"
+                    }
+                    language={language}
+                    canViewQuote={currentViewerRole === "homeowner"}
+                    canOpenWorkCenter={currentViewerRole === "business"}
+                    onViewQuote={() => {
+                      const route = buildCustomerQuoteReviewRoute({
+                        quoteId: msg.reference?.quoteId,
+                        jobId: msg.reference?.jobId,
+                        conversationId: canonicalConversationId,
+                      });
+                      if (route) setPage(route);
+                    }}
+                    onOpenWorkCenter={() => {
+                      const route = buildProfessionalWorkCenterRoute({
+                        quoteId: msg.reference?.quoteId,
+                        jobId: msg.reference?.jobId,
                       });
                       if (route) setPage(route);
                     }}

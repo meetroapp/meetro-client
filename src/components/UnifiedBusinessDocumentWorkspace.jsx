@@ -719,12 +719,17 @@ function QuoteIssueReviewDialog({ state, onCancel, onConfirm }) {
   const issuedQuote = state.result?.issuedQuote || state.checkpoint?.issuedQuote || null;
   const deliveryRetry = state.errorPhase === "DELIVERY" && Boolean(issuedQuote);
   const success = state.stage === "success" && Boolean(issuedQuote);
+  const copyDelivery = state.deliveryIntent === "COPY";
+  const acceptedCopy = copyDelivery && issuedQuote?.decisionState === "APPROVED";
+  const declinedCopy = copyDelivery && issuedQuote?.decisionState === "DECLINED";
   const readiness = state.readiness || null;
   const actionLabel = state.busy
-    ? deliveryRetry
-      ? "Retrying…"
-      : "Sending…"
-    : deliveryRetry
+    ? "Sending…"
+    : acceptedCopy || declinedCopy
+      ? "Send Copy Again"
+      : copyDelivery
+        ? "Send Again"
+        : deliveryRetry
       ? "Retry Sending"
       : "Send Quote to Customer";
   const actions = success
@@ -737,14 +742,27 @@ function QuoteIssueReviewDialog({ state, onCancel, onConfirm }) {
   return (
     <WorkspaceDialog
       titleId="business-document-quote-issue-title"
-      title={success ? "Quote sent to customer" : deliveryRetry ? "Quote ready — sending needs attention" : "Review & Send Quote"}
+      title={success
+        ? copyDelivery ? "Quote copy sent" : "Quote sent to customer"
+        : acceptedCopy ? "Quote already accepted"
+          : declinedCopy ? "Quote already declined"
+            : copyDelivery ? "Quote already delivered"
+              : deliveryRetry ? "Quote ready — sending needs attention" : "Review & Send Quote"}
       onClose={state.busy ? undefined : onCancel}
       actions={actions}
     >
       <div className="business-document-delivery-review">
         <p>
           {success
-            ? `${documentNumber} has been sent to ${state.identity?.customerName || "the customer"} for review.`
+            ? copyDelivery
+              ? `Another copy of ${documentNumber} was sent to ${state.identity?.customerName || "the customer"}.`
+              : `${documentNumber} has been sent to ${state.identity?.customerName || "the customer"} for review.`
+            : acceptedCopy
+              ? "The customer has already accepted this Quote. Sending it again will send another copy only and will not change the accepted agreement."
+              : declinedCopy
+                ? "The customer has already declined this Quote. Sending it again will send another copy of the unchanged Quote only and will not request a new decision."
+                : copyDelivery
+                  ? "This Quote has already been sent and delivered to the customer. Would you like to send the same Quote again?"
             : deliveryRetry
               ? "The quote was prepared successfully, but sending it to the customer needs to be retried."
               : "Review the details below before sending this quote to the customer."}
@@ -758,7 +776,19 @@ function QuoteIssueReviewDialog({ state, onCancel, onConfirm }) {
         </dl>
         <p className="business-document-delivery-truth">
           {success
-            ? "The customer can now review and accept this quote."
+            ? copyDelivery
+              ? acceptedCopy
+                ? "The accepted agreement remains unchanged. No new customer decision is required."
+                : declinedCopy
+                  ? "The declined decision remains unchanged. Commercial revision remains a separate action."
+                  : "The same exact Quote version remains available for customer review."
+              : "The customer can now review and accept this quote."
+            : acceptedCopy
+              ? "This sends the same immutable Quote version only. It does not reopen acceptance, change terms, record payment, or schedule work."
+              : declinedCopy
+                ? "This sends the unchanged historical Quote only. To change commercial terms, use the governed Quote revision workflow."
+                : copyDelivery
+                  ? "This sends the same immutable Quote version only. It does not create a revision or change customer decision authority."
             : "Once sent, this quote will be available for the customer to review and accept. Sending the quote does not mean the customer has accepted it or made a payment. Scheduling and work remain separate next steps."}
         </p>
         {state.error ? <p role="alert" className="business-document-delivery-error">{state.error}</p> : null}
@@ -3079,6 +3109,11 @@ export default function UnifiedBusinessDocumentWorkspace({
       : null;
     const hydratedCanonicalQuote = hydratedAuthority?.canonicalQuote || null;
     const hydratedDelivery = hydratedAuthority?.delivery || null;
+    const deliveryIntent = ["DELIVERED", "APPROVED", "DECLINED"].includes(
+      activeQuoteAuthorityPresentation.state
+    )
+      ? "COPY"
+      : "INITIAL";
     const persistedCheckpoint = hydratedCanonicalQuote?.status === "ISSUED"
       ? {
           canonicalQuote: hydratedCanonicalQuote,
@@ -3111,6 +3146,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         total: localTotal,
       }),
       total: localTotal,
+      deliveryIntent,
     });
 
     if (!savedCandidate) {
@@ -3119,6 +3155,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         identity: null,
         jobId: documentJobIds.quote,
         total: localTotal,
+        deliveryIntent,
       });
       setQuoteIssueState({
         stage: "review",
@@ -3131,6 +3168,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         identity: null,
         readiness,
         total: localTotal,
+        deliveryIntent,
       });
       return;
     }
@@ -3159,6 +3197,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         identity: null,
         readiness,
         total: readiness.total,
+        deliveryIntent,
       });
       return;
     }
@@ -3172,6 +3211,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         identity: null,
         jobId: documentJobIds.quote,
         total: savedTotal,
+        deliveryIntent,
         exactSavedContent: false,
       });
       setQuoteIssueState({
@@ -3185,6 +3225,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         identity: null,
         readiness,
         total: savedTotal,
+        deliveryIntent,
       });
       return;
     }
@@ -3220,6 +3261,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         identity: null,
         readiness,
         total: savedTotal,
+        deliveryIntent,
       });
       return;
     }
@@ -3230,7 +3272,10 @@ export default function UnifiedBusinessDocumentWorkspace({
       total: savedTotal,
     });
     const attemptIdentity = `${document.id}:${document.version}`;
-    if (readiness.ready && quoteIssueAttemptRef.current?.identity !== attemptIdentity) {
+    if (
+      readiness.ready &&
+      (deliveryIntent === "COPY" || quoteIssueAttemptRef.current?.identity !== attemptIdentity)
+    ) {
       quoteIssueAttemptRef.current = {
         identity: attemptIdentity,
         commandKeys: createWorkingQuoteCommandKeys(),
@@ -3253,6 +3298,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       identity,
       readiness,
       total: savedTotal,
+      deliveryIntent,
       commandKeys: readiness.ready
         ? quoteIssueAttemptRef.current.commandKeys
         : null,
@@ -3278,6 +3324,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         jobId: documentJobIds.quote,
         commandKeys: current.commandKeys,
         checkpoint: current.checkpoint,
+        deliveryIntent: current.deliveryIntent,
         setPage,
       });
       setQuoteIssueState((state) => ({
@@ -3294,10 +3341,16 @@ export default function UnifiedBusinessDocumentWorkspace({
         },
         result,
       }));
-      setNotice(`${displayDocumentNumber(current.document)} has been sent to ${current.identity.customerName} for review. Customer acceptance is still pending.`);
+      setNotice(
+        current.deliveryIntent === "COPY"
+          ? `Another copy of ${displayDocumentNumber(current.document)} was sent to ${current.identity.customerName}. The existing customer decision and commercial terms are unchanged.`
+          : `${displayDocumentNumber(current.document)} has been sent to ${current.identity.customerName} for review. Customer acceptance is still pending.`
+      );
     } catch (error) {
       const issuedQuote = error?.checkpoint?.issuedQuote;
-      const errorMessage = issuedQuote
+      const errorMessage = current.deliveryIntent === "COPY"
+        ? "The Quote copy could not be sent. The existing delivery, customer decision, and commercial terms are unchanged."
+        : issuedQuote
         ? "The quote was prepared successfully, but sending it to the customer needs to be retried."
         : error?.code === "QUOTE_EVALUATION_REQUIRED"
           ? "Complete and save the evaluation for this project before sending the quote."

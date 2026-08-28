@@ -3,6 +3,7 @@ import {
   t,
 } from "./language.js";
 import {
+  formatLocaleCurrency,
   formatLocaleDate,
   formatLocaleTime,
 } from "./localeFormat.js";
@@ -10,6 +11,9 @@ import { normalizeCanonicalAlertDestination } from "./canonicalAlert.js";
 import {
   getCanonicalConversationActionTarget,
 } from "./conversationActionRouting.js";
+import {
+  buildProfessionalWorkCenterRoute,
+} from "./professionalWorkCenterRoute.js";
 
 export const DEFAULT_ALERT_CENTER_VIEW = "attention";
 export const ALERT_CENTER_PAGE_SIZE = 25;
@@ -182,6 +186,48 @@ export function getAlertConversationActionTarget(destination) {
   });
 }
 
+export function getAlertWorkCenterActionTarget(destination) {
+  const normalized = normalizeCanonicalAlertDestination(destination);
+  if (
+    normalized?.type !== "conversation" ||
+    !normalized.jobId ||
+    !normalized.quoteId
+  ) return { ok: false, route: null };
+  const route = buildProfessionalWorkCenterRoute({
+    jobId: normalized.jobId,
+    quoteId: normalized.quoteId,
+  });
+  return route ? { ok: true, route } : { ok: false, route: null };
+}
+
+function quoteDecisionFacts(alert, language) {
+  if (
+    ![
+      "alerts.commercial.quoteApproved.title",
+      "alerts.commercial.quoteDeclined.title",
+    ].includes(alert?.titleKey)
+  ) return null;
+  const payload = alert?.payload;
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return null;
+  const currency = typeof payload.currency === "string" && /^[A-Z]{3}$/.test(payload.currency)
+    ? payload.currency
+    : null;
+  const total = currency && Number.isSafeInteger(payload.quoteTotalMinor) && payload.quoteTotalMinor >= 0
+    ? formatLocaleCurrency(payload.quoteTotalMinor / 100, currency, {}, language)
+    : "";
+  const deposit = currency && payload.depositState === "DEPOSIT_DUE" &&
+    Number.isSafeInteger(payload.depositDueMinor) && payload.depositDueMinor >= 0
+    ? formatLocaleCurrency(payload.depositDueMinor / 100, currency, {}, language)
+    : "";
+  return {
+    customerLabel: typeof payload.customerLabel === "string" ? payload.customerLabel : "",
+    projectTitle: typeof payload.projectTitle === "string" ? payload.projectTitle : "",
+    quoteNumber: typeof payload.quoteNumber === "string" ? payload.quoteNumber : "",
+    total,
+    deposit,
+  };
+}
+
 export function getAlertErrorKey(error, operation = "load") {
   if (operation === "dismiss" && error?.status === 409) {
     return "alertCenterDismissConflict";
@@ -197,6 +243,7 @@ export function getAlertErrorKey(error, operation = "load") {
 
 export function getAlertPresentation(alert, language) {
   const unreadCount = getAlertUnreadCount(alert?.payload);
+  const decisionFacts = quoteDecisionFacts(alert, language);
   const date = formatLocaleDate(
     alert?.availableAt,
     { month: "short", day: "numeric", year: "numeric" },
@@ -236,6 +283,7 @@ export function getAlertPresentation(alert, language) {
       language
     ),
     preview: getAlertPreview(alert?.payload),
+    decisionFacts,
     unreadCount,
     unreadCountText: unreadCount === null
       ? ""

@@ -140,6 +140,26 @@ test("failure and success copy remain truthful without exposing orchestration te
   assert.match(workspace, /has been sent to.*for review/);
 });
 
+test("delivered and terminal Quotes expose explicit confirmed same-version COPY actions", () => {
+  const begin = block("async function beginGovernedQuoteIssue", "async function confirmGovernedQuoteIssue");
+  const confirm = block("async function confirmGovernedQuoteIssue", "async function shareSavedDocument");
+  const dialog = block("function QuoteIssueReviewDialog", "function NumberingSetupDialog");
+  assert.match(workspace, /\["DELIVERED", "APPROVED", "DECLINED"\]/);
+  assert.match(begin, /deliveryIntent = [\s\S]*\? "COPY"[\s\S]*: "INITIAL"/);
+  assert.match(begin, /deliveryIntent === "COPY"[\s\S]*createWorkingQuoteCommandKeys/);
+  assert.match(confirm, /deliveryIntent: current\.deliveryIntent/);
+  assert.match(dialog, /Quote already delivered/);
+  assert.match(dialog, /This Quote has already been sent and delivered to the customer\. Would you like to send the same Quote again\?/);
+  assert.match(dialog, /Quote already accepted/);
+  assert.match(dialog, /will not change the accepted agreement/);
+  assert.match(dialog, /Quote already declined/);
+  assert.match(dialog, /will not request a new decision/);
+  assert.match(dialog, /Send Again/);
+  assert.match(dialog, /Send Copy Again/);
+  assert.match(dialog, /label: "Cancel", onClick: onCancel/);
+  assert.doesNotMatch(dialog, /read by customer|opened by customer|seen by customer/i);
+});
+
 test("working-document delivery remains separate for Invoice and non-Job documents", () => {
   assert.match(workspace, /<DeliveryMenu kind=\{activeDocument\}/);
   assert.match(workspace, /deliverBusinessDocumentDraft/);

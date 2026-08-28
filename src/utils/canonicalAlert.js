@@ -142,13 +142,38 @@ export function normalizeCanonicalAlertDestination(value) {
   if (!isPlainObject(value) || typeof value.type !== "string") return null;
 
   const numericDestinations = {
-    conversation: "conversationId",
     emergency_request: "emergencyRequestId",
     request: "requestId",
     project: "requestId",
     business_profile: "businessProfileId",
     review: "reviewId",
   };
+
+  if (value.type === "conversation") {
+    const basic = hasExactKeys(value, ["type", "conversationId"]);
+    const workContext = hasExactKeys(value, [
+      "type",
+      "conversationId",
+      "jobId",
+      "quoteId",
+    ]);
+    if (!basic && !workContext) return null;
+    const conversationId = normalizePositiveNumericIdentity(value.conversationId);
+    if (!conversationId) return null;
+    if (basic) return { type: value.type, conversationId };
+    if (
+      typeof value.jobId !== "string" ||
+      typeof value.quoteId !== "string" ||
+      !UUID_PATTERN.test(value.jobId) ||
+      !UUID_PATTERN.test(value.quoteId)
+    ) return null;
+    return {
+      type: value.type,
+      conversationId,
+      jobId: value.jobId.toLowerCase(),
+      quoteId: value.quoteId.toLowerCase(),
+    };
+  }
   const numericField = numericDestinations[value.type];
   if (numericField) {
     if (!hasExactKeys(value, ["type", numericField])) return null;
