@@ -351,7 +351,7 @@ test("workspace presents Job-linked customer and source context without requirin
     "utf8"
   );
   assert.match(quoteBuilder, /fetchJobLinkedQuoteContext/);
-  assert.match(quoteBuilder, /request = routeCanonicalJobId \|\| isUniversalQuickQuote/);
+  assert.match(quoteBuilder, /request = routeCanonicalJobId \|\| routeSavedDocumentId \|\| isUniversalQuickQuote/);
   assert.match(quoteBuilder, /existingQuoteProtected/);
   assert.match(quoteBuilder, /setRecommendedSolution\(prefill\.recommendedSolution\)/);
   assert.match(workspace, /Linked from Job/);
@@ -372,7 +372,7 @@ test("opening a Job-linked Quote does not call save, issue, Invoice, payment, or
     "utf8"
   );
   const hydrationEffect = quoteBuilder.slice(
-    quoteBuilder.indexOf("void fetchJobLinkedQuoteContext"),
+    quoteBuilder.indexOf("fetchJobLinkedQuoteContext({ jobId: routeCanonicalJobId"),
     quoteBuilder.indexOf("function inputKey")
   );
   assert.doesNotMatch(hydrationEffect, /saveDocument|createBusinessDocumentDraft|issue|send|invoice|payment/i);
@@ -391,15 +391,15 @@ test("hard-refresh protection opens the exact saved Quote instead of routing to 
     "utf8"
   );
   const protection = quoteBuilder.slice(
-    quoteBuilder.indexOf("if (routeCanonicalJobId && jobLinkedQuoteContext.existingQuoteProtected)"),
+    quoteBuilder.indexOf("if (!routeSavedDocumentId && routeCanonicalJobId && jobLinkedQuoteContext.existingQuoteProtected)"),
     quoteBuilder.indexOf("return (\n      <>\n        <input")
   );
   assert.match(protection, /resolveJobLinkedSavedQuoteResume/);
   assert.match(protection, /Open Saved Quote/);
   assert.match(protection, /onClick=\{openProtectedJobLinkedQuote\}/);
   assert.doesNotMatch(protection, /setPage\("quoteBuilder"\)/);
-  assert.match(quoteBuilder, /initialSavedDocumentId=\{jobLinkedQuoteContext\.reopenDocumentId\}/);
-  assert.match(workspace, /getBusinessDocumentDraft\(\{ draftId, setPage \}\)/);
+  assert.match(quoteBuilder, /routeSavedDocumentId \|\| jobLinkedQuoteContext\.reopenDocumentId/);
+  assert.match(workspace, /await getBusinessDocumentDraft\(\{ draftId, setPage \}\)/);
   assert.match(workspace, /expectedJobId: job\.id/);
   assert.match(workspace, /expectedDocumentType: "QUOTE"/);
   assert.match(workspace, /document\?\.status !== "WORKING_DRAFT"/);

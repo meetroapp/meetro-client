@@ -1,3 +1,5 @@
+import { normalizeCustomerTermsSnapshot } from "./customerQuoteDetailApi.js";
+
 const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const HASH_PATTERN = /^[0-9a-f]{64}$/i;
@@ -98,6 +100,43 @@ function boundedText(value, maximum) {
   return typeof value === "string" && value.trim() && value.length <= maximum
     ? value
     : null;
+}
+
+function normalizeCustomerParty(value) {
+  if (value == null) return null;
+  const allowed = [
+    "businessContactId",
+    "customerRelationshipId",
+    "contractorProfileId",
+    "jobId",
+    "linkedAt",
+  ];
+  if (!isPlainObject(value) || !Object.keys(value).every((key) => allowed.includes(key))) {
+    return undefined;
+  }
+  const businessContactId = canonicalUuid(value.businessContactId);
+  const customerRelationshipId = canonicalUuid(value.customerRelationshipId);
+  const contractorProfileId = value.contractorProfileId == null
+    ? null
+    : positiveInteger(value.contractorProfileId);
+  const jobId = value.jobId == null ? null : canonicalUuid(value.jobId);
+  const linkedAt = value.linkedAt == null
+    ? null
+    : canonicalTimestamp(value.linkedAt);
+  if (
+    !businessContactId ||
+    !customerRelationshipId ||
+    (value.contractorProfileId != null && !contractorProfileId) ||
+    (value.jobId != null && !jobId) ||
+    (value.linkedAt != null && !linkedAt)
+  ) return undefined;
+  return {
+    businessContactId,
+    customerRelationshipId,
+    ...(contractorProfileId ? { contractorProfileId } : {}),
+    ...(jobId ? { jobId } : {}),
+    ...(linkedAt ? { linkedAt } : {}),
+  };
 }
 
 function canonicalCurrency(value) {
@@ -323,6 +362,8 @@ function normalizeExclusions(value, options) {
 }
 
 function normalizeCanonicalQuoteVersion(value, options) {
+  const hasTerms = Object.hasOwn(value || {}, "customerTermsSnapshot");
+  const hasIntegrityVersion = Object.hasOwn(value || {}, "integrityVersion");
   const keys = [
     "version",
     "status",
@@ -333,8 +374,10 @@ function normalizeCanonicalQuoteVersion(value, options) {
     "scopeItemCount",
     "conditions",
     "exclusions",
+    ...(hasTerms ? ["customerTermsSnapshot"] : []),
     "issuedAt",
     "integrityHash",
+    ...(hasIntegrityVersion ? ["integrityVersion"] : []),
     "createdAt",
   ];
   if (!hasExactKeys(value, keys)) return null;
@@ -352,6 +395,12 @@ function normalizeCanonicalQuoteVersion(value, options) {
   const scopeItemCount = nonnegativeInteger(value.scopeItemCount, 10_000);
   const conditions = normalizeConditions(value.conditions);
   const exclusions = normalizeExclusions(value.exclusions, options);
+  const customerTermsSnapshot = hasTerms
+    ? normalizeCustomerTermsSnapshot(value.customerTermsSnapshot)
+    : null;
+  const integrityVersion = hasIntegrityVersion
+    ? positiveInteger(value.integrityVersion)
+    : 1;
   const issuedAt = canonicalTimestamp(value.issuedAt, { nullable: true });
   const createdAt = canonicalTimestamp(value.createdAt);
   if (
@@ -364,6 +413,10 @@ function normalizeCanonicalQuoteVersion(value, options) {
     scopeItemCount == null ||
     !conditions ||
     !exclusions ||
+    (hasTerms && value.customerTermsSnapshot != null && !customerTermsSnapshot) ||
+    !integrityVersion ||
+    (integrityVersion === 1 && value.customerTermsSnapshot != null) ||
+    (integrityVersion >= 2 && !customerTermsSnapshot) ||
     (value.issuedAt != null && !issuedAt) ||
     (value.status === "DRAFT" && issuedAt != null) ||
     (value.status !== "DRAFT" && !issuedAt) ||
@@ -383,8 +436,10 @@ function normalizeCanonicalQuoteVersion(value, options) {
     scopeItemCount,
     conditions,
     exclusions,
+    customerTermsSnapshot,
     issuedAt,
     integrityHash: value.integrityHash.toLowerCase(),
+    integrityVersion,
     createdAt,
   };
 }
@@ -409,6 +464,11 @@ export function getCanonicalQuoteJobContext(record = {}) {
 }
 
 function validateQuoteProjection(value, options) {
+  const hasTerms = Object.hasOwn(value || {}, "customerTermsSnapshot");
+  const hasIntegrityVersion = Object.hasOwn(value || {}, "integrityVersion");
+  const hasDocumentNumber = Object.hasOwn(value || {}, "documentNumber");
+  const hasSourceDocument = Object.hasOwn(value || {}, "sourceBusinessDocument");
+  const hasCustomerParty = Object.hasOwn(value || {}, "customerParty");
   const keys = [
     "id",
     "jobId",
@@ -428,6 +488,8 @@ function validateQuoteProjection(value, options) {
     "scopeItemCount",
     "conditions",
     "exclusions",
+    ...(hasTerms ? ["customerTermsSnapshot"] : []),
+    ...(hasIntegrityVersion ? ["integrityVersion"] : []),
     "scopeItems",
     "versions",
     "createdAt",
@@ -435,6 +497,9 @@ function validateQuoteProjection(value, options) {
     "decisionState",
     "decisionVersion",
     "decidedAt",
+    ...(hasDocumentNumber ? ["documentNumber"] : []),
+    ...(hasSourceDocument ? ["sourceBusinessDocument"] : []),
+    ...(hasCustomerParty ? ["customerParty"] : []),
   ];
   if (!hasExactKeys(value, keys)) return null;
   const id = canonicalUuid(value.id);
@@ -458,6 +523,26 @@ function validateQuoteProjection(value, options) {
   const scopeItemCount = nonnegativeInteger(value.scopeItemCount, 10_000);
   const conditions = normalizeConditions(value.conditions);
   const exclusions = normalizeExclusions(value.exclusions, options);
+  const customerTermsSnapshot = hasTerms
+    ? normalizeCustomerTermsSnapshot(value.customerTermsSnapshot)
+    : null;
+  const integrityVersion = hasIntegrityVersion
+    ? positiveInteger(value.integrityVersion)
+    : 1;
+  const documentNumber = hasDocumentNumber && value.documentNumber != null
+    ? boundedText(value.documentNumber, 64)
+    : null;
+  const sourceBusinessDocument = hasSourceDocument && value.sourceBusinessDocument != null
+    ? hasExactKeys(value.sourceBusinessDocument, ["documentId", "documentVersion"])
+      ? {
+        documentId: canonicalUuid(value.sourceBusinessDocument?.documentId),
+        documentVersion: positiveInteger(value.sourceBusinessDocument?.documentVersion),
+      }
+      : { documentId: "", documentVersion: null }
+    : null;
+  const customerParty = hasCustomerParty
+    ? normalizeCustomerParty(value.customerParty)
+    : null;
   const scopeItems = Array.isArray(value.scopeItems)
     ? value.scopeItems.map(normalizeCanonicalScopeItem)
     : null;
@@ -510,6 +595,10 @@ function validateQuoteProjection(value, options) {
     scopeItemCount == null ||
     !conditions ||
     !exclusions ||
+    (hasTerms && value.customerTermsSnapshot != null && !customerTermsSnapshot) ||
+    !integrityVersion ||
+    (integrityVersion === 1 && value.customerTermsSnapshot != null) ||
+    (integrityVersion >= 2 && !customerTermsSnapshot) ||
     !scopeItems ||
     scopeItems.length > 10_000 ||
     scopeItems.some((item) => !item) ||
@@ -531,11 +620,18 @@ function validateQuoteProjection(value, options) {
     current.totalMinor !== totalMinor ||
     current.scopeItemCount !== scopeItemCount ||
     current.issuedAt !== issuedAt ||
+    current.integrityVersion !== integrityVersion ||
+    JSON.stringify(current.customerTermsSnapshot) !==
+      JSON.stringify(customerTermsSnapshot) ||
     !createdAt ||
     !updatedAt ||
     (value.decisionVersion != null && !decisionVersion) ||
     (value.decidedAt != null && !decidedAt) ||
-    (!noDecision && !terminalDecision)
+    (!noDecision && !terminalDecision) ||
+    (hasDocumentNumber && value.documentNumber != null && !documentNumber) ||
+    (hasSourceDocument && value.sourceBusinessDocument != null &&
+      (!sourceBusinessDocument.documentId || !sourceBusinessDocument.documentVersion)) ||
+    (hasCustomerParty && customerParty === undefined)
   ) {
     return null;
   }
@@ -558,6 +654,8 @@ function validateQuoteProjection(value, options) {
     scopeItemCount,
     conditions,
     exclusions,
+    customerTermsSnapshot,
+    integrityVersion,
     scopeItems,
     versions,
     createdAt,
@@ -565,6 +663,9 @@ function validateQuoteProjection(value, options) {
     decisionState: value.decisionState,
     decisionVersion,
     decidedAt,
+    documentNumber,
+    sourceBusinessDocument,
+    customerParty,
   };
 }
 

@@ -1061,7 +1061,8 @@ function JobLinkedQuoteContext({ job }) {
 }
 
 export default function UnifiedBusinessDocumentWorkspace({
-  setPage, language = "en", initialDocument = "quote", initialSavedDocumentId = null, job = {}, quote,
+  setPage, language = "en", initialDocument = "quote", initialSavedDocumentId = null,
+  initialSavedDocument = null, onDurableDocumentOpened, job = {}, quote,
   onApplyQuotePatch, onAddPhotos, canAddPhotos = true, photos = [], photoBusy = false,
   onDownloadQuote, onPreviewQuote, onBack,
   onRestorePhotos, onEnsurePhotosDurable, onPhotosPersisted, onDiscardTransientPhotos,
@@ -1338,8 +1339,10 @@ export default function UnifiedBusinessDocumentWorkspace({
     void openSavedDocument(documentId, {
       expectedJobId: job.id,
       expectedDocumentType: "QUOTE",
+      providedDocument:
+        initialSavedDocument?.id === documentId ? initialSavedDocument : null,
     });
-  }, [initialSavedDocumentId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [initialSavedDocumentId, initialSavedDocument]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     function connectionRestored() {
@@ -1851,9 +1854,11 @@ export default function UnifiedBusinessDocumentWorkspace({
   async function openSavedDocument(draftId, {
     expectedJobId = "",
     expectedDocumentType = "",
+    providedDocument = null,
   } = {}) {
     try {
-      const document = await getBusinessDocumentDraft({ draftId, setPage });
+      const document = providedDocument ||
+        await getBusinessDocumentDraft({ draftId, setPage });
       const normalizedExpectedJobId = String(expectedJobId || "").trim().toLowerCase();
       const normalizedDocumentJobId = String(document?.jobId || "").trim().toLowerCase();
       if (
@@ -1866,6 +1871,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         );
       }
       applyRestoredDocument(document);
+      onDurableDocumentOpened?.(document);
       return true;
     } catch (error) {
       setNotice(error?.message || "The saved document could not be opened.");
@@ -1934,6 +1940,7 @@ export default function UnifiedBusinessDocumentWorkspace({
         startedNew: true,
         noticeMessage: t(labelKey, language),
       });
+      onDurableDocumentOpened?.(document);
       newDocumentAttemptKeysRef.current[documentType] = "";
       pendingStartNewRef.current = null;
       setSaveState({
@@ -2388,6 +2395,7 @@ export default function UnifiedBusinessDocumentWorkspace({
           setPage,
         });
         applyRestoredDocument(document);
+        onDurableDocumentOpened?.(document);
         const identityKey = getAuthenticatedIdentitySnapshot().userId;
         if (identityKey) await deleteBusinessDocumentRecovery({ identityKey });
         setNotice(`${displayDocumentNumber(document)} reopened from your last workspace.`);

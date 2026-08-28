@@ -286,6 +286,26 @@ function supplementalQuote(overrides = {}) {
   };
 }
 
+function governedCustomerTerms() {
+  return {
+    schemaVersion: 1,
+    paymentTerms: "75% deposit",
+    estimatedDuration: "",
+    customerNotes: "Labor and standard materials included",
+    agreement: {
+      exclusions: [],
+      additionalWorkTerms: "",
+      hiddenConditionsTerms: "",
+      diagnosticTerms: "",
+      customerResponsibilities: "",
+      warrantyTerms: "",
+      cancellationTerms: "",
+      acceptanceTerms: "",
+      preauthorizedAdditionalWorkLimit: "",
+    },
+  };
+}
+
 function installBrowser(responses) {
   const calls = [];
   const prior = {
@@ -342,6 +362,36 @@ test("only a verified ordinary lifecycle-v2 Job opens canonical Quote reads", as
   } finally {
     browser.restore();
   }
+});
+
+test("current governed Quote read shape preserves terms, integrity, and saved-document provenance", () => {
+  const customerTermsSnapshot = governedCustomerTerms();
+  const base = rootQuote({ decisionState: null, decisionVersion: null, decidedAt: null });
+  const quote = {
+    ...base,
+    customerTermsSnapshot,
+    integrityVersion: 2,
+    versions: base.versions.map((item) => ({
+      ...item,
+      customerTermsSnapshot,
+      integrityVersion: 2,
+    })),
+    documentNumber: "Q-0000001",
+    sourceBusinessDocument: {
+      documentId: "ccda1240-b24e-4f10-b06f-3908c6641773",
+      documentVersion: 1,
+    },
+    customerParty: null,
+  };
+  const normalized = validateCanonicalQuotes([quote], { jobId: ids.job });
+  assert.equal(normalized.length, 1);
+  assert.equal(normalized[0].integrityVersion, 2);
+  assert.equal(normalized[0].customerTermsSnapshot.paymentTerms, "75% deposit");
+  assert.equal(normalized[0].documentNumber, "Q-0000001");
+  assert.equal(
+    normalized[0].sourceBusinessDocument.documentId,
+    "ccda1240-b24e-4f10-b06f-3908c6641773"
+  );
 });
 
 test("canonical status, customer decision, server totals, and exclusions are preserved", () => {

@@ -61,6 +61,16 @@ import {
   resolveJobLinkedSavedQuoteResume,
 } from "../utils/jobLinkedQuoteContext.js";
 import {
+  getBusinessDocumentDraft,
+  listBusinessDocumentDrafts,
+} from "../utils/businessDocumentDraftApi.js";
+import {
+  bootstrapExactSavedQuote,
+  parseSavedQuoteRoute,
+  replaceSavedQuoteRoute,
+  resolveOwnedSavedQuotesForJob,
+} from "../utils/savedQuoteRoute.js";
+import {
   quoteCustomerPricingProjection,
   quoteIndependentPaymentTerms,
 } from "../utils/quotePricingPresentation.js";
@@ -431,15 +441,6 @@ const pricingMethodOptions = [
 
 const priorityOptions = ["Standard", "Urgent", "Emergency", "Flexible"];
 
-const canonicalJobIdPattern =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function getCanonicalJobIdFromRoute(hash = "") {
-  const query = String(hash).split("?", 2)[1] || "";
-  const jobId = cleanText(new URLSearchParams(query).get("jobId"));
-  return canonicalJobIdPattern.test(jobId) ? jobId : "";
-}
-
 function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   const language = getLanguage();
   const activeJobSnapshot = getActiveJobSnapshot();
@@ -466,7 +467,13 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     quoteBuilderSource === "desktop_sidebar_quick_quote";
   const workCenterReturnCustomer =
     localStorage.getItem("workCenterReturnCustomer") || "";
-  const routeCanonicalJobId = getCanonicalJobIdFromRoute(window.location.hash);
+  const initialSavedQuoteRouteRef = useRef(null);
+  if (!initialSavedQuoteRouteRef.current) {
+    initialSavedQuoteRouteRef.current = parseSavedQuoteRoute(window.location.hash);
+  }
+  const savedQuoteRoute = initialSavedQuoteRouteRef.current;
+  const routeCanonicalJobId = savedQuoteRoute.jobId;
+  const routeSavedDocumentId = savedQuoteRoute.draftId;
 
   const revisedQuoteContext = safeJson(
     localStorage.getItem("meetroRevisedQuoteContext")
@@ -500,7 +507,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     selectedWorkCenterRequest?.id ||
     "";
 
-  const request = routeCanonicalJobId || isUniversalQuickQuote
+  const request = routeCanonicalJobId || routeSavedDocumentId || isUniversalQuickQuote
     ? {}
     : isRevisedQuoteFlow
     ? {
@@ -930,11 +937,17 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     useState("");
   const [quickQuoteAttachedJob, setQuickQuoteAttachedJob] = useState(null);
   const [jobLinkedQuoteContext, setJobLinkedQuoteContext] = useState(() => ({
-    status: routeCanonicalJobId ? "loading" : "standalone",
+    status: routeCanonicalJobId && !routeSavedDocumentId ? "loading" : "standalone",
     reason: "",
     context: null,
     existingQuoteProtected: false,
+    savedQuoteResume: null,
     reopenDocumentId: null,
+  }));
+  const [savedRouteBootstrap, setSavedRouteBootstrap] = useState(() => ({
+    status: routeSavedDocumentId ? "loading" : "standalone",
+    reason: "",
+    document: null,
   }));
   const jobLinkedQuoteHydrationRef = useRef("");
   const [quickQuoteJobConnection, setQuickQuoteJobConnection] = useState({
@@ -1062,30 +1075,99 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     quickQuoteAttachedJob?.jobId || requestedCanonicalJobId;
 
   useEffect(() => {
-    if (!routeCanonicalJobId) return undefined;
+    if (!routeSavedDocumentId || !savedQuoteRoute.valid) return undefined;
+    let active = true;
+    setSavedRouteBootstrap({ status: "loading", reason: "", document: null });
+    void bootstrapExactSavedQuote({
+      route: savedQuoteRoute,
+      getDocument: (draftId) => getBusinessDocumentDraft({ draftId, setPage }),
+    }).then((resolution) => {
+        if (!active) return;
+        if (resolution.status !== "ready") {
+          setSavedRouteBootstrap({
+            status: "unavailable",
+            reason: resolution.reason,
+            document: null,
+          });
+          return;
+        }
+        const document = resolution.document;
+        setQuickQuoteAttachedJob({
+          jobId: resolution.jobId || null,
+          title: cleanText(document.content?.projectTitle),
+          customerLabel: cleanText(document.content?.customerName),
+          customerConcern: "",
+          evaluation: null,
+        });
+        setSavedRouteBootstrap({ status: "ready", reason: "", document });
+      });
+    return () => {
+      active = false;
+    };
+  }, [routeCanonicalJobId, routeSavedDocumentId, savedQuoteRoute.valid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (!routeCanonicalJobId || routeSavedDocumentId || !savedQuoteRoute.valid) {
+      return undefined;
+    }
     let active = true;
     setJobLinkedQuoteContext({
       status: "loading",
       reason: "",
       context: null,
       existingQuoteProtected: false,
+      savedQuoteResume: null,
       reopenDocumentId: null,
     });
-    void fetchJobLinkedQuoteContext({ jobId: routeCanonicalJobId, setPage })
-      .then((result) => {
+    void Promise.allSettled([
+      fetchJobLinkedQuoteContext({ jobId: routeCanonicalJobId, setPage }),
+      listBusinessDocumentDrafts({ type: "QUOTE", setPage }),
+    ]).then(([contextResult, documentsResult]) => {
         if (!active) return;
+        const result = contextResult.status === "fulfilled"
+          ? contextResult.value
+          : { status: "error", reason: "JOB_CONTEXT_FETCH_FAILED", context: null };
+        const savedProtection = documentsResult.status === "fulfilled"
+          ? resolveOwnedSavedQuotesForJob(documentsResult.value, routeCanonicalJobId)
+          : { status: "unavailable", documents: [] };
+        if (savedProtection.status === "ambiguous") {
+          setJobLinkedQuoteContext({
+            status: "ambiguous",
+            reason: "MULTIPLE_SAVED_QUOTES",
+            context: null,
+            existingQuoteProtected: false,
+            savedQuoteResume: null,
+            reopenDocumentId: null,
+          });
+          return;
+        }
         if (result.status !== "ready" || !result.context) {
+          if (savedProtection.status === "exact") {
+            setJobLinkedQuoteContext({
+              status: "protected",
+              reason: "",
+              context: null,
+              existingQuoteProtected: true,
+              savedQuoteResume: savedProtection.resume,
+              reopenDocumentId: null,
+            });
+            return;
+          }
           setJobLinkedQuoteContext({
             status: result.status,
             reason: result.reason,
             context: null,
             existingQuoteProtected: false,
+            savedQuoteResume: null,
             reopenDocumentId: null,
           });
           return;
         }
         const context = result.context;
         const existingQuoteProtected = jobLinkedQuoteHasExistingContent(context);
+        const savedQuoteResume = savedProtection.status === "exact"
+          ? savedProtection.resume
+          : resolveJobLinkedSavedQuoteResume(context);
         setQuickQuoteAttachedJob({
           jobId: context.job.jobId,
           title: context.job.title,
@@ -1114,25 +1196,43 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
           reason: "",
           context,
           existingQuoteProtected,
+          savedQuoteResume,
           reopenDocumentId: null,
         });
       });
     return () => {
       active = false;
     };
-  }, [routeCanonicalJobId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [routeCanonicalJobId, routeSavedDocumentId, savedQuoteRoute.valid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openProtectedJobLinkedQuote() {
-    const resume = resolveJobLinkedSavedQuoteResume(
-      jobLinkedQuoteContext.context
-    );
+    const resume = jobLinkedQuoteContext.savedQuoteResume ||
+      resolveJobLinkedSavedQuoteResume(jobLinkedQuoteContext.context);
     if (!resume || resume.jobId !== routeCanonicalJobId) return;
+    replaceSavedQuoteRoute({
+      jobId: resume.jobId,
+      draftId: resume.documentId,
+    });
     setJobLinkedQuoteContext((current) => ({
       ...current,
       status: "ready",
       existingQuoteProtected: false,
       reopenDocumentId: resume.documentId,
     }));
+  }
+
+  function persistOpenedQuoteRoute(document) {
+    if (document?.documentType !== "QUOTE") {
+      replaceSavedQuoteRoute({});
+      return;
+    }
+    if (document?.status !== "WORKING_DRAFT") {
+      return;
+    }
+    replaceSavedQuoteRoute({
+      jobId: document.jobId || "",
+      draftId: document.id,
+    });
   }
 
   function inputKey(prefix, index) {
@@ -3040,7 +3140,39 @@ ${businessIdentity.businessName}`;
   const unifiedWorkspaceEnabled = true;
 
   if (unifiedWorkspaceEnabled) {
-    if (routeCanonicalJobId && jobLinkedQuoteContext.status === "loading") {
+    if (!savedQuoteRoute.valid) {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate" role="alert">
+          <h1>Saved Quote unavailable</h1>
+          <p>
+            Meetro could not verify this saved Quote route. No customer information
+            was shown and nothing was opened or changed.
+          </p>
+          <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
+        </div>
+      );
+    }
+    if (routeSavedDocumentId && savedRouteBootstrap.status === "loading") {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate">
+          <p role="status">Opening the exact authorized saved Quote…</p>
+        </div>
+      );
+    }
+    if (routeSavedDocumentId && savedRouteBootstrap.status !== "ready") {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate" role="alert">
+          <h1>Saved Quote unavailable</h1>
+          <p>
+            Meetro could not verify this exact saved Quote for the signed-in
+            professional. No customer information was shown and nothing was opened
+            or changed.
+          </p>
+          <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
+        </div>
+      );
+    }
+    if (!routeSavedDocumentId && routeCanonicalJobId && jobLinkedQuoteContext.status === "loading") {
       return (
         <div className="app-page meetro-form-page business-document-context-gate">
           <p role="status">Loading the authorized Job, customer, and Evaluation context…</p>
@@ -3048,24 +3180,26 @@ ${businessIdentity.businessName}`;
       );
     }
     if (
+      !routeSavedDocumentId &&
       routeCanonicalJobId &&
       !["ready", "protected"].includes(jobLinkedQuoteContext.status)
     ) {
+      const multipleSavedQuotes = jobLinkedQuoteContext.status === "ambiguous";
       return (
         <div className="app-page meetro-form-page business-document-context-gate" role="alert">
-          <h1>Job context unavailable</h1>
+          <h1>{multipleSavedQuotes ? "Choose a saved Quote" : "Job context unavailable"}</h1>
           <p>
-            Meetro could not verify this Job and its customer for the signed-in
-            professional. No customer information was shown and no Quote was created.
+            {multipleSavedQuotes
+              ? "More than one saved Quote is linked to this Job. Open Saved Files and choose the exact Quote; Meetro did not select or create one automatically."
+              : "Meetro could not verify this Job and its customer for the signed-in professional. No customer information was shown and no Quote was created."}
           </p>
           <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
         </div>
       );
     }
-    if (routeCanonicalJobId && jobLinkedQuoteContext.existingQuoteProtected) {
-      const savedQuoteResume = resolveJobLinkedSavedQuoteResume(
-        jobLinkedQuoteContext.context
-      );
+    if (!routeSavedDocumentId && routeCanonicalJobId && jobLinkedQuoteContext.existingQuoteProtected) {
+      const savedQuoteResume = jobLinkedQuoteContext.savedQuoteResume ||
+        resolveJobLinkedSavedQuoteResume(jobLinkedQuoteContext.context);
       return (
         <div className="app-page meetro-form-page business-document-context-gate">
           <h1>Existing Quote protected</h1>
@@ -3105,7 +3239,11 @@ ${businessIdentity.businessName}`;
           setPage={setPage}
           language={language}
           initialDocument={initialDocument}
-          initialSavedDocumentId={jobLinkedQuoteContext.reopenDocumentId}
+          initialSavedDocumentId={
+            routeSavedDocumentId || jobLinkedQuoteContext.reopenDocumentId
+          }
+          initialSavedDocument={savedRouteBootstrap.document}
+          onDurableDocumentOpened={persistOpenedQuoteRoute}
           job={{
             id: canonicalJobId || null,
             requestId: jobLinkedQuoteContext.context?.job.requestId || null,
@@ -3123,6 +3261,7 @@ ${businessIdentity.businessName}`;
             recommendations:
               jobLinkedQuoteContext.context?.recommendations || [],
             customerLinkedFromJob:
+              !routeSavedDocumentId &&
               jobLinkedQuoteContext.status === "ready" &&
               Boolean(jobLinkedQuoteContext.context?.customer.displayName),
             canonical: Boolean(canonicalJobId),
