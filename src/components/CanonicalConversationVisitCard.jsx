@@ -155,6 +155,7 @@ export default function CanonicalConversationVisitCard({
   setPage,
   displayMode = "inline",
   openEditorToken = 0,
+  onVisitStateChange,
 }) {
   const viewerIsProfessional = viewerRole === "professional" || viewerRole === "business";
   const [state, setState] = useState({ phase: "loading", visit: null, error: "" });
@@ -211,6 +212,15 @@ export default function CanonicalConversationVisitCard({
     });
     return () => { active = false; };
   }, [openEditorToken, state.phase, state.visit, viewerIsProfessional]);
+
+  useEffect(() => {
+    if (typeof onVisitStateChange !== "function") return;
+    onVisitStateChange(
+      state.phase === "ready"
+        ? { phase: "ready", jobId, visit: state.visit }
+        : { phase: state.phase, jobId, visit: null }
+    );
+  }, [jobId, onVisitStateChange, state.phase, state.visit]);
 
   function open(mode) {
     setNotice("");

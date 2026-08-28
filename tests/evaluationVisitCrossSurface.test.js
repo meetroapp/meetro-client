@@ -17,7 +17,7 @@ const evaluationController = read("src/utils/evaluationAuthorityController.js");
 const evaluationApi = read("src/utils/evaluationApi.js");
 
 test("Conversation is the coordination origin for one Job-bound canonical Evaluation Visit", () => {
-  assert.match(conversation, /canonicalConversationDetail\.relationship\.jobId/);
+  assert.match(conversation, /canonicalConversationDetail\?\.relationship\?\.jobId/);
   assert.match(conversation, /Schedule Evaluation Visit/);
   assert.match(conversation, /<CanonicalConversationVisitCard/);
   assert.match(visitCard, /fetchCanonicalVisits[\s\S]*purpose: "EVALUATION"/);
@@ -41,7 +41,9 @@ test("customer alternate time and opposite-party approval use exact versioned Vi
 });
 
 test("responsive Conversation render modes retain one canonical Visit identity", () => {
-  assert.match(conversation, /"project-panel"[\s\S]*"inline"/);
+  assert.match(conversation, /renderCanonicalVisitInline[\s\S]*displayMode="project-panel"[\s\S]*displayMode="inline"/);
+  assert.match(conversation, /data-current-visit-placement/);
+  assert.match(conversation, /data-conversation-timeline-item="canonical-visit"/);
   assert.match(visitCard, /data-visit-display-mode=\{displayMode\}/);
   assert.match(visitCard, /Keep Conversation Open/);
 });

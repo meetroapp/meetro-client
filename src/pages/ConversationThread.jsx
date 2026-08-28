@@ -45,6 +45,13 @@ import ConversationInvoiceCard from "../components/ConversationInvoiceCard";
 import CanonicalConversationVisitCard from "../components/CanonicalConversationVisitCard";
 import { buildCustomerQuoteReviewRoute } from "../utils/customerQuoteReviewRoute";
 import { buildCustomerInvoiceReviewRoute } from "../utils/customerInvoiceReviewRoute";
+import { fetchCustomerJobQuotes } from "../utils/customerJobQuotesApi";
+import { fetchProfessionalQuotes } from "../utils/professionalQuotesProjection";
+import {
+  getConversationQuoteAuthority,
+  getConversationVisitTimelineIndex,
+  shouldRenderCurrentVisitInline,
+} from "../utils/communicationSchedulePlacement";
 import {
   getWorkflowMessageProps,
   isWorkflowMessageType,
@@ -665,6 +672,8 @@ function ConversationThreadInner({
   embedded = false,
   emergencyContextMode = "stacked",
   onCanonicalEmergencyContextChange,
+  communicationContextMode = "mobile",
+  onCanonicalWorkContextChange,
   canonicalConversationId: canonicalConversationIdOverride,
   allowLegacyQuoteMessageFetch = true,
 }) {
@@ -723,6 +732,15 @@ function ConversationThreadInner({
   const [canonicalMessagesPhase, setCanonicalMessagesPhase] = useState("idle");
   const [canonicalLoadErrorKey, setCanonicalLoadErrorKey] = useState("");
   const [canonicalSendErrorKey, setCanonicalSendErrorKey] = useState("");
+  const [canonicalVisitContext, setCanonicalVisitContext] = useState({
+    phase: "idle",
+    jobId: "",
+    visit: null,
+  });
+  const [canonicalQuoteAuthority, setCanonicalQuoteAuthority] = useState({
+    phase: "idle",
+    authority: null,
+  });
   const [canonicalSendPending, setCanonicalSendPending] = useState(false);
   const [canonicalReloadKey, setCanonicalReloadKey] = useState(0);
   const [canonicalReadSnapshot, setCanonicalReadSnapshot] = useState(null);
@@ -1176,6 +1194,164 @@ useEffect(() => {
     : activeAccountMode === "business"
     ? "business"
     : "homeowner";
+
+  const canonicalJobId = String(
+    canonicalConversationDetail?.relationship?.jobId || ""
+  ).trim();
+  const canonicalDeliveredQuoteIds = useMemo(
+    () =>
+      messages
+        .filter(
+          (message) =>
+            message?.type === "quote_shared" &&
+            message?.quoteShare?.jobId === canonicalJobId
+        )
+        .map((message) => message?.quoteShare?.quoteId)
+        .filter(Boolean),
+    [canonicalJobId, messages]
+  );
+  const canonicalDeliveredQuoteIdsKey = canonicalDeliveredQuoteIds.join(",");
+
+  useEffect(() => {
+    let active = true;
+    const quoteIds = canonicalDeliveredQuoteIdsKey
+      ? canonicalDeliveredQuoteIdsKey.split(",")
+      : [];
+    if (
+      !isCanonicalThread ||
+      !canonicalJobId ||
+      quoteIds.length === 0
+    ) {
+      queueMicrotask(() => {
+        if (active) {
+          setCanonicalQuoteAuthority({ phase: "idle", authority: null });
+        }
+      });
+      return () => {
+        active = false;
+      };
+    }
+
+    queueMicrotask(() => {
+      if (active) {
+        setCanonicalQuoteAuthority((current) => ({
+          phase: current.authority ? "refreshing" : "loading",
+          authority: current.authority,
+        }));
+      }
+    });
+
+    const read =
+      currentViewerRole === "business"
+        ? fetchProfessionalQuotes({
+            classification: "all",
+            limit: 50,
+            setPage,
+          }).then((result) => result.quotes)
+        : fetchCustomerJobQuotes({
+            jobId: canonicalJobId,
+            limit: 25,
+            setPage,
+          }).then((result) => result.quotes);
+
+    void read
+      .then((quotes) => {
+        if (!active) return;
+        const authority = getConversationQuoteAuthority({
+          jobId: canonicalJobId,
+          quoteIds,
+          quotes,
+        });
+        setCanonicalQuoteAuthority({
+          phase: authority ? "ready" : "unavailable",
+          authority,
+        });
+      })
+      .catch(() => {
+        if (active) {
+          setCanonicalQuoteAuthority({ phase: "unavailable", authority: null });
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    canonicalDeliveredQuoteIdsKey,
+    canonicalJobId,
+    currentViewerRole,
+    isCanonicalThread,
+    setPage,
+  ]);
+
+  const handleCanonicalVisitStateChange = useCallback((nextContext) => {
+    setCanonicalVisitContext(nextContext);
+  }, []);
+
+  useEffect(() => {
+    if (typeof onCanonicalWorkContextChange !== "function") return;
+    if (!isCanonicalThread || !canonicalJobId) {
+      onCanonicalWorkContextChange(null);
+      return;
+    }
+    onCanonicalWorkContextChange({
+      conversationId: canonicalConversationId,
+      jobId: canonicalJobId,
+      quoteAuthorityPhase: canonicalQuoteAuthority.phase,
+      quoteAuthority: canonicalQuoteAuthority.authority,
+      visitPhase: canonicalVisitContext.phase,
+      visit:
+        canonicalVisitContext.jobId === canonicalJobId
+          ? canonicalVisitContext.visit
+          : null,
+    });
+  }, [
+    canonicalConversationId,
+    canonicalJobId,
+    canonicalQuoteAuthority.authority,
+    canonicalQuoteAuthority.phase,
+    canonicalVisitContext.jobId,
+    canonicalVisitContext.phase,
+    canonicalVisitContext.visit,
+    isCanonicalThread,
+    onCanonicalWorkContextChange,
+  ]);
+
+  const renderCanonicalVisitInline = shouldRenderCurrentVisitInline({
+    contextMode: communicationContextMode,
+    quoteAuthorityPhase: canonicalQuoteAuthority.phase,
+    quoteAuthority: canonicalQuoteAuthority.authority,
+  });
+  const activeCanonicalVisit =
+    canonicalVisitContext.jobId === canonicalJobId
+      ? canonicalVisitContext.visit
+      : null;
+  const conversationTimelineItems = useMemo(() => {
+    if (
+      !isCanonicalThread ||
+      isCanonicalEmergencyThread ||
+      !canonicalJobId ||
+      !renderCanonicalVisitInline
+    ) {
+      return threadMessages;
+    }
+    const insertionIndex = getConversationVisitTimelineIndex({
+      visit: activeCanonicalVisit,
+      messages: threadMessages,
+    });
+    return [
+      ...threadMessages.slice(0, insertionIndex),
+      { id: "canonical-current-visit", type: "canonical_current_visit" },
+      ...threadMessages.slice(insertionIndex),
+    ];
+  }, [
+    canonicalJobId,
+    activeCanonicalVisit,
+    isCanonicalEmergencyThread,
+    isCanonicalThread,
+    renderCanonicalVisitInline,
+    threadMessages,
+  ]);
 
   useEffect(() => {
     setSavedThreadContactSnapshot(null);
@@ -6239,25 +6415,6 @@ const handleImageUpload = (event) => {
             </div>
           )}
 
-          {isCanonicalThread &&
-            !isCanonicalEmergencyThread &&
-            canonicalConversationDetail?.relationship?.jobId && (
-              <CanonicalConversationVisitCard
-                jobId={canonicalConversationDetail.relationship.jobId}
-                viewerRole={
-                  currentViewerRole === "business" ? "professional" : "customer"
-                }
-                language={language}
-                setPage={setPage}
-                displayMode={
-                  embedded || appLayoutMetrics.layoutWidth >= 768
-                    ? "project-panel"
-                    : "inline"
-                }
-                openEditorToken={canonicalVisitEditorToken}
-              />
-            )}
-
           <div className="chat-messages conversation-messages" style={messagesScroll}>
             <div style={threadSearchRow}>
               <div style={threadSearchInputWrap}>
@@ -6295,6 +6452,33 @@ const handleImageUpload = (event) => {
               <span style={dateLine}></span>
             </div>
 
+            {isCanonicalThread &&
+              !isCanonicalEmergencyThread &&
+              canonicalJobId &&
+              !renderCanonicalVisitInline && (
+                <div
+                  className="conversation-timeline-visit-row"
+                  data-conversation-timeline-item="canonical-visit"
+                  data-current-visit-placement="context-panel"
+                  style={hiddenTimelineVisitRow}
+                >
+                  <CanonicalConversationVisitCard
+                    key={canonicalJobId}
+                    jobId={canonicalJobId}
+                    viewerRole={
+                      currentViewerRole === "business"
+                        ? "professional"
+                        : "customer"
+                    }
+                    language={language}
+                    setPage={setPage}
+                    displayMode="project-panel"
+                    openEditorToken={canonicalVisitEditorToken}
+                    onVisitStateChange={handleCanonicalVisitStateChange}
+                  />
+                </div>
+              )}
+
             {threadMessages.length === 0 && hasThreadSearch ? (
               <div style={{ ...timelineTopEmpty, textAlign: "center" }}>
                 {t("conversationNoSearchMessages", language)}
@@ -6325,7 +6509,33 @@ const handleImageUpload = (event) => {
               </div>
             ) : null}
 
-          {threadMessages.map((msg) => {
+          {conversationTimelineItems.map((msg) => {
+            if (msg.type === "canonical_current_visit") {
+              return (
+                <div
+                  key={msg.id}
+                  className="conversation-timeline-visit-row"
+                  data-conversation-timeline-item="canonical-visit"
+                  data-current-visit-placement="timeline"
+                  style={timelineVisitRow}
+                >
+                  <CanonicalConversationVisitCard
+                    key={canonicalJobId}
+                    jobId={canonicalJobId}
+                    viewerRole={
+                      currentViewerRole === "business"
+                        ? "professional"
+                        : "customer"
+                    }
+                    language={language}
+                    setPage={setPage}
+                    displayMode="inline"
+                    openEditorToken={canonicalVisitEditorToken}
+                    onVisitStateChange={handleCanonicalVisitStateChange}
+                  />
+                </div>
+              );
+            }
             const mine = msg.senderRole === currentViewerRole;
             const localizedTitle = getLocalizedMessageField(msg, "title");
             const localizedSubtitle = getLocalizedMessageField(msg, "subtitle");
@@ -9282,6 +9492,20 @@ const operationalRow = {
   width: "100%",
 };
 
+const timelineVisitRow = {
+  position: "static",
+  zIndex: "auto",
+  flex: "0 0 auto",
+  width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const hiddenTimelineVisitRow = {
+  ...timelineVisitRow,
+  display: "none",
+};
+
 const operationalCard = {
   width: "100%",
   maxWidth: "min(520px, calc(100% - 20px))",
@@ -11132,6 +11356,8 @@ function ConversationThread({
   embedded = false,
   emergencyContextMode = "stacked",
   onCanonicalEmergencyContextChange,
+  communicationContextMode = "mobile",
+  onCanonicalWorkContextChange,
   canonicalConversationId,
   allowLegacyQuoteMessageFetch = true,
 }) {
@@ -11145,6 +11371,8 @@ function ConversationThread({
         onCanonicalEmergencyContextChange={
           onCanonicalEmergencyContextChange
         }
+        communicationContextMode={communicationContextMode}
+        onCanonicalWorkContextChange={onCanonicalWorkContextChange}
         canonicalConversationId={canonicalConversationId}
         allowLegacyQuoteMessageFetch={allowLegacyQuoteMessageFetch}
       />

@@ -99,6 +99,7 @@ import {
 } from "../utils/nativeContacts";
 import { resolveRelationshipIdentity } from "../utils/relationshipIdentity";
 import { captureConversationOriginContext } from "../utils/conversationOrigin";
+import { getConversationVisitContextFacts } from "../utils/communicationSchedulePlacement";
 import {
   getPersonalProfilePhotoForRecord,
   getScopedProfilePhoto,
@@ -718,6 +719,7 @@ function MessagesInbox({ setPage, currentPage }) {
     setActiveSplitCanonicalConversationId,
   ] = useState(routedConversationId || null);
   const [activeEmergencyContext, setActiveEmergencyContext] = useState(null);
+  const [canonicalWorkContext, setCanonicalWorkContext] = useState(null);
   const [communicationWorkspaceState, dispatchCommunicationWorkspace] =
     useReducer(
       communicationWorkspaceReducer,
@@ -937,6 +939,10 @@ function MessagesInbox({ setPage, currentPage }) {
 
   const handleCanonicalEmergencyContextChange = useCallback((context) => {
     setActiveEmergencyContext(context || null);
+  }, []);
+
+  const handleCanonicalWorkContextChange = useCallback((context) => {
+    setCanonicalWorkContext(context || null);
   }, []);
 
   const handleSplitThreadPageChange = useCallback(
@@ -2639,6 +2645,20 @@ function MessagesInbox({ setPage, currentPage }) {
   function getWorkspaceContextFacts(conversation = {}, relationship = null) {
     if (!conversation) return [];
 
+    const canonicalContextMatches =
+      canonicalWorkContext?.conversationId &&
+      String(canonicalWorkContext.conversationId) === String(conversation.id);
+    const canonicalApprovalConfirmed =
+      canonicalContextMatches &&
+      canonicalWorkContext.quoteAuthorityPhase === "ready" &&
+      canonicalWorkContext.quoteAuthority?.approved === true;
+    const canonicalVisitFacts = canonicalApprovalConfirmed
+      ? getConversationVisitContextFacts(
+          canonicalWorkContext.visit,
+          language
+        )
+      : [];
+
     const relatedJob =
       activeJobSnapshot?.conversationId &&
       String(activeJobSnapshot.conversationId) === String(conversation.id)
@@ -2683,11 +2703,17 @@ function MessagesInbox({ setPage, currentPage }) {
     return [
       projectTitle && { label: t("messagesFactRelatedWork", language), value: projectTitle },
       currentWork && { label: t("messagesFactCurrentWork", language), value: currentWork },
-      (scheduleDate || scheduleTime) && {
+      !canonicalApprovalConfirmed && (scheduleDate || scheduleTime) && {
         label: t("messagesFactSchedule", language),
         value: [scheduleDate, scheduleTime].filter(Boolean).join(" · "),
       },
-      quoteStatus && { label: t("messagesFactQuoteStatus", language), value: quoteStatus },
+      (canonicalApprovalConfirmed || quoteStatus) && {
+        label: t("messagesFactQuoteStatus", language),
+        value: canonicalApprovalConfirmed
+          ? t("customerQuoteStatusApproved", language)
+          : quoteStatus,
+      },
+      ...canonicalVisitFacts,
     ].filter(Boolean);
   }
 
@@ -3958,6 +3984,13 @@ function MessagesInbox({ setPage, currentPage }) {
     const memoryFacts = getRelationshipMemoryFacts(conversation, relationship);
     const hasContextFacts = contextFacts.length > 0;
     const hasMemoryFacts = memoryFacts.length > 0;
+    const approvedCanonicalWorkContext =
+      canonicalWorkContext?.conversationId &&
+      String(canonicalWorkContext.conversationId) === String(conversation.id) &&
+      canonicalWorkContext.quoteAuthorityPhase === "ready" &&
+      canonicalWorkContext.quoteAuthority?.approved === true
+        ? canonicalWorkContext
+        : null;
     const hasContactInfo = Boolean(contact.phone || contact.email || contact.address);
     const canOpenDetails = Boolean(
       conversation.project_title ||
@@ -4031,7 +4064,21 @@ function MessagesInbox({ setPage, currentPage }) {
           </div>
         </section>
 
-        <section style={workspaceContextSection}>
+        <section
+          style={workspaceContextSection}
+          data-canonical-current-work={
+            approvedCanonicalWorkContext ? "quote-approved" : undefined
+          }
+          data-canonical-visit-id={
+            approvedCanonicalWorkContext?.visit?.id || undefined
+          }
+          data-canonical-visit-version={
+            approvedCanonicalWorkContext?.visit?.currentVersion || undefined
+          }
+          data-canonical-visit-state={
+            approvedCanonicalWorkContext?.visit?.state || undefined
+          }
+        >
           <p style={workspaceContextEyebrow}>{t("messagesRelatedWork", language)}</p>
           {hasContextFacts ? (
             <div style={workspaceFactList}>
@@ -6617,6 +6664,12 @@ function MessagesInbox({ setPage, currentPage }) {
                 emergencyContextMode={isWideWorkspace ? "panel" : "stacked"}
                 onCanonicalEmergencyContextChange={
                   handleCanonicalEmergencyContextChange
+                }
+                communicationContextMode={
+                  isWideWorkspace ? "column" : "inline"
+                }
+                onCanonicalWorkContextChange={
+                  handleCanonicalWorkContextChange
                 }
                 setPage={handleSplitThreadPageChange}
               />
