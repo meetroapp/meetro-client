@@ -95,6 +95,10 @@
 .business-document-conversation {
   padding: 14px 0 0;
 }
+.business-document-conversation-context,
+.business-document-conversation-footer {
+  min-width: 0;
+}
 .business-document-preview > header {
   display: flex;
   align-items: flex-start;
@@ -295,7 +299,7 @@
 
 .business-document-chat-shell {
   display: grid;
-  grid-template-rows: minmax(0, 1fr) auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
   height: min(62dvh, 620px);
   min-height: 280px;
   min-width: 0;
@@ -310,9 +314,12 @@
   min-width: 0;
   max-width: 100%;
   max-height: none;
+  align-content: start;
+  overflow-x: clip;
   overflow-y: auto;
   overscroll-behavior: contain;
   padding: 5px 2px 24px;
+  scrollbar-gutter: stable;
   scroll-padding-bottom: 24px;
 }
 .business-document-turns > article.meetro,
@@ -539,9 +546,9 @@
 .business-document-photo-cards article { min-width: 0; padding: 7px; border: 1px solid #e1e7e2; border-radius: 10px; background: #fafcf9; }
 .business-document-photo-cards img { display: block; width: 100%; aspect-ratio: 4 / 3; border-radius: 8px; object-fit: cover; }
 .business-document-photo-cards span { display: block; margin: 6px 0; color: #496156; font-size: 9px; font-weight: 850; overflow-wrap: anywhere; }
-.business-document-new-message { grid-row: 1; align-self: end; justify-self: center; position: relative; z-index: 2; bottom: auto; display: block; width: max-content; max-width: calc(100% - 16px); min-width: 0; margin: 0 auto 8px; overflow: hidden; border: 1px solid #cddbd1; border-radius: 999px; color: #165b3a; background: #fff; padding: 7px 13px; box-shadow: 0 6px 18px rgba(29,55,40,.14); font-size: 10px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
+.business-document-new-message { grid-row: 2; align-self: center; justify-self: center; position: relative; z-index: 1; bottom: auto; display: block; width: max-content; max-width: calc(100% - 16px); min-width: 0; margin: 0 auto 8px; overflow: hidden; border: 1px solid #cddbd1; border-radius: 999px; color: #165b3a; background: #fff; padding: 7px 13px; box-shadow: 0 6px 18px rgba(29,55,40,.14); font-size: 10px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
 
-.business-document-composer { grid-row: 2; position: relative; z-index: 3; flex: 0 0 auto; min-width: 0; max-width: 100%; padding: 8px; border: 1px solid #d9e1da; border-radius: 13px; background: #fff; }
+.business-document-composer { grid-row: 3; position: relative; z-index: 1; flex: 0 0 auto; min-width: 0; max-width: 100%; padding: 8px; border: 1px solid #d9e1da; border-radius: 13px; background: #fff; }
 .business-document-composer textarea { display: block; width: 100%; min-height: 74px; resize: vertical; border: 0; outline: none; color: #26384c; background: transparent; line-height: 1.4; }
 .business-document-composer > div { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; border-top: 1px solid #edf0ec; padding-top: 8px; }
 .business-document-composer button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid #dfe7e0; border-radius: 10px; color: #165b3a; background: #fff; padding: 8px 11px; font-size: 11px; font-weight: 900; }
@@ -799,8 +806,7 @@
   .business-document-conversation,
   .business-document-conversation.mobile-active {
     display: grid;
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-auto-rows: auto;
+    grid-template-rows: auto minmax(0, 1fr) auto;
     min-height: 0;
     height: 100%;
     overflow: hidden;
@@ -808,7 +814,7 @@
 
   .business-document-chat-shell {
     display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto auto;
     height: 100%;
     min-height: 0;
     max-height: none;
@@ -823,9 +829,9 @@
   }
 
   .business-document-composer {
-    grid-row: 2;
+    grid-row: 3;
     position: relative;
-    z-index: 3;
+    z-index: 1;
   }
 
   .business-document-evidence-panel {
@@ -895,7 +901,7 @@
 
   #root[data-app-layout="mobile"] .business-document-chat-shell {
     display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto auto;
     height: 56dvh;
     min-height: 220px;
   }
@@ -1096,7 +1102,7 @@
 
   #root[data-app-layout="tablet"] .business-document-chat-shell {
     display: grid;
-    grid-template-rows: minmax(0, 1fr) auto;
+    grid-template-rows: minmax(0, 1fr) auto auto;
     height: 58dvh;
     min-height: 260px;
   }

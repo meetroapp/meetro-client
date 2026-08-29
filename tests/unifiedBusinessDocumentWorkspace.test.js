@@ -801,7 +801,7 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-conversation,[\s\S]*\.business-document-conversation\.mobile-active\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*auto minmax\(0,\s*1fr\)[\s\S]*min-height:\s*0[\s\S]*overflow:\s*hidden/
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-conversation,[\s\S]*\.business-document-conversation\.mobile-active\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto[\s\S]*min-height:\s*0[\s\S]*overflow:\s*hidden/
   );
 
   assert.match(
@@ -811,7 +811,7 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /\.business-document-chat-shell\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto[\s\S]*overflow:\s*hidden/
+    /\.business-document-chat-shell\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto auto[\s\S]*overflow:\s*hidden/
   );
 
   assert.match(
@@ -821,12 +821,12 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /\.business-document-composer\s*\{[\s\S]*grid-row:\s*2[\s\S]*position:\s*relative[\s\S]*z-index:\s*3/
+    /\.business-document-composer\s*\{[\s\S]*grid-row:\s*3[\s\S]*position:\s*relative[\s\S]*z-index:\s*1/
   );
 
   assert.match(
     styles,
-    /\.business-document-new-message\s*\{[\s\S]*grid-row:\s*1[\s\S]*align-self:\s*end[\s\S]*width:\s*max-content[\s\S]*max-width:\s*calc\(100% - 16px\)/
+    /\.business-document-new-message\s*\{[\s\S]*grid-row:\s*2[\s\S]*align-self:\s*center[\s\S]*width:\s*max-content[\s\S]*max-width:\s*calc\(100% - 16px\)/
   );
 
   assert.match(
@@ -841,7 +841,7 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-chat-shell\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto[\s\S]*height:\s*100%[\s\S]*min-height:\s*0/
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-chat-shell\s*\{[\s\S]*display:\s*grid[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto auto[\s\S]*height:\s*100%[\s\S]*min-height:\s*0/
   );
 
   assert.match(
@@ -851,7 +851,7 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-composer\s*\{[\s\S]*grid-row:\s*2[\s\S]*z-index:\s*3/
+    /@media \(min-width:\s*901px\)[\s\S]*\.business-document-composer\s*\{[\s\S]*grid-row:\s*3[\s\S]*z-index:\s*1/
   );
 
   assert.match(
