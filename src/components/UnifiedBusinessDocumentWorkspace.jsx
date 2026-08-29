@@ -590,7 +590,13 @@ function StandardManualEditor({ activeDocument, quote, invoice, documentNumber, 
 
 function InstructionEditor({ turn, onSave, onCancel }) {
   const [value, setValue] = useState(turn.text);
-  return <article className="you editing"><span>You</span><div className="business-document-turn-editor"><textarea aria-label="Edit prior instruction" value={value} onChange={(event) => setValue(event.target.value)} /><div><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={() => onSave(value)} disabled={!value.trim()}>Save</button></div></div></article>;
+  const editorRef = useRef(null);
+  const textareaRef = useRef(null);
+  useEffect(() => {
+    textareaRef.current?.focus({ preventScroll: true });
+    editorRef.current?.scrollIntoView({ block: "nearest" });
+  }, []);
+  return <article ref={editorRef} className="you editing"><span>You</span><div className="business-document-turn-editor"><textarea ref={textareaRef} aria-label="Edit prior instruction" value={value} onChange={(event) => setValue(event.target.value)} /><div><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={() => onSave(value)} disabled={!value.trim()}>Save</button></div></div></article>;
 }
 
 function InstructionTurn({ turn, onSave, onCancel, onEdit, showResponse = true }) {
