@@ -1347,7 +1347,8 @@ test("prefill manual amount shortcuts and governed photo input are functional sh
 });
 
 test("shortcut focus is explicit without false selected state", () => {
-  const shortcuts = workspace.slice(workspace.indexOf("business-document-conversation-shortcuts"), workspace.indexOf("business-private-reminders"));
+  const shortcutsStart = workspace.indexOf("business-document-conversation-shortcuts");
+  const shortcuts = workspace.slice(shortcutsStart, workspace.indexOf("\n        </section>", shortcutsStart));
   assert.match(shortcuts, /focusComposer\("Note: "\)/);
   assert.match(shortcuts, /focusComposer\("Keep this private: "\)/);
   assert.match(shortcuts, /openManualEditor\("amount"\)/);

@@ -83,6 +83,15 @@ test("Edit and proposal review controls remain inside the scrollable transcript"
   assert.match(workspace, /onDismiss=\{dismissInvoiceProposal\}/);
 });
 
+test("dynamic conversation notices scroll with messages instead of shrinking the composer region", () => {
+  assert.match(turns, /privateReminders\.length/);
+  assert.match(turns, /currentAnalysisRequest\.error/);
+  assert.match(turns, /invoiceCreateState\.error/);
+  assert.match(turns, /notice && mobilePane === "conversation"/);
+  const footer = conversation.slice(footerStart);
+  assert.doesNotMatch(footer, /privateReminders\.length|currentAnalysisRequest\.error|invoiceCreateState\.error|notice &&/);
+});
+
 test("right preview rendering cannot replace or key the left transcript structure", () => {
   const previewStart = workspace.indexOf('<section ref={previewRef}', conversationStart);
   assert.ok(previewStart > conversationEnd);
