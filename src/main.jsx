@@ -3,7 +3,8 @@ import { createRoot } from 'react-dom/client'
 import { Capacitor } from '@capacitor/core'
 import './index.css'
 import RouteErrorBoundary from './components/RouteErrorBoundary.jsx'
-import PublicSite, { isPublicWebsitePath } from './public/PublicSite.jsx'
+import PublicSite from './public/PublicSite.jsx'
+import { shouldRenderPublicSite } from './utils/appEntryRouting.js'
 import {
   applyAppLayoutDiagnostics,
   getDesktopContentMetrics,
@@ -40,14 +41,6 @@ function isNativeRuntime() {
   }
 }
 
-function shouldRenderPublicSite() {
-  if (isNativeRuntime()) return false;
-
-  const pathname = window.location.pathname || "/";
-
-  return isPublicWebsitePath(pathname);
-}
-
 function prepareAppEntryPath() {
   if (isNativeRuntime()) return;
 
@@ -58,7 +51,11 @@ function prepareAppEntryPath() {
 
 prepareAppEntryPath();
 
-const shouldUsePublicSite = shouldRenderPublicSite();
+const shouldUsePublicSite = shouldRenderPublicSite({
+  pathname: window.location.pathname,
+  hash: window.location.hash,
+  native: isNativeRuntime(),
+});
 
 if (!shouldUsePublicSite) {
   const initialLayoutMetrics = getDesktopContentMetrics({ capacitor: Capacitor });
