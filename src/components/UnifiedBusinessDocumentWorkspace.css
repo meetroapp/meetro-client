@@ -812,6 +812,12 @@
     overflow: hidden;
   }
 
+  .business-document-control-toolbar { margin-bottom: 6px; }
+  .business-document-job-context { gap: 8px; margin-bottom: 8px; padding: 10px; }
+  .business-document-composer textarea { min-height: 58px; }
+  .business-document-turn-editor textarea { min-height: 52px; }
+  .business-document-conversation-shortcuts { margin-top: 4px; }
+
   .business-document-chat-shell {
     display: grid;
     grid-template-rows: minmax(0, 1fr) auto auto;

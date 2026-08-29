@@ -67,6 +67,15 @@ test("the final message can clear the separately reserved composer row", () => {
   assert.doesNotMatch(styles, /\.business-document-composer\s*\{[^}]*position:\s*(?:absolute|fixed|sticky)/);
 });
 
+test("compact desktop height preserves readable context and a fully usable Edit form", () => {
+  const wide = styles.slice(styles.indexOf("@media (min-width: 901px)"), styles.indexOf("@media (min-width: 1180px)"));
+  assert.match(wide, /\.business-document-job-context\s*\{[^}]*gap:\s*8px[^}]*margin-bottom:\s*8px[^}]*padding:\s*10px/);
+  assert.match(wide, /\.business-document-composer textarea\s*\{\s*min-height:\s*58px/);
+  assert.match(wide, /\.business-document-turn-editor textarea\s*\{\s*min-height:\s*52px/);
+  assert.match(styles, /\.business-document-turn-body button,[\s\S]*min-height:\s*44px/);
+  assert.doesNotMatch(wide, /font-size:\s*[0-8]px/);
+});
+
 test("new-message control has a dedicated non-overlay row and reaches the newest turn", () => {
   assert.match(styles, /\.business-document-new-message\s*\{\s*grid-row:\s*2/);
   assert.doesNotMatch(styles, /\.business-document-new-message\s*\{[^}]*position:\s*(?:absolute|fixed|sticky)/);
