@@ -148,6 +148,7 @@ test("manual mode previews tentative values, supports Apply/Cancel, and protects
   assert.match(manual, /Extra work/);
   assert.match(manual, /Payment terms/);
   assert.match(manual, /Due date/);
+  assert.match(manual, /Due date<input[^>]+onInput=\{\(event\) => update\(\{ dueDate: event\.currentTarget\.value \}\)\}/);
   assert.match(manual, /Customer notes/);
   assert.match(manual, /onPreview\(next\)/);
   assert.match(manual, /onApply\(draft, originalRef\.current\)/);

@@ -446,7 +446,7 @@ function CompletedJobInvoiceManualEditor({ invoice, preparation, onPreview, onAp
       </section>
       <fieldset className="business-document-manual-fields"><legend>Payment</legend><div>
         <label>Payment terms<textarea value={draft.paymentTerms || ""} onChange={(event) => update({ paymentTerms: event.target.value })} /></label>
-        <label>Due date<input type="date" value={draft.dueDate || ""} onChange={(event) => update({ dueDate: event.target.value })} /></label>
+        <label>Due date<input type="date" value={draft.dueDate || ""} onInput={(event) => update({ dueDate: event.currentTarget.value })} /></label>
       </div></fieldset>
       <fieldset className="business-document-manual-fields"><legend>Customer notes</legend><div>
         <label>Notes shown to the customer<textarea value={draft.notes || ""} onChange={(event) => update({ notes: event.target.value })} /></label>
