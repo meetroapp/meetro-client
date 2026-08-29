@@ -25,6 +25,7 @@ import {
   WorkCenterPageHeader,
 } from "../components/WorkCenterWorkspaceSystem.jsx";
 import ProfessionalInvoiceWorkspace from "../components/ProfessionalInvoiceWorkspace";
+import CompletedJobInvoiceHandoff from "../components/CompletedJobInvoiceHandoff";
 import { t as translate } from "../utils/language";
 import { formatDateTimeDisplay, formatScheduleTime as formatDisplayScheduleTime } from "../utils/displayTime";
 import { formatLocaleCurrency, formatLocaleDate, getFormattingLocale } from "../utils/localeFormat";
@@ -11400,7 +11401,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                            autoOpenToken={canonicalAutoOpenToken}
 	                          >
 	                            {["WORK_COMPLETED", "JOB_COMPLETED"].includes(canonicalLiveJob?.stage?.code) ? (
-	                              <button type="button" style={startScheduleBtn} onClick={() => openWorkTab("revenue")}>{workCenterWorkspaceCopy.openInvoices}</button>
+	                              <CompletedJobInvoiceHandoff
+	                                jobId={workCenterLifecycleProjection.projection.job?.id || null}
+	                                language={activeLanguage}
+	                                setPage={setPage}
+	                              />
 	                            ) : (
 	                              <p style={jobWorkspaceDisclosureText}>Available after the work is completed.</p>
 	                            )}

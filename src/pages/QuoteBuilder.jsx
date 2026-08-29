@@ -65,6 +65,11 @@ import {
   listBusinessDocumentDrafts,
 } from "../utils/businessDocumentDraftApi.js";
 import {
+  createCanonicalInvoice,
+  createInvoiceCommandKey,
+  fetchProfessionalInvoiceWorkspace,
+} from "../utils/invoicePaymentApi.js";
+import {
   bootstrapExactSavedQuote,
   parseSavedQuoteRoute,
   replaceSavedQuoteRoute,
@@ -937,12 +942,20 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     useState("");
   const [quickQuoteAttachedJob, setQuickQuoteAttachedJob] = useState(null);
   const [jobLinkedQuoteContext, setJobLinkedQuoteContext] = useState(() => ({
-    status: routeCanonicalJobId && !routeSavedDocumentId ? "loading" : "standalone",
+    status: routeCanonicalJobId && !routeSavedDocumentId && !isUnifiedInvoiceEntry
+      ? "loading"
+      : "standalone",
     reason: "",
     context: null,
     existingQuoteProtected: false,
     savedQuoteResume: null,
     reopenDocumentId: null,
+  }));
+  const [invoicePreparation, setInvoicePreparation] = useState(() => ({
+    status: isUnifiedInvoiceEntry && routeCanonicalJobId ? "loading" : "standalone",
+    job: null,
+    resumeDocumentId: null,
+    error: "",
   }));
   const [savedRouteBootstrap, setSavedRouteBootstrap] = useState(() => ({
     status: routeSavedDocumentId ? "loading" : "standalone",
@@ -1075,6 +1088,53 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     quickQuoteAttachedJob?.jobId || requestedCanonicalJobId;
 
   useEffect(() => {
+    if (!isUnifiedInvoiceEntry || !routeCanonicalJobId || routeSavedDocumentId) {
+      return undefined;
+    }
+    let active = true;
+    setInvoicePreparation({ status: "loading", job: null, resumeDocumentId: null, error: "" });
+    void Promise.all([
+      fetchProfessionalInvoiceWorkspace({ limit: 50, setPage }),
+      listBusinessDocumentDrafts({ type: "INVOICE", setPage }),
+    ]).then(([workspace, documents]) => {
+      if (!active) return;
+      const prepared = workspace.readyJobs.find((job) => job.jobId === routeCanonicalJobId);
+      if (!prepared) {
+        setInvoicePreparation({
+          status: "unavailable", job: null, resumeDocumentId: null,
+          error: "This completed Job is not ready for Invoice review.",
+        });
+        return;
+      }
+      const matches = documents.filter((document) =>
+        document.documentType === "INVOICE" &&
+        document.status === "WORKING_DRAFT" &&
+        document.jobId === routeCanonicalJobId
+      );
+      setQuickQuoteAttachedJob({
+        jobId: prepared.jobId,
+        title: prepared.serviceTitle,
+        customerLabel: prepared.customerName,
+        customerConcern: "",
+        evaluation: null,
+      });
+      setInvoicePreparation({
+        status: "ready",
+        job: prepared,
+        resumeDocumentId: matches[0]?.id || null,
+        error: "",
+      });
+    }).catch((error) => {
+      if (!active) return;
+      setInvoicePreparation({
+        status: "unavailable", job: null, resumeDocumentId: null,
+        error: error?.message || "Invoice review is temporarily unavailable.",
+      });
+    });
+    return () => { active = false; };
+  }, [isUnifiedInvoiceEntry, routeCanonicalJobId, routeSavedDocumentId, setPage]);
+
+  useEffect(() => {
     if (!routeSavedDocumentId || !savedQuoteRoute.valid) return undefined;
     let active = true;
     setSavedRouteBootstrap({ status: "loading", reason: "", document: null });
@@ -1107,7 +1167,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   }, [routeCanonicalJobId, routeSavedDocumentId, savedQuoteRoute.valid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (!routeCanonicalJobId || routeSavedDocumentId || !savedQuoteRoute.valid) {
+    if (isUnifiedInvoiceEntry || !routeCanonicalJobId || routeSavedDocumentId || !savedQuoteRoute.valid) {
       return undefined;
     }
     let active = true;
@@ -1203,7 +1263,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     return () => {
       active = false;
     };
-  }, [routeCanonicalJobId, routeSavedDocumentId, savedQuoteRoute.valid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isUnifiedInvoiceEntry, routeCanonicalJobId, routeSavedDocumentId, savedQuoteRoute.valid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openProtectedJobLinkedQuote() {
     const resume = jobLinkedQuoteContext.savedQuoteResume ||
@@ -1221,7 +1281,12 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     }));
   }
 
+  function inputKey(prefix, index) {
+    return `${prefix}_${index}`.replace(/[^a-z0-9_]/gi, "_").toLowerCase().slice(0, 80);
+  }
+
   function persistOpenedQuoteRoute(document) {
+    if (isUnifiedInvoiceEntry && document?.documentType === "INVOICE") return;
     if (document?.documentType !== "QUOTE") {
       replaceSavedQuoteRoute({});
       return;
@@ -1235,8 +1300,22 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     });
   }
 
-  function inputKey(prefix, index) {
-    return `${prefix}_${index}`.replace(/[^a-z0-9_]/gi, "_").toLowerCase().slice(0, 80);
+  async function createReviewedCompletedJobInvoice({
+    extraWork, customerNotes, terms, due,
+  }) {
+    if (invoicePreparation.status !== "ready" || !invoicePreparation.job) {
+      throw new Error("This completed Job is not ready for Invoice review.");
+    }
+    return createCanonicalInvoice({
+      jobId: invoicePreparation.job.jobId,
+      expectedCompletionVersion: invoicePreparation.job.completionVersion,
+      due,
+      customerNotes,
+      terms,
+      extraWork,
+      idempotencyKey: createInvoiceCommandKey("invoice-create"),
+      setPage,
+    });
   }
 
   function estimateCostInputs() {
@@ -3172,7 +3251,23 @@ ${businessIdentity.businessName}`;
         </div>
       );
     }
-    if (!routeSavedDocumentId && routeCanonicalJobId && jobLinkedQuoteContext.status === "loading") {
+    if (isUnifiedInvoiceEntry && routeCanonicalJobId && invoicePreparation.status === "loading") {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate">
+          <p role="status">Preparing the completed Job for Invoice review…</p>
+        </div>
+      );
+    }
+    if (isUnifiedInvoiceEntry && routeCanonicalJobId && invoicePreparation.status !== "ready") {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate" role="alert">
+          <h1>Invoice review unavailable</h1>
+          <p>{invoicePreparation.error || "This completed Job is not ready for Invoice review."}</p>
+          <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
+        </div>
+      );
+    }
+    if (!isUnifiedInvoiceEntry && !routeSavedDocumentId && routeCanonicalJobId && jobLinkedQuoteContext.status === "loading") {
       return (
         <div className="app-page meetro-form-page business-document-context-gate">
           <p role="status">Loading the authorized Job, customer, and Evaluation context…</p>
@@ -3180,6 +3275,7 @@ ${businessIdentity.businessName}`;
       );
     }
     if (
+      !isUnifiedInvoiceEntry &&
       !routeSavedDocumentId &&
       routeCanonicalJobId &&
       !["ready", "protected"].includes(jobLinkedQuoteContext.status)
@@ -3240,17 +3336,19 @@ ${businessIdentity.businessName}`;
           language={language}
           initialDocument={initialDocument}
           initialSavedDocumentId={
-            routeSavedDocumentId || jobLinkedQuoteContext.reopenDocumentId
+            routeSavedDocumentId ||
+            jobLinkedQuoteContext.reopenDocumentId ||
+            (isUnifiedInvoiceEntry ? invoicePreparation.resumeDocumentId : null)
           }
           initialSavedDocument={savedRouteBootstrap.document}
           onDurableDocumentOpened={persistOpenedQuoteRoute}
           job={{
             id: canonicalJobId || null,
-            requestId: jobLinkedQuoteContext.context?.job.requestId || null,
+            requestId: invoicePreparation.job?.requestId || jobLinkedQuoteContext.context?.job.requestId || null,
             relationshipId:
-              jobLinkedQuoteContext.context?.job.relationshipId || null,
-            title: quickQuoteAttachedJob?.title || activeJobSnapshot?.service || projectTitle,
-            customerName: quickQuoteAttachedJob?.customerLabel || activeJobSnapshot?.customer || customerName,
+              invoicePreparation.job?.relationshipId || jobLinkedQuoteContext.context?.job.relationshipId || null,
+            title: invoicePreparation.job?.serviceTitle || quickQuoteAttachedJob?.title || activeJobSnapshot?.service || projectTitle,
+            customerName: invoicePreparation.job?.customerName || quickQuoteAttachedJob?.customerLabel || activeJobSnapshot?.customer || customerName,
             location: routeCanonicalJobId
               ? customerLocation
               : activeJobSnapshot?.location || customerLocation,
@@ -3261,12 +3359,16 @@ ${businessIdentity.businessName}`;
             recommendations:
               jobLinkedQuoteContext.context?.recommendations || [],
             customerLinkedFromJob:
-              !routeSavedDocumentId &&
-              jobLinkedQuoteContext.status === "ready" &&
-              Boolean(jobLinkedQuoteContext.context?.customer.displayName),
+              invoicePreparation.status === "ready" || (
+                !routeSavedDocumentId &&
+                jobLinkedQuoteContext.status === "ready" &&
+                Boolean(jobLinkedQuoteContext.context?.customer.displayName)
+              ),
             canonical: Boolean(canonicalJobId),
           }}
           quote={unifiedQuoteDraft}
+          invoicePreparation={invoicePreparation.status === "ready" ? invoicePreparation.job : null}
+          onCreateCanonicalInvoice={createReviewedCompletedJobInvoice}
           onApplyQuotePatch={applyUnifiedQuotePatch}
           onAddPhotos={(documentType = "quote") => {
             quickQuotePhotoTargetDocumentRef.current = documentType;

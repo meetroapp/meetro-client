@@ -79,19 +79,15 @@ function validateJob(value) {
 }
 
 function validateLine(value, audience) {
-  const customerKeys = [
-    "sequence", "lineageLabel", "description", "quantity",
-    "unitAmountMinor", "lineTotalMinor",
-  ];
-  const professionalKeys = [
-    ...customerKeys, "lineItemId", "sourceQuoteId", "sourceQuoteVersion",
-  ];
+  const approved = value?.type === "approvedWork";
+  const customerKeys = ["sequence", "type", "description", "quantity", "unitAmountMinor", "lineTotalMinor"];
+  const professionalKeys = approved
+    ? [...customerKeys, "lineItemId", "sourceQuoteId", "sourceQuoteVersion", "sourceScopeItemId", "lineageLabel"]
+    : [...customerKeys, "lineItemId"];
   if (!exact(value, audience === "professional" ? professionalKeys : customerKeys)) return null;
   const normalized = {
     sequence: integer(value.sequence),
-    lineageLabel: new Set(["ORIGINAL", "REVISED", "ADDITIONAL"]).has(value.lineageLabel)
-      ? value.lineageLabel
-      : "",
+    type: approved ? "approvedWork" : value.type === "extraWork" ? "extraWork" : "",
     description: text(value.description, 1000),
     quantity: integer(value.quantity),
     unitAmountMinor: integer(value.unitAmountMinor, { zero: true }),
@@ -99,15 +95,24 @@ function validateLine(value, audience) {
   };
   if (audience === "professional") {
     normalized.lineItemId = uuid(value.lineItemId);
-    normalized.sourceQuoteId = uuid(value.sourceQuoteId);
-    normalized.sourceQuoteVersion = integer(value.sourceQuoteVersion);
+    if (approved) {
+      normalized.sourceQuoteId = uuid(value.sourceQuoteId);
+      normalized.sourceQuoteVersion = integer(value.sourceQuoteVersion);
+      normalized.sourceScopeItemId = uuid(value.sourceScopeItemId);
+      normalized.lineageLabel = new Set(["ORIGINAL", "REVISED", "ADDITIONAL"]).has(value.lineageLabel)
+        ? value.lineageLabel
+        : "";
+    }
   }
   if (
-    !normalized.sequence || !normalized.lineageLabel || !normalized.description ||
+    !normalized.sequence || !normalized.type || !normalized.description ||
     !normalized.quantity || normalized.unitAmountMinor == null ||
     normalized.lineTotalMinor !== normalized.unitAmountMinor * normalized.quantity ||
     (audience === "professional" &&
-      (!normalized.lineItemId || !normalized.sourceQuoteId || !normalized.sourceQuoteVersion))
+      (!normalized.lineItemId || (approved && (
+        !normalized.sourceQuoteId || !normalized.sourceQuoteVersion ||
+        !normalized.sourceScopeItemId || !normalized.lineageLabel
+      ))))
   ) return null;
   return normalized;
 }
@@ -210,7 +215,8 @@ export function validateInvoice(value, { audience, invoiceId = "", jobId = "" } 
 function validateReadyJob(value) {
   if (!exact(value, [
     "jobId", "requestId", "relationshipId", "customerName", "serviceTitle",
-    "completedAt", "completionVersion", "approvedAmount",
+    "completedAt", "completionVersion", "approvedAmount", "paymentsReceivedMinor",
+    "amountStillDueMinor", "approvedWork",
   ])) return null;
   const amount = value.approvedAmount == null ? null : (() => {
     if (!exact(value.approvedAmount, ["currency", "totalMinor"])) return false;
@@ -229,10 +235,25 @@ function validateReadyJob(value) {
     completedAt: timestamp(value.completedAt),
     completionVersion: integer(value.completionVersion),
     approvedAmount: amount,
+    paymentsReceivedMinor: integer(value.paymentsReceivedMinor, { zero: true }),
+    amountStillDueMinor: integer(value.amountStillDueMinor, { zero: true }),
+    approvedWork: Array.isArray(value.approvedWork) ? value.approvedWork.map((item) => {
+      if (!exact(item, ["description", "quantity", "unitAmountMinor", "lineTotalMinor"])) return null;
+      const line = {
+        description: text(item.description, 1000),
+        quantity: integer(item.quantity),
+        unitAmountMinor: integer(item.unitAmountMinor, { zero: true }),
+        lineTotalMinor: integer(item.lineTotalMinor, { zero: true }),
+      };
+      return line.description && line.quantity && line.unitAmountMinor != null &&
+        line.lineTotalMinor === line.quantity * line.unitAmountMinor ? line : null;
+    }) : null,
   };
   return normalized.jobId && normalized.requestId && normalized.relationshipId &&
     normalized.customerName && normalized.serviceTitle && normalized.completedAt &&
-    normalized.completionVersion && amount !== false ? normalized : null;
+    normalized.completionVersion && amount !== false &&
+    normalized.paymentsReceivedMinor != null && normalized.amountStillDueMinor != null &&
+    normalized.approvedWork?.every(Boolean) ? normalized : null;
 }
 
 export function validateInvoiceWorkspace(value) {
@@ -370,13 +391,22 @@ export async function fetchCustomerJobInvoice({ jobId, setPage, authFetchImpl = 
   return invoice;
 }
 
-export async function createCanonicalInvoice({ jobId, expectedCompletionVersion, due, customerNotes = null, terms = null, idempotencyKey, setPage, authFetchImpl = authFetch } = {}) {
+export async function createCanonicalInvoice({ jobId, expectedCompletionVersion, due, customerNotes = null, terms = null, extraWork = [], idempotencyKey, setPage, authFetchImpl = authFetch } = {}) {
   const id = uuid(jobId);
   const version = integer(expectedCompletionVersion);
-  if (!id || !version || !text(idempotencyKey, 200) || !validateDue(due)) {
+  const normalizedExtraWork = Array.isArray(extraWork) && extraWork.length <= 100
+    ? extraWork.map((item) => ({
+        description: text(item?.description, 1000),
+        quantity: integer(item?.quantity),
+        unitAmountMinor: integer(item?.unitAmountMinor, { zero: true }),
+      }))
+    : null;
+  if (!id || !version || !text(idempotencyKey, 200) || !validateDue(due) ||
+      !normalizedExtraWork || normalizedExtraWork.some((item) =>
+        !item.description || !item.quantity || item.unitAmountMinor == null)) {
     throw new InvoicePaymentApiError({ status: 400, code: "INVALID_INVOICE_CREATE_COMMAND" });
   }
-  const data = await request(`/professional/jobs/${id}/invoices`, commandOptions({ expectedCompletionVersion: version, due, customerNotes, terms }, idempotencyKey), setPage, authFetchImpl);
+  const data = await request(`/professional/jobs/${id}/invoices`, commandOptions({ expectedCompletionVersion: version, due, customerNotes, terms, extraWork: normalizedExtraWork }, idempotencyKey), setPage, authFetchImpl);
   const invoice = validateInvoice(data.invoice, { audience: "professional", jobId: id });
   if (!invoice) throw new InvoicePaymentApiError({ status: 502, code: "UNSAFE_PROFESSIONAL_INVOICE_RESPONSE" });
   return invoice;

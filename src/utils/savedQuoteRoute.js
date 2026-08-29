@@ -19,7 +19,11 @@ export function parseSavedQuoteRoute(hash = "") {
     page,
     jobId,
     draftId,
-    valid: page === "quoteBuilder" && !invalidJobId && !invalidDraftId,
+    valid:
+      ["quoteBuilder", "invoiceBuilder"].includes(page) &&
+      !invalidJobId &&
+      !invalidDraftId &&
+      (page === "quoteBuilder" || !hasDraftId),
     invalidJobId,
     invalidDraftId,
     intent: draftId ? "EXACT_SAVED_QUOTE" : jobId ? "JOB_CONTEXT" : "STANDALONE",

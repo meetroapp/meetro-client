@@ -16,6 +16,7 @@ const JOB_ID = "22222222-2222-4222-8222-222222222222";
 const LINE_ID = "33333333-3333-4333-8333-333333333333";
 const QUOTE_ID = "44444444-4444-4444-8444-444444444444";
 const PAYMENT_ID = "55555555-5555-4555-8555-555555555555";
+const SCOPE_ID = "66666666-6666-4666-8666-666666666666";
 
 function invoice(audience = "professional", overrides = {}) {
   const value = {
@@ -35,7 +36,7 @@ function invoice(audience = "professional", overrides = {}) {
     due: { mode: "DUE_ON_RECEIPT", date: null },
     lineItems: [{
       sequence: 1,
-      lineageLabel: "ORIGINAL",
+      type: "approvedWork",
       description: "Replace disposal",
       quantity: 1,
       unitAmountMinor: 92000,
@@ -44,6 +45,8 @@ function invoice(audience = "professional", overrides = {}) {
         lineItemId: LINE_ID,
         sourceQuoteId: QUOTE_ID,
         sourceQuoteVersion: 3,
+        sourceScopeItemId: SCOPE_ID,
+        lineageLabel: "ORIGINAL",
       } : {}),
     }],
     subtotalMinor: 92000,
@@ -88,6 +91,8 @@ test("workspace validator accepts only server-owned financial summary and exact 
       jobId: JOB_ID, requestId: 14, relationshipId: 9, customerName: "Liam Molina",
       serviceTitle: "Kitchen repair", completedAt: "2026-08-15T12:00:00.000Z",
       completionVersion: 1, approvedAmount: { currency: "USD", totalMinor: 92000 },
+      paymentsReceivedMinor: 46000, amountStillDueMinor: 46000,
+      approvedWork: [{ description: "Replace disposal", quantity: 1, unitAmountMinor: 92000, lineTotalMinor: 92000 }],
     }],
     invoices: [{
       invoiceId: INVOICE_ID, invoiceNumber: "INV-111111111111", jobId: JOB_ID,
@@ -148,10 +153,70 @@ test("Invoice commands send only exact governed fields and never accept client s
   await createCanonicalInvoice({ jobId: JOB_ID, expectedCompletionVersion: 1, due: { mode: "DUE_ON_RECEIPT", date: null }, idempotencyKey: "create-1", authFetchImpl });
   await issueCanonicalInvoice({ invoiceId: INVOICE_ID, expectedVersion: 1, idempotencyKey: "issue-1", authFetchImpl });
   await recordCanonicalPayment({ invoiceId: INVOICE_ID, expectedVersion: 2, amountMinor: 46000, method: "CHECK", receivedDate: "2026-08-15", idempotencyKey: "payment-1", authFetchImpl });
-  assert.deepEqual(calls[0].body, { expectedCompletionVersion: 1, due: { mode: "DUE_ON_RECEIPT", date: null }, customerNotes: null, terms: null });
+  assert.deepEqual(calls[0].body, { expectedCompletionVersion: 1, due: { mode: "DUE_ON_RECEIPT", date: null }, customerNotes: null, terms: null, extraWork: [] });
   assert.deepEqual(calls[1].body, { expectedVersion: 1 });
   assert.deepEqual(calls[2].body, { expectedVersion: 2, amountMinor: 46000, method: "CHECK", receivedDate: "2026-08-15", customerReference: null });
   assert.equal(calls.some(({ body }) => "status" in body || "paid" in body || "balanceMinor" in body), false);
+});
+
+test("reviewed Extra work is sent separately and preserves exact carried-payment arithmetic", async () => {
+  let submitted;
+  const result = await createCanonicalInvoice({
+    jobId: JOB_ID,
+    expectedCompletionVersion: 1,
+    due: { mode: "DUE_ON_RECEIPT", date: null },
+    extraWork: [{
+      description: "Additional reviewed cabinet alignment",
+      quantity: 1,
+      unitAmountMinor: 7500,
+      sourceQuoteId: QUOTE_ID,
+    }],
+    idempotencyKey: "create-reviewed-extra",
+    authFetchImpl: async (_endpoint, options) => {
+      submitted = JSON.parse(options.body);
+      return {
+        response: { ok: true, status: 201 },
+        data: {
+          success: true,
+          invoice: invoice("professional", {
+            status: "DRAFT",
+            currentVersion: 1,
+            issuedAt: null,
+            lineItems: [
+              {
+                sequence: 1, type: "approvedWork", description: "Approved repair",
+                quantity: 1, unitAmountMinor: 68000, lineTotalMinor: 68000,
+                lineItemId: LINE_ID, sourceQuoteId: QUOTE_ID,
+                sourceQuoteVersion: 3, sourceScopeItemId: SCOPE_ID,
+                lineageLabel: "REVISED",
+              },
+              {
+                sequence: 2, type: "extraWork",
+                description: "Additional reviewed cabinet alignment",
+                quantity: 1, unitAmountMinor: 7500, lineTotalMinor: 7500,
+                lineItemId: PAYMENT_ID,
+              },
+            ],
+            subtotalMinor: 75500,
+            totalMinor: 75500,
+            paidMinor: 51000,
+            balanceMinor: 24500,
+            actions: { canIssue: true, canRecordPayment: false, canShareExternal: false },
+          }),
+        },
+      };
+    },
+  });
+  assert.deepEqual(submitted.extraWork, [{
+    description: "Additional reviewed cabinet alignment",
+    quantity: 1,
+    unitAmountMinor: 7500,
+  }]);
+  assert.equal(result.totalMinor, 75500);
+  assert.equal(result.paidMinor, 51000);
+  assert.equal(result.balanceMinor, 24500);
+  assert.deepEqual(result.lineItems.map((item) => item.type), ["approvedWork", "extraWork"]);
+  assert.equal("sourceQuoteId" in result.lineItems[1], false);
 });
 
 test("professional Job History Invoice read is exact-Job scoped", async () => {

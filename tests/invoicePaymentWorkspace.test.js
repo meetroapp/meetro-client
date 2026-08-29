@@ -15,13 +15,14 @@ test("Work Center Revenue is owned by canonical Invoice workspace", () => {
   assert.doesNotMatch(revenue, /totalJobRevenue|completedProjectsRevenue|localStorage/);
 });
 
-test("canonical Invoice workspace has create, separate issue, Payment, and sharing controls", () => {
+test("canonical Invoice workspace routes completed Jobs to the existing builder and keeps issue, Payment, and sharing controls", () => {
   const source = read("../src/components/ProfessionalInvoiceWorkspace.jsx");
   for (const required of [
-    "createCanonicalInvoice", "issueCanonicalInvoice", "recordCanonicalPayment",
+    "invoiceBuilder\\?jobId=", "issueCanonicalInvoice", "recordCanonicalPayment",
     "shareInvoiceExternally", "buildInvoiceEmailUrl", "copyInvoiceDetails",
-    "expectedCompletionVersion", "expectedVersion", "createInvoiceCommandKey",
+    "expectedVersion", "Payments received", "Amount still due",
   ]) assert.match(source, new RegExp(required));
+  assert.doesNotMatch(source, /createCanonicalInvoice|data-invoice-create-job-id/);
   assert.doesNotMatch(source, /Pay Now|stripe|paypal|publicInvoice|invoiceUrl/);
   assert.match(source, /minHeight: 44/);
   assert.match(source, /WorkCenterMetricGrid/);

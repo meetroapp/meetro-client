@@ -61,6 +61,25 @@ test("strict route parser distinguishes Job context, exact saved Quote, and inva
   assert.equal(parseSavedQuoteRoute("#quoteBuilder?jobId=23").valid, false);
 });
 
+test("completed Job Invoice preparation survives an exact deep link without exposing a draft route", () => {
+  assert.deepEqual(
+    parseSavedQuoteRoute(`#invoiceBuilder?jobId=${JOB_ID}`),
+    {
+      page: "invoiceBuilder",
+      jobId: JOB_ID,
+      draftId: "",
+      valid: true,
+      invalidJobId: false,
+      invalidDraftId: false,
+      intent: "JOB_CONTEXT",
+    }
+  );
+  assert.equal(
+    parseSavedQuoteRoute(`#invoiceBuilder?jobId=${JOB_ID}&draftId=${DRAFT_ID}`).valid,
+    false
+  );
+});
+
 test("route builder persists only canonical resource identities", () => {
   assert.equal(
     buildSavedQuoteRoute({ jobId: JOB_ID, draftId: DRAFT_ID }),

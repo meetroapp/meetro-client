@@ -371,13 +371,14 @@ function quoteProposalReviewSections(proposal, pricing, patch) {
   return { pricingRows, customerRows, paymentRows, otherRows };
 }
 
-function InvoicePreview({ invoice, branding, generalPhotos, beforePhotos, afterPhotos, saved = false, documentNumber = "" }) {
+function InvoicePreview({ invoice, preparation, branding, generalPhotos, beforePhotos, afterPhotos, saved = false, documentNumber = "" }) {
   const rows = invoiceRows(invoice);
-  const total = invoiceTotal(invoice);
-  const paid = Number(invoice.paidAmount || 0) || 0;
-  const balance = String(invoice.balanceDue ?? "").trim()
-    ? Number(invoice.balanceDue) || 0
-    : Math.max(0, total - paid);
+  const prepared = Boolean(preparation);
+  const approvedMinor = preparation?.approvedAmount?.totalMinor || 0;
+  const extraMinor = rows.reduce((sum, item) => sum + Math.round(item.amount * 100), 0);
+  const totalMinor = prepared ? approvedMinor + extraMinor : Math.round(invoiceTotal(invoice) * 100);
+  const paidMinor = prepared ? preparation.paymentsReceivedMinor : Math.round((Number(invoice.paidAmount || 0) || 0) * 100);
+  const balanceMinor = Math.max(0, totalMinor - paidMinor);
   return (
     <article className="business-live-document" aria-label="Live Invoice Preview">
       <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>INVOICE</b><span>WORKING DRAFT</span></div></header>
@@ -386,12 +387,39 @@ function InvoicePreview({ invoice, branding, generalPhotos, beforePhotos, afterP
       <CustomerPhotoEvidence generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />
       <div className="business-document-table" role="table" aria-label="Invoice summary">
         <div className="head" role="row"><span>Invoice Summary</span><span>Amount</span></div>
-        {rows.length ? rows.map((item) => <div role="row" key={item.id || `${item.description}-${item.amount}`}><span>{item.description}</span><strong>{money(item.amount)}</strong></div>) : <div role="row"><span>Working draft</span><strong>—</strong></div>}
-        <div className="total" role="row"><span>TOTAL DUE</span><strong>{total > 0 ? money(total) : "—"}</strong></div>
+        {prepared ? <><div role="row"><strong>Approved work</strong><strong>{money(approvedMinor / 100)}</strong></div>{preparation.approvedWork.map((item, index) => <div role="row" key={`${item.description}-${index}`}><span>{item.description}</span><span>{money(item.lineTotalMinor / 100)}</span></div>)}<div role="row"><strong>Extra work</strong><strong>{money(extraMinor / 100)}</strong></div></> : null}
+        {rows.length ? rows.map((item) => <div role="row" key={item.id || `${item.description}-${item.amount}`}><span>{item.description}</span><strong>{money(item.amount)}</strong></div>) : !prepared ? <div role="row"><span>Working draft</span><strong>—</strong></div> : null}
+        <div role="row"><span>Invoice total</span><strong>{money(totalMinor / 100)}</strong></div>
+        <div role="row"><span>Payments received</span><strong>{money(paidMinor / 100)}</strong></div>
+        <div className="total" role="row"><span>Amount still due</span><strong>{money(balanceMinor / 100)}</strong></div>
       </div>
-      <div className="business-document-footer-grid"><section><h3>Payment Terms</h3><p>{invoice.paymentTerms || "Not confirmed."}</p></section><section><h3>Due Date</h3><p>{invoice.dueDate || "Not confirmed."}</p></section><section><h3>Amount Paid</h3><p>{money(paid)}</p></section><section><h3>Balance Due</h3><p>{money(balance)}</p></section><section><h3>Status</h3><p>{saved ? "Ready for Customer Review" : "Draft only. Payment and completion are not inferred."}</p></section></div>
+      <div className="business-document-footer-grid"><section><h3>Payment terms</h3><p>{invoice.paymentTerms || "Not confirmed."}</p></section><section><h3>Due date</h3><p>{invoice.dueDate || "Due on receipt"}</p></section><section><h3>Customer notes</h3><p>{invoice.notes || "None."}</p></section><section><h3>Status</h3><p>{saved ? "Saved draft · Ready for review" : prepared ? "Review invoice before creating it." : "Draft only. Payment and completion are not inferred."}</p></section></div>
       <footer>{branding.businessName}<span>Prepared with Meetro</span></footer>
     </article>
+  );
+}
+
+function CompletedInvoicePreparationEditor({ invoice, onChange }) {
+  const rows = Array.isArray(invoice.lineItems) ? invoice.lineItems : [];
+  const updateRow = (index, field, value) => onChange({
+    lineItems: rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row),
+  });
+  return (
+    <section className="business-document-job-context" aria-label="Invoice review">
+      <header><strong>Review invoice</strong><span>Nothing is created until you choose Create Invoice.</span></header>
+      <section><h3>Extra work</h3><p>Add work completed that was not included in the original quote.</p>
+        {rows.map((row, index) => <div className="business-document-manual-rows" key={row.id || index}>
+          <label>Description<input value={row.description || ""} onChange={(event) => updateRow(index, "description", event.target.value)} /></label>
+          <label>Quantity<input inputMode="numeric" value={row.quantity || ""} onChange={(event) => updateRow(index, "quantity", event.target.value)} /></label>
+          <label>Price<input inputMode="decimal" value={row.unitPrice || ""} onChange={(event) => updateRow(index, "unitPrice", event.target.value)} /></label>
+          <button type="button" onClick={() => onChange({ lineItems: rows.filter((_, rowIndex) => rowIndex !== index) })}>Remove item</button>
+        </div>)}
+        <button type="button" onClick={() => onChange({ lineItems: [...rows, { id: `extra-work-${Date.now()}`, description: "", quantity: "1", unitPrice: "" }] })}>Add item</button>
+      </section>
+      <label>Customer notes<textarea value={invoice.notes || ""} onChange={(event) => onChange({ notes: event.target.value })} /></label>
+      <label>Payment terms<textarea value={invoice.paymentTerms || ""} onChange={(event) => onChange({ paymentTerms: event.target.value })} /></label>
+      <label>Due date<input type="date" value={invoice.dueDate || ""} onChange={(event) => onChange({ dueDate: event.target.value })} /></label>
+    </section>
   );
 }
 
@@ -1093,6 +1121,7 @@ function JobLinkedQuoteContext({ job }) {
 export default function UnifiedBusinessDocumentWorkspace({
   setPage, language = "en", initialDocument = "quote", initialSavedDocumentId = null,
   initialSavedDocument = null, onDurableDocumentOpened, job = {}, quote,
+  invoicePreparation = null, onCreateCanonicalInvoice,
   onApplyQuotePatch, onAddPhotos, canAddPhotos = true, photos = [], photoBusy = false,
   onDownloadQuote, onPreviewQuote, onBack,
   onRestorePhotos, onEnsurePhotosDurable, onPhotosPersisted, onDiscardTransientPhotos,
@@ -1165,6 +1194,9 @@ export default function UnifiedBusinessDocumentWorkspace({
   const [numberingSetup, setNumberingSetup] = useState(null);
   const [deliveryState, setDeliveryState] = useState(null);
   const [quoteIssueState, setQuoteIssueState] = useState(null);
+  const [invoiceCreateState, setInvoiceCreateState] = useState({
+    busy: false, error: "", invoice: null,
+  });
   const [persistedQuoteAuthority, setPersistedQuoteAuthority] = useState({
     stage: "idle",
     documentId: "",
@@ -1178,6 +1210,26 @@ export default function UnifiedBusinessDocumentWorkspace({
   const [newContentAvailable, setNewContentAvailable] = useState(false);
   const [customerParties, setCustomerParties] = useState({ quote: null, invoice: null });
   const [linkedCustomerContacts, setLinkedCustomerContacts] = useState({ quote: null, invoice: null });
+  const invoicePreparationHydratedRef = useRef("");
+
+  useEffect(() => {
+    if (!invoicePreparation?.jobId || invoicePreparationHydratedRef.current === invoicePreparation.jobId) return;
+    invoicePreparationHydratedRef.current = invoicePreparation.jobId;
+    const approvedDescription = invoicePreparation.approvedWork
+      .map((item) => item.description)
+      .filter(Boolean)
+      .join("; ");
+    setInvoice((current) => ({
+      ...current,
+      customerName: invoicePreparation.customerName,
+      projectTitle: invoicePreparation.serviceTitle,
+      workPerformed: approvedDescription,
+      paidAmount: String(invoicePreparation.paymentsReceivedMinor / 100),
+      balanceDue: String(invoicePreparation.amountStillDueMinor / 100),
+      lineItems: Array.isArray(current.lineItems) ? current.lineItems : [],
+    }));
+    setDocumentJobIds((current) => ({ ...current, invoice: invoicePreparation.jobId }));
+  }, [invoicePreparation]);
   const [customerControl, setCustomerControl] = useState(() => emptyCustomerControl());
   const [businessContactProfileId, setBusinessContactProfileId] = useState(null);
   const relationshipCommandKeysRef = useRef(new Map());
@@ -2985,7 +3037,24 @@ export default function UnifiedBusinessDocumentWorkspace({
   }
 
   function invoicePdfModel() {
-    const customerVisible = customerVisibleWorkspaceDraft(invoice);
+    const preparedApprovedRows = invoicePreparation?.approvedWork?.map((item, index) => ({
+      id: `approved-work-${index}`,
+      description: item.description,
+      amount: item.lineTotalMinor / 100,
+      total: item.lineTotalMinor / 100,
+    })) || [];
+    const preparedExtraRows = invoiceRows(invoice);
+    const preparedTotal = invoicePreparation
+      ? (invoicePreparation.approvedAmount.totalMinor / 100) +
+        preparedExtraRows.reduce((sum, item) => sum + item.amount, 0)
+      : null;
+    const customerVisible = customerVisibleWorkspaceDraft(invoicePreparation ? {
+      ...invoice,
+      lineItems: [...preparedApprovedRows, ...preparedExtraRows],
+      totalOverride: String(preparedTotal),
+      paidAmount: String(invoicePreparation.paymentsReceivedMinor / 100),
+      balanceDue: String(Math.max(0, preparedTotal - invoicePreparation.paymentsReceivedMinor / 100)),
+    } : invoice);
     const rows = invoiceRows(customerVisible);
     const total = invoiceTotal(customerVisible);
     return attachCustomerDocumentPhotoEvidence(
@@ -3447,6 +3516,45 @@ export default function UnifiedBusinessDocumentWorkspace({
     }
   }
 
+  async function createReviewedInvoice() {
+    if (!invoicePreparation || typeof onCreateCanonicalInvoice !== "function" || invoiceCreateState.busy) return;
+    const sourceRows = Array.isArray(invoice.lineItems) ? invoice.lineItems : [];
+    const extraWork = sourceRows.map((row) => ({
+      description: String(row.description || "").trim(),
+      quantity: Number(row.quantity),
+      unitAmountMinor: Math.round(Number(row.unitPrice) * 100),
+    }));
+    if (extraWork.some((row) =>
+      !row.description || !Number.isSafeInteger(row.quantity) || row.quantity < 1 ||
+      !Number.isSafeInteger(row.unitAmountMinor) || row.unitAmountMinor < 0)) {
+      setInvoiceCreateState({
+        busy: false,
+        error: "Review each Extra work description, quantity, and price before creating the Invoice.",
+        invoice: null,
+      });
+      return;
+    }
+    setInvoiceCreateState({ busy: true, error: "", invoice: null });
+    try {
+      const created = await onCreateCanonicalInvoice({
+        extraWork,
+        customerNotes: String(invoice.notes || "").trim() || null,
+        terms: String(invoice.paymentTerms || invoice.terms || "").trim() || null,
+        due: invoice.dueDate
+          ? { mode: "SPECIFIC_DATE", date: invoice.dueDate }
+          : { mode: "DUE_ON_RECEIPT", date: null },
+      });
+      setInvoiceCreateState({ busy: false, error: "", invoice: created });
+      setNotice("Invoice created. It has not been sent, paid, or used to close the Job.");
+    } catch (error) {
+      setInvoiceCreateState({
+        busy: false,
+        error: error?.message || "The Invoice could not be created. Your review remains open.",
+        invoice: null,
+      });
+    }
+  }
+
   function scrollToNewest() {
     const container = turnsRef.current;
     if (!container) return;
@@ -3548,7 +3656,13 @@ export default function UnifiedBusinessDocumentWorkspace({
           <h2 id="business-document-conversation-title" className="business-document-visually-hidden">{activeDocument === "quote" ? "Quote conversation" : "Invoice conversation"}</h2>
           <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><button ref={howItWorksTriggerRef} type="button" aria-expanded={howItWorksOpen} aria-controls="business-document-workflow-guide" onClick={() => setHowItWorksOpen((open) => !open)}><span aria-hidden="true">ⓘ</span><span>How it works</span></button>{howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}</div>
           {activeDocument === "quote" ? <JobLinkedQuoteContext job={job} /> : null}
-          {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} lockedCustomerName={activeDocument === "quote" ? jobLinkedCustomerName : ""} onModeChange={changeEditorMode} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
+          {activeDocument === "invoice" && invoicePreparation ? (
+            <CompletedInvoicePreparationEditor
+              invoice={invoice}
+              onChange={(patch) => setInvoice((current) => ({ ...current, ...patch }))}
+            />
+          ) : null}
+          {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} lockedCustomerName={activeDocument === "quote" || invoicePreparation ? jobLinkedCustomerName : ""} onModeChange={changeEditorMode} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
           <div className="business-document-chat-shell">
             <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} showResponse={!entry.analysisRouted} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingQuoteProposal && activeDocument === "quote" ? <QuoteProposalReview key={pendingQuoteProposal.id} proposal={pendingQuoteProposal} onApply={applyQuoteProposal} onDismiss={dismissQuoteProposal} /> : null}{pendingAnalysisMessageVisible ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
             {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
@@ -3557,10 +3671,11 @@ export default function UnifiedBusinessDocumentWorkspace({
           <div className="business-document-conversation-shortcuts"><button type="button" onClick={() => focusComposer("Note: ")}>Add to {activeDocument === "quote" ? "Quote" : "Invoice"} Notes</button><button type="button" onClick={() => focusComposer("Keep this private: ")}>Private Reminder</button><button type="button" onClick={() => openManualEditor("amount")}>Change Amount</button></div>
           {privateReminders.length ? <aside className="business-private-reminders"><strong>Private reminders</strong>{privateReminders.map((item) => <p key={item.id}>{item.text}</p>)}<small>Only you can see this. It never appears on customer documents.</small></aside> : null}
           {currentAnalysisRequest.error ? <p className="business-document-notice" role="alert">{currentAnalysisRequest.error}</p> : null}
+          {invoiceCreateState.error && mobilePane === "conversation" ? <p className="business-document-notice" role="alert">{invoiceCreateState.error}</p> : null}
           {notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}
         </section>
         {documentPhotos.length ? <JobEvidencePanel photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onAddPhotos={() => onAddPhotos(activeDocument)} canAddPhotos={canAddPhotos} busy={photoBusy || currentAnalysisRequest.busy} /> : null}
-        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} jobLinked={Boolean(activeDocument === "quote" && job.customerLinkedFromJob)} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityPresentation={activeQuoteAuthorityPresentation} jobLinked={Boolean(job.customerLinkedFromJob)} /> : <InvoicePreview invoice={invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || activeQuoteAuthorityPresentation.actionDisabled} onClick={() => void beginGovernedQuoteIssue()}>{quoteIssueState?.busy ? "Preparing…" : activeQuoteAuthorityPresentation.actionLabel}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
+        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} jobLinked={Boolean((activeDocument === "quote" && job.customerLinkedFromJob) || invoicePreparation)} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityPresentation={activeQuoteAuthorityPresentation} jobLinked={Boolean(job.customerLinkedFromJob)} /> : <InvoicePreview invoice={invoice} preparation={invoicePreparation} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || activeQuoteAuthorityPresentation.actionDisabled} onClick={() => void beginGovernedQuoteIssue()}>{quoteIssueState?.busy ? "Preparing…" : activeQuoteAuthorityPresentation.actionLabel}</button> : activeDocument === "invoice" && invoicePreparation ? <button type="button" className="business-document-primary" disabled={invoiceCreateState.busy || Boolean(invoiceCreateState.invoice)} onClick={() => void createReviewedInvoice()}>{invoiceCreateState.invoice ? "Invoice created" : invoiceCreateState.busy ? "Creating…" : "Create Invoice"}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{invoiceCreateState.error && mobilePane === "preview" ? <p className="business-document-notice" role="alert">{invoiceCreateState.error}</p> : null}{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}
       {photoReviewOpen && documentPhotos.length ? <PhotoReviewDialog photos={documentPhotos} assignments={photoAssignments} onCancel={() => setPhotoReviewOpen(false)} onApply={(assignments) => { setPhotoAssignments((current) => ({ ...current, ...Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...normalizeBusinessDocumentPhotoAssignment(assignment), documentType: activeDocument }])) })); setPhotoReviewOpen(false); }} /> : null}

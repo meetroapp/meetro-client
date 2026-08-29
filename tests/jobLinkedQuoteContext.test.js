@@ -375,7 +375,10 @@ test("opening a Job-linked Quote does not call save, issue, Invoice, payment, or
     quoteBuilder.indexOf("fetchJobLinkedQuoteContext({ jobId: routeCanonicalJobId"),
     quoteBuilder.indexOf("function inputKey")
   );
-  assert.doesNotMatch(hydrationEffect, /saveDocument|createBusinessDocumentDraft|issue|send|invoice|payment/i);
+  assert.doesNotMatch(
+    hydrationEffect,
+    /saveDocument|createBusinessDocumentDraft|issueCanonicalInvoice|createCanonicalInvoice|recordCanonicalPayment|send/i
+  );
   assert.match(hydrationEffect, /setCustomerName/);
   assert.match(hydrationEffect, /setProjectDescription/);
   assert.match(hydrationEffect, /setRecommendedSolution/);
@@ -398,7 +401,7 @@ test("hard-refresh protection opens the exact saved Quote instead of routing to 
   assert.match(protection, /Open Saved Quote/);
   assert.match(protection, /onClick=\{openProtectedJobLinkedQuote\}/);
   assert.doesNotMatch(protection, /setPage\("quoteBuilder"\)/);
-  assert.match(quoteBuilder, /routeSavedDocumentId \|\| jobLinkedQuoteContext\.reopenDocumentId/);
+  assert.match(quoteBuilder, /routeSavedDocumentId\s*\|\|\s*jobLinkedQuoteContext\.reopenDocumentId/);
   assert.match(workspace, /await getBusinessDocumentDraft\(\{ draftId, setPage \}\)/);
   assert.match(workspace, /expectedJobId: job\.id/);
   assert.match(workspace, /expectedDocumentType: "QUOTE"/);
@@ -421,7 +424,7 @@ test("Job customer remains presentation authority while CRM persistence stays op
   assert.match(workspace, /const linkedName = jobLinked[\s\S]*\? content\.customerName/);
   assert.match(workspace, /!jobLinked \? <button[^>]+onClick=\{\(\) => onOpen\("choose"\)\}/);
   assert.match(workspace, /Save as Customer Contact|businessDocumentCustomerSave/);
-  assert.match(workspace, /lockedCustomerName=\{activeDocument === "quote" \? jobLinkedCustomerName : ""\}/);
+  assert.match(workspace, /lockedCustomerName=\{activeDocument === "quote" \|\| invoicePreparation \? jobLinkedCustomerName : ""\}/);
   assert.match(workspace, /job\.customerLinkedFromJob &&[\s\S]*key === "customerName"/);
   assert.match(workspace, /if \(job\.customerLinkedFromJob\) delete durablePatch\.customerName/);
   assert.doesNotMatch(

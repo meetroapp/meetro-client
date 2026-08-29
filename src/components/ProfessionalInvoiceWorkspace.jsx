@@ -10,7 +10,6 @@ import {
 } from "./WorkCenterWorkspaceSystem.jsx";
 import { formatLocaleCurrency } from "../utils/localeFormat.js";
 import {
-  createCanonicalInvoice,
   createInvoiceCommandKey,
   fetchProfessionalInvoice,
   fetchProfessionalInvoiceWorkspace,
@@ -59,17 +58,12 @@ export default function ProfessionalInvoiceWorkspace({
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
-  const [createTarget, setCreateTarget] = useState(null);
-  const [createDraft, setCreateDraft] = useState({
-    dueMode: "DUE_ON_RECEIPT", dueDate: "", customerNotes: "", terms: "",
-  });
   const [confirmIssue, setConfirmIssue] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
   const [paymentDraft, setPaymentDraft] = useState({
     amount: "", method: "CHECK", receivedDate: today(), reference: "",
   });
   const [assistant, setAssistant] = useState({ busy: false, error: "", notice: "", result: null });
-  const [assistantInvoiceDraft, setAssistantInvoiceDraft] = useState(null);
 
   const loadWorkspace = useCallback(async () => {
     const value = await fetchProfessionalInvoiceWorkspace({ limit: 50, setPage });
@@ -101,49 +95,6 @@ export default function ProfessionalInvoiceWorkspace({
       setShowPayment(false);
     } catch {
       setNotice(copy.unavailable);
-    } finally {
-      setBusy("");
-    }
-  }
-
-  async function handleCreate(event) {
-    event.preventDefault();
-    if (!createTarget) return;
-    setBusy("create");
-    setNotice("");
-    try {
-      if (assistantInvoiceDraft) {
-        const edits = [
-          [assistantInvoiceDraft.customerNotes, createDraft.customerNotes],
-          [assistantInvoiceDraft.terms, createDraft.terms],
-        ].filter(([item, value]) => item?.text !== value.trim());
-        await Promise.all(edits.map(([item, value]) => recordWorkflowReview({
-          proposalId: assistantInvoiceDraft.proposalId,
-          elementId: item.id,
-          action: "EDITED",
-          editedValue: value.trim(),
-          setPage,
-        })));
-      }
-      const invoice = await createCanonicalInvoice({
-        jobId: createTarget.jobId,
-        expectedCompletionVersion: createTarget.completionVersion,
-        due: {
-          mode: createDraft.dueMode,
-          date: createDraft.dueMode === "SPECIFIC_DATE" ? createDraft.dueDate : null,
-        },
-        customerNotes: createDraft.customerNotes.trim() || null,
-        terms: createDraft.terms.trim() || null,
-        idempotencyKey: createInvoiceCommandKey("invoice-create"),
-        setPage,
-      });
-      setSelected(invoice);
-      setCreateTarget(null);
-      setCreateDraft({ dueMode: "DUE_ON_RECEIPT", dueDate: "", customerNotes: "", terms: "" });
-      setAssistantInvoiceDraft(null);
-      await loadWorkspace();
-    } catch (error) {
-      setNotice(error?.message || copy.unavailable);
     } finally {
       setBusy("");
     }
@@ -233,21 +184,20 @@ export default function ProfessionalInvoiceWorkspace({
       review: "REVIEW_INVOICE",
       balance: "EXPLAIN_BALANCE",
     };
-    if (!createTarget && !selected) return;
+    if (!selected) return;
     setAssistant({ busy: true, error: "", notice: "", result: null });
     try {
       const result = await requestWorkflowIntelligence({
         operation: INTELLIGENCE_OPERATION.INVOICE,
         locale: language,
         input: {
-          jobId: selected ? null : createTarget.jobId,
-          invoiceId: selected?.invoiceId || null,
+          jobId: null,
+          invoiceId: selected.invoiceId,
           intent: intents[action],
           professionalInstructions: prompt || null,
         },
         expected: {
-          jobId: selected ? undefined : createTarget.jobId,
-          invoiceId: selected?.invoiceId || undefined,
+          invoiceId: selected.invoiceId,
         },
         setPage,
       });
@@ -257,7 +207,7 @@ export default function ProfessionalInvoiceWorkspace({
     }
   }
 
-  async function reviewInvoiceProposal(action, { apply = false } = {}) {
+  async function reviewInvoiceProposal(action) {
     const proposal = assistant.result?.proposal;
     if (!proposal) return;
     const items = [proposal.customerNotes, proposal.terms, proposal.dueDateWording, proposal.balanceExplanation]
@@ -270,14 +220,6 @@ export default function ProfessionalInvoiceWorkspace({
         reasonCategory: action === "REJECTED" ? "PROFESSIONAL_DISMISSED" : undefined,
         setPage,
       })));
-      if (apply && createTarget) {
-        setCreateDraft((current) => ({
-          ...current,
-          customerNotes: proposal.customerNotes.text || current.customerNotes,
-          terms: proposal.terms.text || current.terms,
-        }));
-        setAssistantInvoiceDraft(proposal);
-      }
       setAssistant((current) => ({
         ...current,
         result: action === "REJECTED" ? null : current.result,
@@ -361,48 +303,30 @@ export default function ProfessionalInvoiceWorkspace({
                 <div style={styles.rowAction}>
                   {job.approvedAmount && <strong>{money(job.approvedAmount.totalMinor, job.approvedAmount.currency)}</strong>}
                   <button type="button" style={styles.primaryButton} onClick={() => {
-                    setAssistantInvoiceDraft(null);
-                    setAssistant({ busy: false, error: "", notice: "", result: null });
-                    setCreateTarget(job);
+                    localStorage.setItem("invoiceBuilderReturnPage", "workCenter");
+                    localStorage.setItem("invoiceBuilderSource", "completed_job");
+                    setPage(`invoiceBuilder?jobId=${encodeURIComponent(job.jobId)}`);
                   }}>{copy.create}</button>
                 </div>
+                <dl style={styles.moneySummary}>
+                  <div><dt>Approved work</dt><dd>{money(job.approvedAmount?.totalMinor || 0, job.approvedAmount?.currency)}</dd></div>
+                  <div><dt>Payments received</dt><dd>{money(job.paymentsReceivedMinor, job.approvedAmount?.currency)}</dd></div>
+                  <div><dt>Amount still due</dt><dd>{money(job.amountStillDueMinor, job.approvedAmount?.currency)}</dd></div>
+                </dl>
               </div>
             ))}
           </div>
         </section>
       )}
 
-      {createTarget && (
-        <form style={styles.form} onSubmit={handleCreate} data-invoice-create-job-id={createTarget.jobId}>
-          <h3 style={styles.subheading}>{copy.create}: {createTarget.customerName}</h3>
-          <label style={styles.field}>{copy.dueDate}
-            <select value={createDraft.dueMode} onChange={(event) => setCreateDraft((current) => ({ ...current, dueMode: event.target.value }))} style={styles.input}>
-              <option value="DUE_ON_RECEIPT">{copy.dueOnReceipt}</option>
-              <option value="SPECIFIC_DATE">{copy.specificDate}</option>
-            </select>
-          </label>
-          {createDraft.dueMode === "SPECIFIC_DATE" && (
-            <label style={styles.field}>{copy.dueDate}<input required min={today()} type="date" value={createDraft.dueDate} onChange={(event) => setCreateDraft((current) => ({ ...current, dueDate: event.target.value }))} style={styles.input} /></label>
-          )}
-          <label style={styles.field}>{copy.customerNotes}<textarea maxLength={2000} value={createDraft.customerNotes} onChange={(event) => setCreateDraft((current) => ({ ...current, customerNotes: event.target.value }))} style={styles.textarea} /></label>
-          <label style={styles.field}>{copy.terms}<textarea maxLength={2000} value={createDraft.terms} onChange={(event) => setCreateDraft((current) => ({ ...current, terms: event.target.value }))} style={styles.textarea} /></label>
-          <div style={styles.confirmRow}><button type="submit" disabled={busy === "create"} style={styles.primaryButton}>{copy.create}</button><button type="button" style={styles.secondaryButton} onClick={() => {
-            setCreateTarget(null);
-            setAssistantInvoiceDraft(null);
-          }}>{copy.cancel}</button></div>
-        </form>
-      )}
-
-      {(createTarget || selected) && (
+      {selected && (
         <ContextualAskMeetro
           language={language}
           contextLabel="invoice"
-          contextName={selected?.invoiceNumber || createTarget?.serviceTitle || getAskMeetroWorkflowCopy(language).invoice}
-          actions={selected ? [
+          contextName={selected.invoiceNumber}
+          actions={[
             { id: "review", label: getAskMeetroWorkflowCopy(language).reviewInvoice },
             { id: "balance", label: getAskMeetroWorkflowCopy(language).explainBalance },
-          ] : [
-            { id: "create", label: getAskMeetroWorkflowCopy(language).helpCreateInvoice },
           ]}
           busy={assistant.busy}
           error={assistant.error}
@@ -413,9 +337,9 @@ export default function ProfessionalInvoiceWorkspace({
             <InvoiceAssistantResult
               proposal={assistant.result.proposal}
               language={language}
-              canApply={Boolean(createTarget)}
+              canApply={false}
               money={money}
-              onApply={() => void reviewInvoiceProposal("ACCEPTED", { apply: true })}
+              onApply={() => void reviewInvoiceProposal("ACCEPTED")}
               onDismiss={() => void reviewInvoiceProposal("REJECTED")}
             />
           )}
@@ -494,6 +418,7 @@ const styles = {
   row: { display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: 12, padding: 14, border: "1px solid #d7ded8", borderRadius: 6, background: "#fff" },
   rowCopy: { display: "grid", gap: 3, minWidth: 0, overflowWrap: "anywhere" },
   rowAction: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 },
+  moneySummary: { display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 8, width: "100%", margin: 0 },
   invoiceRow: { display: "flex", justifyContent: "space-between", gap: 12, width: "100%", minHeight: 56, padding: 12, border: "1px solid #d7ded8", borderRadius: 6, background: "#fff", color: "#172317", textAlign: "left", cursor: "pointer" },
   detailBand: { display: "grid", gap: 12, minWidth: 0 },
   actions: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" },

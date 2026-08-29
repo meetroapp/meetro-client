@@ -898,16 +898,14 @@ test("Speak, Type, Add Photos, and the live document remain reachable without su
   assert.doesNotMatch(workspace, /Use Suggestion|Edit & Use|Needs Verification|Dismiss Suggestion/);
 });
 
-test("Live Preview keeps customer Observation separate and uses truthful saved footer parity", () => {
+test("Live Preview keeps customer Observation separate and shows truthful Invoice review money", () => {
   assert.match(workspace, /<h3>Observation<\/h3>/);
   assert.match(workspace, /quote\.recommendedSolution && quote\.projectDescription/);
   assert.match(workspace, /Confirm terms before delivery\./);
   assert.match(workspace, /Not confirmed\./);
-  assert.match(workspace, /Ready for Customer Review/);
+  assert.match(workspace, /Saved draft · Ready for review/);
   assert.match(workspace, /WORKING DRAFT/);
-  for (const label of ["Due Date", "Amount Paid", "Balance Due"]) {
-    assert.match(workspace, new RegExp(`<h3>${label}<\\/h3>`));
-  }
+  for (const label of ["Approved work", "Extra work", "Invoice total", "Payments received", "Amount still due"]) assert.match(workspace, new RegExp(label));
   assert.match(workspace, /saved=\{Boolean\(activeSaved && !activeDirty\)\}/);
 });
 
@@ -940,7 +938,7 @@ test("private reminders, costs, and photos do not enter customer-visible models"
   assert.deepEqual(visible, { customerName: "Paul Becker", totalOverride: "2650" });
   assert.match(workspace, /Private reminders/);
   assert.match(workspace, /never appears on customer documents/);
-  assert.match(workspace, /customerVisibleWorkspaceDraft\(invoice\)/);
+  assert.match(workspace, /customerVisibleWorkspaceDraft\(invoicePreparation \?/);
 });
 
 test("Internal Estimate and Solution Ready are not mandatory visible workspace steps", () => {
