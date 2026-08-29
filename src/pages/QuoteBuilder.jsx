@@ -957,6 +957,9 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     resumeDocumentId: null,
     error: "",
   }));
+  const invoicePreparationRequestRef = useRef(null);
+  const setPageRef = useRef(setPage);
+  setPageRef.current = setPage;
   const [savedRouteBootstrap, setSavedRouteBootstrap] = useState(() => ({
     status: routeSavedDocumentId ? "loading" : "standalone",
     reason: "",
@@ -1089,14 +1092,21 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
 
   useEffect(() => {
     if (!isUnifiedInvoiceEntry || !routeCanonicalJobId || routeSavedDocumentId) {
+      invoicePreparationRequestRef.current = null;
       return undefined;
     }
+    const requestKey = `job:${routeCanonicalJobId}`;
     let active = true;
     setInvoicePreparation({ status: "loading", job: null, resumeDocumentId: null, error: "" });
-    void Promise.all([
-      fetchProfessionalInvoiceWorkspace({ limit: 50, setPage }),
-      listBusinessDocumentDrafts({ type: "INVOICE", setPage }),
-    ]).then(([workspace, documents]) => {
+    const existingRequest = invoicePreparationRequestRef.current;
+    const request = existingRequest?.key === requestKey
+      ? existingRequest.promise
+      : Promise.all([
+          fetchProfessionalInvoiceWorkspace({ limit: 50, setPage: setPageRef.current }),
+          listBusinessDocumentDrafts({ type: "INVOICE", setPage: setPageRef.current }),
+        ]);
+    invoicePreparationRequestRef.current = { key: requestKey, promise: request };
+    void request.then(([workspace, documents]) => {
       if (!active) return;
       const prepared = workspace.readyJobs.find((job) => job.jobId === routeCanonicalJobId);
       if (!prepared) {
@@ -1132,7 +1142,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
       });
     });
     return () => { active = false; };
-  }, [isUnifiedInvoiceEntry, routeCanonicalJobId, routeSavedDocumentId, setPage]);
+  }, [isUnifiedInvoiceEntry, routeCanonicalJobId, routeSavedDocumentId]);
 
   useEffect(() => {
     if (!routeSavedDocumentId || !savedQuoteRoute.valid) return undefined;

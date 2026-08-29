@@ -1048,11 +1048,13 @@ function CustomerPartyControl({
   );
   const selected = control.contacts.find((contact) => contact.id === control.selectedId);
   const durableContact = linkedContact || control.pendingContact;
-  const status = jobLinked
-    ? jobLinkedLabel
+  const status = durableContact
+    ? t("businessDocumentCustomerSavedContact", language)
+    : jobLinked
+      ? jobLinkedLabel
     : linkedDurably
       ? t("businessDocumentCustomerLinked", language)
-    : customerParty || durableContact
+    : customerParty
       ? t("businessDocumentCustomerSavedContact", language)
       : t("businessDocumentCustomerNotLinked", language);
   const linkedName = jobLinked
@@ -1070,19 +1072,19 @@ function CustomerPartyControl({
       </div>
       <div>
         {!jobLinked ? <button type="button" onClick={() => onOpen("choose")}>{t("businessDocumentCustomerChoose", language)}</button> : null}
-        <button type="button" onClick={() => onOpen("save")}>{t("businessDocumentCustomerSave", language)}</button>
+        {!durableContact ? <button type="button" onClick={() => onOpen("save")}>{t("businessDocumentCustomerSave", language)}</button> : null}
       </div>
     </div>
     {!customerParty && !jobLinked ? <p>{t("businessDocumentCustomerNotLinkedHelp", language)}</p> : null}
     {control.open ? <div className="business-document-customer-panel">
       <header>
-        <strong>{control.mode === "save" ? t("businessDocumentCustomerSave", language) : t("businessDocumentCustomerChoose", language)}</strong>
+        <strong>{control.mode === "save" ? t("businessDocumentCustomerSaveTitle", language) : t("businessDocumentCustomerChoose", language)}</strong>
         <button type="button" onClick={onClose} aria-label={t("businessDocumentCustomerClose", language)}>×</button>
       </header>
       {control.mode === "choose" ? <>
         <label>{t("businessDocumentCustomerSearch", language)}<input type="search" value={control.search} placeholder={t("businessDocumentCustomerSearchPlaceholder", language)} onChange={(event) => onSearch(event.target.value)} /></label>
         {control.busy ? <p role="status">{t("businessDocumentCustomerLoading", language)}</p> : null}
-        {!control.busy && !visibleContacts.length ? <p role="status">{t("businessDocumentCustomerEmpty", language)}</p> : null}
+        {!control.busy && !visibleContacts.length ? <p role="status">{t(control.contacts.length && control.search.trim() ? "businessDocumentCustomerNoMatches" : "businessDocumentCustomerEmptyDirectory", language)}</p> : null}
         <div className="business-document-customer-results" role="listbox" aria-label={t("businessDocumentCustomerSearch", language)}>
           {visibleContacts.map((contact) => <button type="button" role="option" aria-selected={control.selectedId === contact.id} className={control.selectedId === contact.id ? "selected" : ""} key={contact.id} onClick={() => onSelect(contact.id)}><strong>{businessContactDisplayName(contact)}</strong><small>{[contact.companyName, contact.email, contact.phone].filter(Boolean).join(" · ")}</small></button>)}
         </div>
@@ -1211,6 +1213,9 @@ export default function UnifiedBusinessDocumentWorkspace({
   const [customerParties, setCustomerParties] = useState({ quote: null, invoice: null });
   const [linkedCustomerContacts, setLinkedCustomerContacts] = useState({ quote: null, invoice: null });
   const invoicePreparationHydratedRef = useRef("");
+  const savedJobCustomerLookupRef = useRef(null);
+  const workspaceSetPageRef = useRef(setPage);
+  workspaceSetPageRef.current = setPage;
 
   useEffect(() => {
     if (!invoicePreparation?.jobId || invoicePreparationHydratedRef.current === invoicePreparation.jobId) return;
@@ -1230,6 +1235,39 @@ export default function UnifiedBusinessDocumentWorkspace({
     }));
     setDocumentJobIds((current) => ({ ...current, invoice: invoicePreparation.jobId }));
   }, [invoicePreparation]);
+
+  useEffect(() => {
+    const jobId = String(invoicePreparation?.jobId || "").trim();
+    const customerName = String(invoicePreparation?.customerName || "").trim();
+    if (!jobId || !customerName) return undefined;
+    const lookupKey = `${jobId}:${customerName.toLocaleLowerCase()}`;
+    let active = true;
+    const navigate = (...args) => workspaceSetPageRef.current?.(...args);
+    const existingLookup = savedJobCustomerLookupRef.current;
+    const lookup = existingLookup?.key === lookupKey
+      ? existingLookup.promise
+      : loadBusinessContactProfileId({ setPage: navigate })
+      .then((contractorProfileId) => {
+        return listBusinessContacts({
+          contractorProfileId,
+          status: "ACTIVE",
+          setPage: navigate,
+        }).then((contacts) => ({ contractorProfileId, contacts }));
+      });
+    savedJobCustomerLookupRef.current = { key: lookupKey, promise: lookup };
+    void lookup.then(({ contractorProfileId, contacts }) => {
+        if (!active) return;
+        setBusinessContactProfileId(contractorProfileId);
+        const existing = findBusinessContactDuplicateCandidates(contacts, {
+          customerName,
+        })[0] || null;
+        if (existing) {
+          setLinkedCustomerContacts((current) => ({ ...current, invoice: existing }));
+        }
+      })
+      .catch(() => undefined);
+    return () => { active = false; };
+  }, [invoicePreparation?.customerName, invoicePreparation?.jobId]);
   const [customerControl, setCustomerControl] = useState(() => emptyCustomerControl());
   const [businessContactProfileId, setBusinessContactProfileId] = useState(null);
   const relationshipCommandKeysRef = useRef(new Map());
