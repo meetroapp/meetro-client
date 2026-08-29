@@ -635,6 +635,24 @@
 .business-document-manual > footer button { min-height: 44px; border: 1px solid #d7e1d9; border-radius: 10px; color: #195b3a; background: #fff; padding: 8px 12px; font-size: 11px; font-weight: 850; }
 .business-document-manual > footer { display: flex; justify-content: flex-end; gap: 8px; margin-top: 16px; padding-top: 12px; border-top: 1px solid #e3e8e4; }
 .business-document-manual > footer .business-document-primary { color: #fff; border-color: #0c6238; background: #0c6238; }
+.business-document-invoice-manual {
+  position: relative;
+  z-index: auto;
+  inset: auto;
+  width: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 14px;
+  box-shadow: none;
+}
+.business-document-invoice-manual .business-document-manual-rows {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(82px, .34fr) minmax(92px, .4fr) auto;
+  gap: 8px;
+  align-items: end;
+}
+.business-document-invoice-manual .business-document-manual-rows button { min-height: 40px; }
+.business-document-invoice-manual fieldset > small { display: block; margin-top: 8px; color: #64766d; }
 .business-document-prefill-details { min-width: 0; margin: 0 0 10px; border: 1px solid #cfe0d2; border-radius: 14px; background: rgba(250,253,249,.98); box-shadow: 0 8px 18px rgba(24,65,41,.07); }
 .business-document-prefill-details summary { min-height: 44px; padding: 12px 14px; color: #125a36; font-size: 12px; font-weight: 900; cursor: pointer; }
 .business-document-prefill-details details > div { padding: 0 12px 12px; border-top: 1px solid #e1e9e2; }
@@ -961,6 +979,9 @@
   .business-document-actions { padding-bottom: 4px; }
   .business-saved-drawer { width: 100vw; }
   .business-document-manual { inset: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)); width: calc(100vw - 16px); max-height: calc(100dvh - 16px); padding: 13px; }
+  .business-document-invoice-manual { inset: auto; width: 100%; max-height: none; }
+  .business-document-invoice-manual .business-document-manual-rows { grid-template-columns: minmax(0, 1fr) minmax(76px, .38fr); }
+  .business-document-invoice-manual .business-document-manual-rows button { grid-column: 1 / -1; justify-self: start; }
   .business-document-manual-rows > div { grid-template-columns: minmax(0, 1fr) minmax(86px, .5fr); }
   .business-document-manual-rows > div > button { grid-column: 1 / -1; justify-self: start; }
   .business-document-header { align-items: flex-start; flex-wrap: wrap; }

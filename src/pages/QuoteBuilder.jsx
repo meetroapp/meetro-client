@@ -70,6 +70,9 @@ import {
   fetchProfessionalInvoiceWorkspace,
 } from "../utils/invoicePaymentApi.js";
 import {
+  fetchEffectiveApprovedInvoiceQuote,
+} from "../utils/invoiceReviewDraft.js";
+import {
   bootstrapExactSavedQuote,
   parseSavedQuoteRoute,
   replaceSavedQuoteRoute,
@@ -1104,11 +1107,19 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
       : Promise.all([
           fetchProfessionalInvoiceWorkspace({ limit: 50, setPage: setPageRef.current }),
           listBusinessDocumentDrafts({ type: "INVOICE", setPage: setPageRef.current }),
-        ]);
+        ]).then(async ([workspace, documents]) => {
+          const prepared = workspace.readyJobs.find((job) => job.jobId === routeCanonicalJobId);
+          if (!prepared) return { workspace, documents, prepared: null, quoteReference: null };
+          const quoteReference = await fetchEffectiveApprovedInvoiceQuote({
+            jobId: routeCanonicalJobId,
+            approvedTotalMinor: prepared.approvedAmount?.totalMinor,
+            setPage: setPageRef.current,
+          });
+          return { workspace, documents, prepared, quoteReference };
+        });
     invoicePreparationRequestRef.current = { key: requestKey, promise: request };
-    void request.then(([workspace, documents]) => {
+    void request.then(({ documents, prepared, quoteReference }) => {
       if (!active) return;
-      const prepared = workspace.readyJobs.find((job) => job.jobId === routeCanonicalJobId);
       if (!prepared) {
         setInvoicePreparation({
           status: "unavailable", job: null, resumeDocumentId: null,
@@ -1130,7 +1141,12 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
       });
       setInvoicePreparation({
         status: "ready",
-        job: prepared,
+        job: {
+          ...prepared,
+          quoteReference: quoteReference.quoteId,
+          approvedQuoteVersion: quoteReference.quoteVersion,
+          approvedQuoteDocumentNumber: quoteReference.documentNumber,
+        },
         resumeDocumentId: matches[0]?.id || null,
         error: "",
       });
@@ -1138,7 +1154,9 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
       if (!active) return;
       setInvoicePreparation({
         status: "unavailable", job: null, resumeDocumentId: null,
-        error: error?.message || "Invoice review is temporarily unavailable.",
+        error: error?.code === "INVOICE_QUOTE_REFERENCE_READ_GAP"
+          ? "INVOICE_QUOTE_REFERENCE_READ_GAP: The effective approved Quote reference is unavailable."
+          : error?.message || "Invoice review is temporarily unavailable.",
       });
     });
     return () => { active = false; };

@@ -15,6 +15,10 @@ import {
   quoteConversationProposalFingerprint,
 } from "../utils/quickQuoteConversationDraft.js";
 import {
+  buildInvoiceConversationProposal,
+  invoiceReviewFingerprint,
+} from "../utils/invoiceReviewDraft.js";
+import {
   normalizeQuotePricingSettings,
   quoteCustomerPricingProjection,
   quoteIndependentPaymentTerms,
@@ -399,28 +403,70 @@ function InvoicePreview({ invoice, preparation, branding, generalPhotos, beforeP
   );
 }
 
-function CompletedInvoicePreparationEditor({ invoice, onChange }) {
-  const rows = Array.isArray(invoice.lineItems) ? invoice.lineItems : [];
-  const updateRow = (index, field, value) => onChange({
-    lineItems: rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row),
-  });
+function CompletedInvoiceReviewIntro() {
   return (
     <section className="business-document-job-context" aria-label="Invoice review">
-      <header><strong>Review invoice</strong><span>Nothing is created until you choose Create Invoice.</span></header>
-      <section><h3>Extra work</h3><p>Add work completed that was not included in the original quote.</p>
-        {rows.map((row, index) => <div className="business-document-manual-rows" key={row.id || index}>
-          <label>Description<input value={row.description || ""} onChange={(event) => updateRow(index, "description", event.target.value)} /></label>
-          <label>Quantity<input inputMode="numeric" value={row.quantity || ""} onChange={(event) => updateRow(index, "quantity", event.target.value)} /></label>
-          <label>Price<input inputMode="decimal" value={row.unitPrice || ""} onChange={(event) => updateRow(index, "unitPrice", event.target.value)} /></label>
-          <button type="button" onClick={() => onChange({ lineItems: rows.filter((_, rowIndex) => rowIndex !== index) })}>Remove item</button>
-        </div>)}
-        <button type="button" onClick={() => onChange({ lineItems: [...rows, { id: `extra-work-${Date.now()}`, description: "", quantity: "1", unitPrice: "" }] })}>Add item</button>
-      </section>
-      <label>Customer notes<textarea value={invoice.notes || ""} onChange={(event) => onChange({ notes: event.target.value })} /></label>
-      <label>Payment terms<textarea value={invoice.paymentTerms || ""} onChange={(event) => onChange({ paymentTerms: event.target.value })} /></label>
-      <label>Due date<input type="date" value={invoice.dueDate || ""} onChange={(event) => onChange({ dueDate: event.target.value })} /></label>
+      <header><strong>Review invoice</strong><span>Tell Meetro what you want to add or change before creating the invoice.</span></header>
     </section>
   );
+}
+
+function CompletedJobInvoiceManualEditor({ invoice, preparation, onPreview, onApply, onCancel }) {
+  const originalRef = useRef(structuredClone(invoice));
+  const [draft, setDraft] = useState(() => structuredClone(invoice));
+  const rows = Array.isArray(draft.lineItems) ? draft.lineItems : [];
+  function update(patch) {
+    setDraft((current) => {
+      const next = { ...current, ...patch };
+      onPreview(next);
+      return next;
+    });
+  }
+  function updateRow(index, field, value) {
+    update({ lineItems: rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row) });
+  }
+  return (
+    <section className="business-document-manual business-document-invoice-manual" role="region" aria-labelledby="business-document-invoice-manual-title">
+      <header><div><span>Manual entry</span><h2 id="business-document-invoice-manual-title">Edit the live Invoice</h2></div><button type="button" onClick={() => onCancel(originalRef.current)}>Cancel</button></header>
+      <fieldset className="business-document-manual-fields"><legend>Invoice details</legend><div>
+        <label>Customer<input value={preparation.customerName} readOnly aria-readonly="true" /></label>
+        <label>Job<input value={preparation.serviceTitle} readOnly aria-readonly="true" /></label>
+        <label>Approved work<input value={money(preparation.approvedAmount.totalMinor / 100)} readOnly aria-readonly="true" /></label>
+      </div><small>Approved work comes from the customer-approved Quote and cannot be rewritten here.</small></fieldset>
+      <section className="business-document-manual-pricing" aria-labelledby="business-document-extra-work-title"><h3 id="business-document-extra-work-title">Extra work</h3><p>Add work completed that was not included in the original quote.</p>
+        <div className="business-document-manual-line-groups">
+          {rows.map((row, index) => <div className="business-document-manual-rows" key={row.id || index}>
+            <label>Description<input value={row.description || ""} onChange={(event) => updateRow(index, "description", event.target.value)} /></label>
+            <label>Quantity<input inputMode="numeric" value={row.quantity || ""} onChange={(event) => updateRow(index, "quantity", event.target.value)} /></label>
+            <label>Price<input inputMode="decimal" value={row.unitPrice || ""} onChange={(event) => updateRow(index, "unitPrice", event.target.value)} /></label>
+            <button type="button" onClick={() => update({ lineItems: rows.filter((_, rowIndex) => rowIndex !== index) })}>Remove item</button>
+          </div>)}
+          <button type="button" onClick={() => update({ lineItems: [...rows, { id: `extra-work-${Date.now()}`, description: "", quantity: "1", unitPrice: "" }] })}>Add item</button>
+        </div>
+      </section>
+      <fieldset className="business-document-manual-fields"><legend>Payment</legend><div>
+        <label>Payment terms<textarea value={draft.paymentTerms || ""} onChange={(event) => update({ paymentTerms: event.target.value })} /></label>
+        <label>Due date<input type="date" value={draft.dueDate || ""} onChange={(event) => update({ dueDate: event.target.value })} /></label>
+      </div></fieldset>
+      <fieldset className="business-document-manual-fields"><legend>Customer notes</legend><div>
+        <label>Notes shown to the customer<textarea value={draft.notes || ""} onChange={(event) => update({ notes: event.target.value })} /></label>
+      </div></fieldset>
+      <footer><button type="button" onClick={() => onCancel(originalRef.current)}>Cancel</button><button type="button" className="business-document-primary" onClick={() => onApply(draft, originalRef.current)}>Apply changes</button></footer>
+    </section>
+  );
+}
+
+function ManualEditor(props) {
+  if (props.activeDocument === "invoice" && props.invoicePreparation) {
+    return <CompletedJobInvoiceManualEditor
+      invoice={props.invoice}
+      preparation={props.invoicePreparation}
+      onPreview={props.onPreview}
+      onApply={props.onApply}
+      onCancel={props.onCancel}
+    />;
+  }
+  return <StandardManualEditor {...props} />;
 }
 
 function PhotoStrip({ photos }) {
@@ -440,7 +486,7 @@ function EditableRows({ title, rows, nameField, onChange }) {
   );
 }
 
-function ManualEditor({ activeDocument, quote, invoice, documentNumber, initialFocus, language, mode = "manual", lockedCustomerName = "", onApply, onCancel, onModeChange }) {
+function StandardManualEditor({ activeDocument, quote, invoice, documentNumber, initialFocus, language, mode = "manual", lockedCustomerName = "", onApply, onCancel, onModeChange }) {
   const source = activeDocument === "quote" ? quote : invoice;
   const initialSourceRef = useRef(null);
   if (!initialSourceRef.current) {
@@ -550,6 +596,44 @@ function InstructionEditor({ turn, onSave, onCancel }) {
 function InstructionTurn({ turn, onSave, onCancel, onEdit, showResponse = true }) {
   if (turn.editing) return <InstructionEditor turn={turn} onSave={onSave} onCancel={onCancel} />;
   return <><article className="you"><span>You</span><div className="business-document-turn-body"><p>{turn.text}</p><div><button type="button" onClick={onEdit}>Edit</button>{turn.revisions ? <small>Edited</small> : null}</div>{turn.revisionHistory?.length ? <details><summary>Revision history</summary><ol>{turn.revisionHistory.map((text, index) => <li key={`${turn.id}-revision-${index}`}>{text}</li>)}</ol></details> : null}</div></article>{showResponse ? <article className="meetro"><span>M</span><p>{businessDocumentTurnResponse(turn)}</p></article> : null}</>;
+}
+
+function InvoiceProposalReview({ proposal, onApply, onDismiss }) {
+  const [editing, setEditing] = useState(false);
+  const [patch, setPatch] = useState(() => ({ ...proposal.patch }));
+  const proposedRows = Array.isArray(patch.lineItems) ? patch.lineItems : [];
+  const proposedExtra = proposal.category === "EXTRA_WORK" ? proposedRows.at(-1) : null;
+  function update(field, value) {
+    setPatch((current) => ({ ...current, [field]: value }));
+  }
+  function updateExtra(field, value) {
+    setPatch((current) => ({
+      ...current,
+      lineItems: (current.lineItems || []).map((row, index, rows) =>
+        index === rows.length - 1 ? { ...row, [field]: value } : row
+      ),
+    }));
+  }
+  return <article className="business-document-proposal" aria-labelledby={`proposal-title-${proposal.id}`}>
+    <header><span>Meetro proposal</span><h3 id={`proposal-title-${proposal.id}`}>Proposed Invoice changes</h3><p>Nothing changes until you apply.</p></header>
+    <blockquote aria-label="Instruction being reviewed">{proposal.instruction}</blockquote>
+    {editing ? <div className="business-document-proposal-editor">
+      {proposedExtra ? <>
+        <label>Description<input value={proposedExtra.description || ""} onChange={(event) => updateExtra("description", event.target.value)} /></label>
+        <label>Quantity<input inputMode="numeric" value={proposedExtra.quantity || ""} onChange={(event) => updateExtra("quantity", event.target.value)} /></label>
+        <label>Price<input inputMode="decimal" value={proposedExtra.unitPrice || ""} onChange={(event) => updateExtra("unitPrice", event.target.value)} /></label>
+      </> : null}
+      {Object.hasOwn(patch, "notes") ? <label>Customer notes<textarea value={patch.notes || ""} onChange={(event) => update("notes", event.target.value)} /></label> : null}
+      {Object.hasOwn(patch, "paymentTerms") ? <label>Payment terms<input value={patch.paymentTerms || ""} onChange={(event) => update("paymentTerms", event.target.value)} /></label> : null}
+      {Object.hasOwn(patch, "dueDate") ? <label>Due date<input type="date" value={patch.dueDate || ""} onChange={(event) => update("dueDate", event.target.value)} /></label> : null}
+    </div> : <div className="business-document-proposal-sections">
+      {proposedExtra ? <section className="business-document-proposal-section"><h4>Extra work</h4><dl><div><dt>Description</dt><dd>{proposedExtra.description}</dd></div><div><dt>Quantity</dt><dd>{proposedExtra.quantity}</dd></div><div><dt>Price</dt><dd>{money(Number(proposedExtra.unitPrice || 0))}</dd></div></dl></section> : null}
+      {Object.hasOwn(patch, "notes") ? <section className="business-document-proposal-section"><h4>Customer notes</h4><p>{patch.notes}</p></section> : null}
+      {Object.hasOwn(patch, "paymentTerms") ? <section className="business-document-proposal-section"><h4>Payment terms</h4><p>{patch.paymentTerms}</p></section> : null}
+      {Object.hasOwn(patch, "dueDate") ? <section className="business-document-proposal-section"><h4>Due date</h4><p>{patch.dueDate}</p></section> : null}
+    </div>}
+    <footer><button type="button" className="business-document-primary" onClick={() => onApply(patch)}>Apply</button><button type="button" onClick={() => setEditing((value) => !value)}>{editing ? "Review" : "Edit"}</button><button type="button" onClick={onDismiss}>Dismiss</button></footer>
+  </article>;
 }
 
 function QuoteProposalReview({ proposal, onApply, onDismiss }) {
@@ -1139,6 +1223,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   const [photoReviewOpen, setPhotoReviewOpen] = useState(false);
   const [turns, setTurns] = useState([]);
   const [pendingQuoteProposal, setPendingQuoteProposal] = useState(null);
+  const [pendingInvoiceProposal, setPendingInvoiceProposal] = useState(null);
   const [quoteBaseline, setQuoteBaseline] = useState(() => quote);
   const [invoiceBaseline, setInvoiceBaseline] = useState(() => ({ ...createInvoiceContinuityDraft({ job, quote }), invoiceNumber: "", invoiceDate: todayLocalIsoDate(), lineItems: [] }));
   const initialDocumentBaselinesRef = useRef({ quote: quoteBaseline, invoice: invoiceBaseline });
@@ -1158,6 +1243,7 @@ export default function UnifiedBusinessDocumentWorkspace({
   const quoteAuthorityRequestRef = useRef(0);
   const initialSavedDocumentOpenRef = useRef("");
   const quoteProposalApplyInFlightRef = useRef(false);
+  const invoiceProposalApplyInFlightRef = useRef(false);
   const startNewInFlightRef = useRef(null);
   const pendingStartNewRef = useRef(null);
   const pendingExitRef = useRef(null);
@@ -1224,15 +1310,24 @@ export default function UnifiedBusinessDocumentWorkspace({
       .map((item) => item.description)
       .filter(Boolean)
       .join("; ");
-    setInvoice((current) => ({
-      ...current,
+    const preparationPatch = {
       customerName: invoicePreparation.customerName,
       projectTitle: invoicePreparation.serviceTitle,
       workPerformed: approvedDescription,
       paidAmount: String(invoicePreparation.paymentsReceivedMinor / 100),
       balanceDue: String(invoicePreparation.amountStillDueMinor / 100),
+      quoteReference: invoicePreparation.quoteReference,
+    };
+    setInvoice((current) => ({
+      ...current,
+      ...preparationPatch,
       lineItems: Array.isArray(current.lineItems) ? current.lineItems : [],
     }));
+    setInvoiceBaseline((current) => {
+      const next = { ...current, ...preparationPatch, lineItems: Array.isArray(current.lineItems) ? current.lineItems : [] };
+      initialDocumentBaselinesRef.current.invoice = next;
+      return next;
+    });
     setDocumentJobIds((current) => ({ ...current, invoice: invoicePreparation.jobId }));
   }, [invoicePreparation]);
 
@@ -1372,7 +1467,8 @@ export default function UnifiedBusinessDocumentWorkspace({
   const currentConversationLength =
     currentConversationEntries.length +
     (pendingAnalysisMessageVisible ? 1 : 0) +
-    (pendingQuoteProposal && activeDocument === "quote" ? 1 : 0);
+    (pendingQuoteProposal && activeDocument === "quote" ? 1 : 0) +
+    (pendingInvoiceProposal && activeDocument === "invoice" ? 1 : 0);
   const currentReconciliation = reconcileBusinessDocumentInstructions({ documentType: activeDocument, baseline: activeDocument === "quote" ? quoteBaseline : invoiceBaseline, instructions: currentInstructions, manualOverrides: manualOverrides[activeDocument] });
   const privateReminders = currentReconciliation.privateReminders;
   const quotePayload = useMemo(() => buildBusinessDocumentSavePayload({
@@ -2876,6 +2972,49 @@ export default function UnifiedBusinessDocumentWorkspace({
       return true;
     }
 
+    if (activeDocument === "invoice" && invoicePreparation) {
+      let proposal = buildInvoiceConversationProposal({
+        instruction,
+        current,
+      });
+      if (!proposal.recognizedChanges.length && resolution.capability === "DOCUMENT_MUTATION") {
+        const allowedKeys = new Set(["notes", "paymentTerms", "dueDate", "lineItems"]);
+        const allowedPatch = Object.fromEntries(
+          Object.entries(resolution.patch).filter(([key]) => allowedKeys.has(key))
+        );
+        if (Object.keys(allowedPatch).length) {
+          proposal = {
+            instruction,
+            category: Object.hasOwn(allowedPatch, "lineItems") ? "EXTRA_WORK" : "INVOICE_DETAILS",
+            patch: allowedPatch,
+            recognizedChanges: Object.keys(allowedPatch),
+            baselineFingerprint: invoiceReviewFingerprint(current),
+          };
+        }
+      }
+      if (proposal.recognizedChanges.length) {
+        invoiceProposalApplyInFlightRef.current = false;
+        setPendingInvoiceProposal({
+          ...proposal,
+          id: `invoice-proposal-${Date.now()}`,
+          existingId,
+          baseline: current,
+        });
+        setMessage("");
+        setNotice("Review Meetro’s proposed Invoice changes. Nothing has been applied or saved.");
+        return true;
+      }
+      if (
+        resolution.capability === "DOCUMENT_MUTATION" &&
+        !resolution.patch.privateReminder &&
+        !resolution.patch.photoIntent
+      ) {
+        setMessage("");
+        setNotice("Approved work cannot be rewritten here. Add a customer note, payment term, due date, or Extra work item instead.");
+        return true;
+      }
+    }
+
     if (
       activeDocument === "quote" &&
       resolution.capability === "DOCUMENT_MUTATION"
@@ -2934,6 +3073,65 @@ export default function UnifiedBusinessDocumentWorkspace({
     quoteProposalApplyInFlightRef.current = false;
     setPendingQuoteProposal(null);
     setNotice("Proposal dismissed. The working Quote is unchanged.");
+  }
+
+  function dismissInvoiceProposal() {
+    invoiceProposalApplyInFlightRef.current = false;
+    setPendingInvoiceProposal(null);
+    setNotice("Proposal dismissed. The working Invoice is unchanged.");
+  }
+
+  function applyInvoiceProposal(editedPatch) {
+    if (invoiceProposalApplyInFlightRef.current) return;
+    const proposal = pendingInvoiceProposal;
+    if (!proposal) return;
+    if (invoiceReviewFingerprint(invoice) !== proposal.baselineFingerprint) {
+      setNotice("This proposal is stale because the working Invoice changed. Dismiss it and send the instruction again.");
+      return;
+    }
+    invoiceProposalApplyInFlightRef.current = true;
+    const durableKeys = new Set(["notes", "paymentTerms", "dueDate", "lineItems"]);
+    const patch = Object.fromEntries(
+      Object.entries(editedPatch).filter(([key]) => durableKeys.has(key))
+    );
+    const nextInvoice = { ...invoice, ...patch };
+    const overrides = { ...manualOverrides.invoice, ...patch };
+    let turnId = proposal.existingId;
+    let nextTurns;
+    if (turnId) {
+      const previousTurn = turns.find((turn) => turn.id === turnId);
+      const built = buildBusinessDocumentConversationTurn({
+        id: turnId,
+        documentType: "invoice",
+        instruction: proposal.instruction,
+        current: invoice,
+        previousTurn,
+        resolvedPatch: patch,
+      });
+      nextTurns = turns.map((turn) => turn.id === turnId
+        ? { ...built.turn, recognized: false, responseText: "Invoice proposal applied to the unsaved working document. Nothing was saved or created." }
+        : turn);
+    } else {
+      turnIdRef.current += 1;
+      turnId = `professional-instruction-${Date.now()}-${turnIdRef.current}`;
+      const built = buildBusinessDocumentConversationTurn({
+        id: turnId,
+        documentType: "invoice",
+        instruction: proposal.instruction,
+        current: invoice,
+        resolvedPatch: patch,
+      });
+      nextTurns = [...turns, {
+        ...built.turn,
+        recognized: false,
+        responseText: "Invoice proposal applied to the unsaved working document. Nothing was saved or created.",
+      }];
+    }
+    setTurns(nextTurns);
+    setManualOverrides((current) => ({ ...current, invoice: overrides }));
+    setInvoice(nextInvoice);
+    setPendingInvoiceProposal(null);
+    setNotice("Proposed Invoice changes applied. The Invoice remains unsaved and has not been created.");
   }
 
   function applyQuoteProposal(editedPatch) {
@@ -3020,6 +3218,13 @@ export default function UnifiedBusinessDocumentWorkspace({
   }
 
   function usePrefill() {
+    if (activeDocument === "invoice" && invoicePreparation) {
+      if (manualState?.originalInvoice) setInvoice(manualState.originalInvoice);
+      setManualState(null);
+      setNotice("Tell Meetro what you want to add or change. Meetro will propose changes for your review.");
+      requestAnimationFrame(() => messageRef.current?.focus());
+      return true;
+    }
     setManualState((current) => current
       ? { ...current, mode: "prefill", focus: "first" }
       : { mode: "prefill", focus: "first" });
@@ -3033,6 +3238,12 @@ export default function UnifiedBusinessDocumentWorkspace({
   }
 
   function openManualEditor(focus = "first") {
+    if (activeDocument === "invoice" && invoicePreparation) {
+      setManualState((current) => current?.mode === "manual"
+        ? current
+        : { mode: "manual", focus, originalInvoice: structuredClone(invoice) });
+      return;
+    }
     setManualState((current) => current
       ? { ...current, mode: "manual", focus }
       : { mode: "manual", focus });
@@ -3044,7 +3255,14 @@ export default function UnifiedBusinessDocumentWorkspace({
       : { mode, focus: "first" });
   }
 
+  function restoreTentativeManualInvoice() {
+    if (activeDocument === "invoice" && invoicePreparation && manualState?.originalInvoice) {
+      setInvoice(structuredClone(manualState.originalInvoice));
+    }
+  }
+
   function switchDocument(documentType) {
+    restoreTentativeManualInvoice();
     setActiveDocument(normalizeBusinessDocumentTab(documentType));
     setManualState(null);
     setCustomerControl(emptyCustomerControl());
@@ -3064,9 +3282,18 @@ export default function UnifiedBusinessDocumentWorkspace({
       if (JSON.stringify(value) !== JSON.stringify(original[key])) overrides[key] = value;
     }
     setManualOverrides((current) => ({ ...current, [activeDocument]: overrides }));
-    reconcileDocument(activeDocument, turns, overrides);
+    if (activeDocument === "invoice" && invoicePreparation) setInvoice(draft);
+    else reconcileDocument(activeDocument, turns, overrides);
     setManualState(null);
     setNotice(`Manual ${activeDocument} changes applied to the working draft.`);
+  }
+
+  function cancelManualEditing(original = manualState?.originalInvoice) {
+    if (activeDocument === "invoice" && invoicePreparation && original) {
+      setInvoice(structuredClone(original));
+      setNotice("Manual changes canceled. The working Invoice is unchanged.");
+    }
+    setManualState(null);
   }
 
   function focusPreview() {
@@ -3692,21 +3919,16 @@ export default function UnifiedBusinessDocumentWorkspace({
       <main className={`business-document-main ${documentPhotos.length ? "has-evidence" : ""}`}>
         <section className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`} aria-labelledby="business-document-conversation-title">
           <h2 id="business-document-conversation-title" className="business-document-visually-hidden">{activeDocument === "quote" ? "Quote conversation" : "Invoice conversation"}</h2>
-          <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><button ref={howItWorksTriggerRef} type="button" aria-expanded={howItWorksOpen} aria-controls="business-document-workflow-guide" onClick={() => setHowItWorksOpen((open) => !open)}><span aria-hidden="true">ⓘ</span><span>How it works</span></button>{howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}</div>
+          <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} data-assisted-active={invoicePreparation && activeDocument === "invoice" && !manualState ? "true" : undefined} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} aria-expanded={invoicePreparation && activeDocument === "invoice" ? manualState?.mode === "manual" : undefined} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><button ref={howItWorksTriggerRef} type="button" aria-expanded={howItWorksOpen} aria-controls="business-document-workflow-guide" onClick={() => setHowItWorksOpen((open) => !open)}><span aria-hidden="true">ⓘ</span><span>How it works</span></button>{howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}</div>
           {activeDocument === "quote" ? <JobLinkedQuoteContext job={job} /> : null}
-          {activeDocument === "invoice" && invoicePreparation ? (
-            <CompletedInvoicePreparationEditor
-              invoice={invoice}
-              onChange={(patch) => setInvoice((current) => ({ ...current, ...patch }))}
-            />
-          ) : null}
-          {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} lockedCustomerName={activeDocument === "quote" || invoicePreparation ? jobLinkedCustomerName : ""} onModeChange={changeEditorMode} onApply={applyManualDraft} onCancel={() => setManualState(null)} /> : null}
+          {activeDocument === "invoice" && invoicePreparation ? <CompletedInvoiceReviewIntro /> : null}
+          {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} invoicePreparation={invoicePreparation} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} lockedCustomerName={activeDocument === "quote" || invoicePreparation ? jobLinkedCustomerName : ""} onModeChange={changeEditorMode} onPreview={setInvoice} onApply={applyManualDraft} onCancel={cancelManualEditing} /> : null}
           <div className="business-document-chat-shell">
-            <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} showResponse={!entry.analysisRouted} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingQuoteProposal && activeDocument === "quote" ? <QuoteProposalReview key={pendingQuoteProposal.id} proposal={pendingQuoteProposal} onApply={applyQuoteProposal} onDismiss={dismissQuoteProposal} /> : null}{pendingAnalysisMessageVisible ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
+            <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>{activeDocument === "invoice" && invoicePreparation ? "Tell me what you want to add or change on this invoice. I’ll propose the change for you to review before anything is applied." : "Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document."}</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} showResponse={!entry.analysisRouted} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingQuoteProposal && activeDocument === "quote" ? <QuoteProposalReview key={pendingQuoteProposal.id} proposal={pendingQuoteProposal} onApply={applyQuoteProposal} onDismiss={dismissQuoteProposal} /> : null}{pendingInvoiceProposal && activeDocument === "invoice" ? <InvoiceProposalReview key={pendingInvoiceProposal.id} proposal={pendingInvoiceProposal} onApply={applyInvoiceProposal} onDismiss={dismissInvoiceProposal} /> : null}{pendingAnalysisMessageVisible ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}</div>
             {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
-            <div className="business-document-composer"><textarea ref={messageRef} id="business-document-message" value={message} rows={3} placeholder={`Ask Meetro about the job or tell me what to change on the ${activeDocument}…`} onChange={(event) => setMessage(event.target.value)} /><div><WorkflowMicrophoneInput language={language} contextLabel={`business-${activeDocument}`} idleLabel="Speak" setPage={guardedSetPage} disabled={currentAnalysisRequest.busy} onTranscript={(transcript) => setMessage((current) => [current, transcript].filter(Boolean).join(" "))} /><button type="button" onClick={() => onAddPhotos(activeDocument)} disabled={!canAddPhotos || photoBusy || currentAnalysisRequest.busy}><MeetroIcon name="photoCount" size={17} decorative />{photoBusy ? "Adding…" : "Add Photos"}</button><button type="button" className="business-document-send-message" onClick={() => void submitInstruction(message)} disabled={!message.trim() || currentAnalysisRequest.busy}>{currentAnalysisRequest.busy ? "Thinking…" : "Send"}</button></div></div>
+            <div className="business-document-composer"><textarea ref={messageRef} id="business-document-message" value={message} rows={3} placeholder={activeDocument === "invoice" && invoicePreparation ? "Ask Meetro about this invoice…" : `Ask Meetro about the job or tell me what to change on the ${activeDocument}…`} onChange={(event) => setMessage(event.target.value)} /><div><WorkflowMicrophoneInput language={language} contextLabel={`business-${activeDocument}`} idleLabel="Speak" setPage={guardedSetPage} disabled={currentAnalysisRequest.busy} onTranscript={(transcript) => setMessage((current) => [current, transcript].filter(Boolean).join(" "))} /><button type="button" onClick={() => onAddPhotos(activeDocument)} disabled={!canAddPhotos || photoBusy || currentAnalysisRequest.busy}><MeetroIcon name="photoCount" size={17} decorative />{photoBusy ? "Adding…" : "Add Photos"}</button><button type="button" className="business-document-send-message" onClick={() => void submitInstruction(message)} disabled={!message.trim() || currentAnalysisRequest.busy}>{currentAnalysisRequest.busy ? "Thinking…" : "Send"}</button></div></div>
           </div>
-          <div className="business-document-conversation-shortcuts"><button type="button" onClick={() => focusComposer("Note: ")}>Add to {activeDocument === "quote" ? "Quote" : "Invoice"} Notes</button><button type="button" onClick={() => focusComposer("Keep this private: ")}>Private Reminder</button><button type="button" onClick={() => openManualEditor("amount")}>Change Amount</button></div>
+          <div className="business-document-conversation-shortcuts"><button type="button" onClick={() => focusComposer("Note: ")}>Add to {activeDocument === "quote" ? "Quote" : "Invoice"} Notes</button><button type="button" onClick={() => focusComposer("Keep this private: ")}>Private Reminder</button><button type="button" onClick={() => openManualEditor("amount")}>{activeDocument === "invoice" && invoicePreparation ? "Add Extra Work" : "Change Amount"}</button></div>
           {privateReminders.length ? <aside className="business-private-reminders"><strong>Private reminders</strong>{privateReminders.map((item) => <p key={item.id}>{item.text}</p>)}<small>Only you can see this. It never appears on customer documents.</small></aside> : null}
           {currentAnalysisRequest.error ? <p className="business-document-notice" role="alert">{currentAnalysisRequest.error}</p> : null}
           {invoiceCreateState.error && mobilePane === "conversation" ? <p className="business-document-notice" role="alert">{invoiceCreateState.error}</p> : null}
