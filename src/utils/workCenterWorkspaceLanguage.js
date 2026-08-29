@@ -36,7 +36,7 @@ const COPY = Object.freeze({
     findings: "What I Found & Recommendations",
     findingsSummary: "Review findings and the work you recommend.",
     workPlan: "Work Plan",
-    workPlanSummary: "Track approved work and progress.",
+    workPlanSummary: "Everything you need before starting this job.",
     materialsPreparation: "Materials & Preparation",
     materialsPreparationSummary: "Plan materials, tools, equipment, and readiness.",
     quotes: "Quotes & Approvals",

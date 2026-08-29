@@ -217,7 +217,7 @@ test("11. exact Work Preparation v2 remains version 2", () => {
 });
 
 test("12. Job change triggers exact Work Plan refetch", () => {
-  assert.match(workPlanWorkspace, /\[jobId, refreshKey, setPage\]/);
+  assert.match(workPlanWorkspace, /\[canonicalRecord, jobId, preferredQuoteId, refreshKey, setPage\]/);
 });
 
 test("13. Job change triggers exact Work Preparation refetch", () => {

@@ -20,7 +20,22 @@ import {
 import { isCanonicalWorkCenterHydrationEnabled } from "../utils/workCenterCanonicalHydration.js";
 import { getCanonicalEvaluationDraftProgress } from "../utils/evaluationDraftProgression.js";
 import CanonicalFindingsPanel from "./CanonicalFindingsPanel.jsx";
+import WorkflowMicrophoneInput from "./WorkflowMicrophoneInput.jsx";
 import { WorkCenterAccordion } from "./WorkCenterWorkspaceSystem.jsx";
+import {
+  loadCanonicalFindingsForEvaluation,
+  loadCanonicalRecommendationsForFinding,
+} from "../utils/findingRecommendationReadController.js";
+import {
+  buildEvaluationAssistantProfessionalInput,
+  selectApprovedQuote,
+} from "../utils/workCenterLifecycleUx.js";
+import { fetchProfessionalJobWorkPlan } from "../utils/workPlanApi.js";
+import { fetchWorkPreparation } from "../utils/workPreparationApi.js";
+import {
+  loadCanonicalQuoteDetail,
+  loadCanonicalQuotesForRecord,
+} from "../utils/quoteReadController.js";
 import {
   CAMERA_PERMISSION_MESSAGE,
   createPhotoInputEvent,
@@ -169,6 +184,9 @@ export default function CanonicalJobEvaluation({
     notice: "",
     result: null,
   });
+  const [assistantContext, setAssistantContext] = useState({
+    findings: [], recommendations: [], approvedQuote: null, preparation: null, workPlan: null,
+  });
   const [assistantFindingDraft, setAssistantFindingDraft] = useState(null);
   const [assistantRecommendationDraft, setAssistantRecommendationDraft] = useState(null);
   const [photoLifecycle, setPhotoLifecycle] = useState({
@@ -186,6 +204,46 @@ export default function CanonicalJobEvaluation({
   const photoUploadInputRef = useRef(null);
   const photoCameraInputRef = useRef(null);
   const [assistantEvaluationEdit, setAssistantEvaluationEdit] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    if (!loadState.evaluation) {
+      queueMicrotask(() => {
+        if (active) setAssistantContext({ findings: [], recommendations: [], approvedQuote: null, preparation: null, workPlan: null });
+      });
+      return () => { active = false; };
+    }
+    const scopedRecord = canonicalRecord({ jobId, requestId, relationshipId });
+    const evaluationContextRead = loadCanonicalFindingsForEvaluation({ evaluation: loadState.evaluation, setPage })
+      .then(async (findings) => {
+        const canonicalFindings = findings || [];
+        const recommendationGroups = await Promise.all(canonicalFindings.map((finding) =>
+          loadCanonicalRecommendationsForFinding({ finding, setPage }).catch(() => [])
+        ));
+        return { findings: canonicalFindings, recommendations: recommendationGroups.flat() };
+      });
+    const approvedQuoteRead = loadCanonicalQuotesForRecord({ record: scopedRecord, setPage })
+      .then((quotes) => {
+        const quote = selectApprovedQuote(quotes);
+        return quote ? loadCanonicalQuoteDetail({ record: scopedRecord, quote, setPage }) : null;
+      });
+    void Promise.allSettled([
+      evaluationContextRead,
+      approvedQuoteRead,
+      fetchWorkPreparation({ jobId, setPage }),
+      fetchProfessionalJobWorkPlan({ jobId, setPage }),
+    ]).then(([evaluationResult, quoteResult, preparationResult, workPlanResult]) => {
+      if (!active) return;
+      setAssistantContext({
+        findings: evaluationResult.status === "fulfilled" ? evaluationResult.value.findings : [],
+        recommendations: evaluationResult.status === "fulfilled" ? evaluationResult.value.recommendations : [],
+        approvedQuote: quoteResult.status === "fulfilled" ? quoteResult.value : null,
+        preparation: preparationResult.status === "fulfilled" ? preparationResult.value?.workPreparation : null,
+        workPlan: workPlanResult.status === "fulfilled" ? workPlanResult.value : null,
+      });
+    });
+    return () => { active = false; };
+  }, [jobId, loadState.evaluation, relationshipId, requestId, setPage]);
 
   useEffect(() => {
     setSelectedPhotoReferenceIds([]);
@@ -592,15 +650,28 @@ export default function CanonicalJobEvaluation({
           evaluationId: evaluation?.evaluation?.id || null,
           intent: intents[action],
           ...(action === "photos" ? { photoReferenceIds } : {}),
-          professionalInput: {
-            observations: form.observations || null,
-            measurements: [],
-            notes: [form.diagnosisSummary, form.limitations, form.internalNotes, prompt]
-              .filter(Boolean)
-              .concat(action === "photos" ? [selectedPhotoSummary] : [])
-              .filter(Boolean)
-              .join("\n") || null,
-          },
+          professionalInput: buildEvaluationAssistantProfessionalInput({
+            evaluation: evaluation ? {
+              ...evaluation,
+              evaluation: {
+                ...evaluation.evaluation,
+                content: {
+                  ...evaluation.evaluation.content,
+                  observations: form.observations || evaluation.evaluation.content.observations,
+                  diagnosisSummary: form.diagnosisSummary || evaluation.evaluation.content.diagnosisSummary,
+                  limitations: form.limitations || evaluation.evaluation.content.limitations,
+                  internalNotes: form.internalNotes || evaluation.evaluation.content.internalNotes,
+                },
+              },
+            } : null,
+            structuredFindings: assistantContext.findings,
+            recommendations: assistantContext.recommendations,
+            approvedQuote: assistantContext.approvedQuote,
+            preparation: assistantContext.preparation,
+            workPlan: assistantContext.workPlan,
+            prompt,
+            selectedPhotoSummary: action === "photos" ? selectedPhotoSummary : "",
+          }),
         },
         expected: { jobId, evaluationId: evaluation?.evaluation?.id || undefined },
         setPage,
@@ -1074,6 +1145,19 @@ export default function CanonicalJobEvaluation({
                   required={required}
                   onChange={(event) => setForm((current) => ({ ...current, [field]: event.target.value }))}
                 />
+                {field === "observations" && (
+                  <WorkflowMicrophoneInput
+                    language={language}
+                    contextLabel="evaluation-observations"
+                    disabled={loadState.status === "saving"}
+                    setPage={setPage}
+                    idleLabel="Add voice notes"
+                    onTranscript={(transcript) => setForm((current) => ({
+                      ...current,
+                      observations: [current.observations.trim(), transcript.trim()].filter(Boolean).join("\n"),
+                    }))}
+                  />
+                )}
               </label>
             ))}
             <details style={styles.advancedFields}>

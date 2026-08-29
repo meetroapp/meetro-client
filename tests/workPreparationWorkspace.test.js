@@ -17,12 +17,17 @@ test("Materials & Preparation copy is complete for every supported language", ()
   }
 });
 
-test("professional workspace is adjacent to Work Plan and reads the dedicated authority route", () => {
+test("professional workspace is integrated inside Work Plan and reads the dedicated authority route", () => {
   const dashboard = source("src/pages/ContractorDashboard.jsx");
+  const workPlan = source("src/components/ProfessionalWorkPlanWorkspace.jsx");
+  const compact = source("src/components/CompactWorkPlanPreparation.jsx");
   const workspace = source("src/components/ProfessionalWorkPreparationWorkspace.jsx");
   const api = source("src/utils/workPreparationApi.js");
-  assert.match(dashboard, /canonical-job-work-plan[\s\S]*canonical-job-work-preparation[\s\S]*canonical-job-quotes/);
-  assert.match(dashboard, /ProfessionalWorkPreparationWorkspace/);
+  assert.match(dashboard, /canonical-job-evaluation[\s\S]*canonical-job-quotes[\s\S]*canonical-job-work-plan[\s\S]*canonical-job-completion-invoice/);
+  assert.doesNotMatch(dashboard, /id="canonical-job-work-preparation"/);
+  assert.match(workPlan, /CompactWorkPlanPreparation/);
+  assert.match(compact, /ProfessionalWorkPreparationWorkspace/);
+  assert.match(workPlan, /Materials & Preparation/);
   assert.match(api, /\/jobs\/\$\{encodeURIComponent\(normalizedJobId\)\}\/work-preparation/);
   assert.doesNotMatch(workspace, /fetchProfessionalJobWorkPlan|fetchProfessionalWorkPlanSummary|liveJob|localStorage|sessionStorage/);
 });

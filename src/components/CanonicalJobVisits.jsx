@@ -133,7 +133,13 @@ function notifyCanonicalVisitChanged(jobId, visitId = null) {
   }));
 }
 
-export default function CanonicalJobVisits({ record = {}, setPage }) {
+export default function CanonicalJobVisits({
+  record = {},
+  setPage,
+  purposeFilter = "ALL",
+  showDeposit = true,
+  embedded = false,
+}) {
   const environmentEnabled = isCanonicalWorkCenterHydrationEnabled();
   const jobId = String(record.jobId || "").trim();
   const requestId = Number(record.requestId || record.postId) || null;
@@ -227,10 +233,12 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
     };
   }, [jobId]);
 
-  const subjects = useMemo(
-    () => [workspace.evaluation, ...(workspace.approvedWork || [])].filter(Boolean),
-    [workspace.approvedWork, workspace.evaluation]
-  );
+  const subjects = useMemo(() => {
+    const all = [workspace.evaluation, ...(workspace.approvedWork || [])].filter(Boolean);
+    return purposeFilter === "ALL"
+      ? all
+      : all.filter((subject) => subject.purpose === purposeFilter);
+  }, [purposeFilter, workspace.approvedWork, workspace.evaluation]);
 
   function reload() {
     setReloadVersion((current) => current + 1);
@@ -425,7 +433,7 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
 
   return (
     <section style={styles.section} aria-labelledby="canonical-job-visits-title">
-      <div style={styles.header}>
+      {!embedded && <div style={styles.header}>
         <div>
           <span style={styles.eyebrow}>Visit planning</span>
           <h3 id="canonical-job-visits-title" style={styles.title}>
@@ -433,10 +441,14 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
           </h3>
         </div>
         <span style={styles.readOnly}>For this job</span>
-      </div>
+      </div>}
 
       <p style={styles.boundaryNote}>
-        Plan visit timing and keep the customer informed.
+        {purposeFilter === "EVALUATION"
+          ? "Evaluation Visit timing and history stay with the assessment."
+          : purposeFilter === "APPROVED_WORK"
+            ? "Schedule the customer-approved Work from this Work Plan."
+            : "Plan visit timing and keep the customer informed."}
       </p>
 
       {workspace.status === "loading" && (
@@ -500,7 +512,7 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                   <p role="alert" style={styles.error}>{subject.error}</p>
                 )}
 
-                {subject.purpose === "APPROVED_WORK" && (
+                {showDeposit && subject.purpose === "APPROVED_WORK" && (
                   <ProfessionalDepositCard
                     jobId={jobId}
                     quoteId={subject.subjectId}
@@ -615,8 +627,8 @@ export default function CanonicalJobVisits({ record = {}, setPage }) {
                           )}
                           {visit.state === "COMPLETED" && (
                             <p style={styles.completedNotice}>
-                              This records only that the Visit occurred. No Evaluation,
-                              approved scope, Workstream, or Job was completed by this action.
+                              This records only that the Visit occurred. It does not
+                              complete the approved work or the Job.
                             </p>
                           )}
 

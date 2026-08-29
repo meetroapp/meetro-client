@@ -16,8 +16,8 @@ test("four workflow surfaces expose contextual assistance without silent authori
   assert.match(evaluation, /recordWorkflowReview/);
   assert.match(dashboard, /quoteBuilder\?jobId=/);
   assert.match(dashboard, /getAskMeetroWorkflowCopy\(activeLanguage\)\.estimate/);
-  assert.match(quote, /getCanonicalJobIdFromRoute\(window\.location\.hash\)/);
-  assert.match(quote, /canonicalJobIdPattern\.test\(jobId\)/);
+  assert.match(quote, /parseSavedQuoteRoute\(window\.location\.hash\)/);
+  assert.match(quote, /routeCanonicalJobId = savedQuoteRoute\.jobId/);
   assert.match(quote, /applyConfirmedQuoteComposition/);
   assert.match(invoice, /canonicalFinancialTruth/);
   for (const source of [evaluation, quote, invoice]) assert.match(source, /directMutationAllowed|recordWorkflowReview|recordQuoteCompositionReview/);

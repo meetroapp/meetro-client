@@ -16,8 +16,10 @@ const dashboard = source("src/pages/ContractorDashboard.jsx");
 const projectDetails = source("src/pages/ProjectDetails.jsx");
 const api = source("src/utils/jobCompletionApi.js");
 
-test("professional completion is a server-gated two-step canonical command", () => {
-  assert.match(workPlan, /summary\?\.readyForCompletionReview[\s\S]*<ProfessionalCompletionReview/);
+test("legacy Job completion remains server-gated but is not presented as atomic Work completion", () => {
+  assert.doesNotMatch(workPlan, /ProfessionalCompletionReview|completeCanonicalJob/);
+  assert.match(workPlan, /WORK_LEVEL_AUTHORITY_GAPS/);
+  assert.match(workPlan, /Start Work is temporarily unavailable/);
   assert.match(completionReview, /fetchJobCompletionReview/);
   assert.match(completionReview, /review\.canComplete && !confirming/);
   assert.match(completionReview, /role="alertdialog"/);

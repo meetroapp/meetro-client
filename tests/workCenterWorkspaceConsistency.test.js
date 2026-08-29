@@ -75,14 +75,17 @@ test("all seven Work Center destinations adopt the shared presentation system", 
 
 test("Current Job stays identity-first and progressively discloses canonical sections", () => {
   for (const id of [
-    "canonical-job-visits", "canonical-job-evaluation", "canonical-job-work-plan",
+    "canonical-job-evaluation", "canonical-job-work-plan",
     "canonical-job-quotes", "canonical-job-completion-invoice",
   ]) assert.match(dashboard, new RegExp(`id="${id}"`));
+  assert.doesNotMatch(dashboard, /id="canonical-job-visits"/);
   assert.match(dashboard, /canonicalLiveJob\?\.nextAction\?\.code/);
   assert.match(dashboard, /canonicalLiveJob\?\.stage\?\.code/);
   assert.match(dashboard, /resolveWorkCenterSectionForNextAction/);
   assert.match(dashboard, /canonicalAutoOpenToken/);
   assert.match(dashboard, /CanonicalJobVisits/);
+  assert.match(dashboard, /purposeFilter="EVALUATION"/);
+  assert.match(read("../src/components/ProfessionalWorkPlanWorkspace.jsx"), /purposeFilter="APPROVED_WORK"/);
   assert.match(dashboard, /CanonicalJobEvaluation/);
   assert.match(dashboard, /ProfessionalWorkPlanWorkspace/);
   assert.match(dashboard, /CanonicalQuotesPanel/);

@@ -5225,3 +5225,20 @@ button {
     justify-self: start;
   }
 }
+@media (max-width: 720px) {
+  .professional-work-plan .work-plan-compact-area {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .professional-work-plan .work-plan-material-column-labels {
+    display: none !important;
+  }
+
+  .professional-work-plan .work-plan-material-item-row {
+    grid-template-columns: minmax(0, 1fr) auto !important;
+  }
+
+  .professional-work-plan .work-plan-material-item-row > :last-child {
+    grid-column: 1 / -1;
+  }
+}

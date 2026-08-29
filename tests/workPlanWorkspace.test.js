@@ -16,6 +16,10 @@ const workspace = readFileSync(
   new URL("../src/components/ProfessionalWorkPlanWorkspace.jsx", import.meta.url),
   "utf8"
 );
+const compactPreparation = readFileSync(
+  new URL("../src/components/CompactWorkPlanPreparation.jsx", import.meta.url),
+  "utf8"
+);
 const overview = readFileSync(
   new URL("../src/components/ProfessionalWorkPlanOverview.jsx", import.meta.url),
   "utf8"
@@ -45,23 +49,22 @@ test("Work Center adds one canonical Work Plan card distinct from Current Jobs",
   assert.doesNotMatch(api, /localStorage|activeJobs|workflow_quote_sent|completedProjects/);
 });
 
-test("professional Work Plan uses exact commands then canonical refetch", () => {
+test("professional Work Plan is an exact read projection and never composes Work authority", () => {
   for (const command of [
     "createWorkItem",
     "progressWorkItem",
     "updateWorkItem",
     "completeWorkArea",
   ]) {
-    assert.match(workspace, new RegExp(`\\b${command}\\b`));
+    assert.doesNotMatch(workspace, new RegExp(`\\b${command}\\b`));
   }
-  assert.match(workspace, /await action\(\);[\s\S]*await loadPlan\(\);/);
-  assert.match(workspace, /expectedVersion: activity\.currentVersion/);
-  assert.match(workspace, /expectedVersion: workstream\.currentVersion/);
-  assert.match(workspace, /customerVisible: editor\.customerVisible/);
-  assert.match(workspace, /activity\.status === "IN_PROGRESS"/);
-  assert.match(workspace, /summary\?\.readyForCompletionReview/);
-  assert.match(workspace, /This does not close the Job|readyForCompletionReviewBody/);
-  assert.doesNotMatch(workspace, /job\.complete|invoice|payment|portfolio|localStorage/);
+  assert.match(workspace, /WORK_LEVEL_AUTHORITY_GAPS/);
+  assert.match(workspace, /Start Work is temporarily unavailable/);
+  assert.match(workspace, /buildApprovedWorkProjection/);
+  assert.match(workspace, /CompactWorkPlanPreparation/);
+  assert.match(compactPreparation, /ProfessionalWorkPreparationWorkspace/);
+  assert.match(workspace, /purposeFilter="APPROVED_WORK"/);
+  assert.doesNotMatch(workspace, /job\.complete|localStorage|sessionStorage/);
 });
 
 test("Project Journey renders only the strict customer-safe Work Plan projection", () => {
@@ -98,15 +101,15 @@ test("Work Plan copy is complete for EN, ES, FR, and PT-BR", () => {
 
 test("desktop and compact Work Plan surfaces preserve readable 44px controls", () => {
   assert.match(dashboard, /compactWorkCenterChildTabs = \[[\s\S]*"workPlan"/);
-  assert.match(workspace, /gridTemplateColumns: "repeat\(auto-fit, minmax\(110px, 1fr\)\)"/);
+  assert.match(workspace, /gridTemplateColumns: "repeat\(auto-fit, minmax\(min\(100%, 150px\), 1fr\)\)"/);
   assert.match(overview, /WorkCenterMetricGrid/);
   assert.match(overview, /key: "jobs"/);
   assert.match(workspaceSystem, /work-center-metric-grid/);
   assert.match(css, /grid-template-columns: repeat\(2, minmax\(0, 1fr\)\)/);
   assert.match(css, /last-child:nth-child\(odd\)/);
   assert.match(customer, /gridTemplateColumns: "minmax\(90px, auto\) 1fr"/);
-  for (const source of [workspace, overview, customer]) {
+  for (const source of [workspace, compactPreparation, overview, customer]) {
     assert.match(source, /minHeight: 44/);
-    assert.match(source, /overflowWrap: "anywhere"/);
+    assert.match(source, /overflowWrap: "anywhere"|minWidth: 0/);
   }
 });

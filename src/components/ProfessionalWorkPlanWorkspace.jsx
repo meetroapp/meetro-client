@@ -1,449 +1,172 @@
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { fetchProfessionalJobWorkPlan } from "../utils/workPlanApi.js";
+import { fetchWorkPreparation } from "../utils/workPreparationApi.js";
+import { loadCanonicalQuoteDetail, loadCanonicalQuotesForRecord } from "../utils/quoteReadController.js";
+import { loadCanonicalVisitWorkspace } from "../utils/canonicalVisitController.js";
 import {
-  completeWorkArea,
-  createWorkItem,
-  createWorkPlanIdempotencyKey,
-  fetchProfessionalJobWorkPlan,
-  progressWorkItem,
-  updateWorkItem,
-} from "../utils/workPlanApi.js";
-import { getWorkPlanCopy } from "../utils/workPlanLanguage.js";
-import ProfessionalCompletionReview from "./ProfessionalCompletionReview.jsx";
+  WORK_LEVEL_AUTHORITY_GAPS,
+  buildApprovedWorkProjection,
+  buildExecutionSafeViewModel,
+  buildReadinessProjection,
+  deriveWorkExecutionMode,
+  selectApprovedQuote,
+} from "../utils/workCenterLifecycleUx.js";
+import CanonicalJobVisits from "./CanonicalJobVisits.jsx";
+import CompactWorkPlanPreparation from "./CompactWorkPlanPreparation.jsx";
 
-function statusLabel(status, copy) {
-  const labels = {
-    READY_TO_START: copy.readyToStart,
-    PLANNED: copy.readyToStart,
-    IN_PROGRESS: copy.inProgress,
-    NEEDS_ATTENTION: copy.needsAttention,
-    DONE: copy.completed,
-    COMPLETED: copy.completed,
-  };
-  return labels[status] || copy.readyToStart;
+function readable(value) {
+  return String(value || "Unavailable").toLowerCase().split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1)).join(" ");
 }
 
-function displayDate(value, language) {
+function dateLabel(value, language) {
   if (!value) return "";
-  const locale = { en: "en-US", es: "es", fr: "fr", "pt-BR": "pt-BR" }[language] || "en-US";
-  return new Intl.DateTimeFormat(locale, { month: "short", day: "numeric" }).format(
-    new Date(value)
-  );
+  try {
+    return new Intl.DateTimeFormat(language || "en", { month: "short", day: "numeric", year: "numeric" }).format(new Date(value));
+  } catch { return ""; }
 }
 
-const emptyEditor = Object.freeze({
-  mode: "",
-  workstreamId: "",
-  activityId: "",
-  statement: "",
-  customerVisible: false,
-});
+function scheduleLabel(visit, language) {
+  if (!visit?.scheduledStartAt) return "Schedule unavailable";
+  try {
+    const start = new Date(visit.scheduledStartAt);
+    const end = visit.scheduledEndAt ? new Date(visit.scheduledEndAt) : null;
+    const date = new Intl.DateTimeFormat(language || "en", { month: "short", day: "numeric" }).format(start);
+    const time = new Intl.DateTimeFormat(language || "en", { hour: "numeric", minute: "2-digit" });
+    return `${date} · ${time.format(start)}${end ? `–${time.format(end)}` : ""}`;
+  } catch { return "Schedule unavailable"; }
+}
 
-export default function ProfessionalWorkPlanWorkspace({
-  jobId,
-  language = "en",
-  setPage,
-  onCanonicalChange,
-}) {
-  const copy = getWorkPlanCopy(language);
-  const [refreshKey, setRefreshKey] = useState(0);
-  const [state, setState] = useState({ status: "loading", plan: null, error: "" });
-  const [editor, setEditor] = useState(emptyEditor);
-  const [busy, setBusy] = useState("");
-  const [commandError, setCommandError] = useState("");
+function assignedName(record) {
+  return [record.assignedProfessionalName, record.professionalName, record.providerName, record.businessName]
+    .find((value) => typeof value === "string" && value.trim())?.trim() || "";
+}
 
-  const loadPlan = useCallback(async () => {
-    const plan = await fetchProfessionalJobWorkPlan({ jobId, setPage });
-    setState({ status: "ready", plan, error: "" });
-    return plan;
-  }, [jobId, setPage]);
+function Status({ children, tone = "neutral" }) {
+  return <span style={{ ...styles.status, ...styles[`${tone}Status`] }}>{children}</span>;
+}
 
-  useEffect(() => {
-    let active = true;
-    queueMicrotask(() => {
-      if (active) setState({ status: "loading", plan: null, error: "" });
-    });
-    void fetchProfessionalJobWorkPlan({ jobId, setPage })
-      .then((plan) => {
-        if (active) setState({ status: "ready", plan, error: "" });
-      })
-      .catch((error) => {
-        if (active) {
-          setState({
-            status: "error",
-            plan: null,
-            error: String(error?.code || "WORK_PLAN_FAILED"),
-          });
-        }
-      });
-    return () => { active = false; };
-  }, [jobId, refreshKey, setPage]);
-
-  const runCommand = useCallback(async (key, action) => {
-    setBusy(key);
-    setCommandError("");
-    try {
-      await action();
-      await loadPlan();
-      setEditor(emptyEditor);
-      onCanonicalChange?.();
-    } catch (error) {
-      setCommandError(String(error?.code || "WORK_PLAN_COMMAND_FAILED"));
-    } finally {
-      setBusy("");
-    }
-  }, [loadPlan, onCanonicalChange]);
-
-  const plan = state.plan;
-  const summary = plan?.summary;
-
+function CompactArea({ title, summary, children, id }) {
   return (
-    <section
-      className="professional-work-plan"
-      style={styles.section}
-      aria-labelledby="professional-work-plan-title"
-      data-work-plan-status={state.status}
-      data-work-plan-error={state.error || commandError}
-      data-work-plan-job-id={jobId || ""}
-    >
-      <header style={styles.header}>
-        <div>
-          <span style={styles.eyebrow}>{copy.workspaceEyebrow}</span>
-          <h2 id="professional-work-plan-title" style={styles.title}>{copy.workPlan}</h2>
-          <p style={styles.purpose}>{copy.workspacePurpose}</p>
-        </div>
-        {summary && (
-          <span style={styles.progressPill}>
-            {copy.format("summaryProgress", {
-              completed: summary.completedCount,
-              total: summary.workItemCount,
-            })}
-          </span>
-        )}
-      </header>
-
-      {state.status === "loading" && <p role="status">{copy.loading}</p>}
-      {state.status === "error" && (
-        <div role="alert" style={styles.error}>
-          <p>{copy.unavailable}</p>
-          <button
-            type="button"
-            style={styles.secondaryButton}
-            onClick={() => setRefreshKey((value) => value + 1)}
-          >
-            {copy.retry}
-          </button>
-        </div>
-      )}
-      {commandError && <p role="alert" style={styles.commandError}>{copy.commandFailed}</p>}
-
-      {summary && (
-        <div style={styles.summary} aria-label={copy.workItems}>
-          <div style={styles.metric}><strong>{summary.workItemCount}</strong><span>{copy.workItems}</span></div>
-          <div style={styles.metric}><strong>{summary.completedCount}</strong><span>{copy.completed}</span></div>
-          <div style={styles.metric}><strong>{summary.remainingCount}</strong><span>{copy.remaining}</span></div>
-          <div style={styles.metric}><strong>{summary.needsAttentionCount}</strong><span>{copy.needsAttention}</span></div>
-        </div>
-      )}
-
-      {summary?.readyForCompletionReview && (
-        <div style={styles.readyNotice} role="status">
-          <strong>{copy.readyForCompletionReview}</strong>
-          <span>{copy.readyForCompletionReviewBody}</span>
-        </div>
-      )}
-
-      {summary?.readyForCompletionReview && (
-        <ProfessionalCompletionReview
-          jobId={jobId}
-          language={language}
-          setPage={setPage}
-          onCompleted={() => {
-            void loadPlan();
-            onCanonicalChange?.();
-          }}
-        />
-      )}
-
-      {state.status === "ready" && plan.workstreams.length === 0 && (
-        <p style={styles.empty}>{copy.noApprovedWork}</p>
-      )}
-
-      {plan?.workstreams.map((workstream) => (
-        <article
-          key={workstream.id}
-          style={styles.workstream}
-          data-workstream-id={workstream.id}
-          data-workstream-status={workstream.status}
-        >
-          <header style={styles.workstreamHeader}>
-            <div style={styles.workstreamHeading}>
-              <span style={styles.sequence}>{workstream.sequence}</span>
-              <div>
-                <h3 style={styles.workstreamTitle}>{workstream.title}</h3>
-                <span style={styles.statusText}>{statusLabel(workstream.status, copy)}</span>
-              </div>
-            </div>
-            <div style={styles.headerActions}>
-              {workstream.canAddWorkItem && (
-                <button
-                  type="button"
-                  style={styles.secondaryButton}
-                  onClick={() => setEditor({
-                    ...emptyEditor,
-                    mode: "create",
-                    workstreamId: workstream.id,
-                  })}
-                >
-                  {copy.addWorkItem}
-                </button>
-              )}
-              {workstream.canMarkComplete && (
-                <button
-                  type="button"
-                  style={styles.primaryButton}
-                  disabled={Boolean(busy)}
-                  onClick={() => runCommand(`workstream-${workstream.id}`, () =>
-                    completeWorkArea({
-                      jobId,
-                      workstreamId: workstream.id,
-                      expectedVersion: workstream.currentVersion,
-                      idempotencyKey: createWorkPlanIdempotencyKey("complete-area"),
-                      setPage,
-                    })
-                  )}
-                >
-                  {busy === `workstream-${workstream.id}` ? copy.saving : copy.completeWorkArea}
-                </button>
-              )}
-            </div>
-          </header>
-
-          {workstream.blockers.length > 0 && (
-            <div style={styles.blockers}>
-              <strong>{copy.blockers}</strong>
-              <ul style={styles.list}>
-                {workstream.blockers.map((blocker) => (
-                  <li key={blocker.id}>{blocker.statement}</li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {editor.mode === "create" && editor.workstreamId === workstream.id && (
-            <WorkItemEditor
-              copy={copy}
-              editor={editor}
-              busy={busy === "create"}
-              onChange={setEditor}
-              onCancel={() => setEditor(emptyEditor)}
-              onSave={() => runCommand("create", () => createWorkItem({
-                jobId,
-                workstreamId: workstream.id,
-                statement: editor.statement,
-                customerVisible: editor.customerVisible,
-                idempotencyKey: createWorkPlanIdempotencyKey("create-item"),
-                setPage,
-              }))}
-            />
-          )}
-
-          <div style={styles.activities}>
-            {workstream.activities.length === 0 && (
-              <p style={styles.empty}>{copy.noApprovedWork}</p>
-            )}
-            {workstream.activities.map((activity) => (
-              <div
-                key={activity.id}
-                style={styles.activity}
-                data-work-item-id={activity.id}
-                data-work-item-status={activity.status}
-              >
-                <div style={styles.activityTop}>
-                  <div style={styles.activityCopy}>
-                    <span style={styles.statusText}>{statusLabel(activity.status, copy)}</span>
-                    <p style={styles.statement}>{activity.statement}</p>
-                    <time style={styles.date} dateTime={activity.updatedAt}>
-                      {displayDate(activity.updatedAt, language)}
-                    </time>
-                  </div>
-                  <div style={styles.activityActions}>
-                    {activity.canStart && (
-                      <button
-                        type="button"
-                        style={styles.primaryButton}
-                        disabled={Boolean(busy)}
-                        onClick={() => runCommand(`start-${activity.id}`, () => progressWorkItem({
-                          jobId,
-                          workstreamId: workstream.id,
-                          activityId: activity.id,
-                          expectedVersion: activity.currentVersion,
-                          targetStatus: "IN_PROGRESS",
-                          idempotencyKey: createWorkPlanIdempotencyKey("start-item"),
-                          setPage,
-                        }))}
-                      >
-                        {busy === `start-${activity.id}` ? copy.saving : copy.startWork}
-                      </button>
-                    )}
-                    {activity.canUpdate && activity.status === "IN_PROGRESS" && (
-                      <button
-                        type="button"
-                        style={styles.secondaryButton}
-                        onClick={() => setEditor({
-                          mode: "update",
-                          workstreamId: workstream.id,
-                          activityId: activity.id,
-                          statement: activity.statement,
-                          customerVisible: false,
-                        })}
-                      >
-                        {copy.updateWork}
-                      </button>
-                    )}
-                    {activity.canComplete && (
-                      <button
-                        type="button"
-                        style={styles.primaryButton}
-                        disabled={Boolean(busy)}
-                        onClick={() => runCommand(`complete-${activity.id}`, () => progressWorkItem({
-                          jobId,
-                          workstreamId: workstream.id,
-                          activityId: activity.id,
-                          expectedVersion: activity.currentVersion,
-                          targetStatus: "DONE",
-                          idempotencyKey: createWorkPlanIdempotencyKey("complete-item"),
-                          setPage,
-                        }))}
-                      >
-                        {busy === `complete-${activity.id}` ? copy.saving : copy.markComplete}
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {editor.mode === "update" && editor.activityId === activity.id && (
-                  <WorkItemEditor
-                    copy={copy}
-                    editor={editor}
-                    busy={busy === `update-${activity.id}`}
-                    onChange={setEditor}
-                    onCancel={() => setEditor(emptyEditor)}
-                    onSave={() => runCommand(`update-${activity.id}`, () => updateWorkItem({
-                      jobId,
-                      workstreamId: workstream.id,
-                      activityId: activity.id,
-                      expectedVersion: activity.currentVersion,
-                      statement: editor.statement,
-                      customerVisible: editor.customerVisible,
-                      idempotencyKey: createWorkPlanIdempotencyKey("update-item"),
-                      setPage,
-                    }))}
-                  />
-                )}
-
-                {activity.updates.length > 0 && (
-                  <details style={styles.updates}>
-                    <summary>{copy.progressUpdates}</summary>
-                    <ul style={styles.list}>
-                      {activity.updates.map((update) => (
-                        <li key={update.version}>
-                          {update.statement}
-                          {update.customerVisible && (
-                            <span style={styles.customerUpdate}> {copy.customerUpdate}</span>
-                          )}
-                        </li>
-                      ))}
-                    </ul>
-                  </details>
-                )}
-              </div>
-            ))}
-          </div>
-        </article>
-      ))}
+    <section id={id} className="work-plan-compact-area" style={styles.area} aria-labelledby={`${id}-title`}>
+      <header style={styles.areaHeader}><h3 id={`${id}-title`} style={styles.areaTitle}>{title}</h3><p style={styles.areaSummary}>{summary}</p></header>
+      <div style={styles.areaBody}>{children}</div>
     </section>
   );
 }
 
-function WorkItemEditor({ copy, editor, busy, onChange, onCancel, onSave }) {
-  const valid = editor.statement.trim().length > 0 && editor.statement.length <= 5000;
+function ReadinessCheck({ complete, label }) {
+  return <div style={{ ...styles.readinessCheck, ...(complete ? styles.readinessCheckComplete : {}) }}><span aria-hidden="true" style={styles.checkIcon}>{complete ? "✓" : "○"}</span><span>{label}</span></div>;
+}
+
+function CompactSchedule({ visits, record, language, canonicalRecord, setPage }) {
+  const [controlsOpen, setControlsOpen] = useState(false);
+  const visit = [...visits].filter((item) => item.state !== "CANCELLED")
+    .sort((left, right) => Date.parse(left.scheduledStartAt || 0) - Date.parse(right.scheduledStartAt || 0))[0];
+  const professional = assignedName(record);
   return (
-    <form
-      style={styles.editor}
-      onSubmit={(event) => {
-        event.preventDefault();
-        if (valid && !busy) onSave();
-      }}
-    >
-      <label style={styles.label}>
-        {copy.workItemDescription}
-        <textarea
-          value={editor.statement}
-          maxLength={5000}
-          rows={3}
-          style={styles.textarea}
-          onChange={(event) => onChange({ ...editor, statement: event.target.value })}
-        />
-      </label>
-      <label style={styles.checkboxLabel}>
-        <input
-          type="checkbox"
-          checked={editor.customerVisible}
-          onChange={(event) => onChange({
-            ...editor,
-            customerVisible: event.target.checked,
-          })}
-        />
-        <span><strong>{copy.customerUpdate}</strong><small>{copy.customerUpdateHint}</small></span>
-      </label>
-      <div style={styles.editorActions}>
-        <button type="button" style={styles.secondaryButton} onClick={onCancel}>
-          {copy.cancel}
-        </button>
-        <button type="submit" style={styles.primaryButton} disabled={!valid || busy}>
-          {busy ? copy.saving : copy.save}
-        </button>
-      </div>
-    </form>
+    <div style={styles.scheduleSection}>
+      {visit ? <div style={styles.scheduleRow} data-work-schedule-state={visit.state}>
+        <div style={styles.scheduleCopy}><strong>{scheduleLabel(visit, language)}</strong><span>{[professional && `Assigned to ${professional}`, visit.locationMode === "REMOTE" ? "Remote" : "At the job address"].filter(Boolean).join(" · ")}</span></div>
+        <Status tone={["SCHEDULED", "STARTED", "COMPLETED"].includes(visit.state) ? "success" : "neutral"}>{visit.state === "SCHEDULED" ? "Confirmed" : readable(visit.state)}</Status>
+      </div> : <p style={styles.muted}>No work visit is scheduled yet.</p>}
+      <button type="button" style={styles.secondaryButton} aria-expanded={controlsOpen} aria-controls="work-plan-schedule-controls" onClick={() => setControlsOpen((current) => !current)}>{controlsOpen ? "Hide schedule options" : "View or edit schedule"}</button>
+      {controlsOpen && <div id="work-plan-schedule-controls" style={styles.scheduleControls}><CanonicalJobVisits record={canonicalRecord} setPage={setPage} purposeFilter="APPROVED_WORK" showDeposit={false} embedded /></div>}
+    </div>
+  );
+}
+
+export function PreWorkPlanPresentation({ approvedWork, preparation, approvedVisits, readiness, record = {}, language = "en", canonicalRecord = {}, jobId, setPage, onCanonicalChange, preparationInitialOpen = "", showManageControls = true }) {
+  return <div style={styles.preWork} data-work-plan-review-state={preparationInitialOpen || "collapsed"}>
+    <div style={styles.preWorkStatus}><Status tone={readiness.readyToStart ? "success" : "neutral"}>{readiness.label}</Status></div>
+    <CompactArea id="approved-work" title="Approved Work" summary="What the customer approved.">
+      {!approvedWork?.scope.length ? <p style={styles.muted}>No approved Quote scope is available for this Job.</p> : <ul style={styles.scopeList}>{approvedWork.scope.map((item) => <li key={item.scopeItemId} style={styles.scopeItem} data-approved-scope-item-id={item.scopeItemId}><strong>{item.description}</strong>{item.quantity != null && <span>Qty {item.quantity} · Approved by customer</span>}</li>)}</ul>}
+      {approvedWork && <details style={styles.supportingDetails}><summary>View approved scope details</summary><code>{approvedWork.quoteId}</code><span>Approved Quote version {approvedWork.approvedVersion}</span></details>}
+    </CompactArea>
+    <CompactArea id="materials-preparation" title="Materials & Preparation" summary="What you need before you start."><CompactWorkPlanPreparation preparation={preparation} jobId={jobId} language={language} setPage={setPage} onCanonicalChange={onCanonicalChange} initialOpen={preparationInitialOpen} showManageControls={showManageControls} /></CompactArea>
+    <CompactArea id="work-schedule" title="Work Schedule" summary="When the work is planned."><CompactSchedule visits={approvedVisits} record={record} language={language} canonicalRecord={canonicalRecord} setPage={setPage} /></CompactArea>
+    <CompactArea id="work-readiness" title="Ready to Start" summary="Everything is in place.">
+      <div style={styles.readinessGrid}><ReadinessCheck complete={readiness.approvedScope} label="Customer approved" /><ReadinessCheck complete={readiness.depositSatisfied} label="Deposit received" /><ReadinessCheck complete={readiness.preparationReady} label="Materials ready" /><ReadinessCheck complete={readiness.scheduled} label="Work scheduled" /></div>
+      <div style={readiness.readyToStart ? styles.readyNotice : styles.waitingNotice} role="status" data-work-authority-gap={WORK_LEVEL_AUTHORITY_GAPS[0]}><strong>{readiness.readyToStart ? "Ready to Start" : "A few things still need attention"}</strong><span>{readiness.readyToStart ? "Everything is in place. Start Work is temporarily unavailable." : "Complete the unchecked items before starting this job."}</span></div>
+    </CompactArea>
+  </div>;
+}
+
+export default function ProfessionalWorkPlanWorkspace({ jobId, record = {}, preferredQuoteId = "", liveJob = null, language = "en", setPage, onCanonicalChange }) {
+  const [refreshKey, setRefreshKey] = useState(0);
+  const [state, setState] = useState({ status: "loading", plan: null, quote: null, preparation: null, schedule: null, errors: [] });
+  const requestId = Number(record.requestId || record.postId) || null;
+  const relationshipId = Number(record.relationshipId) || null;
+  const canonicalRecord = useMemo(() => ({ source: "CANONICAL_BACKEND_READ", readOnly: true, lifecycleVerified: true, lifecycleContractVersion: 2, jobId, requestId, postId: requestId, relationshipId }), [jobId, relationshipId, requestId]);
+
+  useEffect(() => {
+    let active = true;
+    queueMicrotask(() => { if (active) setState({ status: "loading", plan: null, quote: null, preparation: null, schedule: null, errors: [] }); });
+    const planRead = fetchProfessionalJobWorkPlan({ jobId, setPage });
+    const preparationRead = fetchWorkPreparation({ jobId, setPage });
+    const scheduleRead = loadCanonicalVisitWorkspace({ record: canonicalRecord, setPage });
+    const quoteRead = loadCanonicalQuotesForRecord({ record: canonicalRecord, setPage }).then(async (quotes) => {
+      const selected = selectApprovedQuote(quotes, preferredQuoteId);
+      return selected ? loadCanonicalQuoteDetail({ record: canonicalRecord, quote: selected, setPage }) : null;
+    });
+    void Promise.allSettled([planRead, quoteRead, preparationRead, scheduleRead]).then((results) => {
+      if (!active) return;
+      const [planResult, quoteResult, preparationResult, scheduleResult] = results;
+      const errors = results.map((result) => result.status === "rejected" ? String(result.reason?.code || result.reason?.message || "READ_FAILED") : "").filter(Boolean);
+      setState({
+        status: planResult.status === "fulfilled" ? "ready" : "error",
+        plan: planResult.status === "fulfilled" ? planResult.value : null,
+        quote: quoteResult.status === "fulfilled" ? quoteResult.value : null,
+        preparation: preparationResult.status === "fulfilled" ? preparationResult.value?.workPreparation : null,
+        schedule: scheduleResult.status === "fulfilled" ? scheduleResult.value : null,
+        errors,
+      });
+    });
+    return () => { active = false; };
+  }, [canonicalRecord, jobId, preferredQuoteId, refreshKey, setPage]);
+
+  const plan = state.plan;
+  const approvedWork = buildApprovedWorkProjection(state.quote);
+  const approvedVisits = state.schedule?.approvedWork?.flatMap((subject) => subject.visits || []) || [];
+  const readiness = buildReadinessProjection({ approvedWork, preparation: state.preparation, schedule: approvedVisits });
+  const mode = deriveWorkExecutionMode({ plan, liveJob });
+  const executionView = buildExecutionSafeViewModel({ approvedWork, plan, preparation: state.preparation, schedule: approvedVisits, liveJob });
+  const title = mode === "COMPLETED" ? "Work Completed" : mode === "IN_PROGRESS" ? "Work In Progress" : "Work Plan";
+
+  return (
+    <section className="professional-work-plan" style={styles.section} aria-label={title} data-work-plan-primary-container="true" data-work-plan-status={state.status} data-work-plan-error={state.errors.join(",")} data-work-plan-job-id={jobId || ""} data-work-execution-mode={mode}>
+      {mode !== "PRE_WORK" && <header style={styles.header}><h2 style={styles.title}>{title}</h2><Status tone={mode === "COMPLETED" ? "success" : "active"}>{title}</Status></header>}
+      {state.status === "loading" && <p role="status">Loading this Work Plan…</p>}
+      {state.status === "error" && <div role="alert" style={styles.error}><p>This Work Plan is temporarily unavailable.</p><button type="button" style={styles.secondaryButton} onClick={() => setRefreshKey((value) => value + 1)}>Retry</button></div>}
+      {state.errors.length > 0 && state.status === "ready" && <p role="status" style={styles.partialNotice}>Some Work Plan details are temporarily unavailable.</p>}
+
+      {state.status === "ready" && mode === "PRE_WORK" && <PreWorkPlanPresentation approvedWork={approvedWork} preparation={state.preparation} approvedVisits={approvedVisits} readiness={readiness} record={record} language={language} canonicalRecord={canonicalRecord} jobId={jobId} setPage={setPage} onCanonicalChange={onCanonicalChange} />}
+
+      {state.status === "ready" && mode !== "PRE_WORK" && <>
+        <CompactArea id="approved-work" title="Approved Work" summary="What the customer approved.">{!approvedWork?.scope.length ? <p style={styles.muted}>No approved scope is available.</p> : <ul style={styles.scopeList}>{approvedWork.scope.map((item) => <li key={item.scopeItemId} style={styles.scopeItem}><strong>{item.description}</strong>{item.quantity != null && <span>Qty {item.quantity}</span>}</li>)}</ul>}</CompactArea>
+        <div style={styles.referenceGrid}><div><strong>Preparation</strong><span>{readable(executionView.preparation?.preparationState)}</span></div><div><strong>Schedule</strong><span>{executionView.schedule.length ? `${executionView.schedule.length} visit${executionView.schedule.length === 1 ? "" : "s"}` : "Unavailable"}</span></div></div>
+        <section style={styles.progressSection} aria-labelledby="work-progress-title"><h3 id="work-progress-title" style={styles.areaTitle}>Progress</h3>{plan.workstreams.length === 0 && <p style={styles.muted}>No work progress is available.</p>}{plan.workstreams.map((workstream) => <article key={workstream.id} style={styles.workstream} data-workstream-id={workstream.id} data-workstream-status={workstream.status}><header style={styles.workstreamHeader}><div><strong>{workstream.title}</strong><span>{readable(workstream.status || workstream.state)}</span></div><Status tone={["DONE", "COMPLETED"].includes(workstream.status) ? "success" : "active"}>{readable(workstream.status)}</Status></header><div style={styles.activities}>{workstream.activities.map((activity) => <div key={activity.id} style={styles.activity} data-work-item-id={activity.id} data-work-item-status={activity.status}><div><strong>{activity.statement}</strong><span>{dateLabel(activity.updatedAt, language)}</span></div><Status tone={["DONE", "COMPLETED"].includes(activity.status) ? "success" : "active"}>{readable(activity.status)}</Status>{activity.updates?.length > 0 && <details style={styles.supportingDetails}><summary>Progress updates</summary><ul>{activity.updates.map((update) => <li key={update.version}>{update.statement}</li>)}</ul></details>}</div>)}</div><details style={styles.supportingDetails}><summary>Work record details</summary><code>{workstream.id}</code><span>Version {workstream.currentVersion}</span></details></article>)}</section>
+        {mode === "COMPLETED" && <p style={styles.nextStep}><strong>Next:</strong> Invoice & Closeout.</p>}
+      </>}
+    </section>
   );
 }
 
 const styles = {
-  section: { display: "grid", gap: 18, margin: "20px 0", minWidth: 0 },
-  header: { display: "flex", justifyContent: "space-between", gap: 16, flexWrap: "wrap" },
-  eyebrow: { color: "#475569", fontSize: 12, fontWeight: 800 },
-  title: { margin: "3px 0 0", fontSize: 24, letterSpacing: 0 },
-  purpose: { margin: "7px 0 0", color: "#475569", lineHeight: 1.5 },
-  progressPill: { alignSelf: "flex-start", color: "#1f5132", fontWeight: 800, fontSize: 13 },
-  summary: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(110px, 1fr))", gap: 1, borderTop: "1px solid #cbd5e1", borderBottom: "1px solid #cbd5e1" },
-  metric: { display: "grid", gap: 3, minWidth: 0, padding: "10px 8px", overflowWrap: "anywhere" },
-  workstream: { display: "grid", gap: 16, padding: "18px 0", borderBottom: "1px solid #cbd5e1", minWidth: 0 },
-  workstreamHeader: { display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" },
-  workstreamHeading: { display: "flex", alignItems: "flex-start", gap: 10, minWidth: 0 },
-  sequence: { display: "grid", placeItems: "center", width: 30, height: 30, flex: "0 0 30px", borderRadius: 6, background: "#e8f1e5", color: "#1f5132", fontWeight: 900 },
-  workstreamTitle: { margin: 0, fontSize: 18, letterSpacing: 0, overflowWrap: "anywhere" },
-  statusText: { color: "#1f5132", fontSize: 12, fontWeight: 850 },
-  headerActions: { display: "flex", gap: 8, flexWrap: "wrap" },
-  activities: { display: "grid", gap: 4 },
-  activity: { display: "grid", gap: 12, padding: "14px 0 14px 14px", borderLeft: "3px solid #d7e3d2", minWidth: 0 },
-  activityTop: { display: "flex", justifyContent: "space-between", gap: 14, flexWrap: "wrap" },
-  activityCopy: { minWidth: 0, flex: "1 1 260px" },
-  statement: { margin: "4px 0", lineHeight: 1.5, overflowWrap: "anywhere" },
-  date: { color: "#64748b", fontSize: 12 },
-  activityActions: { display: "flex", alignItems: "flex-start", gap: 8, flexWrap: "wrap" },
-  primaryButton: { minHeight: 44, padding: "9px 14px", border: 0, borderRadius: 6, background: "#1f5132", color: "#fff", fontWeight: 850, cursor: "pointer" },
-  secondaryButton: { minHeight: 44, padding: "9px 14px", border: "1px solid #64748b", borderRadius: 6, background: "#fff", color: "#243326", fontWeight: 800, cursor: "pointer" },
-  blockers: { display: "grid", gap: 8, padding: 12, borderLeft: "3px solid #b45309", background: "#fffaf0", color: "#7c2d12" },
-  list: { margin: 0, paddingLeft: 20, display: "grid", gap: 6 },
-  updates: { color: "#475569", fontSize: 13 },
-  customerUpdate: { color: "#166534", fontWeight: 800 },
-  editor: { display: "grid", gap: 12, padding: 14, background: "#f8fafc", border: "1px solid #cbd5e1", borderRadius: 8 },
-  label: { display: "grid", gap: 6, fontWeight: 800 },
-  textarea: { width: "100%", minHeight: 88, padding: 10, boxSizing: "border-box", border: "1px solid #94a3b8", borderRadius: 6, font: "inherit", resize: "vertical" },
-  checkboxLabel: { display: "flex", alignItems: "flex-start", gap: 10, minHeight: 44 },
-  editorActions: { display: "flex", justifyContent: "flex-end", gap: 8, flexWrap: "wrap" },
-  readyNotice: { display: "grid", gap: 4, padding: 14, borderLeft: "3px solid #1f5132", background: "#eff7ed", color: "#24452e" },
-  empty: { margin: 0, color: "#64748b" },
-  error: { color: "#991b1b" },
-  commandError: { margin: 0, color: "#991b1b", fontWeight: 700 },
+  section: { display: "grid", gap: 12, minWidth: 0 },
+  preWork: { display: "grid", minWidth: 0 },
+  preWorkStatus: { display: "flex", justifyContent: "flex-end", alignItems: "center", padding: "0 0 10px" },
+  header: { display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12, flexWrap: "wrap" },
+  title: { margin: 0, color: "#173d2a", fontSize: "clamp(1.25rem, 4vw, 1.65rem)" },
+  status: { display: "inline-flex", alignItems: "center", minHeight: 28, padding: "2px 10px", borderRadius: 999, border: "1px solid #cbd5ce", color: "#415148", background: "#f7faf8", fontSize: 12, fontWeight: 850 },
+  successStatus: { borderColor: "#a6cfaf", color: "#1d5b31", background: "#edf8ef" },
+  activeStatus: { borderColor: "#9eb8d1", color: "#244b70", background: "#eef6fd" }, neutralStatus: {},
+  area: { display: "grid", gridTemplateColumns: "minmax(180px, 230px) minmax(0, 1fr)", gap: "14px 24px", padding: "16px 0", borderTop: "1px solid #dce5de", background: "#fff", minWidth: 0 },
+  areaHeader: { minWidth: 0 }, areaTitle: { margin: 0, color: "#203d2b", fontSize: 17 }, areaSummary: { margin: "4px 0 0", color: "#5b6a61", lineHeight: 1.4 }, areaBody: { display: "grid", gap: 10, minWidth: 0 },
+  scopeList: { margin: 0, paddingLeft: 20, display: "grid", gap: 9 }, scopeItem: { paddingLeft: 2, lineHeight: 1.4, display: "grid", gap: 2 }, supportingDetails: { display: "grid", gap: 6, color: "#5d6a62", fontSize: 12, overflowWrap: "anywhere" },
+  scheduleSection: { display: "grid", justifyItems: "start", gap: 10, minWidth: 0 }, scheduleRow: { width: "100%", boxSizing: "border-box", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, flexWrap: "wrap", padding: "11px 12px", borderRadius: 10, background: "#f5f8f6", minWidth: 0 }, scheduleCopy: { display: "grid", gap: 3, minWidth: 0, overflowWrap: "anywhere" }, scheduleControls: { width: "100%", minWidth: 0 },
+  readinessGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))", gap: 8, minWidth: 0 }, readinessCheck: { minWidth: 0, minHeight: 50, boxSizing: "border-box", display: "flex", alignItems: "center", gap: 8, padding: "9px 10px", border: "1px solid #dce4de", borderRadius: 9, background: "#f8faf8", color: "#536158" }, readinessCheckComplete: { background: "#f0f7f1", color: "#234d32" }, checkIcon: { display: "inline-grid", placeItems: "center", flex: "0 0 23px", width: 23, height: 23, borderRadius: 999, border: "1px solid #75a780", color: "#21623a", fontWeight: 900 },
+  readyNotice: { display: "grid", gap: 3, padding: "11px 12px", borderLeft: "3px solid #3f8752", color: "#245433", background: "#eef7f0", lineHeight: 1.4 }, waitingNotice: { display: "grid", gap: 3, padding: "11px 12px", borderLeft: "3px solid #b07a1b", color: "#654a17", background: "#fff9eb", lineHeight: 1.4 },
+  referenceGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 210px), 1fr))", gap: 9 }, progressSection: { display: "grid", gap: 12, padding: "14px 0", borderTop: "1px solid #dce5de" }, workstream: { display: "grid", gap: 10, paddingTop: 10, borderTop: "1px solid #e0e7e2" }, workstreamHeader: { display: "flex", justifyContent: "space-between", gap: 10, flexWrap: "wrap" }, activities: { display: "grid", gap: 8 }, activity: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", gap: 10, padding: 11, borderLeft: "3px solid #bdd0c1", background: "#f8fbf9" },
+  partialNotice: { margin: 0, color: "#78570f" }, nextStep: { margin: 0, padding: 12, background: "#edf7ef", color: "#234b31" }, muted: { margin: 0, color: "#64746a", lineHeight: 1.5 }, error: { color: "#991b1b" }, secondaryButton: { minHeight: 44, padding: "8px 12px", border: "1px solid #8ea395", borderRadius: 8, background: "#fff", color: "#275039", fontWeight: 800, cursor: "pointer" },
 };

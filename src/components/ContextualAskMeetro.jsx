@@ -33,6 +33,20 @@ export default function ContextualAskMeetro({
   const activeAction = actions.some((action) => action.id === selectedAction)
     ? selectedAction
     : actions[0]?.id || "";
+  const primaryActions = actions.slice(0, 3);
+  const moreActions = actions.slice(3);
+
+  const actionButton = (action) => (
+    <button
+      key={action.id}
+      type="button"
+      style={{ ...styles.action, ...(activeAction === action.id ? styles.actionSelected : {}) }}
+      aria-pressed={activeAction === action.id}
+      onClick={() => setSelectedAction(action.id)}
+    >
+      {action.label}
+    </button>
+  );
 
   if (!open) {
     return (
@@ -74,18 +88,14 @@ export default function ContextualAskMeetro({
       <p style={styles.advisory}>{copy.advisory} {copy.noSilentChanges}</p>
 
       <div style={styles.actionGrid} role="group" aria-label={copy.promptLabel}>
-        {actions.map((action) => (
-          <button
-            key={action.id}
-            type="button"
-            style={{ ...styles.action, ...(activeAction === action.id ? styles.actionSelected : {}) }}
-            aria-pressed={activeAction === action.id}
-            onClick={() => setSelectedAction(action.id)}
-          >
-            {action.label}
-          </button>
-        ))}
+        {primaryActions.map(actionButton)}
       </div>
+      {moreActions.length > 0 && (
+        <details style={styles.moreActions}>
+          <summary style={styles.moreSummary}>More</summary>
+          <div style={styles.actionGrid}>{moreActions.map(actionButton)}</div>
+        </details>
+      )}
 
       {mediaControls ? <div style={styles.mediaControls}>{mediaControls}</div> : null}
 
@@ -137,6 +147,8 @@ const styles = {
   actionGrid: { display: "flex", flexWrap: "wrap", gap: 8 },
   action: { minHeight: 44, padding: "0 13px", border: "1px solid #a9b7ad", borderRadius: 6, background: "#fff", color: "#263b2d", fontWeight: 750, cursor: "pointer" },
   actionSelected: { borderColor: "#1f6a3a", background: "#e9f4ec", color: "#174b2c" },
+  moreActions: { color: "#405247" },
+  moreSummary: { minHeight: 44, display: "flex", alignItems: "center", fontWeight: 800, cursor: "pointer" },
   mediaControls: {
     display: "grid",
     gap: 8,

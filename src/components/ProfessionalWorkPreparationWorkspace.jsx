@@ -263,6 +263,7 @@ function PlanEditor({ plan, copy, busy, onCancel, onSave }) {
 
 export default function ProfessionalWorkPreparationWorkspace({
   jobId, language = "en", setPage, onCanonicalChange,
+  embedded = false, showDepositStatus = true,
 }) {
   const copy = getWorkPreparationCopy(language);
   const [state, setState] = useState(EMPTY_STATE);
@@ -356,11 +357,11 @@ export default function ProfessionalWorkPreparationWorkspace({
   };
 
   return (
-    <section style={styles.section} aria-labelledby="professional-work-preparation-title" data-work-preparation-status={state.status} data-work-preparation-error={state.error || commandError}>
-      <header style={styles.header}>
+    <section style={styles.section} aria-label={embedded ? copy.title : undefined} aria-labelledby={embedded ? undefined : "professional-work-preparation-title"} data-work-preparation-status={state.status} data-work-preparation-error={state.error || commandError}>
+      {!embedded && <header style={styles.header}>
         <div><span style={styles.eyebrow}>{copy.eyebrow}</span><h2 id="professional-work-preparation-title" style={styles.title}>{copy.title}</h2><p style={styles.purpose}>{copy.purpose}</p></div>
         {plan && <WorkCenterStatusPill tone={toneForState(plan.readiness.planningState)}>{copy.version} {plan.currentVersion}</WorkCenterStatusPill>}
-      </header>
+      </header>}
       {state.status === "loading" && <p role="status">{copy.loading}</p>}
       {state.status === "error" && <div role="alert" style={styles.notice}><p>{copy.unavailable}</p><button type="button" style={styles.secondaryButton} onClick={() => setRefreshKey((value) => value + 1)}>{copy.retry}</button></div>}
       {commandError && <p role="alert" style={styles.errorText}>{copy.commandFailed} <span style={styles.srOnly}>{commandError}</span></p>}
@@ -382,9 +383,9 @@ export default function ProfessionalWorkPreparationWorkspace({
           <div style={styles.metrics} aria-label={copy.title}>
             {metrics.map((metric) => <div key={metric.label} style={styles.metric}><span style={styles.metricLabel}>{metric.label}</span><WorkCenterStatusPill tone={toneForState(metric.state)}>{metric.value}</WorkCenterStatusPill></div>)}
           </div>
-          <div style={plan.deposit.commitmentLocked ? styles.lockedNotice : styles.openNotice} role="status">
+          {showDepositStatus && <div style={plan.deposit.commitmentLocked ? styles.lockedNotice : styles.openNotice} role="status">
             <strong>{copy.deposit}: {stateLabel(plan.deposit.state, copy)}</strong><span>{plan.deposit.commitmentLocked ? copy.depositLocked : copy.depositOpen}</span>
-          </div>
+          </div>}
           <p style={styles.workStartNotice}>{copy.workStartNotice}</p>
           <div style={styles.summaryGrid}>
             <div style={styles.summaryCard}><strong>{plan.items.length}</strong><span>{copy.itemCount}</span></div>

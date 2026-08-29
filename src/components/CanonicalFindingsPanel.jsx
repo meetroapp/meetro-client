@@ -9,6 +9,7 @@ import { loadCanonicalFindingsForEvaluation } from "../utils/findingRecommendati
 import { getEfrCopy } from "../utils/efrLanguage.js";
 import { getNewFindingDraftText } from "../utils/evaluationDraftProgression.js";
 import CanonicalRecommendationsPanel from "./CanonicalRecommendationsPanel.jsx";
+import { buildEvaluationTruthProjection } from "../utils/workCenterLifecycleUx.js";
 
 function findingState(finding, copy) {
   if (finding.resolutionState === "RESOLVED") return copy.resolved;
@@ -52,6 +53,10 @@ export default function CanonicalFindingsPanel({
   });
   const [editor, setEditor] = useState(null);
   const confirmKeys = useRef(new Map());
+  const evaluationTruth = buildEvaluationTruthProjection({
+    evaluation,
+    structuredFindings: state.findings,
+  });
 
   useEffect(() => {
     let active = true;
@@ -208,7 +213,18 @@ export default function CanonicalFindingsPanel({
         </button>
       )}
       {state.status === "ready" && state.findings.length === 0 && !editor && (
-        <p style={styles.message}>{copy.noFindings}</p>
+        evaluationTruth.hasEvaluationInformation ? (
+          <div style={styles.contextEmptyState}>
+            <strong>Evaluation details recorded</strong>
+            <p style={styles.statement}>{evaluationTruth.narrativeReference}</p>
+            <span style={styles.message}>No structured findings yet.</span>
+            {canReviewFindings && (
+              <button type="button" style={styles.secondaryButton} onClick={() => openEditor()}>
+                Turn evaluation notes into findings
+              </button>
+            )}
+          </div>
+        ) : <p style={styles.message}>{copy.noFindings}</p>
       )}
       {assistantFindingDraft && canReviewFindings && !editor && (
         <div style={styles.editor} data-assistant-finding-draft={assistantFindingDraft.id}>
@@ -335,6 +351,7 @@ const styles = {
   visibility: { color: "#64748b", fontSize: 12, fontWeight: 700 },
   statement: { margin: 0, lineHeight: 1.5, overflowWrap: "anywhere" },
   editor: { display: "grid", gap: 12, padding: 12, border: "1px solid #cbd5e1", borderRadius: 8 },
+  contextEmptyState: { display: "grid", gap: 8, padding: 14, borderLeft: "3px solid #6f8c77", background: "#f7faf8" },
   label: { display: "grid", gap: 6, color: "#334155", fontWeight: 700 },
   textarea: { width: "100%", minHeight: 96, boxSizing: "border-box", padding: 10, border: "1px solid #94a3b8", borderRadius: 6, font: "inherit", resize: "vertical" },
   checkLabel: { display: "flex", alignItems: "center", gap: 9, minHeight: 44, lineHeight: 1.4 },
