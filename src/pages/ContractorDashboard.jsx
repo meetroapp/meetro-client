@@ -12,6 +12,7 @@ import ProfessionalScheduleWorkspace from "../components/ProfessionalScheduleWor
 import ProfessionalQuotesWorkspace from "../components/ProfessionalQuotesWorkspace";
 import ProfessionalWorkPlanOverview from "../components/ProfessionalWorkPlanOverview.jsx";
 import ProfessionalWorkPlanWorkspace from "../components/ProfessionalWorkPlanWorkspace.jsx";
+import ProfessionalWorkPreparationWorkspace from "../components/ProfessionalWorkPreparationWorkspace.jsx";
 import ProfessionalJobHistoryWorkspace from "../components/ProfessionalJobHistoryWorkspace.jsx";
 import CanonicalQuotesPanel from "../components/CanonicalQuotesPanel";
 import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage.js";
@@ -11290,6 +11291,21 @@ function ContractorDashboard({ setPage, language = "en" }) {
                                 setProfessionalJobHistoryRefreshKey((value) => value + 1);
                                 setCanonicalWorkCenterRefreshKey((value) => value + 1);
                               }}
+                            />
+                          </WorkCenterAccordion>
+                          <WorkCenterAccordion
+                            id="canonical-job-work-preparation"
+                            icon="workCenter"
+                            title={workCenterWorkspaceCopy.materialsPreparation}
+                            summary={workCenterWorkspaceCopy.materialsPreparationSummary}
+                          >
+                            <ProfessionalWorkPreparationWorkspace
+                              jobId={workCenterLifecycleProjection.projection.job?.id || null}
+                              language={activeLanguage}
+                              setPage={setPage}
+                              onCanonicalChange={() =>
+                                setCanonicalWorkCenterRefreshKey((value) => value + 1)
+                              }
                             />
                           </WorkCenterAccordion>
                           <WorkCenterAccordion
