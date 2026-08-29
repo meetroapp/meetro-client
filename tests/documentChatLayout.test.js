@@ -73,7 +73,8 @@ test("compact desktop height preserves readable context and a fully usable Edit 
   assert.match(wide, /\.business-document-composer textarea\s*\{\s*height:\s*58px;\s*min-height:\s*58px/);
   assert.match(wide, /\.business-document-turn-editor textarea\s*\{\s*height:\s*52px;\s*min-height:\s*52px/);
   assert.match(workspace, /textareaRef\.current\?\.focus\(\{ preventScroll: true \}\)/);
-  assert.match(workspace, /editorRef\.current\?\.scrollIntoView\(\{ block: "nearest" \}\)/);
+  assert.match(workspace, /editor\?\.closest\("\.business-document-turns"\)/);
+  assert.match(workspace, /container\.scrollTop \+= editorRect\.top - containerRect\.top - centeredTop/);
   assert.match(styles, /\.business-document-turn-body button,[\s\S]*min-height:\s*44px/);
   assert.doesNotMatch(wide, /font-size:\s*[0-8]px/);
 });

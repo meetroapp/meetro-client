@@ -594,7 +594,16 @@ function InstructionEditor({ turn, onSave, onCancel }) {
   const textareaRef = useRef(null);
   useEffect(() => {
     textareaRef.current?.focus({ preventScroll: true });
-    editorRef.current?.scrollIntoView({ block: "nearest" });
+    const frame = requestAnimationFrame(() => {
+      const editor = editorRef.current;
+      const container = editor?.closest(".business-document-turns");
+      if (!editor || !container) return;
+      const editorRect = editor.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const centeredTop = Math.max(0, (container.clientHeight - editorRect.height) / 2);
+      container.scrollTop += editorRect.top - containerRect.top - centeredTop;
+    });
+    return () => cancelAnimationFrame(frame);
   }, []);
   return <article ref={editorRef} className="you editing"><span>You</span><div className="business-document-turn-editor"><textarea ref={textareaRef} aria-label="Edit prior instruction" value={value} onChange={(event) => setValue(event.target.value)} /><div><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={() => onSave(value)} disabled={!value.trim()}>Save</button></div></div></article>;
 }
