@@ -175,9 +175,11 @@ export function normalizeCanonicalLiveJobProjection(payload = {}) {
   const blocker = normalizeDefinition(liveJob.blocker, BLOCKERS, { nullable: true });
   const nextAction = normalizeNextAction(liveJob.nextAction);
   const freshness = normalizeFreshness(liveJob.freshness);
-  const deposit = normalizePreWorkDepositGate(liveJob.deposit, {
-    includeMaterialized: true,
-  });
+  const deposit = liveJob.deposit == null
+    ? null
+    : normalizePreWorkDepositGate(liveJob.deposit, {
+        includeMaterialized: true,
+      });
   if (
     Number(liveJob.contractVersion) !== 1 ||
     !jobId ||
@@ -188,7 +190,7 @@ export function normalizeCanonicalLiveJobProjection(payload = {}) {
     (liveJob.blocker != null && !blocker) ||
     !nextAction ||
     !freshness ||
-    !deposit ||
+    (liveJob.deposit != null && !deposit) ||
     !Array.isArray(liveJob.availableActions) ||
     !Array.isArray(liveJob.reasonCodes)
   ) {

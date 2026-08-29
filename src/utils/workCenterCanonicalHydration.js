@@ -99,6 +99,16 @@ export function isCanonicalWorkCenterEntry(record = {}) {
   );
 }
 
+export function findCanonicalWorkCenterEntryByJobId(entries = [], jobId = "") {
+  const normalizedJobId = String(jobId || "").trim().toLowerCase();
+  if (!normalizedJobId) return null;
+  return (Array.isArray(entries) ? entries : []).find(
+    (entry) =>
+      isCanonicalWorkCenterEntry(entry) &&
+      String(entry?.jobId || "").trim().toLowerCase() === normalizedJobId
+  ) || null;
+}
+
 export function normalizeCanonicalWorkCenterEntry({
   summary = {},
   detail = {},

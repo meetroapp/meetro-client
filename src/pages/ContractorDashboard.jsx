@@ -142,6 +142,7 @@ import { fetchProfessionalJobHistory } from "../utils/jobCompletionApi.js";
 import { getJobCompletionCopy } from "../utils/jobCompletionLanguage.js";
 import {
   fetchCanonicalWorkCenterEntries,
+  findCanonicalWorkCenterEntryByJobId,
   isCanonicalWorkCenterEntry,
   mergeCanonicalWorkCenterEntries,
 } from "../utils/workCenterCanonicalHydration";
@@ -370,6 +371,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       typeof window === "undefined" ? "" : window.location.hash
     )
   );
+  const [workCenterRouteRevision, setWorkCenterRouteRevision] = useState(0);
   const appliedWorkCenterRouteRef = useRef("");
   const [workCenterJobReturnSurface, setWorkCenterJobReturnSurface] = useState("jobs");
   const [isEditingCompletedEvaluation, setIsEditingCompletedEvaluation] = useState(false);
@@ -8522,16 +8524,47 @@ function ContractorDashboard({ setPage, language = "en" }) {
   );
 
   useEffect(() => {
+    const syncWorkCenterRoute = () => {
+      const next = parseProfessionalWorkCenterRoute(window.location.hash);
+      const current = workCenterRouteRecordRef.current;
+      if (
+        current?.jobId === next?.jobId &&
+        current?.quoteId === next?.quoteId
+      ) {
+        return;
+      }
+      workCenterRouteRecordRef.current = next;
+      setWorkCenterRouteRevision((revision) => revision + 1);
+    };
+
+    syncWorkCenterRoute();
+    window.addEventListener("hashchange", syncWorkCenterRoute);
+    return () => window.removeEventListener("hashchange", syncWorkCenterRoute);
+  }, []);
+
+  useEffect(() => {
     const target = workCenterRouteRecordRef.current;
     if (!target) return;
+    if (canonicalWorkCenterHydration.status !== "ready") return;
     const token = `${target.jobId}:${target.quoteId}`;
-    if (appliedWorkCenterRouteRef.current === token) return;
-    const exactJob = workCenterJobs.find(
-      (job) =>
-        isCanonicalWorkCenterEntry(job) &&
-        String(job?.jobId || "").toLowerCase() === target.jobId
+    const exactJob = findCanonicalWorkCenterEntryByJobId(
+      canonicalWorkCenterHydration.entries,
+      target.jobId
     );
-    if (!exactJob) return;
+    if (!exactJob) {
+      setSelectedWorkCenterJob(null);
+      setSelectedWorkCenterQuoteId("");
+      return;
+    }
+    if (appliedWorkCenterRouteRef.current === token) {
+      setSelectedWorkCenterJob((current) =>
+        String(current?.jobId || "").toLowerCase() === target.jobId &&
+        current !== exactJob
+          ? exactJob
+          : current
+      );
+      return;
+    }
     appliedWorkCenterRouteRef.current = token;
     setActiveTab("currentJobs");
     setIsWorkCenterSectionOpen(false);
@@ -8540,7 +8573,11 @@ function ContractorDashboard({ setPage, language = "en" }) {
     setSelectedWorkCenterQuoteId(target.quoteId);
     setWorkCenterJobReturnSurface("quotes");
     setSelectedWorkCenterJob(exactJob);
-  }, [workCenterJobs]);
+  }, [
+    canonicalWorkCenterHydration.entries,
+    canonicalWorkCenterHydration.status,
+    workCenterRouteRevision,
+  ]);
 
   useEffect(() => {
     if (!pendingEvaluationVisitHandoff) return;
