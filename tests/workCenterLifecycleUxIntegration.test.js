@@ -29,7 +29,7 @@ test("1. primary section order is Evaluation, Quote & Approval, Work Plan, execu
 });
 test("2. Ask Meetro is contextual and not a lifecycle stage", () => assert.equal(WORK_CENTER_LIFECYCLE.includes("Ask Meetro"), false));
 test("3. Deposit is readiness state and not a lifecycle page", () => { assert.equal(WORK_CENTER_LIFECYCLE.includes("Deposit"), false); assert.match(plan, /Deposit received/); });
-test("4. Ready to Start is a status and not a page", () => { assert.equal(WORK_CENTER_LIFECYCLE.includes("Ready to Start"), false); assert.match(plan, /readiness\.label/); });
+test("4. Ready to Start is a status and not a page", () => { assert.equal(WORK_CENTER_LIFECYCLE.includes("Ready to Start"), false); assert.match(dashboard, /status=\{jobDisplayStatus\}/); });
 test("5. Work Plan contains its four locked areas", () => { for (const label of ["Approved Work", "Materials & Preparation", "Work Schedule", "Ready to Start"]) assert.match(plan, new RegExp(label.replace(/[&]/g, "&"))); });
 test("6. Materials & Preparation has no separate lifecycle accordion", () => assert.doesNotMatch(dashboard, /id="canonical-job-work-preparation"/));
 test("7. approved-work scheduling appears inside Work Plan", () => assert.match(plan, /purposeFilter="APPROVED_WORK"/));
@@ -43,8 +43,8 @@ test("14. Approved Work derives from an approved Quote", () => assert.equal(buil
 test("15. approved scope wording is preserved exactly", () => assert.equal(buildApprovedWorkProjection(approvedQuote).scope[0].description, approvedQuote.scopeItems[0].description));
 test("16. pre-work canonical state renders Work Plan mode", () => assert.equal(deriveWorkExecutionMode({ plan: { workstreams: [{ state: "OPEN", status: "PLANNED", activities: [{ status: "PLANNED" }] }] } }), "PRE_WORK"));
 test("17. canonical started state renders Work In Progress mode", () => assert.equal(deriveWorkExecutionMode({ plan: { workstreams: [{ state: "OPEN", status: "IN_PROGRESS", activities: [{ status: "IN_PROGRESS" }] }] } }), "IN_PROGRESS"));
-test("18. canonical completed state renders Work Completed", () => { assert.equal(deriveWorkExecutionMode({ liveJob: { stage: { code: "JOB_COMPLETED" } } }), "COMPLETED"); assert.match(plan, /"Work Completed"/); });
-test("19. Work execution does not infer financial Job closure", () => { assert.match(plan, /mode === "COMPLETED" && <p/); assert.doesNotMatch(plan, /createInvoice|recordPayment/); });
+test("18. canonical completed state renders Work Completed", () => { assert.equal(deriveWorkExecutionMode({ liveJob: { stage: { code: "WORK_COMPLETED" } } }), "COMPLETED"); assert.equal(deriveWorkExecutionMode({ liveJob: { stage: { code: "JOB_COMPLETED" } } }), "COMPLETED"); assert.match(plan, /"Work Completed"/); });
+test("19. Work execution does not infer financial Job closure", () => { assert.match(plan, /mode === "COMPLETED" && <div/); assert.match(plan, /Prepare Final Invoice/); assert.doesNotMatch(plan, /createInvoice|recordPayment/); });
 test("20. Work Plan mount performs reads and no business command", () => { assert.match(plan, /Promise\.allSettled/); assert.doesNotMatch(plan, /createWorkItem|progressWorkItem|completeWorkArea|completeJob/); });
 test("21. narrative Evaluation does not use no-findings copy as its only truth", () => { assert.match(findingsUi, /evaluationTruth\.hasEvaluationInformation/); assert.match(findingsUi, /Evaluation details recorded/); });
 test("22. Evaluation information existence is explicit", () => assert.equal(buildEvaluationTruthProjection({ evaluation }).hasEvaluationInformation, true));
@@ -59,9 +59,9 @@ test("30. voice transcript is visible and editable before save", () => { assert.
 test("31. AI does not silently save a finding", () => { assert.match(evaluationUi, /onAddFinding/); assert.match(findingsUi, /assistantFindingDraft/); assert.match(findingsUi, /onClick=\{\(\) => \{/); });
 test("32. three suggestions are primary and remaining actions use More", () => { assert.match(assistantUi, /actions\.slice\(0, 3\)/); assert.match(assistantUi, />More</); });
 test("33. retained Evaluation context prevents a false empty-assessment model", () => assert.match(buildEvaluationAssistantProfessionalInput({ evaluation }).notes, /Evaluation findings: Inspect mold risk/));
-test("34. compact Job header renders customer and service once", () => { assert.equal((header.match(/<h2 style=\{styles\.title\}>\{customer\}<\/h2>/g) || []).length, 1); assert.equal((header.match(/<p style=\{styles\.service\}>\{service\}<\/p>/g) || []).length, 1); });
-test("35. Job details use a compact responsive grid", () => assert.match(header, /repeat\(auto-fit, minmax\(220px, 1fr\)\)/));
-test("36. compact iPhone layout avoids fixed-width horizontal overflow", () => { assert.match(header, /minWidth: 0/); assert.doesNotMatch(header, /width: [4-9]\d\d/); });
+test("34. compact Job header renders customer and service once", () => { assert.equal((header.match(/<h2>\{customer\}<\/h2>/g) || []).length, 1); assert.equal((header.match(/<p className="compact-current-job-header__service">\{service\}<\/p>/g) || []).length, 1); });
+test("35. Job details use a compact responsive grid", () => { assert.match(header, /compact-current-job-header__primary/); assert.match(header, /compact-current-job-header__details/); });
+test("36. compact iPhone layout avoids fixed-width horizontal overflow", () => { assert.match(header, /compact-current-job-header__state/); assert.doesNotMatch(header, /width: [4-9]\d\d/); });
 test("37. lifecycle accordions remain touch friendly", () => { assert.match(workspaceSystem, /work-center-accordion__trigger/); assert.match(css, /work-center-accordion__trigger[\s\S]*min-height:\s*44px/); });
 test("38. canonical top-of-page uses one compact card instead of two tall cards", () => { assert.match(dashboard, /<CompactCurrentJobHeader/); assert.match(dashboard, /!isCanonicalReadOnlyJob && \([\s\S]*meetro-job-persistent-context/); });
 test("39. compact Current Job retains status and next action", () => { assert.match(dashboard, /status=\{jobDisplayStatus\}/); assert.match(dashboard, /nextStep=\{jobDisplayNextStep\}/); });

@@ -59,7 +59,9 @@ function payload(overrides = {}) {
         workstreamVersion: 0,
         activityVersion: 0,
         obligationVersion: 0,
+        approvedWorkExecutionVersion: 0,
         depositVersion: 0,
+        invoiceVersion: 0,
         evaluationCount: 1,
         findingCount: 1,
         recommendationCount: 1,
@@ -102,6 +104,33 @@ test("normalizer accepts durable Job completion and invoice handoff truth", () =
   assert.equal(liveJob.stage.code, "JOB_COMPLETED");
   assert.equal(liveJob.nextAction.code, "READY_TO_INVOICE");
   assert.equal(hasCanonicalLiveJobAction(liveJob, "VIEW_JOB_HISTORY"), true);
+});
+
+test("normalizer accepts approved Work completion without inferring Job closure", () => {
+  const liveJob = normalizeCanonicalLiveJobProjection(payload({
+    stage: { code: "WORK_COMPLETED", label: "Work Completed" },
+    responsibility: { code: "PROFESSIONAL", label: "Professional" },
+    blocker: null,
+    nextAction: {
+      code: "READY_TO_INVOICE",
+      label: "Ready to Invoice",
+      description: "The operational Job is complete. Billing remains a separate next step.",
+    },
+    availableActions: [],
+    reasonCodes: [
+      "APPROVED_WORK_EXECUTION_COMPLETED",
+      "INVOICE_NOT_CREATED",
+      "JOB_CLOSURE_REMAINS_SEPARATE",
+    ],
+    freshness: {
+      ...payload().liveJob.freshness,
+      approvedWorkExecutionVersion: 2,
+    },
+  }));
+  assert.equal(liveJob.stage.code, "WORK_COMPLETED");
+  assert.equal(liveJob.nextAction.code, "READY_TO_INVOICE");
+  assert.equal(liveJob.freshness.approvedWorkExecutionVersion, 2);
+  assert.equal(hasCanonicalLiveJobAction(liveJob, "VIEW_JOB_HISTORY"), false);
 });
 
 test("normalizer keeps issued-undelivered responsibility with the professional", () => {

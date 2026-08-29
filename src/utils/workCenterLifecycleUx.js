@@ -136,7 +136,7 @@ export function buildApprovedWorkProjection(quote) {
 export function deriveWorkExecutionMode({ plan, liveJob } = {}) {
   const workstreams = list(plan?.workstreams);
   const activities = workstreams.flatMap((workstream) => list(workstream.activities));
-  const canonicalComplete = liveJob?.stage?.code === "JOB_COMPLETED" ||
+  const canonicalComplete = ["WORK_COMPLETED", "JOB_COMPLETED"].includes(liveJob?.stage?.code) ||
     (workstreams.length > 0 && workstreams.every((workstream) =>
       ["DONE", "COMPLETED", "CLOSED"].includes(workstream.state) ||
       ["DONE", "COMPLETED"].includes(workstream.status)

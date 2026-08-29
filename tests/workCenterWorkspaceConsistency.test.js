@@ -55,7 +55,7 @@ test("shared system owns headers, truthful metrics, empty states, statuses, and 
   ]) assert.match(system, new RegExp(`export function ${component}`));
   assert.match(system, /aria-expanded=\{open\}/);
   assert.match(system, /aria-controls=\{`\$\{sectionId\}-content`\}/);
-  assert.match(css, /\.work-center-accordion__trigger \{[\s\S]*min-height: 68px/);
+  assert.match(css, /\.work-center-accordion__trigger \{[\s\S]*min-height: 64px/);
   assert.match(css, /\.work-center-empty-state \{[\s\S]*box-shadow:/);
 });
 

@@ -22,6 +22,7 @@ const STAGES = new Set([
   "WORK_BLOCKED",
   "WORK_REVIEW_NEEDED",
   "WORKSTREAMS_COMPLETE_PENDING_JOB_COMPLETION",
+  "WORK_COMPLETED",
   "JOB_COMPLETED",
 ]);
 
@@ -63,6 +64,10 @@ const NEXT_ACTIONS = new Set([
   "REVIEW_WORKSTREAM_COMPLETION",
   "NEXT_STEP_NOT_YET_AVAILABLE",
   "READY_TO_INVOICE",
+  "REVIEW_DRAFT_INVOICE",
+  "WAIT_FOR_PAYMENT",
+  "REVIEW_BALANCE_DUE",
+  "REVIEW_PAID_INVOICE",
 ]);
 
 const AVAILABLE_ACTIONS = new Set([
@@ -80,6 +85,7 @@ const AVAILABLE_ACTIONS = new Set([
   "CONTINUE_ACTIVE_WORK",
   "REVIEW_WORKSTREAM_COMPLETION",
   "VIEW_JOB_HISTORY",
+  "VIEW_INVOICE",
 ]);
 
 const VERSION_KEYS = Object.freeze([
@@ -90,7 +96,9 @@ const VERSION_KEYS = Object.freeze([
   "workstreamVersion",
   "activityVersion",
   "obligationVersion",
+  "approvedWorkExecutionVersion",
   "depositVersion",
+  "invoiceVersion",
 ]);
 
 const COUNT_KEYS = Object.freeze([

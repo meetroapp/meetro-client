@@ -11052,7 +11052,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     : translate("workCenterBackToJobs", activeLanguage)}
                 />
 
-	                <div style={jobWorkflowFirstHero}>
+	                <div style={isCanonicalReadOnlyJob ? canonicalJobWorkflowShell : jobWorkflowFirstHero}>
 	                  <CompactCurrentJobHeader
 	                    eyebrow={isJobHistoryMode ? translate("homeMyProjectsHistory", activeLanguage) : translate("workCenterCurrentJob", activeLanguage)}
 	                    customer={persistentContextCustomer}
@@ -11368,6 +11368,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             icon="workCenter"
                             title={workCenterWorkspaceCopy.workPlan}
                             summary={workCenterWorkspaceCopy.workPlanSummary}
+                            status={jobDisplayStatus}
                             defaultOpen={canonicalNextActionSection === "workPlan"}
                             autoOpenToken={canonicalAutoOpenToken}
                           >
@@ -11398,7 +11399,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                            defaultOpen={canonicalNextActionSection === "completionInvoice"}
 	                            autoOpenToken={canonicalAutoOpenToken}
 	                          >
-	                            {canonicalLiveJob?.stage?.code === "JOB_COMPLETED" ? (
+	                            {["WORK_COMPLETED", "JOB_COMPLETED"].includes(canonicalLiveJob?.stage?.code) ? (
 	                              <button type="button" style={startScheduleBtn} onClick={() => openWorkTab("revenue")}>{workCenterWorkspaceCopy.openInvoices}</button>
 	                            ) : (
 	                              <p style={jobWorkspaceDisclosureText}>Available after the work is completed.</p>
@@ -20468,6 +20469,13 @@ const jobWorkflowFirstHero = {
   gap: "16px",
   border: "1px solid var(--meetro-color-line)",
   boxShadow: "var(--meetro-shadow-lifted)",
+};
+
+const canonicalJobWorkflowShell = {
+  display: "grid",
+  gap: "12px",
+  minWidth: 0,
+  textAlign: "left",
 };
 
 const jobPersistentContextRegion = {

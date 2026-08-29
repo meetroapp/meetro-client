@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { buildMaterialPreparationProjection } from "../utils/workCenterLifecycleUx.js";
 import ProfessionalWorkPreparationWorkspace from "./ProfessionalWorkPreparationWorkspace.jsx";
+import MeetroIcon from "./MeetroIcon.jsx";
 
 function readableState(value, ready) {
   if (ready) return "Ready";
@@ -21,7 +22,7 @@ function quantityLabel(item) {
   return [item.quantity, item.unit].filter((value) => value !== "" && value != null).join(" ");
 }
 
-function SummaryButton({ id, title, summary, expanded, onClick }) {
+function SummaryButton({ id, title, summary, expanded, onClick, icon }) {
   return (
     <button
       type="button"
@@ -30,6 +31,7 @@ function SummaryButton({ id, title, summary, expanded, onClick }) {
       aria-controls={`${id}-details`}
       onClick={onClick}
     >
+      <span style={styles.summaryIcon} aria-hidden="true"><MeetroIcon name={icon} size={20} decorative /></span>
       <span style={styles.summaryCopy}><span style={styles.summaryTitle}>{title}</span><strong>{summary}</strong></span>
       <span aria-hidden="true" style={styles.chevron}>{expanded ? "−" : "+"}</span>
     </button>
@@ -72,9 +74,9 @@ export default function CompactWorkPlanPreparation({
   return (
     <div style={styles.section} data-materials-source="canonical-work-preparation" data-materials-model="existing-work-preparation">
       <div style={styles.summaryGrid} aria-label="Materials and preparation summaries">
-        <SummaryButton id="work-plan-materials" title="Materials" summary={projection.materialsSummary} expanded={open.materials} onClick={() => toggle("materials")} />
-        <SummaryButton id="work-plan-customer-supplies" title="Customer supplies" summary={projection.customerSuppliesSummary} expanded={open.customer} onClick={() => toggle("customer")} />
-        <SummaryButton id="work-plan-preparation" title="Preparation" summary={projection.preparationSummary} expanded={open.preparation} onClick={() => toggle("preparation")} />
+        <SummaryButton id="work-plan-materials" title="Materials" summary={projection.materialsSummary} expanded={open.materials} onClick={() => toggle("materials")} icon="materials" />
+        <SummaryButton id="work-plan-customer-supplies" title="Customer supplies" summary={projection.customerSuppliesSummary} expanded={open.customer} onClick={() => toggle("customer")} icon="people" />
+        <SummaryButton id="work-plan-preparation" title="Preparation" summary={projection.preparationSummary} expanded={open.preparation} onClick={() => toggle("preparation")} icon="activeWork" />
       </div>
 
       {open.materials && (
@@ -130,9 +132,10 @@ export default function CompactWorkPlanPreparation({
 const styles = {
   section: { display: "grid", gap: 10, minWidth: 0 },
   summaryGrid: { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 180px), 1fr))", gap: 9, minWidth: 0 },
-  summaryButton: { width: "100%", minWidth: 0, minHeight: 62, padding: "10px 12px", border: "1px solid #d8e2da", borderRadius: 10, background: "#f6f9f7", color: "#213d2c", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, textAlign: "left", cursor: "pointer" },
-  summaryButtonOpen: { borderColor: "#7fa38a", background: "#eef6f0" },
-  summaryCopy: { display: "grid", gap: 3, minWidth: 0 },
+  summaryButton: { width: "100%", minWidth: 0, minHeight: 60, padding: "9px 11px", border: "1px solid #d8e2da", borderRadius: 10, background: "#f6f9f7", color: "#213d2c", display: "grid", gridTemplateColumns: "34px minmax(0, 1fr) auto", alignItems: "center", gap: 9, textAlign: "left", cursor: "pointer" },
+  summaryButtonOpen: { border: "1px solid #7fa38a", background: "#eef6f0" },
+  summaryIcon: { display: "grid", placeItems: "center", width: 34, height: 34, borderRadius: 999, background: "#e7f1e9", color: "#245b38" },
+  summaryCopy: { display: "grid", gap: 2, minWidth: 0 },
   summaryTitle: { color: "#5c6c62", fontSize: 12, fontWeight: 800, letterSpacing: ".03em", textTransform: "uppercase" },
   chevron: { flex: "0 0 auto", fontSize: 22, lineHeight: 1, color: "#3f654b" },
   detail: { minWidth: 0, padding: "4px 0 2px", overflow: "hidden" },

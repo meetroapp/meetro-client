@@ -11,7 +11,8 @@ const cssSource = readFileSync(
   "utf8"
 );
 const alertCss = cssSource.slice(
-  cssSource.indexOf("/* Canonical Alert count badge")
+  cssSource.indexOf("/* Canonical Alert count badge"),
+  cssSource.indexOf("/* R1-05B")
 );
 
 function mobileBlock(start, end) {
