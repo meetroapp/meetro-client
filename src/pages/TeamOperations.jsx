@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
+import EmployeeShell from "../components/EmployeeShell";
 import {
   fetchBusinessTimeSettings,
   fetchTeamToday,
@@ -30,6 +31,11 @@ const CATEGORY_LABELS = Object.freeze({
   BREAK: "Break",
   GENERAL: "General",
 });
+
+const BOOKKEEPER_NAVIGATION = Object.freeze([
+  { route: "teamOperations", query: { view: "timesheets" }, label: "Timesheets", icon: "◷" },
+  { route: "bookkeeperProfile", label: "Profile", icon: "●" },
+]);
 
 function routeValue(name) {
   try {
@@ -336,15 +342,9 @@ function TeamOperations({ setPage }) {
     setProjection(null);
   }
 
-  return (
-    <div className="app-page meetro-responsive-page meetro-visual-page" style={pageStyle}>
-      <BusinessToolsPageHeader
-        title="Team"
-        description="Members, live operational visibility, and canonical recorded-time review."
-        categoryLabel="Business Operations"
-        onBack={() => setPage("businessCommandCenter")}
-      />
-      {membership && <TeamNavigation view={view} setPage={setPage} canViewToday={canViewToday} onView={(nextView) => { setSelectedView(nextView); setProjection(null); }} />}
+  const workspaceContent = (
+    <>
+      {membership?.role !== "BOOKKEEPER_FINANCE" && <TeamNavigation view={view} setPage={setPage} canViewToday={canViewToday} onView={(nextView) => { setSelectedView(nextView); setProjection(null); }} />}
       {error && <div role="alert" style={errorStyle}>{error}</div>}
       {loading && <div role="status" style={cardStyle}>Loading governed Team time…</div>}
       {!loading && !membership && (
@@ -365,6 +365,36 @@ function TeamOperations({ setPage }) {
             : <TimesheetsView data={projection} range={range} onRange={(next) => { setRange(next); setProjection(null); }} now={now} timeZone={settings.timeZone} setPage={setPage} />}
         </>
       )}
+    </>
+  );
+
+  if (membership?.role === "BOOKKEEPER_FINANCE") {
+    return (
+      <EmployeeShell
+        membership={membership}
+        currentPage="teamOperations"
+        setPage={setPage}
+        title="Timesheets"
+        description="Read-only Team time using the Business calendar."
+        navigation={BOOKKEEPER_NAVIGATION}
+        roleLabel="Bookkeeper / Finance"
+        brandLabel="Finance"
+        accessLabel="Read-only access"
+      >
+        {workspaceContent}
+      </EmployeeShell>
+    );
+  }
+
+  return (
+    <div className="app-page meetro-responsive-page meetro-visual-page" style={pageStyle}>
+      <BusinessToolsPageHeader
+        title="Team"
+        description="Members, live operational visibility, and canonical recorded-time review."
+        categoryLabel="Business Operations"
+        onBack={() => setPage("businessCommandCenter")}
+      />
+      {workspaceContent}
       <BottomNav setPage={setPage} currentPage="teamMembers" />
     </div>
   );

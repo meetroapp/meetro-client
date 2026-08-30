@@ -39,6 +39,11 @@ import { shouldUseCommunicationCenterConversationRoute } from "./utils/communica
 import { parseCanonicalConversationRoute } from "./utils/canonicalConversationMessaging";
 import { resolveLegacyEmergencyRoute } from "./utils/emergencyRoutes";
 import { fetchProfessionalSubscription } from "./utils/subscriptionApi";
+import { fetchMyTeamAuthority } from "./utils/teamApi";
+import {
+  getRoleAwareRoute,
+  resolvePrimaryTeamExperience,
+} from "./utils/teamRoleExperience";
 
 const Home = lazy(() => import("./pages/Home"));
 import MyRequests from "./pages/MyRequests";
@@ -85,6 +90,9 @@ import HiringCenter from "./pages/HiringCenter";
 import TeamMembers from "./pages/TeamMembers";
 import EmployeeJobs from "./pages/EmployeeJobs";
 import TeamOperations from "./pages/TeamOperations";
+import EmployeePortal from "./pages/EmployeePortal";
+import BookkeeperProfile from "./pages/BookkeeperProfile";
+import EmployeeShell from "./components/EmployeeShell";
 import AssetCenter from "./pages/AssetCenter";
 import ServiceTypesEvaluations from "./pages/ServiceTypesEvaluations";
 import MaterialsLibrary from "./pages/MaterialsLibrary";
@@ -568,6 +576,10 @@ function App() {
   const [authenticatedIdentity, setAuthenticatedIdentity] = useState(
     getAuthenticatedIdentitySnapshot
   );
+  const [teamExperienceGate, setTeamExperienceGate] = useState({
+    status: "idle",
+    experience: resolvePrimaryTeamExperience(),
+  });
   const updateSubscriptionGate = useCallback((result = {}) => {
     setSubscriptionGate({
       status: "ready",
@@ -582,6 +594,57 @@ function App() {
     () => subscribeAuthenticatedIdentity(setAuthenticatedIdentity),
     []
   );
+
+  useEffect(() => {
+    let active = true;
+    if (authenticatedIdentity.status !== "authenticated") {
+      Promise.resolve().then(() => {
+        if (active) {
+          setTeamExperienceGate({
+            status: "not_applicable",
+            experience: resolvePrimaryTeamExperience(),
+          });
+        }
+      });
+      return () => { active = false; };
+    }
+
+    const refresh = () => {
+      setTeamExperienceGate((current) => ({ ...current, status: "loading" }));
+      fetchMyTeamAuthority(setPageState)
+        .then((authority) => {
+          if (active) {
+            setTeamExperienceGate({
+              status: "ready",
+              experience: resolvePrimaryTeamExperience(authority),
+            });
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setTeamExperienceGate({
+              status: "unavailable",
+              experience: resolvePrimaryTeamExperience(),
+            });
+          }
+        });
+    };
+
+    refresh();
+    window.addEventListener("meetroTeamAuthorityChanged", refresh);
+    return () => {
+      active = false;
+      window.removeEventListener("meetroTeamAuthorityChanged", refresh);
+    };
+  }, [authenticatedIdentity.sessionGeneration, authenticatedIdentity.status]);
+
+  useEffect(() => {
+    if (teamExperienceGate.status !== "ready") return;
+    const currentRoute = getHashRoute() || page;
+    const roleRoute = getRoleAwareRoute(currentRoute, teamExperienceGate.experience);
+    if (!roleRoute || roleRoute === currentRoute) return;
+    window.location.hash = roleRoute;
+  }, [page, teamExperienceGate]);
 
   useEffect(() => {
     let active = true;
@@ -992,15 +1055,65 @@ function App() {
       return;
     }
 
-	    const finalPage = shouldRouteToProfessionalOnboarding(newPage)
+	    const intendedPage = shouldRouteToProfessionalOnboarding(newPage)
 	      ? "professionalOnboarding"
 	      : newPage;
-	
+	    const finalPage = getRoleAwareRoute(
+	      intendedPage,
+	      teamExperienceGate.experience
+	    );
 	    const finalRoutePage = getRoutePage(finalPage);
 	    syncAccountModeForPage(finalRoutePage);
 	    window.location.hash = finalPage;
 	    setPageState(finalRoutePage);
 	  };
+
+const fieldMembership = teamExperienceGate.experience?.kind === "FIELD_EMPLOYEE"
+  ? teamExperienceGate.experience.membership
+  : null;
+const bookkeeperMembership = teamExperienceGate.experience?.kind === "BOOKKEEPER_FINANCE"
+  ? teamExperienceGate.experience.membership
+  : null;
+const currentRoleRoute = getRoleAwareRoute(
+  getHashRoute() || page,
+  teamExperienceGate.experience
+);
+
+if (
+  authenticatedIdentity.status === "authenticated" &&
+  teamExperienceGate.status === "loading" &&
+  page !== "login"
+) {
+  return withRouteBoundary(
+    <LoadingScreen text="Preparing your Team workspace…" />,
+    page,
+    setPage
+  );
+}
+
+if (
+  authenticatedIdentity.status === "authenticated" &&
+  teamExperienceGate.status === "unavailable" &&
+  page !== "login"
+) {
+  return withRouteBoundary(
+    <LoadingScreen text="Team access could not be verified. Refresh to try again." />,
+    page,
+    setPage
+  );
+}
+
+if (
+  teamExperienceGate.status === "ready" &&
+  currentRoleRoute &&
+  getRoutePage(currentRoleRoute) !== page
+) {
+  return withRouteBoundary(
+    <LoadingScreen text="Opening your role-aware workspace…" />,
+    page,
+    setPage
+  );
+}
 
 if (sessionHydration.status === SESSION_HYDRATION.restoring || page === "sessionRestoring") {
   return withRouteBoundary(<SessionRestoringScreen />, "sessionRestoring", setPage);
@@ -1254,11 +1367,56 @@ if (page === "teamMembers") {
 }
 
 if (page === "employeeJobs") {
-  return withStartupChrome(<EmployeeJobs setPage={setPage} />, updateNotice);
+  return withStartupChrome(<EmployeeJobs setPage={setPage} roleMembership={fieldMembership} />, updateNotice);
+}
+
+if (["employeeHome", "employeeSchedule", "employeeTime", "employeeMessages", "employeeProfile"].includes(page)) {
+  if (!fieldMembership) {
+    return withStartupChrome(<LoadingScreen text="Field Employee access is required." />, updateNotice);
+  }
+  const view = {
+    employeeHome: "home",
+    employeeSchedule: "schedule",
+    employeeTime: "time",
+    employeeMessages: "messages",
+    employeeProfile: "profile",
+  }[page];
+  return withStartupChrome(
+    <EmployeePortal membership={fieldMembership} setPage={setPage} view={view} />,
+    updateNotice
+  );
+}
+
+if (page === "employeeAlerts") {
+  if (!fieldMembership) {
+    return withStartupChrome(<LoadingScreen text="Field Employee access is required." />, updateNotice);
+  }
+  return withStartupChrome(
+    <EmployeeShell
+      membership={fieldMembership}
+      currentPage="employeeAlerts"
+      setPage={setPage}
+      title="Alerts"
+      description="Alerts delivered to your exact account."
+    >
+      {withSuspense(<Notifications setPage={setPage} employeeMode />)}
+    </EmployeeShell>,
+    updateNotice
+  );
 }
 
 if (page === "teamOperations") {
   return withStartupChrome(<TeamOperations setPage={setPage} />, updateNotice);
+}
+
+if (page === "bookkeeperProfile") {
+  if (!bookkeeperMembership) {
+    return withStartupChrome(<LoadingScreen text="Bookkeeper access is required." />, updateNotice);
+  }
+  return withStartupChrome(
+    <BookkeeperProfile membership={bookkeeperMembership} setPage={setPage} />,
+    updateNotice
+  );
 }
 
 if (page === "assetCenter") {

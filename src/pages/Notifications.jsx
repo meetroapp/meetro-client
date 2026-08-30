@@ -158,7 +158,7 @@ function AlertCard({
   );
 }
 
-function Notifications({ setPage }) {
+function Notifications({ setPage, employeeMode = false }) {
   const language = useLanguage();
   const setPageRef = useRef(setPage);
   setPageRef.current = setPage;
@@ -233,11 +233,12 @@ function Notifications({ setPage }) {
   }, [controller]);
 
   useEffect(() => {
+    if (employeeMode) return undefined;
     void refreshDecisionAttention();
     return () => {
       decisionAttentionGenerationRef.current += 1;
     };
-  }, [refreshDecisionAttention]);
+  }, [employeeMode, refreshDecisionAttention]);
 
   const handleViewChange = (viewId) => {
     if (viewId === controller.getState().viewId) return;
@@ -357,7 +358,7 @@ function Notifications({ setPage }) {
       durableDecisionQuoteIds.push(alert.destination.quoteId);
     }
   }
-  const decisionAttentionItems = selectedView === "attention"
+  const decisionAttentionItems = !employeeMode && selectedView === "attention"
     ? projectProfessionalQuoteDecisionAttentionList({
         quotes: decisionAttentionState.quotes,
         liveJobs: decisionAttentionState.liveJobs,
@@ -380,7 +381,7 @@ function Notifications({ setPage }) {
           disabled={phase === "loading" || isRefreshing}
           onClick={() => {
             void controller.refresh();
-            void refreshDecisionAttention();
+            if (!employeeMode) void refreshDecisionAttention();
           }}
         >
           {isRefreshing
@@ -547,7 +548,7 @@ function Notifications({ setPage }) {
         )}
       </main>
 
-      <BottomNav setPage={setPage} currentPage="notifications" />
+      {!employeeMode && <BottomNav setPage={setPage} currentPage="notifications" />}
     </div>
   );
 }

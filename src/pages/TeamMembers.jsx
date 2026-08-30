@@ -119,6 +119,7 @@ function TeamMembers({ setPage }) {
         "Invitation accepted. Your exact business Team membership is active."
       );
       await load();
+      window.dispatchEvent(new CustomEvent("meetroTeamAuthorityChanged"));
     } catch (acceptError) {
       setError(acceptError.message || "The invitation could not be accepted.");
     } finally {
@@ -327,11 +328,13 @@ function TeamMembers({ setPage }) {
         <section style={cardStyle} aria-labelledby="team-invitation-heading">
           <p style={eyebrowStyle}>Invitation</p>
           <h2 id="team-invitation-heading" style={headingStyle}>
-            Join the exact business Team
+            You are joining {authority?.pendingInvitations?.[0]?.businessName || "this business"}
           </h2>
           <p style={copyStyle}>
             Acceptance is bound to your authenticated email and cannot be
-            claimed by another account.
+            claimed by another account. Employees join this exact Team; they do
+            not create another Business, start another Trial, or choose a
+            subscription plan.
           </p>
           <button
             type="button"

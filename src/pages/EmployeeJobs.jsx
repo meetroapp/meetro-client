@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
+import EmployeeShell from "../components/EmployeeShell";
 import {
   fetchEmployeeJobs,
   fetchEmployeeSchedule,
@@ -62,8 +63,8 @@ function locationText(location) {
   return location?.serviceArea || "Service location is available when confirmed.";
 }
 
-function EmployeeJobs({ setPage }) {
-  const [authority, setAuthority] = useState(null);
+function EmployeeJobs({ setPage, roleMembership = null }) {
+  const [authority, setAuthority] = useState(() => roleMembership ? { memberships: [roleMembership] } : null);
   const [workspace, setWorkspace] = useState(null);
   const [team, setTeam] = useState(null);
   const [schedule, setSchedule] = useState([]);
@@ -226,19 +227,8 @@ function EmployeeJobs({ setPage }) {
     assignment.state === "ACTIVE" && assignment.membershipId === selectedMembership?.id
   ) || selfAssignedJob?.assignments?.[0] || null;
 
-  return (
-    <div className="app-page meetro-responsive-page meetro-visual-page" style={pageStyle}>
-      <BusinessToolsPageHeader
-        title={managementMode ? "Job Assignments" : "My Jobs"}
-        description={
-          managementMode
-            ? "Assign exact Team members to exact Jobs with durable history."
-            : "Only work assigned to your active Team membership appears here."
-        }
-        categoryLabel="Team Operations"
-        onBack={() => setPage("teamMembers")}
-      />
-
+  const workspaceContent = (
+    <>
       {error && <div role="alert" style={errorStyle}>{error}</div>}
       {notice && <div role="status" style={noticeStyle}>{notice}</div>}
 
@@ -271,12 +261,6 @@ function EmployeeJobs({ setPage }) {
             businessId={selectedMembership.businessId}
             setPage={setPage}
           />
-          <TimeEvidencePanel
-            businessId={selectedMembership.businessId}
-            job={selfAssignedJob}
-            assignment={selfAssignment}
-            setPage={setPage}
-          />
           <TeamTimePanel businessId={selectedMembership.businessId} setPage={setPage} />
         </>
       ) : (
@@ -297,6 +281,37 @@ function EmployeeJobs({ setPage }) {
           />
         </>
       )}
+    </>
+  );
+
+  if (selectedMembership?.role === "FIELD_EMPLOYEE") {
+    return (
+      <EmployeeShell
+        membership={selectedMembership}
+        currentPage="employeeJobs"
+        setPage={setPage}
+        title="My Jobs"
+        description="Only work assigned to your active Team membership appears here."
+      >
+        {workspaceContent}
+      </EmployeeShell>
+    );
+  }
+
+  return (
+    <div className="app-page meetro-responsive-page meetro-visual-page" style={pageStyle}>
+      <BusinessToolsPageHeader
+        title={managementMode ? "Job Assignments" : "My Jobs"}
+        description={
+          managementMode
+            ? "Assign exact Team members to exact Jobs with durable history."
+            : "Only work assigned to your active Team membership appears here."
+        }
+        categoryLabel="Team Operations"
+        onBack={() => setPage("teamMembers")}
+      />
+
+      {workspaceContent}
 
       <BottomNav setPage={setPage} currentPage="employeeJobs" />
     </div>
@@ -647,7 +662,7 @@ function boundaryLocation(requested) {
   });
 }
 
-function TimeEvidencePanel({ businessId, job, assignment, setPage }) {
+export function TimeEvidencePanel({ businessId, job, assignment, setPage }) {
   const [time, setTime] = useState(null);
   const [category, setCategory] = useState(() => job && assignment ? "JOB_WORK" : "GENERAL");
   const [includeLocation, setIncludeLocation] = useState(false);
