@@ -195,6 +195,22 @@ test("typed destinations accept exact canonical identities and reject navigation
     { type: "business_profile", businessProfileId: 41 },
     { type: "review", reviewId: 51 },
     { type: "notifications" },
+    { type: "job", jobId: "11111111-1111-4111-8111-111111111111" },
+    {
+      type: "visit",
+      jobId: "11111111-1111-4111-8111-111111111111",
+      visitId: "22222222-2222-4222-8222-222222222222",
+    },
+    {
+      type: "quote",
+      jobId: "11111111-1111-4111-8111-111111111111",
+      quoteId: "33333333-3333-4333-8333-333333333333",
+    },
+    {
+      type: "invoice",
+      jobId: "11111111-1111-4111-8111-111111111111",
+      invoiceId: "44444444-4444-4444-8444-444444444444",
+    },
   ];
   assert.deepEqual(destinations.map(({ type }) => type), [
     "conversation",
@@ -205,6 +221,10 @@ test("typed destinations accept exact canonical identities and reject navigation
     "business_profile",
     "review",
     "notifications",
+    "job",
+    "visit",
+    "quote",
+    "invoice",
   ]);
   for (const destination of destinations) {
     const before = structuredClone(destination);
@@ -225,6 +245,17 @@ test("typed destinations accept exact canonical identities and reject navigation
     { type: "conversation", conversationId: 91, url: "https://example.test" },
     { type: "conversation", conversationId: 91, returnPage: "home" },
     { type: "unknown", conversationId: 91 },
+    { type: "job", jobId: "bad" },
+    {
+      type: "visit",
+      jobId: "11111111-1111-4111-8111-111111111111",
+    },
+    {
+      type: "invoice",
+      jobId: "11111111-1111-4111-8111-111111111111",
+      invoiceId: "44444444-4444-4444-8444-444444444444",
+      address: "unsafe",
+    },
     {
       type: "conversation",
       conversationId: { id: 91, route: "conversationThread" },

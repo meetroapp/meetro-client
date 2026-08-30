@@ -174,6 +174,37 @@ export function normalizeCanonicalAlertDestination(value) {
       quoteId: value.quoteId.toLowerCase(),
     };
   }
+
+  if (value.type === "job") {
+    if (!hasExactKeys(value, ["type", "jobId"])) return null;
+    if (typeof value.jobId !== "string" || !UUID_PATTERN.test(value.jobId)) {
+      return null;
+    }
+    return { type: value.type, jobId: value.jobId.toLowerCase() };
+  }
+
+  const jobResourceDestinations = {
+    visit: "visitId",
+    quote: "quoteId",
+    invoice: "invoiceId",
+  };
+  const resourceField = jobResourceDestinations[value.type];
+  if (resourceField) {
+    if (!hasExactKeys(value, ["type", "jobId", resourceField])) return null;
+    if (
+      typeof value.jobId !== "string" ||
+      typeof value[resourceField] !== "string" ||
+      !UUID_PATTERN.test(value.jobId) ||
+      !UUID_PATTERN.test(value[resourceField])
+    ) {
+      return null;
+    }
+    return {
+      type: value.type,
+      jobId: value.jobId.toLowerCase(),
+      [resourceField]: value[resourceField].toLowerCase(),
+    };
+  }
   const numericField = numericDestinations[value.type];
   if (numericField) {
     if (!hasExactKeys(value, ["type", numericField])) return null;
