@@ -7,6 +7,11 @@ import {
   fetchManagedJobAssignments,
   updateJobAssignments,
 } from "../utils/jobAssignmentApi";
+import {
+  fetchFieldOperations,
+  sendFieldMessage,
+  updateFieldStatus,
+} from "../utils/fieldOperationsApi";
 import { fetchBusinessTeam, fetchMyTeamAuthority } from "../utils/teamApi";
 
 function routeValue(name) {
@@ -237,6 +242,8 @@ function EmployeeJobs({ setPage }) {
           workingJobId={workingJobId}
           onToggle={toggleMember}
           onSave={saveAssignments}
+          businessId={selectedMembership.businessId}
+          setPage={setPage}
         />
       ) : (
         <FieldWorkspace
@@ -244,6 +251,8 @@ function EmployeeJobs({ setPage }) {
           schedule={schedule}
           selectedJob={selectedJob}
           onSelect={setSelectedJobId}
+          businessId={selectedMembership.businessId}
+          setPage={setPage}
         />
       )}
 
@@ -252,7 +261,7 @@ function EmployeeJobs({ setPage }) {
   );
 }
 
-function ManagerWorkspace({ jobs, members, drafts, workingJobId, onToggle, onSave }) {
+function ManagerWorkspace({ jobs, members, drafts, workingJobId, onToggle, onSave, businessId, setPage }) {
   if (!jobs.length) {
     return <section style={cardStyle}><h2 style={headingStyle}>No eligible Jobs</h2><p style={copyStyle}>No active Job owned by this exact business is available for assignment.</p></section>;
   }
@@ -305,13 +314,25 @@ function ManagerWorkspace({ jobs, members, drafts, workingJobId, onToggle, onSav
               ))}
             </details>
           )}
+          {(job.assignments || [])
+            .filter((item) => item.state === "ACTIVE" && item.memberStatus === "ACTIVE" && item.memberRole === "FIELD_EMPLOYEE")
+            .map((assignment) => (
+              <FieldOperationsPanel
+                key={assignment.id}
+                businessId={businessId}
+                job={job}
+                assignment={assignment}
+                managed
+                setPage={setPage}
+              />
+            ))}
         </section>
       ))}
     </div>
   );
 }
 
-function FieldWorkspace({ jobs, schedule, selectedJob, onSelect }) {
+function FieldWorkspace({ jobs, schedule, selectedJob, onSelect, businessId, setPage }) {
   if (!jobs.length) {
     return <section style={cardStyle}><h2 style={headingStyle}>No assigned Jobs</h2><p style={copyStyle}>When an Owner or Manager assigns work to you, it will appear here.</p></section>;
   }
@@ -371,6 +392,15 @@ function FieldWorkspace({ jobs, schedule, selectedJob, onSelect }) {
               </div>
             )) : <p style={detailCopyStyle}>No approved Job document is currently available.</p>}
           </DetailSection>
+          {selectedJob.assignments?.[0] && (
+            <FieldOperationsPanel
+              businessId={businessId}
+              job={selectedJob}
+              assignment={selectedJob.assignments[0]}
+              managed={false}
+              setPage={setPage}
+            />
+          )}
         </section>
       )}
 
@@ -385,6 +415,154 @@ function FieldWorkspace({ jobs, schedule, selectedJob, onSelect }) {
         )) : <p style={copyStyle}>No active Visit is scheduled for your assigned Jobs.</p>}
       </section>
     </>
+  );
+}
+
+function readableStatus(value) {
+  return String(value || "ASSIGNED")
+    .toLowerCase()
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function operationKey(prefix) {
+  if (globalThis.crypto?.randomUUID) return `${prefix}-${globalThis.crypto.randomUUID()}`;
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function FieldOperationsPanel({ businessId, job, assignment, managed, setPage }) {
+  const [operations, setOperations] = useState(null);
+  const [message, setMessage] = useState("");
+  const [note, setNote] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [working, setWorking] = useState("");
+  const [error, setError] = useState("");
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      const result = await fetchFieldOperations(
+        job.id,
+        { businessId, assignmentId: assignment.id, managed },
+        setPage
+      );
+      setOperations(result.operations);
+    } catch (loadError) {
+      setError(loadError.message || "Field updates are unavailable.");
+    } finally {
+      setLoading(false);
+    }
+  }, [assignment.id, businessId, job.id, managed, setPage]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(load, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+
+  async function advanceStatus() {
+    if (!operations?.nextStatus || managed) return;
+    setWorking("status");
+    setError("");
+    try {
+      const result = await updateFieldStatus(job.id, {
+        businessId,
+        assignmentId: assignment.id,
+        toStatus: operations.nextStatus,
+        note: note.trim() || null,
+        idempotencyKey: operationKey("field-status"),
+      }, setPage);
+      setOperations(result.operations);
+      setNote("");
+    } catch (statusError) {
+      setError(statusError.message || "Field status could not be updated.");
+    } finally {
+      setWorking("");
+    }
+  }
+
+  async function submitMessage(event) {
+    event.preventDefault();
+    if (!message.trim()) return;
+    setWorking("message");
+    setError("");
+    try {
+      await sendFieldMessage(job.id, {
+        businessId,
+        assignmentId: assignment.id,
+        message: message.trim(),
+        idempotencyKey: operationKey("field-message"),
+      }, { managed, setPage });
+      setMessage("");
+      await load();
+    } catch (messageError) {
+      setError(messageError.message || "The internal Job message could not be sent.");
+    } finally {
+      setWorking("");
+    }
+  }
+
+  return (
+    <div style={operationsStyle}>
+      <div style={rowStyle}>
+        <div>
+          <p style={eyebrowStyle}>Field operations · {assignment.memberName || "Field Employee"}</p>
+          <h3 style={detailTitleStyle}>Status and internal Job communication</h3>
+        </div>
+        <span style={pillStyle}>{readableStatus(operations?.currentStatus)}</span>
+      </div>
+      {error && <div role="alert" style={inlineErrorStyle}>{error}</div>}
+      {loading ? <p style={detailCopyStyle}>Loading field evidence…</p> : (
+        <>
+          {!managed && operations?.nextStatus && (
+            <div style={statusActionStyle}>
+              <label style={fieldLabelStyle}>
+                Optional update note
+                <input
+                  value={note}
+                  onChange={(event) => setNote(event.target.value)}
+                  maxLength={1000}
+                  style={textInputStyle}
+                  placeholder="Add a short operational note"
+                />
+              </label>
+              <button type="button" style={primaryButton} disabled={working === "status"} onClick={advanceStatus}>
+                {working === "status" ? "Recording…" : `Mark ${readableStatus(operations.nextStatus)}`}
+              </button>
+            </div>
+          )}
+          {!managed && !operations?.nextStatus && (
+            <p role="status" style={completeStyle}>Field work has been reported complete. Business and customer completion remain separate.</p>
+          )}
+          <div style={messageListStyle} aria-label="Internal Job messages">
+            {(operations?.messages || []).length ? operations.messages.map((item) => (
+              <article key={item.id} style={messageStyle}>
+                <strong>{item.senderName}</strong>
+                <span style={messageMetaStyle}>{roleLabel(item.senderRole)} · {formatSchedule(item.createdAt)}</span>
+                <p style={messageTextStyle}>{item.message}</p>
+              </article>
+            )) : <p style={detailCopyStyle}>No internal Job messages yet.</p>}
+          </div>
+          <form onSubmit={submitMessage} style={messageFormStyle}>
+            <label style={fieldLabelStyle}>
+              Message {managed ? assignment.memberName || "Field Employee" : "the business Team"}
+              <textarea
+                value={message}
+                onChange={(event) => setMessage(event.target.value)}
+                maxLength={5000}
+                rows={3}
+                style={textareaStyle}
+                placeholder="Internal Job communication only — customers do not receive this message"
+              />
+            </label>
+            <button type="submit" style={primaryButton} disabled={!message.trim() || working === "message"}>
+              {working === "message" ? "Sending…" : "Send internal message"}
+            </button>
+          </form>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -429,5 +607,17 @@ const rowMetaStyle = { margin: "4px 0 0", color: "#64776b", fontSize: 13, textTr
 const scheduleTimeStyle = { display: "grid", gap: 4, textAlign: "right", color: "#52675a", fontSize: 13 };
 const noticeStyle = { ...cardStyle, background: "#edf8ef", color: "#1a5d31", borderColor: "#b9d9c0" };
 const errorStyle = { ...cardStyle, background: "#fff4f2", color: "#8b2e2e", borderColor: "#e7beb8" };
+const operationsStyle = { borderTop: "1px solid #d7e5db", marginTop: 20, paddingTop: 20 };
+const statusActionStyle = { display: "flex", alignItems: "flex-end", gap: 12, margin: "14px 0", flexWrap: "wrap" };
+const fieldLabelStyle = { display: "grid", gap: 7, color: "#294c37", fontWeight: 700, flex: "1 1 260px" };
+const textInputStyle = { minHeight: 42, border: "1px solid #cbdacf", borderRadius: 10, padding: "9px 11px", color: "#183c27", background: "#fff" };
+const textareaStyle = { ...textInputStyle, minHeight: 82, resize: "vertical", fontFamily: "inherit" };
+const completeStyle = { padding: 12, borderRadius: 10, background: "#edf8ef", color: "#1a5d31", lineHeight: 1.5 };
+const messageListStyle = { display: "grid", gap: 8, maxHeight: 320, overflowY: "auto", margin: "16px 0" };
+const messageStyle = { padding: 12, border: "1px solid #e1eae3", borderRadius: 11, background: "#fbfdfb", color: "#294c37" };
+const messageMetaStyle = { display: "block", color: "#64776b", fontSize: 12, marginTop: 3 };
+const messageTextStyle = { margin: "8px 0 0", whiteSpace: "pre-wrap", lineHeight: 1.45 };
+const messageFormStyle = { display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" };
+const inlineErrorStyle = { padding: 10, borderRadius: 9, background: "#fff4f2", color: "#8b2e2e", margin: "10px 0" };
 
 export default EmployeeJobs;

@@ -11,6 +11,7 @@ import { t } from "../src/utils/language.js";
 
 const pageSource = readFileSync("src/pages/EmployeeJobs.jsx", "utf8");
 const apiSource = readFileSync("src/utils/jobAssignmentApi.js", "utf8");
+const fieldApiSource = readFileSync("src/utils/fieldOperationsApi.js", "utf8");
 const appSource = readFileSync("src/App.jsx", "utf8");
 const teamSource = readFileSync("src/pages/TeamMembers.jsx", "utf8");
 
@@ -54,6 +55,18 @@ test("field workspace renders only server projections and contains no local assi
   assert.doesNotMatch(pageSource, /Clock In|Clock Out|time entry/i);
 });
 
+test("field status and communication extend My Jobs with server-owned exact assignment authority", () => {
+  assert.match(fieldApiSource, /\/employee\/jobs\/\$\{encodeURIComponent\(jobId\)\}\/field-status/);
+  assert.match(fieldApiSource, /const surface = managed \? "team" : "employee"/);
+  assert.match(fieldApiSource, /\/\$\{surface\}\/jobs\/\$\{encodeURIComponent\(jobId\)\}\/field-messages/);
+  assert.match(pageSource, /fetchFieldOperations/);
+  assert.match(pageSource, /updateFieldStatus/);
+  assert.match(pageSource, /sendFieldMessage/);
+  assert.match(pageSource, /Internal Job communication only/);
+  assert.match(pageSource, /Business and customer completion remain separate/);
+  assert.doesNotMatch(`${pageSource}\n${fieldApiSource}`, /localStorage|sessionStorage|customerMessage|Clock In|Clock Out|GPS|payroll/i);
+});
+
 test("Owner/Manager assignment UI excludes Bookkeeper/Finance from assignable targets", () => {
   assert.match(pageSource, /\["MANAGER", "FIELD_EMPLOYEE"\]\.includes\(member\.role\)/);
   assert.match(pageSource, /\["OWNER", "MANAGER"\]\.includes\(selected\.role\)/);
@@ -75,5 +88,9 @@ test("assignment lifecycle Alert copy is permanent across all supported language
     assert.notEqual(t("alerts.work.jobAssignmentChanged.title", language), "alerts.work.jobAssignmentChanged.title");
     assert.notEqual(t("alerts.work.jobReassigned.title", language), "alerts.work.jobReassigned.title");
     assert.notEqual(t("alerts.work.jobUnassigned.title", language), "alerts.work.jobUnassigned.title");
+    assert.notEqual(t("alerts.work.fieldStatus.on_my_way.title", language), "alerts.work.fieldStatus.on_my_way.title");
+    assert.notEqual(t("alerts.work.fieldStatus.arrived.title", language), "alerts.work.fieldStatus.arrived.title");
+    assert.notEqual(t("alerts.work.fieldStatus.field_work_completed.title", language), "alerts.work.fieldStatus.field_work_completed.title");
+    assert.notEqual(t("alerts.work.fieldMessage.title", language), "alerts.work.fieldMessage.title");
   }
 });
