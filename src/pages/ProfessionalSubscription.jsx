@@ -13,6 +13,10 @@ import {
   purchaseStoreKitSubscription,
   restoreStoreKitSubscriptions,
 } from "../utils/storeKitSubscriptions";
+import {
+  getSubscriptionPlanAction,
+  getSubscriptionPurchaseChannel,
+} from "../utils/subscriptionPlanPresentation";
 
 function dateLabel(value) {
   if (!value) return "";
@@ -171,8 +175,14 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
       {error && <div role="alert" style={errorStyle}>{error}</div>}
       {message && <div role="status" style={messageStyle}>{message}</div>}
 
-      {state?.qaAccess && (
-        <div style={qaStyle}>Staging QA access is active. It cannot activate in production.</div>
+      {state?.qaAccess && !subscription && (
+        <section style={qaStyle} aria-label="Staging QA Access">
+          <p style={eyebrowStyle}>STAGING ONLY</p>
+          <h2 style={qaTitleStyle}>Staging QA Access</h2>
+          <p style={qaCopyStyle}>Full professional access for testing.</p>
+          <p style={qaCopyStyle}>No Apple or Stripe subscription is active.</p>
+          <p style={qaCopyStyle}>This staging-only access cannot activate in production.</p>
+        </section>
       )}
 
       {subscription && (
@@ -189,35 +199,42 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
       <section style={plansGridStyle} aria-label="Professional plans">
         {(state?.catalog || []).map((plan) => {
           const storeProduct = productsById.get(plan.providerProductId);
-          const eligibleTrial = storeProduct?.trialEligible === true && Boolean(storeProduct?.introductoryOffer);
           const displayPrice = storeProduct?.displayPrice || `$${(plan.amountMinor / 100).toFixed(2)}`;
-          const providerReady = nativeIos
-            ? plan.providers?.APPLE_APP_STORE?.configured && Boolean(storeProduct)
-            : plan.providers?.STRIPE?.configured;
-          const purchaseReady = providerReady && !state?.entitled && !state?.qaAccess;
-          const trialOffered = nativeIos ? eligibleTrial : plan.providers?.STRIPE?.configured;
+          const channel = getSubscriptionPurchaseChannel({ nativeIos, plan, storeProduct });
+          const action = getSubscriptionPlanAction({
+            qaAccess: state?.qaAccess,
+            entitled: state?.entitled,
+            subscription,
+            planCode: plan.code,
+            providerReady: channel.providerReady,
+            trialOffered: channel.trialOffered,
+            nativeIos,
+          });
           const planName = plan.name || fallbackPlanName(plan);
           const positioning = plan.positioning || fallbackPlanPositioning(plan);
-          const trialAction = trialOffered ? "Start 14-Day Free Trial" : nativeIos ? "Continue with Apple" : "Start on web";
           return (
             <article key={plan.code} style={planCardStyle}>
               <p style={eyebrowStyle}>{planName.toUpperCase()}</p>
               <h2 style={planTitleStyle}>{positioning}</h2>
               <p style={seatStyle}>Up to {plan.seatLimit} professional users</p>
-              {trialOffered ? <p style={trialStyle}>14 days free</p> : <p style={providerCopyStyle}>Trial eligibility checked by Apple</p>}
-              <p style={priceStyle}>{trialOffered ? "Then " : ""}{displayPrice}<span style={monthStyle}> / month</span></p>
-              <p style={trialCopyStyle}>{trialOffered ? `Free for 14 days, then ${displayPrice}/month. Cancel anytime.` : `${displayPrice}/month. Apple determines trial eligibility.`}</p>
+              <p style={channel.trialOffered ? trialStyle : providerCopyStyle}>{channel.eligibilityLabel}</p>
+              <p style={priceStyle}>{channel.trialOffered ? "Then " : ""}{displayPrice}<span style={monthStyle}> / month</span></p>
+              <p style={trialCopyStyle}>{channel.trialOffered ? `Free for 14 days, then ${displayPrice}/month. Cancel anytime.` : `${displayPrice}/month. ${channel.providerName} determines trial eligibility.`}</p>
               <p style={copyStyle}>Owner counts as one included professional user.</p>
-              <button
-                type="button"
-                style={{ ...purchaseStyle, opacity: purchaseReady ? 1 : 0.55 }}
-                disabled={!purchaseReady || Boolean(busy)}
-                onClick={() => purchase(plan)}
-              >
-                {busy === plan.code ? "Working…" : state?.entitled ? "Current access already active" : trialAction}
-              </button>
-              {!providerReady && <p style={providerCopyStyle}>{nativeIos ? "Apple product configuration is required." : "Web subscription checkout is unavailable."}</p>}
-              {!nativeIos && providerReady && <p style={providerCopyStyle}>Stripe governs trial dates and billing status. Access starts only after server verification.</p>}
+              {action.kind === "purchase" ? (
+                <button
+                  type="button"
+                  style={{ ...purchaseStyle, opacity: action.enabled ? 1 : 0.55 }}
+                  disabled={!action.enabled || Boolean(busy)}
+                  onClick={() => purchase(plan)}
+                >
+                  {busy === plan.code ? "Working…" : action.label}
+                </button>
+              ) : (
+                <p style={planStateStyle}>{action.label}</p>
+              )}
+              {!channel.providerReady && <p style={providerCopyStyle}>{channel.unavailableLabel}</p>}
+              {channel.providerReady && <p style={providerCopyStyle}>{channel.governanceLabel}</p>}
             </article>
           );
         })}
@@ -232,11 +249,13 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
         </ul>
       </section>
 
-      <section style={actionsStyle}>
-        {nativeIos && subscription?.provider !== "STRIPE" && <button type="button" style={secondaryStyle} disabled={Boolean(busy)} onClick={restore}>Restore Purchases</button>}
-        <button type="button" style={secondaryStyle} disabled={!subscription || Boolean(busy)} onClick={manage}>Manage Subscription</button>
-      </section>
-      <p style={footnoteStyle}>Apple or Stripe determines trial eligibility, renewals, cancellations, and billing status. One verified Meetro business entitlement works on web and iPhone; a second subscription is not required.</p>
+      {(subscription || (nativeIos && !state?.qaAccess)) && (
+        <section style={actionsStyle}>
+          {nativeIos && subscription?.provider !== "STRIPE" && <button type="button" style={secondaryStyle} disabled={Boolean(busy)} onClick={restore}>Restore Purchases</button>}
+          {subscription && <button type="button" style={secondaryStyle} disabled={Boolean(busy)} onClick={manage}>Manage Subscription</button>}
+        </section>
+      )}
+      <p style={footnoteStyle}>{nativeIos ? "Apple" : "Stripe"} determines trial eligibility and purchase status for this channel. One verified Meetro business entitlement works on web and iPhone; a second subscription is not required.</p>
       <BottomNav setPage={setPage} currentPage="professionalSubscription" />
     </div>
   );
@@ -264,7 +283,10 @@ const statusCardStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit
 const labelStyle = { display: "block", color: "#60766e", fontSize: 12, fontWeight: 700, marginBottom: 4 };
 const errorStyle = { background: "#fff1ef", color: "#8c2f24", borderRadius: 12, padding: 14, marginBottom: 14 };
 const messageStyle = { background: "#edf7f0", color: "#185d3d", borderRadius: 12, padding: 14, marginBottom: 14 };
-const qaStyle = { background: "#fff8df", color: "#6d5313", borderRadius: 12, padding: 12, marginBottom: 14, fontSize: 14 };
+const qaStyle = { background: "#fff8df", color: "#6d5313", border: "1px solid #eedb9e", borderRadius: 16, padding: "16px 18px", marginBottom: 18 };
+const qaTitleStyle = { margin: "4px 0 8px", fontSize: 22 };
+const qaCopyStyle = { margin: "5px 0", lineHeight: 1.45, fontSize: 14 };
+const planStateStyle = { minHeight: 48, margin: 0, borderRadius: 12, background: "#edf3f0", color: "#405c52", display: "grid", placeItems: "center", textAlign: "center", padding: "0 12px", fontSize: 14, fontWeight: 750 };
 const includedStyle = { marginTop: 22, border: "1px solid #d7e3de", borderRadius: 18, background: "#f7fbf8", padding: 22 };
 const includedTitleStyle = { margin: "4px 0 6px", fontSize: 24 };
 const featureGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: "10px 18px", listStyle: "none", margin: "18px 0 0", padding: 0 };

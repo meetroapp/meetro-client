@@ -42,19 +42,19 @@ function resolveUsedSeats(state = {}, subscription = {}) {
 }
 
 export function getBusinessPlanPresentation(state = {}) {
-  if (state?.qaAccess) {
+  const subscription = state?.subscription;
+  if (state?.qaAccess && !subscription) {
     return Object.freeze({
       kind: "qa",
       eyebrow: "Business Plan",
       planName: "Staging QA Access",
-      statusLabel: "Full access",
-      seatLabel: "Server-controlled staging access",
-      billingLabel: "No Apple or Stripe subscription record was created.",
+      statusLabel: "Testing access",
+      seatLabel: "This staging-only access cannot activate in production.",
+      billingLabel: "No Apple or Stripe subscription is active.",
       manageLabel: "Plan details",
     });
   }
 
-  const subscription = state?.subscription;
   if (!subscription) {
     return Object.freeze({
       kind: state?.applicable === true ? "required" : "unavailable",

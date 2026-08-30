@@ -10,15 +10,16 @@ const registry = fs.readFileSync(new URL("../src/utils/businessToolsRegistry.js"
 const api = fs.readFileSync(new URL("../src/utils/subscriptionApi.js", import.meta.url), "utf8");
 const login = fs.readFileSync(new URL("../src/pages/Login.jsx", import.meta.url), "utf8");
 const contractorProfile = fs.readFileSync(new URL("../src/pages/ContractorProfile.jsx", import.meta.url), "utf8");
+const planPresentation = fs.readFileSync(new URL("../src/utils/subscriptionPlanPresentation.js", import.meta.url), "utf8");
 
 test("professional subscription screen exposes the three approved paid plans", () => {
   assert.match(page, /Starter/);
   assert.match(page, /Growth/);
   assert.match(page, /Professional/);
   assert.match(page, /Up to \{plan\.seatLimit\} professional users/);
-  assert.match(page, /14 days free/);
+  assert.match(planPresentation, /14 days free/);
   assert.match(page, /amountMinor \/ 100/);
-  assert.match(page, /Start 14-Day Free Trial/);
+  assert.match(planPresentation, /Start 14-Day Free Trial/);
   assert.match(page, /Free for 14 days, then \$\{displayPrice\}\/month\. Cancel anytime\./);
   assert.doesNotMatch(page, /annual|per-lead|premium AI|priority leads/i);
 });
@@ -40,10 +41,10 @@ test("all paid plans share the complete Meetro Business platform", () => {
 });
 
 test("trial promise requires provider eligibility and introductory offer", () => {
-  assert.match(page, /storeProduct\?\.trialEligible === true/);
-  assert.match(page, /Boolean\(storeProduct\?\.introductoryOffer\)/);
-  assert.match(page, /Trial eligibility checked by Apple/);
-  assert.doesNotMatch(page, /trialEligible\s*=\s*true/);
+  assert.match(planPresentation, /storeProduct\?\.trialEligible === true/);
+  assert.match(planPresentation, /Boolean\(storeProduct\?\.introductoryOffer\)/);
+  assert.match(planPresentation, /Trial eligibility determined by \$\{providerName\}/);
+  assert.doesNotMatch(page + planPresentation, /trialEligible\s*=\s*true/);
 });
 
 test("purchase only unlocks after server verification", () => {
@@ -74,14 +75,15 @@ test("web purchase uses server-created Stripe Checkout while iOS uses StoreKit",
 
 test("provider redirect never sets entitlement and Stripe trial remains provider governed", () => {
   assert.match(page, /window\.location\.assign\(checkout\.url\)/);
-  assert.match(page, /Stripe governs trial dates and billing status\. Access starts only after server verification/);
+  assert.match(planPresentation, /governs trial dates and billing status\. Access starts only after server verification/);
   assert.doesNotMatch(page + api, /setState\([^)]*entitled:\s*true|localStorage.*subscri/i);
 });
 
 test("one provider entitlement prevents a second platform purchase", () => {
-  assert.match(page, /purchaseReady = providerReady && !state\?\.entitled && !state\?\.qaAccess/);
+  assert.match(planPresentation, /if \(subscription \|\| entitled\)/);
   assert.match(page, /subscription\?\.provider !== "STRIPE"/);
-  assert.match(page, /Current access already active/);
+  assert.doesNotMatch(page, /Current access already active/);
+  assert.match(planPresentation, /subscription\?\.plan === planCode \? "Current plan" : "Plan comparison"/);
 });
 
 test("Apple-on-web and Stripe-on-iPhone use the same platform-neutral entitlement gate", () => {
