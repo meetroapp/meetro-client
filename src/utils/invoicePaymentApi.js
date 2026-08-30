@@ -78,6 +78,30 @@ function validateJob(value) {
     : null;
 }
 
+function validateCustomerParty(value) {
+  if (value == null) return null;
+  const allowed = [
+    "businessContactId", "customerRelationshipId", "contractorProfileId",
+    "jobId", "linkedAt",
+  ];
+  if (!plain(value) || Object.keys(value).some((key) => !allowed.includes(key))) return false;
+  const normalized = {
+    businessContactId: uuid(value.businessContactId),
+    customerRelationshipId: uuid(value.customerRelationshipId),
+  };
+  if (value.contractorProfileId != null) {
+    normalized.contractorProfileId = integer(value.contractorProfileId);
+  }
+  if (value.jobId != null) normalized.jobId = uuid(value.jobId);
+  if (value.linkedAt != null) normalized.linkedAt = timestamp(value.linkedAt);
+  return normalized.businessContactId && normalized.customerRelationshipId &&
+    (value.contractorProfileId == null || normalized.contractorProfileId) &&
+    (value.jobId == null || normalized.jobId) &&
+    (value.linkedAt == null || normalized.linkedAt)
+    ? normalized
+    : false;
+}
+
 function validateLine(value, audience) {
   const approved = value?.type === "approvedWork";
   const customerKeys = ["sequence", "type", "description", "quantity", "unitAmountMinor", "lineTotalMinor"];
@@ -150,7 +174,9 @@ export function validateInvoice(value, { audience, invoiceId = "", jobId = "" } 
     "paidMinor", "balanceMinor", "customerNotes", "terms", "issuedAt", "payments",
     "actions",
   ];
-  const keys = audience === "professional" ? [...baseKeys, "currentVersion"] : baseKeys;
+  const keys = audience === "professional"
+    ? [...baseKeys, "currentVersion", "customerParty"]
+    : baseKeys;
   if (!exact(value, keys) || !Array.isArray(value.lineItems) || value.lineItems.length > 500 ||
       !Array.isArray(value.payments) || value.payments.length > 500) return null;
   const lines = value.lineItems.map((line) => validateLine(line, audience));
@@ -187,7 +213,10 @@ export function validateInvoice(value, { audience, invoiceId = "", jobId = "" } 
       ? Object.fromEntries(expectedActions.map((key) => [key, value.actions[key]]))
       : null,
   };
-  if (audience === "professional") normalized.currentVersion = integer(value.currentVersion);
+  if (audience === "professional") {
+    normalized.currentVersion = integer(value.currentVersion);
+    normalized.customerParty = validateCustomerParty(value.customerParty);
+  }
   const exactInvoiceId = uuid(invoiceId);
   const exactJobId = uuid(jobId);
   if (
@@ -202,7 +231,9 @@ export function validateInvoice(value, { audience, invoiceId = "", jobId = "" } 
     !normalized.actions || (value.customerNotes != null && !normalized.customerNotes) ||
     (value.terms != null && !normalized.terms) ||
     (value.issuedAt != null && !normalized.issuedAt) ||
-    (audience === "professional" && !normalized.currentVersion) ||
+    (audience === "professional" && (
+      !normalized.currentVersion || normalized.customerParty === false
+    )) ||
     (exactInvoiceId && normalized.invoiceId !== exactInvoiceId) ||
     (exactJobId && normalized.jobId !== exactJobId)
   ) return null;

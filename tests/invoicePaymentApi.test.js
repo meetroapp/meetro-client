@@ -60,7 +60,7 @@ function invoice(audience = "professional", overrides = {}) {
     actions: audience === "professional"
       ? { canIssue: false, canRecordPayment: true, canShareExternal: true }
       : { canReview: true, canPayOnline: false },
-    ...(audience === "professional" ? { currentVersion: 2 } : {}),
+    ...(audience === "professional" ? { currentVersion: 2, customerParty: null } : {}),
     ...overrides,
   };
   return value;
@@ -68,6 +68,21 @@ function invoice(audience = "professional", overrides = {}) {
 
 test("strict Invoice validators separate professional command state from customer truth", () => {
   assert.ok(validateInvoice(invoice("professional"), { audience: "professional", invoiceId: INVOICE_ID }));
+  const durableParty = validateInvoice(invoice("professional", {
+    customerParty: {
+      contractorProfileId: 10,
+      businessContactId: "77777777-7777-4777-8777-777777777777",
+      customerRelationshipId: "88888888-8888-4888-8888-888888888888",
+    },
+  }), { audience: "professional", invoiceId: INVOICE_ID });
+  assert.deepEqual(durableParty.customerParty, {
+    contractorProfileId: 10,
+    businessContactId: "77777777-7777-4777-8777-777777777777",
+    customerRelationshipId: "88888888-8888-4888-8888-888888888888",
+  });
+  assert.equal(validateInvoice(invoice("professional", {
+    customerParty: { businessContactId: "not-authority" },
+  }), { audience: "professional" }), null);
   const customer = validateInvoice(invoice("customer"), { audience: "customer", jobId: JOB_ID });
   assert.ok(customer);
   assert.equal("currentVersion" in customer, false);
