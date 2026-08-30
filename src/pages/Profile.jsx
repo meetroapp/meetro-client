@@ -45,6 +45,7 @@ import {
   updatePersonalProfile,
 } from "../utils/personalProfile";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import { fetchMyTeamAuthority } from "../utils/teamApi";
 import {
   createTemporaryProfilePhotoPreview,
   isPersonalProfilePhotoUploadEnabled,
@@ -56,6 +57,24 @@ import {
   uploadBusinessProfileLogo,
   validateBusinessLogoFile,
 } from "../utils/businessProfileLogo";
+
+function hasTeamMembersReadAuthority(membership = {}) {
+  if (!membership || String(membership.status || "").toUpperCase() !== "ACTIVE") {
+    return false;
+  }
+
+  return (
+    membership.role === "OWNER" ||
+    (Array.isArray(membership.permissions) && membership.permissions.includes("TEAM_VIEW"))
+  );
+}
+
+function findTeamMembersAuthorityMembership(authority = {}) {
+  const memberships = Array.isArray(authority?.memberships)
+    ? authority.memberships
+    : [];
+  return memberships.find(hasTeamMembersReadAuthority) || null;
+}
 
 function Profile({ setPage, currentPage, embedded = false }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
@@ -84,6 +103,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const [assistantVoicePreference, setAssistantVoicePreference] = useState(
     localStorage.getItem("meetroAssistantVoicePreference") || "auto"
   );
+  const [teamMembersMembership, setTeamMembersMembership] = useState(null);
   const [relationshipInsightsEnabled, setRelationshipInsightsEnabledState] = useState(() =>
     areRelationshipInsightsEnabled({ role: localStorage.getItem("activeAccountMode") || "personal" })
   );
@@ -148,6 +168,35 @@ function Profile({ setPage, currentPage, embedded = false }) {
       });
   }, [activeMode, setPage]);
 
+  useEffect(() => {
+    if (!isBusinessMode) {
+      setTeamMembersMembership(null);
+      return;
+    }
+
+    let cancelled = false;
+    const refreshTeamMembersAuthority = () => {
+      fetchMyTeamAuthority(setPage)
+        .then((authority) => {
+          if (cancelled) return;
+          setTeamMembersMembership(findTeamMembersAuthorityMembership(authority));
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setTeamMembersMembership(null);
+          }
+        });
+    };
+
+    refreshTeamMembersAuthority();
+    window.addEventListener("meetroTeamAuthorityChanged", refreshTeamMembersAuthority);
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener("meetroTeamAuthorityChanged", refreshTeamMembersAuthority);
+    };
+  }, [isBusinessMode, setPage]);
+
   const businessName = localStorage.getItem("businessName") || "";
   const businessCategory = localStorage.getItem("businessCategory") || "";
   const userName = localStorage.getItem("userName") || "";
@@ -164,6 +213,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
     : hasBusinessAccess
     ? t("available")
     : t("inactive");
+  const canShowTeamMembers = Boolean(teamMembersMembership);
 
   useEffect(() => {
     const handleLanguageChange = () => {
@@ -1435,6 +1485,15 @@ function Profile({ setPage, currentPage, embedded = false }) {
           value={t("open")}
           onClick={() => setPage("meetroMoments")}
         />
+
+        {canShowTeamMembers && (
+          <SettingRow
+            icon="businessTools"
+            label={t("teamMembers")}
+            value={t("open")}
+            onClick={() => setPage("teamMembers")}
+          />
+        )}
 
         <div style={settingInlineBlock}>
           <div style={settingInlineHeader}>
