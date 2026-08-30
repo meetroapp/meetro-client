@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import MeetroIcon from "../components/MeetroIcon";
+import BusinessPlanStatusCard from "../components/BusinessPlanStatusCard";
 import { authFetch } from "../utils/authFetch";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { getLanguage, t } from "../utils/language";
@@ -536,10 +537,6 @@ function BusinessDashboard({ setPage }) {
       openWorkCenter: "Continue Work",
       newLeads: "Matching Requests",
       viewAllLeads: "Review leads",
-      upgradeTitle: "Founding professional access",
-      upgradeText:
-        "Business profile and operational tools remain available while Meetro prepares authorized opportunity sharing.",
-      upgrade: "Upgrade to Meetro Pro",
     },
     es: {
       dashboard: "Panel de Negocio",
@@ -597,10 +594,6 @@ function BusinessDashboard({ setPage }) {
       openWorkCenter: "Continuar trabajo",
       newLeads: "Solicitudes coincidentes",
       viewAllLeads: "Revisar oportunidades",
-      upgradeTitle: "Acceso profesional fundador",
-      upgradeText:
-        "El perfil y las herramientas operativas permanecen disponibles mientras Meetro prepara el intercambio autorizado de oportunidades.",
-      upgrade: "Actualizar a Meetro Pro",
     },
     fr: {
       dashboard: "Tableau de bord",
@@ -658,10 +651,6 @@ function BusinessDashboard({ setPage }) {
       openWorkCenter: "Continuer le travail",
       newLeads: "Demandes correspondantes",
       viewAllLeads: "Examiner les prospects",
-      upgradeTitle: "Accès professionnel fondateur",
-      upgradeText:
-        "Le profil et les outils opérationnels restent disponibles pendant que Meetro prépare le partage autorisé des opportunités.",
-      upgrade: "Passer à Meetro Pro",
     },
     "pt-BR": {
       dashboard: "Painel do negócio",
@@ -719,10 +708,6 @@ function BusinessDashboard({ setPage }) {
       openWorkCenter: "Continuar trabalho",
       newLeads: "Solicitações correspondentes",
       viewAllLeads: "Revisar oportunidades",
-      upgradeTitle: "Acesso profissional fundador",
-      upgradeText:
-        "O perfil e as ferramentas operacionais permanecem disponíveis enquanto o Meetro prepara o compartilhamento autorizado de oportunidades.",
-      upgrade: "Atualizar para Meetro Pro",
     },
   };
   const text = dashboardText[language] || dashboardText.en;
@@ -988,7 +973,7 @@ function BusinessDashboard({ setPage }) {
             }
 
             .business-dashboard-tools-section > button,
-            .business-dashboard-upgrade-card {
+            .business-dashboard-plan-card {
               min-height: 100%;
             }
 
@@ -1366,13 +1351,10 @@ function BusinessDashboard({ setPage }) {
             </button>
           </section>
 
-          <section className="business-dashboard-upgrade-card" style={upgradeCard}>
-            <div>
-              <span style={upgradeBadge}>Founding Pro</span>
-              <h2 style={upgradeTitle}>{text.upgradeTitle}</h2>
-              <p style={upgradeText}>{text.upgradeText}</p>
-            </div>
-          </section>
+          <BusinessPlanStatusCard
+            setPage={setPage}
+            className="business-dashboard-plan-card"
+          />
         </div>
       </div>
 
@@ -2375,39 +2357,6 @@ const leadsCard = {
   marginBottom: "16px",
   border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
-};
-
-const upgradeCard = {
-  background:
-    "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
-  color: "white",
-  borderRadius: "26px",
-  padding: "20px",
-  display: "flex",
-  gap: "14px",
-  alignItems: "center",
-  boxShadow: "0 18px 40px rgba(49,35,20,0.18)",
-};
-
-const upgradeBadge = {
-  background: "rgba(255,255,255,0.18)",
-  padding: "6px 10px",
-  borderRadius: "999px",
-  fontSize: "11px",
-  fontWeight: "900",
-  textTransform: "uppercase",
-};
-
-const upgradeTitle = {
-  margin: "10px 0 6px",
-  fontSize: "20px",
-};
-
-const upgradeText = {
-  margin: 0,
-  lineHeight: 1.45,
-  opacity: 0.92,
-  fontSize: "14px",
 };
 
 export default BusinessDashboard;

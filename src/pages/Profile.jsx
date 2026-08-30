@@ -3,6 +3,7 @@ import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
 import PersonalAddressManager from "../components/PersonalAddressManager";
 import AccountSecurityWorkspace from "../components/AccountSecurityWorkspace";
+import BusinessPlanStatusCard from "../components/BusinessPlanStatusCard";
 import {
   SUPPORTED_LANGUAGES,
   getLanguage,
@@ -1047,7 +1048,13 @@ function Profile({ setPage, currentPage, embedded = false }) {
             </div>
 
             {!hasBusinessAccess && (
-              <p style={helperText}>{t("createBusinessProfileFirst")}</p>
+              <button
+                type="button"
+                style={businessActivationButton}
+                onClick={() => setPage("contractorProfile")}
+              >
+                Set Up Business Account
+              </button>
             )}
           </div>
 
@@ -1595,24 +1602,10 @@ function Profile({ setPage, currentPage, embedded = false }) {
         />
       </SettingsSection>
 
-      <div className="meetro-visual-surface" style={compactProCard}>
-        <div>
-          <span style={compactProBadge}>{t("meetroPro")}</span>
-          <h2 style={compactProTitle}>{t("growWithMeetro")}</h2>
-          <p style={compactProText}>{t("meetroProSettingsText")}</p>
-        </div>
-
-        <button
-          type="button"
-          className="meetro-visual-primary-button"
-          style={compactProButton}
-          onClick={() => setProfileNotice(t("meetroProSettingsText"))}
-        >
-          {t("upgradeToMeetroPro")}
-        </button>
-
-        {profileNotice && <p style={profileNoticeText}>{profileNotice}</p>}
-      </div>
+      <BusinessPlanStatusCard
+        setPage={setPage}
+        className="profile-business-plan-status"
+      />
 
       <button onClick={handleLogout} className="meetro-visual-primary-button" style={logoutButton}>
         {t("logout")}
@@ -2891,30 +2884,6 @@ const settingValue = {
   whiteSpace: "nowrap",
 };
 
-const lockedProBox = {
-  background: "var(--meetro-surface-warm)",
-  borderRadius: "20px",
-  padding: "22px",
-  textAlign: "center",
-};
-
-const lockedIcon = {
-  fontSize: "46px",
-  marginBottom: "12px",
-};
-
-const lockedTitle = {
-  margin: "0 0 10px",
-  fontSize: "22px",
-  color: "var(--meetro-color-ink)",
-};
-
-const lockedText = {
-  margin: "0 0 18px",
-  color: "var(--meetro-color-muted)",
-  lineHeight: 1.6,
-};
-
 const primaryButton = {
   border: "none",
   background: "var(--meetro-gradient-community-action)",
@@ -2925,87 +2894,15 @@ const primaryButton = {
   cursor: "pointer",
 };
 
-const proCard = {
-  background: "linear-gradient(135deg, var(--meetro-color-forest, #1f4d34) 0%, var(--meetro-color-forest, #1f4d34) 100%)",
-  color: "white",
-  borderRadius: "28px",
-  padding: "24px",
-  marginBottom: "16px",
-  boxShadow: "0 18px 40px rgba(31,77,52,0.24)",
-};
-
-const compactProCard = {
-  background: "var(--meetro-surface-paper)",
-  border: "1px solid var(--meetro-color-line)",
-  borderRadius: "22px",
-  padding: "16px",
-  marginBottom: "14px",
-  boxShadow: "var(--meetro-shadow-soft)",
-};
-
-const compactProBadge = {
-  display: "inline-block",
-  background: "var(--meetro-surface-sage)",
-  color: "var(--meetro-color-forest)",
-  padding: "6px 10px",
-  borderRadius: "999px",
-  fontSize: "12px",
-  fontWeight: "900",
-};
-
-const compactProTitle = {
-  margin: "10px 0 6px",
-  color: "var(--meetro-color-ink)",
-  fontSize: "18px",
-  fontWeight: "950",
-};
-
-const compactProText = {
-  margin: 0,
-  color: "var(--meetro-color-muted)",
-  lineHeight: 1.45,
-  fontSize: "14px",
-  fontWeight: "700",
-};
-
-const compactProButton = {
-  border: "none",
-  background: "var(--meetro-gradient-community-action)",
-  color: "white",
-  padding: "12px 14px",
-  borderRadius: "16px",
-  fontWeight: "900",
-  cursor: "pointer",
-  marginTop: "12px",
-};
-
-const proBadge = {
-  background: "rgba(255,255,255,0.18)",
-  padding: "7px 12px",
-  borderRadius: "999px",
-  fontSize: "12px",
-  fontWeight: "bold",
-};
-
-const proTitle = {
-  margin: "18px 0 8px",
-  fontSize: "26px",
-};
-
-const proText = {
-  lineHeight: 1.6,
-  opacity: 0.92,
-};
-
-const proButton = {
-  border: "none",
-  background: "white",
+const businessActivationButton = {
+  border: "1px solid var(--meetro-color-forest, #1f4d34)",
+  background: "transparent",
   color: "var(--meetro-color-forest, #1f4d34)",
-  padding: "15px 18px",
-  borderRadius: "18px",
-  fontWeight: "bold",
+  padding: "10px 13px",
+  borderRadius: "13px",
+  fontWeight: "850",
   cursor: "pointer",
-  marginTop: "14px",
+  marginTop: "10px",
 };
 
 const statusCard = {
