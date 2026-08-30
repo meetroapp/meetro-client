@@ -131,6 +131,17 @@ function Profile({ setPage, currentPage, embedded = false }) {
     : personalProfilePhotoEnabled;
   const mediaUploadDeferred = !profilePhotoUploadEnabled;
   const mediaDeferredCopy = getMediaDeferredCopy(language);
+  const hasBusinessAccess =
+    hasBusinessProfileOwnership(user || {}) ||
+    hasBusinessProfileOwnership(businessProfile || {}) ||
+    isProfessionalSession();
+
+  const isBusinessMode = activeMode === "business" && hasBusinessAccess;
+  const businessModeStatusLabel = isBusinessMode
+    ? t("active")
+    : hasBusinessAccess
+    ? t("available")
+    : t("inactive");
 
   useEffect(() => {
     if (activeMode === "business") {
@@ -202,17 +213,6 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const userName = localStorage.getItem("userName") || "";
   const userEmail = localStorage.getItem("userEmail") || "";
 
-  const hasBusinessAccess =
-    hasBusinessProfileOwnership(user || {}) ||
-    hasBusinessProfileOwnership(businessProfile || {}) ||
-    isProfessionalSession();
-
-  const isBusinessMode = activeMode === "business" && hasBusinessAccess;
-  const businessModeStatusLabel = isBusinessMode
-    ? t("active")
-    : hasBusinessAccess
-    ? t("available")
-    : t("inactive");
   const canShowTeamMembers = Boolean(teamMembersMembership);
 
   useEffect(() => {
