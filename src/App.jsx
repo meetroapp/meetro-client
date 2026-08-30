@@ -84,6 +84,7 @@ import CustomerRelationshipsCenter from "./pages/CustomerRelationshipsCenter";
 import HiringCenter from "./pages/HiringCenter";
 import TeamMembers from "./pages/TeamMembers";
 import EmployeeJobs from "./pages/EmployeeJobs";
+import TeamOperations from "./pages/TeamOperations";
 import AssetCenter from "./pages/AssetCenter";
 import ServiceTypesEvaluations from "./pages/ServiceTypesEvaluations";
 import MaterialsLibrary from "./pages/MaterialsLibrary";
@@ -1254,6 +1255,10 @@ if (page === "teamMembers") {
 
 if (page === "employeeJobs") {
   return withStartupChrome(<EmployeeJobs setPage={setPage} />, updateNotice);
+}
+
+if (page === "teamOperations") {
+  return withStartupChrome(<TeamOperations setPage={setPage} />, updateNotice);
 }
 
 if (page === "assetCenter") {

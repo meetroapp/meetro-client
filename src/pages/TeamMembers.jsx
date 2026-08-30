@@ -71,6 +71,17 @@ function TeamMembers({ setPage }) {
     );
   }, [authority]);
 
+  const operationsMembership = useMemo(() => {
+    return (
+      (authority?.memberships || []).find(
+        (item) =>
+          item.status === "ACTIVE" &&
+          (item.permissions?.includes("TIME_TEAM_VIEW") ||
+            item.permissions?.includes("TIME_SELF_VIEW"))
+      ) || null
+    );
+  }, [authority]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -280,6 +291,34 @@ function TeamMembers({ setPage }) {
             {["OWNER", "MANAGER"].includes(workMembership.role)
               ? "Manage Job Assignments"
               : "Open My Jobs"}
+          </button>
+        </section>
+      )}
+
+      {!loading && operationsMembership && (
+        <section style={workAccessStyle} aria-label="Team Today and Timesheets">
+          <div>
+            <strong>
+              {operationsMembership.permissions?.includes("TEAM_TODAY_VIEW")
+                ? "Team Today & Timesheets"
+                : "My Timesheets"}
+            </strong>
+            <p style={workAccessCopyStyle}>
+              Review canonical active timers and recorded time using the Business timezone.
+            </p>
+          </div>
+          <button
+            type="button"
+            style={primaryButton}
+            onClick={() =>
+              setPage(
+                `teamOperations?businessId=${encodeURIComponent(
+                  operationsMembership.businessId
+                )}&view=${operationsMembership.permissions?.includes("TEAM_TODAY_VIEW") ? "today" : "timesheets"}`
+              )
+            }
+          >
+            Open Team Time
           </button>
         </section>
       )}
