@@ -7,6 +7,7 @@ import {
   deactivateBusinessTeamMember,
   fetchBusinessTeam,
   fetchMyTeamAuthority,
+  resendBusinessTeamInvitation,
   revokeBusinessTeamInvitation,
   updateBusinessTeamRole,
 } from "../utils/teamApi";
@@ -16,6 +17,128 @@ const ROLE_OPTIONS = Object.freeze([
   { value: "BOOKKEEPER_FINANCE", label: "Bookkeeper / Finance" },
   { value: "FIELD_EMPLOYEE", label: "Field Employee" },
 ]);
+
+const INVITATION_HASH_PATH = "/login#teamMembers?invitation=";
+const INVITATION_NOTES = Object.freeze({
+  genericCreate:
+    "Invitation created. Its pending state now reserves one professional seat.",
+  genericResend: "Invitation resent.",
+  copySuccess: "Invitation link copied.",
+  copyFailure: "Unable to copy automatically.\nSelect and copy the invitation link below.",
+  noLink: "No invitation link is available for this Team invitation.",
+  emailSent:
+    "Invitation sent to:\n{email}\n\nPending · Seat reserved",
+  emailFailed:
+    "Invitation created, but email could not be delivered.\n\nPending · Seat reserved",
+  resendEmailFailed:
+    "Invitation was not resent, but the original invitation remains pending.",
+  deliverySuccess: "Email: Sent",
+  deliveryFailed: "Email: Delivery failed",
+});
+
+function toText(value) {
+  return String(value || "").trim();
+}
+
+function firstTruthyText(...values) {
+  for (const value of values) {
+    const text = toText(value);
+    if (text) return text;
+  }
+  return "";
+}
+
+function resolveClientBaseUrl() {
+  const env = import.meta.env || {};
+  return (
+    firstTruthyText(
+      env.VITE_CLIENT_BASE_URL,
+      env.VITE_CLIENT_ORIGIN,
+      env.VITE_WEB_ORIGIN,
+      env.VITE_APP_ORIGIN,
+      env.VITE_APP_BASE_URL
+    ).replace(/\/+$/, "") ||
+    toText(window.location.origin).replace(/\/+$/, "")
+  );
+}
+
+function isHttpUrl(value) {
+  return /^https?:\/\//i.test(toText(value));
+}
+
+function normalizeInvitationDeliveryState(invitation = {}) {
+  const raw = String(
+    firstTruthyText(
+      invitation.emailDeliveryStatus,
+      invitation.deliveryStatus,
+      invitation.delivery?.status,
+      invitation.delivery?.email?.status,
+      invitation.emailDelivery?.status,
+      invitation.emailDelivery?.delivered,
+      invitation.emailDelivery,
+      invitation.emailSent,
+      invitation.deliveryStatusCode
+    ) || ""
+  ).toLowerCase();
+  if (raw === "true") return "sent";
+  if (["sent", "delivered", "delivered_to_recipient", "queued", "success", "ok"].includes(raw)) return "sent";
+  if (raw === "false") return "failed";
+  if (
+    ["failed", "blocked", "error", "undelivered", "delivery_failed", "not_delivered", "reject", "rejects", "bounced", "bounced_permanent"].includes(raw)
+  ) return "failed";
+  return "";
+}
+
+function resolveInvitationLink(invitation = {}, fallbackBaseUrl = "") {
+  const baseUrl = toText(fallbackBaseUrl) || resolveClientBaseUrl();
+  const explicitLink = firstTruthyText(
+    invitation.joinUrl,
+    invitation.inviteUrl,
+    invitation.link,
+    invitation.url,
+    invitation.invitationUrl,
+    invitation.webUrl,
+    invitation.inviteLink
+  );
+  if (explicitLink && isHttpUrl(explicitLink)) return explicitLink;
+  if (explicitLink) {
+    const cleanExplicit = explicitLink.startsWith("/")
+      ? explicitLink
+      : `/${explicitLink}`;
+    return `${baseUrl}${cleanExplicit}`;
+  }
+  const token = firstTruthyText(
+    invitation.token,
+    invitation.invitationToken
+  );
+  if (!token || !baseUrl) return "";
+  return `${baseUrl}${INVITATION_HASH_PATH}${encodeURIComponent(token)}`;
+}
+
+function deliveryLabel(invitation = {}) {
+  const state = normalizeInvitationDeliveryState(invitation);
+  if (state === "sent") return INVITATION_NOTES.deliverySuccess;
+  if (state === "failed") return INVITATION_NOTES.deliveryFailed;
+  return "";
+}
+
+function resolveInvitationNotice(invitation, fallbackEmail = "", mode = "create") {
+  const state = normalizeInvitationDeliveryState(invitation);
+  const email = toText(fallbackEmail || invitation?.email);
+  if (state === "sent") {
+    return email
+      ? INVITATION_NOTES.emailSent.replace("{email}", email)
+      : mode === "resend"
+      ? `${INVITATION_NOTES.deliverySuccess}\n\n${INVITATION_NOTES.genericResend}`
+      : INVITATION_NOTES.genericCreate + "\n" + INVITATION_NOTES.deliverySuccess;
+  }
+  if (state === "failed") {
+    return mode === "resend"
+      ? INVITATION_NOTES.resendEmailFailed
+      : INVITATION_NOTES.emailFailed;
+  }
+  return mode === "resend" ? INVITATION_NOTES.genericResend : INVITATION_NOTES.genericCreate;
+}
 
 function invitationTokenFromLocation() {
   try {
@@ -45,6 +168,7 @@ function TeamMembers({ setPage }) {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [invitationLink, setInvitationLink] = useState("");
+  const [manualCopyLink, setManualCopyLink] = useState("");
   const [inviteDraft, setInviteDraft] = useState({
     displayName: "",
     email: "",
@@ -141,15 +265,10 @@ function TeamMembers({ setPage }) {
         },
         setPage
       );
-      const link = `${
-        window.location.origin
-      }/login#teamMembers?invitation=${encodeURIComponent(
-        result.invitation.token
-      )}`;
-      setInvitationLink(link);
-      setNotice(
-        "Invitation created. Its pending state now reserves one professional seat."
-      );
+      const invitation = result?.invitation || result || {};
+      setInvitationLink(resolveInvitationLink(invitation, resolveClientBaseUrl()));
+      setManualCopyLink("");
+      setNotice(resolveInvitationNotice(invitation, inviteDraft.email));
       setInviteDraft({ displayName: "", email: "", role: "FIELD_EMPLOYEE" });
       await load();
     } catch (inviteError) {
@@ -159,11 +278,49 @@ function TeamMembers({ setPage }) {
     }
   }
 
-  async function copyInvitationLink() {
-    await navigator.clipboard.writeText(invitationLink);
-    setNotice(
-      "Invitation link copied. Share it only with the exact invited person."
-    );
+  async function copyInvitationLink(link = "") {
+    const target = toText(link);
+    if (!target) {
+      setNotice(INVITATION_NOTES.noLink);
+      return;
+    }
+    try {
+      if (globalThis.navigator?.clipboard?.writeText) {
+        await globalThis.navigator.clipboard.writeText(target);
+        setManualCopyLink("");
+        setNotice(INVITATION_NOTES.copySuccess);
+        return;
+      }
+    } catch {
+      // no-op: handled in fallback path
+    }
+    setManualCopyLink(target);
+    setNotice(INVITATION_NOTES.copyFailure);
+  }
+
+  async function resendInvitation(invitationId, fallbackEmail = "") {
+    if (!selectedMembership) return;
+    setWorking(true);
+    setError("");
+    setNotice("");
+    try {
+      const result = await resendBusinessTeamInvitation(
+        invitationId,
+        selectedMembership.businessId,
+        setPage
+      );
+      const invitation = result?.invitation || result || {};
+      setNotice(resolveInvitationNotice(invitation, fallbackEmail, "resend"));
+      setInvitationLink(
+        resolveInvitationLink(invitation, resolveClientBaseUrl())
+      );
+      setManualCopyLink("");
+      await load();
+    } catch (resendError) {
+      setError(resendError.message || "The invitation could not be resent.");
+    } finally {
+      setWorking(false);
+    }
   }
 
   async function revokeInvitation(invitationId) {
@@ -238,6 +395,9 @@ function TeamMembers({ setPage }) {
     team?.permissions || selectedMembership?.permissions || []
   );
   const seatAuthority = team?.seatAuthority;
+  const canManageInvitations =
+    permissions.has("TEAM_REVOKE_INVITATION") ||
+    permissions.has("TEAM_INVITE");
 
   return (
     <div
@@ -445,19 +605,36 @@ function TeamMembers({ setPage }) {
                   style={primaryButton}
                   disabled={working || (seatAuthority?.seatsAvailable ?? 0) < 1}
                 >
-                  Create Invitation
+                  Send Invitation
                 </button>
               </form>
               {invitationLink && (
                 <div style={linkBox}>
-                  <code style={linkCode}>{invitationLink}</code>
+                  <input
+                    style={linkInput}
+                    value={invitationLink}
+                    readOnly
+                  />
                   <button
                     type="button"
                     style={secondaryButton}
-                    onClick={copyInvitationLink}
+                    onClick={() => copyInvitationLink(invitationLink)}
                   >
                     Copy link
                   </button>
+                </div>
+              )}
+              {manualCopyLink && (
+                <div style={linkBox}>
+                  <p style={copyFallbackText}>
+                    Invitation link:
+                  </p>
+                  <input
+                    style={linkInput}
+                    value={manualCopyLink}
+                    readOnly
+                    onFocus={(event) => event.currentTarget.select()}
+                  />
                 </div>
               )}
             </section>
@@ -534,19 +711,62 @@ function TeamMembers({ setPage }) {
                       <p style={rowMeta}>
                         {invitation.email} · {roleLabel(invitation.role)} ·{" "}
                         {statusLabel(invitation.status)}
+                        {deliveryLabel(invitation) && (
+                          <> · {deliveryLabel(invitation)}</>
+                        )}
                       </p>
                     </div>
-                    {invitation.status === "PENDING" &&
-                      permissions.has("TEAM_REVOKE_INVITATION") && (
-                        <button
-                          type="button"
-                          style={dangerButton}
-                          onClick={() => revokeInvitation(invitation.id)}
-                          disabled={working}
-                        >
-                          Revoke
-                        </button>
-                      )}
+                    <div style={rowActions}>
+                      {invitation.status === "PENDING" &&
+                        canManageInvitations && (
+                          <>
+                            <button
+                              type="button"
+                              style={secondaryButton}
+                              onClick={() =>
+                                resendInvitation(
+                                  invitation.id,
+                                  invitation.email
+                                )
+                              }
+                              disabled={working}
+                            >
+                              Resend invitation
+                            </button>
+                            {resolveInvitationLink(
+                              invitation,
+                              resolveClientBaseUrl()
+                            ) && (
+                              <button
+                                type="button"
+                                style={secondaryButton}
+                                onClick={() =>
+                                  copyInvitationLink(
+                                    resolveInvitationLink(
+                                      invitation,
+                                      resolveClientBaseUrl()
+                                    )
+                                  )
+                                }
+                                disabled={working}
+                              >
+                                Copy link
+                              </button>
+                            )}
+                          </>
+                        )}
+                      {invitation.status === "PENDING" &&
+                        canManageInvitations && (
+                          <button
+                            type="button"
+                            style={dangerButton}
+                            onClick={() => revokeInvitation(invitation.id)}
+                            disabled={working}
+                          >
+                            Revoke
+                          </button>
+                        )}
+                    </div>
                   </article>
                 ))}
               </div>
@@ -685,10 +905,19 @@ const linkBox = {
   alignItems: "center",
   flexWrap: "wrap",
 };
-const linkCode = {
+const linkInput = {
   flex: "1 1 300px",
   overflowWrap: "anywhere",
   color: "#234b32",
+  background: "#ecf4eb",
+  border: "1px solid #b9d3c0",
+  borderRadius: 10,
+  padding: "8px 10px",
+  minHeight: 38,
+};
+const copyFallbackText = {
+  ...copyStyle,
+  margin: 0,
 };
 const noticeStyle = {
   ...cardStyle,

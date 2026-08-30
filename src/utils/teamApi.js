@@ -38,6 +38,14 @@ export function createBusinessTeamInvitation(payload, setPage) {
   );
 }
 
+export function resendBusinessTeamInvitation(invitationId, businessId, setPage) {
+  return teamRequest(
+    `/team/invitations/${encodeURIComponent(invitationId)}/resend`,
+    jsonOptions("POST", { businessId }),
+    setPage
+  );
+}
+
 export function acceptBusinessTeamInvitation(token, setPage) {
   return teamRequest(
     "/team/invitations/accept",
