@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import { authFetch, clearMeetroSession } from "../utils/authFetch";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
 import {
   acceptBusinessTeamInvitation,
@@ -7,10 +8,13 @@ import {
   deactivateBusinessTeamMember,
   fetchBusinessTeam,
   fetchMyTeamAuthority,
+  inspectBusinessTeamInvitation,
   resendBusinessTeamInvitation,
   revokeBusinessTeamInvitation,
   updateBusinessTeamRole,
 } from "../utils/teamApi";
+import { resolvePrimaryTeamExperience } from "../utils/teamRoleExperience";
+import { getAuthenticatedIdentitySnapshot } from "../utils/session";
 
 const ROLE_OPTIONS = Object.freeze([
   { value: "MANAGER", label: "Manager" },
@@ -149,6 +153,10 @@ function invitationTokenFromLocation() {
   }
 }
 
+function normalizeIdentityEmail(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
 function roleLabel(role) {
   if (role === "OWNER") return "Owner";
   return ROLE_OPTIONS.find((option) => option.value === role)?.label || role;
@@ -169,6 +177,16 @@ function TeamMembers({ setPage }) {
   const [notice, setNotice] = useState("");
   const [invitationLink, setInvitationLink] = useState("");
   const [manualCopyLink, setManualCopyLink] = useState("");
+  const [inviteSendState, setInviteSendState] = useState("");
+  const [resendSendStateById, setResendSendStateById] = useState({});
+  const [invitationPreview, setInvitationPreview] = useState(null);
+  const [invitationPreviewLoading, setInvitationPreviewLoading] =
+    useState(false);
+  const [invitationPreviewError, setInvitationPreviewError] = useState("");
+  const [invitationSession, setInvitationSession] = useState({
+    status: "checking",
+    email: "",
+  });
   const [inviteDraft, setInviteDraft] = useState({
     displayName: "",
     email: "",
@@ -229,21 +247,133 @@ function TeamMembers({ setPage }) {
   }, [setPage]);
 
   useEffect(() => {
+    if (invitationToken) return undefined;
+
     const timer = window.setTimeout(() => load(), 0);
     return () => window.clearTimeout(timer);
-  }, [load]);
+  }, [invitationToken, load]);
+
+  useEffect(() => {
+    if (!invitationToken) return undefined;
+
+    let cancelled = false;
+
+    setInvitationPreviewLoading(true);
+    setInvitationPreviewError("");
+
+    inspectBusinessTeamInvitation(invitationToken)
+      .then((result) => {
+        if (cancelled) return;
+        setInvitationPreview(result?.invitation || null);
+      })
+      .catch((previewError) => {
+        if (cancelled) return;
+        setInvitationPreviewError(
+          previewError.message ||
+            "This Team invitation could not be loaded."
+        );
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setInvitationPreviewLoading(false);
+        }
+      });
+
+    const authenticatedIdentity = getAuthenticatedIdentitySnapshot();
+
+    if (authenticatedIdentity.status !== "authenticated") {
+      setInvitationSession({
+        status: "signed_out",
+        email: "",
+      });
+    } else {
+      setInvitationSession({
+        status: "checking",
+        email: "",
+      });
+
+      authFetch(
+        "/auth/me",
+        {
+          method: "GET",
+          skipAuthExpirationHandling: true,
+        },
+        setPage
+      )
+        .then(({ response, data }) => {
+          if (cancelled) return;
+
+          if (!response?.ok || !data?.user) {
+            setInvitationSession({
+              status: "signed_out",
+              email: "",
+            });
+            return;
+          }
+
+          setInvitationSession({
+            status: "authenticated",
+            email: String(data.user.email || "").trim(),
+          });
+        })
+        .catch(() => {
+          if (!cancelled) {
+            setInvitationSession({
+              status: "signed_out",
+              email: "",
+            });
+          }
+        });
+    }
+
+    return () => {
+      cancelled = true;
+    };
+  }, [invitationToken, setPage]);
+
+  function continueInvitationAuthentication(mode = "login", {
+    switchAccount = false,
+  } = {}) {
+    if (!invitationToken) return;
+
+    if (switchAccount) {
+      clearMeetroSession();
+    }
+
+    const query = new URLSearchParams({
+      teamInvitation: invitationToken,
+      mode,
+    });
+
+    window.location.hash = `login?${query.toString()}`;
+    window.location.reload();
+  }
 
   async function acceptInvitation() {
     if (!invitationToken) return;
     setWorking(true);
     setError("");
     try {
-      await acceptBusinessTeamInvitation(invitationToken, setPage);
-      setNotice(
-        "Invitation accepted. Your exact business Team membership is active."
+      const result = await acceptBusinessTeamInvitation(
+        invitationToken,
+        setPage
       );
-      await load();
-      window.dispatchEvent(new CustomEvent("meetroTeamAuthorityChanged"));
+
+      const membership = result?.membership || null;
+
+      window.dispatchEvent(
+        new CustomEvent("meetroTeamAuthorityChanged")
+      );
+
+      const experience = resolvePrimaryTeamExperience({
+        memberships: membership ? [membership] : [],
+      });
+
+      setNotice(
+        "Invitation accepted. Your Team membership is active."
+      );
+
+      setPage(experience.landingRoute || "home");
     } catch (acceptError) {
       setError(acceptError.message || "The invitation could not be accepted.");
     } finally {
@@ -254,6 +384,7 @@ function TeamMembers({ setPage }) {
   async function createInvitation(event) {
     event.preventDefault();
     if (!selectedMembership) return;
+    setInviteSendState("sending");
     setWorking(true);
     setError("");
     setNotice("");
@@ -266,12 +397,19 @@ function TeamMembers({ setPage }) {
         setPage
       );
       const invitation = result?.invitation || result || {};
+      const deliveryState = normalizeInvitationDeliveryState(invitation);
+
+      setInviteSendState(
+        deliveryState === "failed" ? "delivery_failed" : "sent"
+      );
+
       setInvitationLink(resolveInvitationLink(invitation, resolveClientBaseUrl()));
       setManualCopyLink("");
       setNotice(resolveInvitationNotice(invitation, inviteDraft.email));
       setInviteDraft({ displayName: "", email: "", role: "FIELD_EMPLOYEE" });
       await load();
     } catch (inviteError) {
+      setInviteSendState("failed");
       setError(inviteError.message || "The invitation could not be created.");
     } finally {
       setWorking(false);
@@ -300,6 +438,12 @@ function TeamMembers({ setPage }) {
 
   async function resendInvitation(invitationId, fallbackEmail = "") {
     if (!selectedMembership) return;
+
+    setResendSendStateById((current) => ({
+      ...current,
+      [invitationId]: "sending",
+    }));
+
     setWorking(true);
     setError("");
     setNotice("");
@@ -310,6 +454,14 @@ function TeamMembers({ setPage }) {
         setPage
       );
       const invitation = result?.invitation || result || {};
+      const deliveryState = normalizeInvitationDeliveryState(invitation);
+
+      setResendSendStateById((current) => ({
+        ...current,
+        [invitationId]:
+          deliveryState === "failed" ? "delivery_failed" : "sent",
+      }));
+
       setNotice(resolveInvitationNotice(invitation, fallbackEmail, "resend"));
       setInvitationLink(
         resolveInvitationLink(invitation, resolveClientBaseUrl())
@@ -317,6 +469,11 @@ function TeamMembers({ setPage }) {
       setManualCopyLink("");
       await load();
     } catch (resendError) {
+      setResendSendStateById((current) => ({
+        ...current,
+        [invitationId]: "failed",
+      }));
+
       setError(resendError.message || "The invitation could not be resent.");
     } finally {
       setWorking(false);
@@ -398,6 +555,166 @@ function TeamMembers({ setPage }) {
   const canManageInvitations =
     permissions.has("TEAM_REVOKE_INVITATION") ||
     permissions.has("TEAM_INVITE");
+
+  if (invitationToken) {
+    const signedInEmail = normalizeIdentityEmail(
+      invitationSession.email
+    );
+    const invitedEmail = normalizeIdentityEmail(
+      invitationPreview?.email
+    );
+    const sessionChecking =
+      invitationSession.status === "checking";
+    const hasSession =
+      invitationSession.status === "authenticated";
+    const sessionMatchesInvitation =
+      Boolean(hasSession && invitedEmail) &&
+      signedInEmail === invitedEmail;
+
+    const invitationStatus = String(
+      invitationPreview?.status || ""
+    ).toUpperCase();
+
+    return (
+      <div
+        className="app-page meetro-responsive-page meetro-visual-page"
+        style={invitationPageStyle}
+      >
+        <main style={invitationLandingCard}>
+          <p style={eyebrowStyle}>Meetro Team Invitation</p>
+
+          {invitationPreviewLoading && (
+            <p style={copyStyle} role="status">
+              Loading your invitation…
+            </p>
+          )}
+
+          {invitationPreviewError && (
+            <div role="alert" style={errorStyle}>
+              {invitationPreviewError}
+            </div>
+          )}
+
+          {!invitationPreviewLoading && invitationPreview && (
+            <>
+              <h1 style={invitationTitle}>
+                Join {invitationPreview.businessName || "this Team"}
+              </h1>
+
+              <p style={invitationLead}>
+                You’ve been invited to join as{" "}
+                <strong>{roleLabel(invitationPreview.role)}</strong>.
+              </p>
+
+              <div style={invitationFacts}>
+                <div>
+                  <span style={invitationFactLabel}>Business</span>
+                  <strong>
+                    {invitationPreview.businessName || "Meetro Business"}
+                  </strong>
+                </div>
+
+                <div>
+                  <span style={invitationFactLabel}>Role</span>
+                  <strong>{roleLabel(invitationPreview.role)}</strong>
+                </div>
+
+                <div>
+                  <span style={invitationFactLabel}>
+                    Invitation email
+                  </span>
+                  <strong>{invitationPreview.email}</strong>
+                </div>
+              </div>
+
+              {invitationStatus !== "PENDING" ? (
+                <div role="status" style={noticeStyle}>
+                  This invitation is {statusLabel(invitationStatus)}.
+                  Contact the business if you need a new invitation.
+                </div>
+              ) : sessionChecking ? (
+                <p style={copyStyle} role="status">
+                  Checking your current Meetro account…
+                </p>
+              ) : !hasSession ? (
+                <>
+                  <p style={copyStyle}>
+                    Sign in with the exact invited email address, or create
+                    your Meetro account to continue.
+                  </p>
+
+                  <div style={invitationActions}>
+                    <button
+                      type="button"
+                      style={primaryButton}
+                      onClick={() =>
+                        continueInvitationAuthentication("login")
+                      }
+                    >
+                      Sign in to Join
+                    </button>
+
+                    <button
+                      type="button"
+                      style={secondaryButton}
+                      onClick={() =>
+                        continueInvitationAuthentication("signup")
+                      }
+                    >
+                      Create Account & Join
+                    </button>
+                  </div>
+                </>
+              ) : !sessionMatchesInvitation ? (
+                <>
+                  <div role="status" style={invitationMismatchBox}>
+                    <strong>
+                      You’re signed in with a different account.
+                    </strong>
+                    <p style={copyStyle}>
+                      Current account:{" "}
+                      {signedInEmail || "another Meetro account"}
+                    </p>
+                    <p style={copyStyle}>
+                      This invitation requires:{" "}
+                      {invitationPreview.email}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    style={primaryButton}
+                    onClick={() =>
+                      continueInvitationAuthentication("login", {
+                        switchAccount: true,
+                      })
+                    }
+                  >
+                    Switch Account
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div role="status" style={invitationMatchBox}>
+                    Signed in as <strong>{signedInEmail}</strong>
+                  </div>
+
+                  <button
+                    type="button"
+                    style={primaryButton}
+                    onClick={acceptInvitation}
+                    disabled={working}
+                  >
+                    {working ? "Joining…" : "Accept & Join Team"}
+                  </button>
+                </>
+              )}
+            </>
+          )}
+        </main>
+      </div>
+    );
+  }
 
   return (
     <div
@@ -546,7 +863,7 @@ function TeamMembers({ setPage }) {
           {permissions.has("TEAM_INVITE") && (
             <section style={cardStyle}>
               <p style={eyebrowStyle}>Add a Team member</p>
-              <h2 style={headingStyle}>Create invitation</h2>
+              <h2 style={headingStyle}>Invite a Team Member</h2>
               <p style={copyStyle}>
                 A pending invitation immediately reserves one seat. The owner
                 already occupies one seat.
@@ -605,7 +922,31 @@ function TeamMembers({ setPage }) {
                   style={primaryButton}
                   disabled={working || (seatAuthority?.seatsAvailable ?? 0) < 1}
                 >
-                  Send Invitation
+                  {inviteSendState === "sending" ? (
+                    "Sending…"
+                  ) : (
+                    <span style={buttonFeedbackStack} aria-live="polite">
+                      <span>Send Invitation</span>
+
+                      {inviteSendState === "sent" && (
+                        <small style={buttonFeedbackText}>
+                          ✓ Sent just now
+                        </small>
+                      )}
+
+                      {inviteSendState === "delivery_failed" && (
+                        <small style={buttonFeedbackText}>
+                          Delivery failed
+                        </small>
+                      )}
+
+                      {inviteSendState === "failed" && (
+                        <small style={buttonFeedbackText}>
+                          Couldn’t send
+                        </small>
+                      )}
+                    </span>
+                  )}
                 </button>
               </form>
               {invitationLink && (
@@ -731,7 +1072,38 @@ function TeamMembers({ setPage }) {
                               }
                               disabled={working}
                             >
-                              Resend invitation
+                              {resendSendStateById[invitation.id] ===
+                              "sending" ? (
+                                "Sending…"
+                              ) : (
+                                <span
+                                  style={buttonFeedbackStack}
+                                  aria-live="polite"
+                                >
+                                  <span>Resend invitation</span>
+
+                                  {resendSendStateById[invitation.id] ===
+                                    "sent" && (
+                                    <small style={buttonFeedbackText}>
+                                      ✓ Sent just now
+                                    </small>
+                                  )}
+
+                                  {resendSendStateById[invitation.id] ===
+                                    "delivery_failed" && (
+                                    <small style={buttonFeedbackText}>
+                                      Delivery failed
+                                    </small>
+                                  )}
+
+                                  {resendSendStateById[invitation.id] ===
+                                    "failed" && (
+                                    <small style={buttonFeedbackText}>
+                                      Couldn’t send
+                                    </small>
+                                  )}
+                                </span>
+                              )}
                             </button>
                             {resolveInvitationLink(
                               invitation,
@@ -895,6 +1267,80 @@ const rolePill = {
   fontSize: 13,
 };
 const compactSelect = { ...inputStyle, minHeight: 38, padding: "6px 9px" };
+const buttonFeedbackStack = {
+  display: "flex",
+  flexDirection: "column",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: 2,
+  lineHeight: 1.1,
+};
+
+const buttonFeedbackText = {
+  fontSize: 11,
+  fontWeight: 700,
+  opacity: 0.84,
+  whiteSpace: "nowrap",
+};
+
+const invitationPageStyle = {
+  ...pageStyle,
+  display: "flex",
+  justifyContent: "center",
+  alignItems: "flex-start",
+  paddingTop: 48,
+};
+
+const invitationLandingCard = {
+  ...cardStyle,
+  width: "min(620px, 100%)",
+  padding: 28,
+};
+
+const invitationTitle = {
+  margin: "4px 0 10px",
+  color: "#183c28",
+  fontSize: 30,
+};
+
+const invitationLead = {
+  ...copyStyle,
+  fontSize: 17,
+  marginBottom: 22,
+};
+
+const invitationFacts = {
+  display: "grid",
+  gap: 12,
+  margin: "0 0 22px",
+};
+
+const invitationFactLabel = {
+  display: "block",
+  marginBottom: 3,
+  color: "#6c7f72",
+  fontSize: 12,
+  fontWeight: 700,
+  letterSpacing: "0.06em",
+  textTransform: "uppercase",
+};
+
+const invitationActions = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+};
+
+const invitationMismatchBox = {
+  ...noticeStyle,
+  margin: "0 0 16px",
+};
+
+const invitationMatchBox = {
+  ...noticeStyle,
+  margin: "0 0 16px",
+};
+
 const linkBox = {
   marginTop: 14,
   padding: 12,

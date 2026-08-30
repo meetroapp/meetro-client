@@ -26,6 +26,7 @@ import {
 } from "../utils/loginErrorPresentation";
 import MeetroIcon from "../components/MeetroIcon";
 import PasswordResetWorkspace from "../components/PasswordResetWorkspace";
+import { inspectBusinessTeamInvitation } from "../utils/teamApi";
 
 function readStoredVerificationContext() {
   try {
@@ -54,21 +55,46 @@ function readStoredVerificationContext() {
 function preservePendingTeamInvitation() {
   try {
     const hash = String(window.location.hash || "");
-    if (!hash.startsWith("#teamMembers?")) return "";
-    const token = new URLSearchParams(hash.split("?")[1] || "").get("invitation") || "";
-    if (/^[A-Za-z0-9_-]{32,200}$/.test(token)) {
-      return token;
-    }
+    const cleanHash = hash.startsWith("#") ? hash.slice(1) : hash;
+    const [route, query = ""] = cleanHash.split("?");
+    const params = new URLSearchParams(query);
+
+    const token =
+      route === "teamMembers"
+        ? params.get("invitation") || ""
+        : route === "login"
+        ? params.get("teamInvitation") || ""
+        : "";
+
+    return /^[A-Za-z0-9_-]{32,200}$/.test(token) ? token : "";
   } catch {
-    // The invitation remains server-owned when browser storage is unavailable.
+    return "";
   }
-  return "";
+}
+
+function readTeamInvitationLoginMode() {
+  try {
+    const hash = String(window.location.hash || "");
+    const cleanHash = hash.startsWith("#") ? hash.slice(1) : hash;
+    const [route, query = ""] = cleanHash.split("?");
+
+    if (route !== "login") return "";
+
+    const mode =
+      new URLSearchParams(query).get("mode") || "";
+
+    return ["login", "signup"].includes(mode) ? mode : "";
+  } catch {
+    return "";
+  }
 }
 
 function Login({ setPage }) {
   const [initialVerificationContext] = useState(readStoredVerificationContext);
   const [mode, setMode] = useState(
-    localStorage.getItem("meetroLoginMode") || "login"
+    readTeamInvitationLoginMode() ||
+      localStorage.getItem("meetroLoginMode") ||
+      "login"
   );
   const [language, updateLanguage] = useState(getLanguage() || "en");
   const [accountType, setAccountType] = useState("homeowner");
@@ -76,7 +102,9 @@ function Login({ setPage }) {
   const [name, setName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
-  const [email, setEmail] = useState(initialVerificationContext.email);
+  const [email, setEmail] = useState(
+    initialVerificationContext.email
+  );
   const [password, setPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [twoFactorStep, setTwoFactorStep] = useState(
@@ -95,6 +123,34 @@ function Login({ setPage }) {
   const [authError, setAuthError] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
   const [legalAccepted, setLegalAccepted] = useState(false);
+
+  useEffect(() => {
+    const invitationToken = preservePendingTeamInvitation();
+
+    if (!invitationToken || initialVerificationContext.email) return;
+
+    let cancelled = false;
+
+    inspectBusinessTeamInvitation(invitationToken)
+      .then((result) => {
+        if (cancelled) return;
+
+        const invitedEmail = String(
+          result?.invitation?.email || ""
+        ).trim();
+
+        if (invitedEmail) {
+          setEmail((current) => current || invitedEmail);
+        }
+      })
+      .catch(() => {
+        // The sign-in form remains usable if invitation preview is unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialVerificationContext.email]);
 
   const text = {
     en: {

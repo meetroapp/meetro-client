@@ -1,3 +1,4 @@
+import API_URL from "../api.js";
 import { authFetch } from "./authFetch.js";
 
 async function teamRequest(path, options = {}, setPage) {
@@ -28,6 +29,32 @@ export function fetchMyTeamAuthority(setPage) {
 export function fetchBusinessTeam(businessId, setPage) {
   const query = new URLSearchParams({ businessId: String(businessId || "") });
   return teamRequest(`/team?${query.toString()}`, { method: "GET" }, setPage);
+}
+
+export async function inspectBusinessTeamInvitation(token) {
+  const response = await fetch(`${API_URL}/team/invitations/inspect`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token }),
+  });
+
+  let data = {};
+  try {
+    data = await response.json();
+  } catch {
+    data = {};
+  }
+
+  if (!response.ok || data?.success !== true) {
+    const error = new Error(
+      data?.message || "Team invitation information is unavailable."
+    );
+    error.code = data?.code || "TEAM_INVITATION_INSPECTION_FAILED";
+    error.status = response.status;
+    throw error;
+  }
+
+  return data;
 }
 
 export function createBusinessTeamInvitation(payload, setPage) {
