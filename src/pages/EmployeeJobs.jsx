@@ -12,6 +12,12 @@ import {
   sendFieldMessage,
   updateFieldStatus,
 } from "../utils/fieldOperationsApi";
+import {
+  clockInTime,
+  clockOutTime,
+  fetchOwnTime,
+  fetchTeamTime,
+} from "../utils/timeEvidenceApi";
 import { fetchBusinessTeam, fetchMyTeamAuthority } from "../utils/teamApi";
 
 function routeValue(name) {
@@ -79,6 +85,7 @@ function EmployeeJobs({ setPage }) {
     return (
       memberships.find((item) => ["OWNER", "MANAGER"].includes(item.role)) ||
       memberships.find((item) => item.permissions?.includes("ASSIGNED_WORK")) ||
+      memberships.find((item) => item.permissions?.includes("TIME_SELF_VIEW")) ||
       null
     );
   }, [authority]);
@@ -100,7 +107,8 @@ function EmployeeJobs({ setPage }) {
           ? memberships.find((item) => item.businessId === requestedBusinessId)
           : null) ||
         memberships.find((item) => ["OWNER", "MANAGER"].includes(item.role)) ||
-        memberships.find((item) => item.permissions?.includes("ASSIGNED_WORK"));
+        memberships.find((item) => item.permissions?.includes("ASSIGNED_WORK")) ||
+        memberships.find((item) => item.permissions?.includes("TIME_SELF_VIEW"));
       if (!selected) {
         setWorkspace(null);
         setTeam(null);
@@ -132,6 +140,10 @@ function EmployeeJobs({ setPage }) {
             ])
           )
         );
+      } else if (selected.role === "BOOKKEEPER_FINANCE") {
+        setWorkspace(null);
+        setTeam(null);
+        setSchedule([]);
       } else {
         const [jobsResult, scheduleResult] = await Promise.all([
           fetchEmployeeJobs(selected.businessId, setPage),
@@ -203,6 +215,16 @@ function EmployeeJobs({ setPage }) {
   const selectedJob = (workspace?.jobs || []).find(
     (job) => job.id === selectedJobId
   );
+  const selfAssignedJob = managementMode
+    ? (workspace?.jobs || []).find((job) =>
+        (job.assignments || []).some((assignment) =>
+          assignment.state === "ACTIVE" && assignment.membershipId === selectedMembership?.id
+        )
+      )
+    : selectedJob;
+  const selfAssignment = (selfAssignedJob?.assignments || []).find((assignment) =>
+    assignment.state === "ACTIVE" && assignment.membershipId === selectedMembership?.id
+  ) || selfAssignedJob?.assignments?.[0] || null;
 
   return (
     <div className="app-page meetro-responsive-page meetro-visual-page" style={pageStyle}>
@@ -230,30 +252,50 @@ function EmployeeJobs({ setPage }) {
           </p>
         </section>
       ) : selectedMembership.role === "BOOKKEEPER_FINANCE" ? (
-        <section style={cardStyle}>
-          <h2 style={headingStyle}>Field work is not part of this role</h2>
-          <p style={copyStyle}>Bookkeeper / Finance authority does not grant Job assignment or field access.</p>
-        </section>
+        <>
+          <section style={cardStyle}>
+            <h2 style={headingStyle}>Time records</h2>
+            <p style={copyStyle}>Bookkeeper / Finance has read-only Team time visibility and no Job dispatch or field-status authority.</p>
+          </section>
+          <TeamTimePanel businessId={selectedMembership.businessId} setPage={setPage} />
+        </>
       ) : managementMode ? (
-        <ManagerWorkspace
-          jobs={workspace?.jobs || []}
-          members={assignableMembers}
-          drafts={drafts}
-          workingJobId={workingJobId}
-          onToggle={toggleMember}
-          onSave={saveAssignments}
-          businessId={selectedMembership.businessId}
-          setPage={setPage}
-        />
+        <>
+          <ManagerWorkspace
+            jobs={workspace?.jobs || []}
+            members={assignableMembers}
+            drafts={drafts}
+            workingJobId={workingJobId}
+            onToggle={toggleMember}
+            onSave={saveAssignments}
+            businessId={selectedMembership.businessId}
+            setPage={setPage}
+          />
+          <TimeEvidencePanel
+            businessId={selectedMembership.businessId}
+            job={selfAssignedJob}
+            assignment={selfAssignment}
+            setPage={setPage}
+          />
+          <TeamTimePanel businessId={selectedMembership.businessId} setPage={setPage} />
+        </>
       ) : (
-        <FieldWorkspace
-          jobs={workspace?.jobs || []}
-          schedule={schedule}
-          selectedJob={selectedJob}
-          onSelect={setSelectedJobId}
-          businessId={selectedMembership.businessId}
-          setPage={setPage}
-        />
+        <>
+          <FieldWorkspace
+            jobs={workspace?.jobs || []}
+            schedule={schedule}
+            selectedJob={selectedJob}
+            onSelect={setSelectedJobId}
+            businessId={selectedMembership.businessId}
+            setPage={setPage}
+          />
+          <TimeEvidencePanel
+            businessId={selectedMembership.businessId}
+            job={selfAssignedJob}
+            assignment={selfAssignment}
+            setPage={setPage}
+          />
+        </>
       )}
 
       <BottomNav setPage={setPage} currentPage="employeeJobs" />
@@ -566,6 +608,222 @@ function FieldOperationsPanel({ businessId, job, assignment, managed, setPage })
   );
 }
 
+const TIME_CATEGORY_LABELS = Object.freeze({
+  JOB_WORK: "Job Work",
+  DRIVING: "Driving",
+  OFFICE: "Office",
+  SUPPLIES: "Supplies",
+  BREAK: "Break",
+  GENERAL: "General",
+});
+
+function formatDuration(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainder = total % 60;
+  return hours ? `${hours}h ${minutes}m` : `${minutes}m ${remainder}s`;
+}
+
+function sessionDuration(session, now = Date.now()) {
+  if (session?.durationSeconds != null) return Number(session.durationSeconds);
+  const started = new Date(session?.clockedInAt).getTime();
+  return Number.isFinite(started) ? Math.max(0, Math.floor((now - started) / 1000)) : 0;
+}
+
+function boundaryLocation(requested) {
+  if (!requested) return Promise.resolve({ status: "NOT_REQUESTED" });
+  if (!navigator.geolocation) return Promise.resolve({ status: "UNAVAILABLE" });
+  return new Promise((resolve) => {
+    navigator.geolocation.getCurrentPosition(
+      (position) => resolve({
+        status: "CAPTURED",
+        latitude: position.coords.latitude,
+        longitude: position.coords.longitude,
+      }),
+      (error) => resolve({ status: error?.code === 1 ? "DENIED" : "UNAVAILABLE" }),
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
+    );
+  });
+}
+
+function TimeEvidencePanel({ businessId, job, assignment, setPage }) {
+  const [time, setTime] = useState(null);
+  const [category, setCategory] = useState(() => job && assignment ? "JOB_WORK" : "GENERAL");
+  const [includeLocation, setIncludeLocation] = useState(false);
+  const [working, setWorking] = useState(false);
+  const [error, setError] = useState("");
+  const [now, setNow] = useState(0);
+
+  const load = useCallback(async () => {
+    try {
+      setError("");
+      setTime(await fetchOwnTime(businessId, setPage));
+    } catch (loadError) {
+      setError(loadError.message || "Time evidence is unavailable.");
+    }
+  }, [businessId, setPage]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(load, 0);
+    return () => window.clearTimeout(timer);
+  }, [load]);
+
+  useEffect(() => {
+    if (!time?.activeSession) return undefined;
+    const initial = window.setTimeout(() => setNow(Date.now()), 0);
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
+  }, [time?.activeSession]);
+
+  async function clockIn() {
+    setWorking(true);
+    setError("");
+    try {
+      const location = await boundaryLocation(includeLocation);
+      await clockInTime({
+        businessId,
+        category,
+        jobId: category === "JOB_WORK" ? job.id : null,
+        assignmentId: category === "JOB_WORK" ? assignment.id : null,
+        location,
+        idempotencyKey: operationKey("clock-in"),
+      }, setPage);
+      await load();
+    } catch (clockError) {
+      setError(clockError.message || "Clock In could not be recorded.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  async function clockOut() {
+    if (!time?.activeSession) return;
+    setWorking(true);
+    setError("");
+    try {
+      const location = await boundaryLocation(includeLocation);
+      await clockOutTime({
+        businessId,
+        sessionId: time.activeSession.id,
+        location,
+        idempotencyKey: operationKey("clock-out"),
+      }, setPage);
+      await load();
+    } catch (clockError) {
+      setError(clockError.message || "Clock Out could not be recorded.");
+    } finally {
+      setWorking(false);
+    }
+  }
+
+  const active = time?.activeSession;
+  const jobWorkAvailable = Boolean(job?.id && assignment?.id);
+  return (
+    <section style={timePanelStyle} aria-label="Clock In and Clock Out">
+      <div style={rowStyle}>
+        <div>
+          <p style={eyebrowStyle}>Canonical time evidence</p>
+          <h3 style={detailTitleStyle}>Clock In / Clock Out</h3>
+          <p style={detailCopyStyle}>Server timestamps are authoritative. Field and business completion remain separate.</p>
+        </div>
+        {active && <span style={activeTimerStyle}>{formatDuration(sessionDuration(active, now))}</span>}
+      </div>
+      {error && <div role="alert" style={inlineErrorStyle}>{error}</div>}
+      {active ? (
+        <div style={timerActionStyle}>
+          <div>
+            <strong>{TIME_CATEGORY_LABELS[active.category] || active.category}</strong>
+            <p style={rowMetaStyle}>{active.jobTitle || "No Job required"} · started {formatSchedule(active.clockedInAt)}</p>
+          </div>
+          <button type="button" style={primaryButton} disabled={working} onClick={clockOut}>
+            {working ? "Recording…" : "Clock Out"}
+          </button>
+        </div>
+      ) : (
+        <div style={timerActionStyle}>
+          <label style={fieldLabelStyle}>
+            Time category
+            <select value={category} onChange={(event) => setCategory(event.target.value)} style={textInputStyle}>
+              {Object.entries(TIME_CATEGORY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </label>
+          <button type="button" style={primaryButton} disabled={working || (category === "JOB_WORK" && !jobWorkAvailable)} onClick={clockIn}>
+            {working ? "Recording…" : "Clock In"}
+          </button>
+        </div>
+      )}
+      {!active && category === "JOB_WORK" && !jobWorkAvailable && (
+        <p style={detailCopyStyle}>Select an actively assigned Job before recording Job Work.</p>
+      )}
+      <label style={locationOptionStyle}>
+        <input type="checkbox" checked={includeLocation} onChange={(event) => setIncludeLocation(event.target.checked)} />
+        Capture optional location at this Clock boundary
+      </label>
+      <details style={historyStyle}>
+        <summary>My time history</summary>
+        {(time?.sessions || []).length ? time.sessions.map((session) => (
+          <TimeRow key={session.id} session={session} now={now} />
+        )) : <p style={detailCopyStyle}>No time has been recorded yet.</p>}
+      </details>
+    </section>
+  );
+}
+
+function TimeRow({ session, now }) {
+  return (
+    <article style={timeRowStyle}>
+      <div>
+        <strong>{session.employeeName || "Team member"} · {TIME_CATEGORY_LABELS[session.category] || session.category}</strong>
+        <p style={rowMetaStyle}>{session.jobTitle || "No Job required"}</p>
+      </div>
+      <div style={scheduleTimeStyle}>
+        <strong>{formatDuration(sessionDuration(session, now))}</strong>
+        <span>{formatSchedule(session.clockedInAt)} → {session.clockedOutAt ? formatSchedule(session.clockedOutAt) : "Active"}</span>
+      </div>
+    </article>
+  );
+}
+
+function TeamTimePanel({ businessId, setPage }) {
+  const [time, setTime] = useState(null);
+  const [error, setError] = useState("");
+  const [now, setNow] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    fetchTeamTime(businessId, setPage)
+      .then((result) => { if (!cancelled) setTime(result); })
+      .catch((loadError) => { if (!cancelled) setError(loadError.message || "Team time is unavailable."); });
+    return () => { cancelled = true; };
+  }, [businessId, setPage]);
+
+  useEffect(() => {
+    if (!(time?.sessions || []).some((session) => !session.clockedOutAt)) return undefined;
+    const initial = window.setTimeout(() => setNow(Date.now()), 0);
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => {
+      window.clearTimeout(initial);
+      window.clearInterval(timer);
+    };
+  }, [time?.sessions]);
+
+  return (
+    <section style={cardStyle} aria-label="Team time evidence">
+      <p style={eyebrowStyle}>Operations</p>
+      <h2 style={headingStyle}>Team time evidence</h2>
+      <p style={copyStyle}>Read-only operational records. Payroll, wages, taxes, and customer billing are not calculated here.</p>
+      {error && <div role="alert" style={inlineErrorStyle}>{error}</div>}
+      {!time ? <p style={detailCopyStyle}>Loading governed Team time…</p> : time.sessions.length ? (
+        <div style={timeListStyle}>{time.sessions.map((session) => <TimeRow key={session.id} session={session} now={now} />)}</div>
+      ) : <p style={detailCopyStyle}>No Team time has been recorded yet.</p>}
+    </section>
+  );
+}
+
 function Fact({ label, value }) {
   return <div style={factStyle}><span style={eyebrowStyle}>{label}</span><strong>{value || "Not available"}</strong></div>;
 }
@@ -619,5 +877,11 @@ const messageMetaStyle = { display: "block", color: "#64776b", fontSize: 12, mar
 const messageTextStyle = { margin: "8px 0 0", whiteSpace: "pre-wrap", lineHeight: 1.45 };
 const messageFormStyle = { display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" };
 const inlineErrorStyle = { padding: 10, borderRadius: 9, background: "#fff4f2", color: "#8b2e2e", margin: "10px 0" };
+const timePanelStyle = { ...cardStyle };
+const timerActionStyle = { display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 14, flexWrap: "wrap", margin: "16px 0" };
+const activeTimerStyle = { ...pillStyle, fontVariantNumeric: "tabular-nums", fontSize: 16 };
+const locationOptionStyle = { display: "flex", alignItems: "center", gap: 9, color: "#52675a", fontSize: 13, margin: "10px 0" };
+const timeRowStyle = { display: "flex", justifyContent: "space-between", gap: 14, padding: "12px 0", borderTop: "1px solid #e1eae3", flexWrap: "wrap", color: "#294c37" };
+const timeListStyle = { display: "grid" };
 
 export default EmployeeJobs;

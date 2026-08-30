@@ -12,6 +12,7 @@ import { t } from "../src/utils/language.js";
 const pageSource = readFileSync("src/pages/EmployeeJobs.jsx", "utf8");
 const apiSource = readFileSync("src/utils/jobAssignmentApi.js", "utf8");
 const fieldApiSource = readFileSync("src/utils/fieldOperationsApi.js", "utf8");
+const timeApiSource = readFileSync("src/utils/timeEvidenceApi.js", "utf8");
 const appSource = readFileSync("src/App.jsx", "utf8");
 const teamSource = readFileSync("src/pages/TeamMembers.jsx", "utf8");
 
@@ -52,7 +53,6 @@ test("field workspace renders only server projections and contains no local assi
   assert.match(pageSource, /Employee Schedule/);
   assert.match(pageSource, /Service location/);
   assert.doesNotMatch(pageSource, /localStorage|sessionStorage|meetroTeamMembers/);
-  assert.doesNotMatch(pageSource, /Clock In|Clock Out|time entry/i);
 });
 
 test("field status and communication extend My Jobs with server-owned exact assignment authority", () => {
@@ -64,13 +64,13 @@ test("field status and communication extend My Jobs with server-owned exact assi
   assert.match(pageSource, /sendFieldMessage/);
   assert.match(pageSource, /Internal Job communication only/);
   assert.match(pageSource, /Business and customer completion remain separate/);
-  assert.doesNotMatch(`${pageSource}\n${fieldApiSource}`, /localStorage|sessionStorage|customerMessage|Clock In|Clock Out|GPS|payroll/i);
+  assert.doesNotMatch(fieldApiSource, /localStorage|sessionStorage|customerMessage|GPS|payroll/i);
 });
 
 test("Owner/Manager assignment UI excludes Bookkeeper/Finance from assignable targets", () => {
   assert.match(pageSource, /\["MANAGER", "FIELD_EMPLOYEE"\]\.includes\(member\.role\)/);
   assert.match(pageSource, /\["OWNER", "MANAGER"\]\.includes\(selected\.role\)/);
-  assert.match(pageSource, /Bookkeeper \/ Finance authority does not grant Job assignment or field access/);
+  assert.match(pageSource, /Bookkeeper \/ Finance has read-only Team time visibility and no Job dispatch or field-status authority/);
 });
 
 test("canonical Job alerts deep-link to the assignment-gated employee workspace", () => {
@@ -93,4 +93,17 @@ test("assignment lifecycle Alert copy is permanent across all supported language
     assert.notEqual(t("alerts.work.fieldStatus.field_work_completed.title", language), "alerts.work.fieldStatus.field_work_completed.title");
     assert.notEqual(t("alerts.work.fieldMessage.title", language), "alerts.work.fieldMessage.title");
   }
+});
+
+test("employee Job workspace exposes governed Clock In and Clock Out without payroll or canonical completion", () => {
+  assert.match(pageSource, /Canonical time evidence/);
+  assert.match(pageSource, /Clock In \/ Clock Out/);
+  assert.match(pageSource, /Server timestamps are authoritative/);
+  assert.match(pageSource, /Capture optional location at this Clock boundary/);
+  assert.match(pageSource, /My time history/);
+  assert.match(pageSource, /Payroll, wages, taxes, and customer billing are not calculated here/);
+  assert.match(timeApiSource, /\/employee\/time\/clock-in/);
+  assert.match(timeApiSource, /\/employee\/time\/clock-out/);
+  assert.match(timeApiSource, /\/team\/time/);
+  assert.doesNotMatch(timeApiSource, /invoice|deposit|payment|quote/i);
 });
