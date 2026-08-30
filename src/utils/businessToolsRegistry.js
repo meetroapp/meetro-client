@@ -12,7 +12,7 @@ export const BUSINESS_TOOLS_AUDIT = Object.freeze([
   { id: "customers", title: "Customer Relationships", status: BUSINESS_TOOL_STATUS.READ_ONLY, route: "customerRelationshipsCenter" },
   { id: "portfolio", title: "Portfolio", status: BUSINESS_TOOL_STATUS.READY, route: "projectGallery" },
   { id: "hiringCenter", title: "Hiring Center", status: BUSINESS_TOOL_STATUS.READ_ONLY, route: "hiringCenter" },
-  { id: "teamMembers", title: "Team Members", status: BUSINESS_TOOL_STATUS.READ_ONLY, route: "teamMembers" },
+  { id: "teamMembers", title: "Team Members", status: BUSINESS_TOOL_STATUS.READY, route: "teamMembers" },
   { id: "assetCenter", title: "Asset Center", status: BUSINESS_TOOL_STATUS.READ_ONLY, route: "assetCenter" },
   { id: "serviceEvaluations", title: "Service Types & Evaluations", status: BUSINESS_TOOL_STATUS.READ_ONLY, route: "serviceTypesEvaluations" },
   { id: "findingsLibrary", title: "Findings Library", status: BUSINESS_TOOL_STATUS.COMING_SOON, route: null },

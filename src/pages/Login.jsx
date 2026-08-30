@@ -51,6 +51,20 @@ function readStoredVerificationContext() {
   }
 }
 
+function preservePendingTeamInvitation() {
+  try {
+    const hash = String(window.location.hash || "");
+    if (!hash.startsWith("#teamMembers?")) return "";
+    const token = new URLSearchParams(hash.split("?")[1] || "").get("invitation") || "";
+    if (/^[A-Za-z0-9_-]{32,200}$/.test(token)) {
+      return token;
+    }
+  } catch {
+    // The invitation remains server-owned when browser storage is unavailable.
+  }
+  return "";
+}
+
 function Login({ setPage }) {
   const [initialVerificationContext] = useState(readStoredVerificationContext);
   const [mode, setMode] = useState(
@@ -833,6 +847,7 @@ function Login({ setPage }) {
 
       const isFirstLogin = localStorage.getItem("firstLogin") === "true";
       const sessionResult = saveUserData(verifiedLoginData);
+      const pendingTeamInvitationToken = preservePendingTeamInvitation();
 
       if (isFirstLogin) {
         clearNewHomeownerRelationshipState();
@@ -844,6 +859,12 @@ function Login({ setPage }) {
       setTwoFactorStep(false);
       setTwoFactorCode("");
       setVerificationError("");
+
+      if (pendingTeamInvitationToken) {
+        localStorage.removeItem("firstLogin");
+        setPage(`teamMembers?invitation=${encodeURIComponent(pendingTeamInvitationToken)}`);
+        return;
+      }
 
       if (isFirstLogin) {
         localStorage.removeItem("firstLogin");

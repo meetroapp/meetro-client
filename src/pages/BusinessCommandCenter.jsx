@@ -163,8 +163,8 @@ function BusinessCommandCenter({ setPage }) {
       id: "teamMembers",
       icon: "hiringCenter",
       title: t("teamMembers"),
-      desc: t("teamMembersUnavailableText"),
-      badge: statusLabel("teamMembers", BUSINESS_TOOL_STATUS.READ_ONLY),
+      desc: "Manage Team memberships, preset roles, invitations, and professional seats.",
+      badge: statusLabel("teamMembers", BUSINESS_TOOL_STATUS.READY),
     },
     reportsCenter: {
       id: "reportsCenter",

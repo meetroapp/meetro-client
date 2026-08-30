@@ -305,7 +305,6 @@ function App() {
   "customerRelationshipsCenter",
   "invoiceBuilder",
   "hiringCenter",
-  "teamMembers",
   "jobUpdate",
   "materialsLibrary",
   "permitCenter",
