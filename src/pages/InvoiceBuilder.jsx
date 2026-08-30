@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import QuoteBuilder from "./QuoteBuilder.jsx";
+import ProfessionalInvoiceWorkspace from "../components/ProfessionalInvoiceWorkspace.jsx";
+import { parseInvoiceBuilderRoute } from "../utils/completedJobInvoiceHandoff.js";
 import { getLanguage } from "../utils/language";
 import { getWorkCenterContextReturnLabel } from "../utils/workCenterReturnLabels";
 import {
@@ -1478,5 +1480,25 @@ const printTotalDue = {
 };
 
 export default function InvoiceBuilder({ setPage }) {
+  const route = parseInvoiceBuilderRoute(window.location.hash);
+  if (!route.valid) {
+    return (
+      <div className="app-page meetro-form-page business-document-context-gate" role="alert">
+        <h1>Invoice review unavailable</h1>
+        <p>Meetro could not verify this exact Invoice route. Nothing was opened or changed.</p>
+        <button type="button" onClick={() => setPage("workCenter")}>Go Back</button>
+      </div>
+    );
+  }
+  if (route.intent === "EXACT_CANONICAL_INVOICE") {
+    return (
+      <ProfessionalInvoiceWorkspace
+        setPage={setPage}
+        initialInvoiceId={route.invoiceId}
+        expectedJobId={route.jobId}
+        onBack={() => setPage(`workCenter?jobId=${encodeURIComponent(route.jobId)}`)}
+      />
+    );
+  }
   return <QuoteBuilder setPage={setPage} initialDocument="invoice" />;
 }

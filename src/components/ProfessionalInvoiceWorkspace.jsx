@@ -50,6 +50,8 @@ export default function ProfessionalInvoiceWorkspace({
   language = "en",
   setPage,
   onBack,
+  initialInvoiceId = "",
+  expectedJobId = "",
 }) {
   const copy = getInvoiceCopy(language);
   const branding = getBusinessIdentityProjection({}, {
@@ -84,6 +86,30 @@ export default function ProfessionalInvoiceWorkspace({
     });
     return () => { active = false; };
   }, [loadWorkspace]);
+
+  useEffect(() => {
+    if (!initialInvoiceId) return undefined;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setBusy(`read:${initialInvoiceId}`);
+      setNotice("");
+      void fetchProfessionalInvoice({ invoiceId: initialInvoiceId, setPage })
+        .then((invoice) => {
+          if (!active) return;
+          if (expectedJobId && invoice.jobId !== expectedJobId) {
+            setNotice("This exact Invoice does not belong to the requested Job.");
+            return;
+          }
+          setSelected(invoice);
+          setConfirmIssue(false);
+          setShowPayment(false);
+        })
+        .catch(() => active && setNotice(copy.unavailable))
+        .finally(() => active && setBusy(""));
+    });
+    return () => { active = false; };
+  }, [copy.unavailable, expectedJobId, initialInvoiceId, setPage]);
 
   const money = useCallback((minor, currency = workspace?.summary.currency || "USD") =>
     formatLocaleCurrency((Number(minor) || 0) / 100, currency || "USD", {}, language),
