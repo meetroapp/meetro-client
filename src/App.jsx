@@ -589,6 +589,18 @@ function App() {
   }, [sessionHydration.status]);
 
   useEffect(() => {
+    if (
+      subscriptionGate.status !== "ready" ||
+      subscriptionGate.entitled === true ||
+      page === "professionalSubscription" ||
+      !isProfessionalSession() ||
+      !isProfessionalOnlyPage(page)
+    ) return;
+    window.location.hash = "professionalSubscription";
+    setPageState("professionalSubscription");
+  }, [page, subscriptionGate.entitled, subscriptionGate.status]);
+
+  useEffect(() => {
     if (sessionHydration.status !== SESSION_HYDRATION.restoring) return undefined;
 
     const timer = window.setTimeout(() => {

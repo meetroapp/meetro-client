@@ -34,6 +34,33 @@ function statusCopy(subscription) {
   return labels[subscription?.status] || "Plan required";
 }
 
+const INCLUDED_BUSINESS_FEATURES = [
+  "Work Center",
+  "Customer Communication",
+  "Evaluations & Scheduling",
+  "Quotes & Approvals",
+  "Deposit & Payment Tracking",
+  "Invoicing",
+  "Leads & Urgent/Emergency Opportunities",
+  "Alerts",
+  "Business Profile & Portfolio",
+  "Web + iPhone access",
+];
+
+function fallbackPlanName(plan) {
+  if (plan?.seatLimit === 2) return "Starter";
+  if (plan?.seatLimit === 5) return "Growth";
+  if (plan?.seatLimit === 10) return "Professional";
+  return "Meetro Business";
+}
+
+function fallbackPlanPositioning(plan) {
+  if (plan?.seatLimit === 2) return "For small businesses";
+  if (plan?.seatLimit === 5) return "For growing teams";
+  if (plan?.seatLimit === 10) return "For established teams";
+  return "For professional businesses";
+}
+
 export default function ProfessionalSubscription({ setPage }) {
   const [state, setState] = useState(null);
   const [products, setProducts] = useState([]);
@@ -130,6 +157,7 @@ export default function ProfessionalSubscription({ setPage }) {
   };
 
   const subscription = state?.subscription;
+  const currentPlan = (state?.catalog || []).find((plan) => plan.code === subscription?.plan);
   return (
     <div className="app-page subscription-page" style={pageStyle}>
       <header style={headerStyle}>
@@ -149,7 +177,7 @@ export default function ProfessionalSubscription({ setPage }) {
       {subscription && (
         <section style={statusCardStyle} aria-label="Current subscription">
           <div><span style={labelStyle}>Status</span><strong>{statusCopy(subscription)}</strong></div>
-          <div><span style={labelStyle}>Current plan</span><strong>{subscription.plan?.includes("5_USER") ? "Up to 5 users" : "Up to 2 users"}</strong></div>
+          <div><span style={labelStyle}>Current plan</span><strong>{currentPlan?.name || fallbackPlanName({ seatLimit: subscription.seatLimit })} · Up to {subscription.seatLimit} users</strong></div>
           <div><span style={labelStyle}>Seats included</span><strong>{subscription.seatLimit}</strong></div>
           <div><span style={labelStyle}>Billing provider</span><strong>{subscription.provider === "STRIPE" ? "Web / Stripe" : "Apple App Store"}</strong></div>
           {subscription.trialEndsAt && <div><span style={labelStyle}>Trial ends</span><strong>{dateLabel(subscription.trialEndsAt)}</strong></div>}
@@ -167,12 +195,17 @@ export default function ProfessionalSubscription({ setPage }) {
             : plan.providers?.STRIPE?.configured;
           const purchaseReady = providerReady && !state?.entitled && !state?.qaAccess;
           const trialOffered = nativeIos ? eligibleTrial : plan.providers?.STRIPE?.configured;
+          const planName = plan.name || fallbackPlanName(plan);
+          const positioning = plan.positioning || fallbackPlanPositioning(plan);
+          const trialAction = trialOffered ? "Start 14-Day Free Trial" : nativeIos ? "Continue with Apple" : "Start on web";
           return (
             <article key={plan.code} style={planCardStyle}>
-              <p style={eyebrowStyle}>{plan.seatLimit === 2 ? "PLAN A" : "PLAN B"}</p>
-              <h2 style={planTitleStyle}>Up to {plan.seatLimit} users</h2>
+              <p style={eyebrowStyle}>{planName.toUpperCase()}</p>
+              <h2 style={planTitleStyle}>{positioning}</h2>
+              <p style={seatStyle}>Up to {plan.seatLimit} professional users</p>
               {trialOffered ? <p style={trialStyle}>14 days free</p> : <p style={providerCopyStyle}>Trial eligibility checked by Apple</p>}
               <p style={priceStyle}>{trialOffered ? "Then " : ""}{displayPrice}<span style={monthStyle}> / month</span></p>
+              <p style={trialCopyStyle}>{trialOffered ? `Free for 14 days, then ${displayPrice}/month. Cancel anytime.` : `${displayPrice}/month. Apple determines trial eligibility.`}</p>
               <p style={copyStyle}>Owner counts as one included professional user.</p>
               <button
                 type="button"
@@ -180,13 +213,22 @@ export default function ProfessionalSubscription({ setPage }) {
                 disabled={!purchaseReady || Boolean(busy)}
                 onClick={() => purchase(plan)}
               >
-                {busy === plan.code ? "Working…" : state?.entitled ? "Current access already active" : nativeIos ? "Start with Apple" : "Start on web"}
+                {busy === plan.code ? "Working…" : state?.entitled ? "Current access already active" : trialAction}
               </button>
               {!providerReady && <p style={providerCopyStyle}>{nativeIos ? "Apple product configuration is required." : "Web subscription checkout is unavailable."}</p>}
               {!nativeIos && providerReady && <p style={providerCopyStyle}>Stripe governs trial dates and billing status. Access starts only after server verification.</p>}
             </article>
           );
         })}
+      </section>
+
+      <section style={includedStyle} aria-labelledby="included-business-features">
+        <p style={eyebrowStyle}>COMPLETE BUSINESS PLATFORM</p>
+        <h2 id="included-business-features" style={includedTitleStyle}>Included with every Meetro Business plan</h2>
+        <p style={copyStyle}>Choose based on team size. Every plan includes the same core business workflows.</p>
+        <ul style={featureGridStyle}>
+          {INCLUDED_BUSINESS_FEATURES.map((feature) => <li key={feature} style={featureStyle}>✓ {feature}</li>)}
+        </ul>
       </section>
 
       <section style={actionsStyle}>
@@ -208,7 +250,9 @@ const copyStyle = { color: "#5c6f68", lineHeight: 1.5 };
 const plansGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 300px), 1fr))", gap: 16, marginTop: 18 };
 const planCardStyle = { border: "1px solid #d7e3de", borderRadius: 18, background: "#fff", padding: 22, boxShadow: "0 8px 24px rgba(23,53,43,.07)" };
 const planTitleStyle = { margin: "4px 0 14px", fontSize: 24 };
+const seatStyle = { color: "#254e40", fontSize: 17, fontWeight: 750, margin: "0 0 12px" };
 const trialStyle = { color: "#17613f", background: "#e8f6ed", borderRadius: 999, display: "inline-block", padding: "7px 12px", fontWeight: 800 };
+const trialCopyStyle = { color: "#405c52", fontSize: 14, lineHeight: 1.45, minHeight: 40 };
 const providerCopyStyle = { color: "#6b7772", fontSize: 13, minHeight: 20 };
 const priceStyle = { fontSize: 30, fontWeight: 850, margin: "12px 0" };
 const monthStyle = { fontSize: 15, fontWeight: 600, color: "#65756f" };
@@ -220,4 +264,8 @@ const labelStyle = { display: "block", color: "#60766e", fontSize: 12, fontWeigh
 const errorStyle = { background: "#fff1ef", color: "#8c2f24", borderRadius: 12, padding: 14, marginBottom: 14 };
 const messageStyle = { background: "#edf7f0", color: "#185d3d", borderRadius: 12, padding: 14, marginBottom: 14 };
 const qaStyle = { background: "#fff8df", color: "#6d5313", borderRadius: 12, padding: 12, marginBottom: 14, fontSize: 14 };
+const includedStyle = { marginTop: 22, border: "1px solid #d7e3de", borderRadius: 18, background: "#f7fbf8", padding: 22 };
+const includedTitleStyle = { margin: "4px 0 6px", fontSize: 24 };
+const featureGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 260px), 1fr))", gap: "10px 18px", listStyle: "none", margin: "18px 0 0", padding: 0 };
+const featureStyle = { color: "#24533f", fontWeight: 700, lineHeight: 1.4 };
 const footnoteStyle = { color: "#687872", fontSize: 13, lineHeight: 1.5, marginTop: 18 };

@@ -9,13 +9,32 @@ const native = fs.readFileSync(new URL("../ios/App/App/StoreKitSubscriptions.swi
 const registry = fs.readFileSync(new URL("../src/utils/businessToolsRegistry.js", import.meta.url), "utf8");
 const api = fs.readFileSync(new URL("../src/utils/subscriptionApi.js", import.meta.url), "utf8");
 
-test("professional subscription screen exposes exactly the approved plans", () => {
-  assert.match(page, /PLAN A/);
-  assert.match(page, /PLAN B/);
-  assert.match(page, /Up to \{plan\.seatLimit\} users/);
+test("professional subscription screen exposes the three approved paid plans", () => {
+  assert.match(page, /Starter/);
+  assert.match(page, /Growth/);
+  assert.match(page, /Professional/);
+  assert.match(page, /Up to \{plan\.seatLimit\} professional users/);
   assert.match(page, /14 days free/);
   assert.match(page, /amountMinor \/ 100/);
+  assert.match(page, /Start 14-Day Free Trial/);
+  assert.match(page, /Free for 14 days, then \$\{displayPrice\}\/month\. Cancel anytime\./);
   assert.doesNotMatch(page, /annual|per-lead|premium AI|priority leads/i);
+});
+
+test("all paid plans share the complete Meetro Business platform", () => {
+  for (const feature of [
+    "Work Center",
+    "Customer Communication",
+    "Evaluations & Scheduling",
+    "Quotes & Approvals",
+    "Deposit & Payment Tracking",
+    "Invoicing",
+    "Leads & Urgent/Emergency Opportunities",
+    "Alerts",
+    "Business Profile & Portfolio",
+    "Web + iPhone access",
+  ]) assert.match(page, new RegExp(feature.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  assert.match(page, /Included with every Meetro Business plan/);
 });
 
 test("trial promise requires provider eligibility and introductory offer", () => {
@@ -89,6 +108,13 @@ test("central professional gate excludes the subscription surface and homeowners
   assert.match(app, /isProfessionalOnlyPage\(page\)[\s\S]*isProfessionalSession\(\)[\s\S]*subscriptionGate/);
   assert.match(app, /page !== "professionalSubscription"/);
   assert.match(app, /setSubscriptionGate\(\{ status: "not_applicable", entitled: true \}\)/);
+});
+
+test("normal no-entitlement access routes cleanly to plans without treating it as an operation error", () => {
+  assert.match(app, /subscriptionGate\.status !== "ready"/);
+  assert.match(app, /window\.location\.hash = "professionalSubscription"/);
+  assert.match(app, /setPageState\("professionalSubscription"\)/);
+  assert.doesNotMatch(page, /The subscription operation could not be completed/);
 });
 
 test("server-entitled staging professionals retain normal Job, Quote, Invoice, and Alert routes", () => {
