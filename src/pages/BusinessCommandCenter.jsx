@@ -198,9 +198,9 @@ function BusinessCommandCenter({ setPage }) {
       icon: "subscription",
       title: isSpanish ? "Plan y suscripcion" : "Plan & Subscription",
       desc: isSpanish
-        ? "Revisa opciones futuras de Meetro Pro y soporte del negocio."
-        : "Review future Meetro Pro options and business support.",
-      badge: statusLabel("subscription", BUSINESS_TOOL_STATUS.COMING_SOON),
+        ? "Revisa tu plan profesional, usuarios incluidos y estado de suscripcion."
+        : "Review your professional plan, included users, and subscription status.",
+      badge: statusLabel("subscription", BUSINESS_TOOL_STATUS.READY),
     },
     complianceCenter: {
       id: "complianceCenter",
@@ -424,6 +424,11 @@ function BusinessCommandCenter({ setPage }) {
       return;
     }
 
+    if (toolId === "subscription") {
+      setPage("professionalSubscription");
+      return;
+    }
+
     if (toolId === "assetCenter") {
       setPage("assetCenter");
       return;
@@ -513,7 +518,7 @@ function BusinessCommandCenter({ setPage }) {
     }
 
     if (
-      ["reviews", "subscription", "findingsLibrary", "knowledgeBase"].includes(
+      ["reviews", "findingsLibrary", "knowledgeBase"].includes(
         toolId
       )
     ) {

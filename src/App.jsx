@@ -36,6 +36,7 @@ import useAppLayoutMetrics from "./hooks/useAppLayoutMetrics";
 import { shouldUseCommunicationCenterConversationRoute } from "./utils/communicationLayout";
 import { parseCanonicalConversationRoute } from "./utils/canonicalConversationMessaging";
 import { resolveLegacyEmergencyRoute } from "./utils/emergencyRoutes";
+import { fetchProfessionalSubscription } from "./utils/subscriptionApi";
 
 const Home = lazy(() => import("./pages/Home"));
 import MyRequests from "./pages/MyRequests";
@@ -74,6 +75,7 @@ import QuoteBuilder from "./pages/QuoteBuilder";
 import ChangeOrderRequest from "./pages/ChangeOrderRequest";
 import BusinessAnalytics from "./pages/BusinessAnalytics";
 import BusinessCommandCenter from "./pages/BusinessCommandCenter";
+import ProfessionalSubscription from "./pages/ProfessionalSubscription";
 const ProfessionalOnboarding = lazy(() => import("./pages/ProfessionalOnboarding"));
 import BusinessAvailability from "./pages/BusinessAvailability";
 import CustomerRelationshipsCenter from "./pages/CustomerRelationshipsCenter";
@@ -314,6 +316,7 @@ function App() {
   "reportsCenter",
   "serviceTypesEvaluations",
   "workCenter",
+  "professionalSubscription",
 ];
 
   const isProfessionalOnlyPage = (targetPage = "") =>
@@ -558,9 +561,32 @@ function App() {
       ? "sessionRestoring"
       : getInitialPage()
   );
+  const [subscriptionGate, setSubscriptionGate] = useState({ status: "idle", entitled: false });
   const isStartupReady =
     startupReadiness.status === STARTUP_READINESS.ready &&
     sessionHydration.status !== SESSION_HYDRATION.restoring;
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => {
+      if (
+        sessionHydration.status !== SESSION_HYDRATION.authenticated ||
+        !isProfessionalSession()
+      ) {
+        if (active) setSubscriptionGate({ status: "not_applicable", entitled: true });
+        return;
+      }
+      if (active) setSubscriptionGate({ status: "loading", entitled: false });
+      fetchProfessionalSubscription(setPageState)
+        .then((result) => {
+          if (active) setSubscriptionGate({ status: "ready", entitled: result.entitled === true });
+        })
+        .catch(() => {
+          if (active) setSubscriptionGate({ status: "unavailable", entitled: false });
+        });
+      });
+    return () => { active = false; };
+  }, [sessionHydration.status]);
 
   useEffect(() => {
     if (sessionHydration.status !== SESSION_HYDRATION.restoring) return undefined;
@@ -951,6 +977,25 @@ if (sessionHydration.status === SESSION_HYDRATION.restoring || page === "session
   return withRouteBoundary(<SessionRestoringScreen />, "sessionRestoring", setPage);
 }
 
+if (
+  page !== "professionalSubscription" &&
+  isProfessionalOnlyPage(page) &&
+  isProfessionalSession() &&
+  subscriptionGate.status === "loading"
+) {
+  return withRouteBoundary(<LoadingScreen text="Checking professional access…" />, page, setPage);
+}
+
+if (
+  page !== "professionalSubscription" &&
+  isProfessionalOnlyPage(page) &&
+  isProfessionalSession() &&
+  subscriptionGate.status !== "idle" &&
+  subscriptionGate.entitled !== true
+) {
+  return withStartupChrome(<ProfessionalSubscription setPage={setPage} />, updateNotice);
+}
+
 if (page === "login") {
   return withStartupChrome(withRouteBoundary(<Login setPage={setPage} />, page, setPage), updateNotice);
 }
@@ -1145,6 +1190,10 @@ if (page === "changeOrderRequest") {
 
 if (page === "businessCommandCenter") {
   return withStartupChrome(withGuideLayer(<BusinessCommandCenter setPage={setPage} />, page, setPage), updateNotice);
+}
+
+if (page === "professionalSubscription") {
+  return withStartupChrome(<ProfessionalSubscription setPage={setPage} />, updateNotice);
 }
 
 if (page === "businessAvailability") {

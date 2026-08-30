@@ -7,5 +7,6 @@ class MainViewController: CAPBridgeViewController {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(SpeechRecognition())
         bridge?.registerPluginInstance(NativeContacts())
+        bridge?.registerPluginInstance(StoreKitSubscriptions())
     }
 }

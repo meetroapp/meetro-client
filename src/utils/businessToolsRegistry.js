@@ -30,7 +30,7 @@ export const BUSINESS_TOOLS_AUDIT = Object.freeze([
   { id: "reviews", title: "Reviews", status: BUSINESS_TOOL_STATUS.COMING_SOON, route: null },
   { id: "settings", title: "Settings", status: BUSINESS_TOOL_STATUS.READY, route: "profile" },
   { id: "legal", title: "Legal", status: BUSINESS_TOOL_STATUS.READY, route: "legal" },
-  { id: "subscription", title: "Plan & Subscription", status: BUSINESS_TOOL_STATUS.COMING_SOON, route: null },
+  { id: "subscription", title: "Plan & Subscription", status: BUSINESS_TOOL_STATUS.READY, route: "professionalSubscription" },
 ]);
 
 export function getBusinessToolAuditRows() {
