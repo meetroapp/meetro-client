@@ -60,6 +60,17 @@ function TeamMembers({ setPage }) {
     );
   }, [authority]);
 
+  const workMembership = useMemo(() => {
+    return (
+      (authority?.memberships || []).find(
+        (item) =>
+          item.status === "ACTIVE" &&
+          (["OWNER", "MANAGER"].includes(item.role) ||
+            item.permissions?.includes("ASSIGNED_WORK"))
+      ) || null
+    );
+  }, [authority]);
+
   const load = useCallback(async () => {
     setLoading(true);
     setError("");
@@ -239,6 +250,38 @@ function TeamMembers({ setPage }) {
         <div role="status" style={noticeStyle}>
           {notice}
         </div>
+      )}
+
+      {!loading && workMembership && (
+        <section style={workAccessStyle} aria-label="Job assignment workspace">
+          <div>
+            <strong>
+              {["OWNER", "MANAGER"].includes(workMembership.role)
+                ? "Job assignment authority"
+                : "Your assigned work"}
+            </strong>
+            <p style={workAccessCopyStyle}>
+              {["OWNER", "MANAGER"].includes(workMembership.role)
+                ? "Assign active Team members to exact business Jobs."
+                : "Open only the Jobs and Schedule assigned to this membership."}
+            </p>
+          </div>
+          <button
+            type="button"
+            style={primaryButton}
+            onClick={() =>
+              setPage(
+                `employeeJobs?businessId=${encodeURIComponent(
+                  workMembership.businessId
+                )}`
+              )
+            }
+          >
+            {["OWNER", "MANAGER"].includes(workMembership.role)
+              ? "Manage Job Assignments"
+              : "Open My Jobs"}
+          </button>
+        </section>
       )}
 
       {invitationToken && (
@@ -617,5 +660,17 @@ const errorStyle = {
   color: "#8b2e2e",
   borderColor: "#e7beb8",
 };
+const workAccessStyle = {
+  ...cardStyle,
+  background: "linear-gradient(135deg, #edf8ef, #f8fbf8)",
+  borderColor: "#b9d9c0",
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 16,
+  flexWrap: "wrap",
+  color: "#1a5d31",
+};
+const workAccessCopyStyle = { ...copyStyle, margin: "5px 0 0" };
 
 export default TeamMembers;

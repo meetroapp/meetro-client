@@ -96,6 +96,7 @@ const SUPPORTED_DESTINATIONS = new Set([
   "business_profile",
   "review",
   "notifications",
+  "job",
   "visit",
 ]);
 
@@ -275,6 +276,18 @@ export function getAlertDestinationActionTarget(
     return route
       ? { ok: true, route, labelKey: "alertCenterOpenDetails" }
       : { ok: false, route: null, labelKey: null };
+  }
+
+  if (normalized.type === "job") {
+    const params = new URLSearchParams({
+      jobId: normalized.jobId,
+      returnPage: "notifications",
+    });
+    return {
+      ok: true,
+      route: `employeeJobs?${params}`,
+      labelKey: "alertCenterOpenDetails",
+    };
   }
 
   return { ok: false, route: null, labelKey: null };

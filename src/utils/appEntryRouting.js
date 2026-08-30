@@ -47,6 +47,7 @@ const APPLICATION_HASH_ROUTES = new Set([
   "emergencyOperationsCenter",
   "emergencyRequest",
   "emergencyStatus",
+  "employeeJobs",
   "favorites",
   "guidelines",
   "hiringCenter",
