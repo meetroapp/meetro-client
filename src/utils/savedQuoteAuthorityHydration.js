@@ -28,6 +28,21 @@ function positiveInteger(value) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function customerParty(value) {
+  if (value == null) return null;
+  const businessContactId = uuid(value.businessContactId);
+  const customerRelationshipId = uuid(value.customerRelationshipId);
+  return businessContactId && customerRelationshipId
+    ? Object.freeze({ businessContactId, customerRelationshipId })
+    : undefined;
+}
+
+function sameCustomerParty(left, right) {
+  if (left == null || right == null) return left === right;
+  return left.businessContactId === right.businessContactId &&
+    left.customerRelationshipId === right.customerRelationshipId;
+}
+
 function validateSourceDocument(document) {
   const documentId = uuid(document?.id);
   const documentVersion = positiveInteger(document?.version);
@@ -82,7 +97,7 @@ function decisionMatchesDelivery(canonicalQuote, delivery) {
   );
 }
 
-function safeCanonicalQuoteProjection(quote) {
+function safeCanonicalQuoteProjection(quote, canonicalCustomerParty = null) {
   return Object.freeze({
     id: quote.id,
     jobId: quote.jobId,
@@ -96,6 +111,7 @@ function safeCanonicalQuoteProjection(quote) {
     currency: quote.currency,
     documentNumber: quote.documentNumber,
     sourceBusinessDocument: quote.sourceBusinessDocument,
+    customerParty: canonicalCustomerParty,
   });
 }
 
@@ -149,7 +165,23 @@ export async function hydrateSavedQuoteAuthority({
       message: "The saved Quote no longer matches its canonical source version.",
     });
   }
-  const canonicalQuote = safeCanonicalQuoteProjection(normalizedCanonicalQuote);
+  const sourceCustomerParty = customerParty(document.customerParty);
+  const canonicalCustomerParty = customerParty(sourceMatches[0].customerParty);
+  if (
+    sourceCustomerParty === undefined ||
+    canonicalCustomerParty === undefined ||
+    !sameCustomerParty(sourceCustomerParty, canonicalCustomerParty)
+  ) {
+    throw new SavedQuoteAuthorityHydrationError({
+      status: 409,
+      code: "SAVED_QUOTE_CUSTOMER_AUTHORITY_MISMATCH",
+      message: "The saved Quote customer no longer matches canonical Quote authority.",
+    });
+  }
+  const canonicalQuote = safeCanonicalQuoteProjection(
+    normalizedCanonicalQuote,
+    canonicalCustomerParty
+  );
 
   let delivery = null;
   if (canonicalQuote.status === "ISSUED") {
@@ -177,6 +209,7 @@ export async function hydrateSavedQuoteAuthority({
 
 export const savedQuoteAuthorityHydrationInternals = Object.freeze({
   decisionMatchesDelivery,
+  sameCustomerParty,
   safeCanonicalQuoteProjection,
   validateSourceDocument,
 });

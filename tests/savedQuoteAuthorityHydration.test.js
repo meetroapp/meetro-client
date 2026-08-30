@@ -38,6 +38,8 @@ function canonicalQuote({
   status = "ISSUED",
   documentVersion = 1,
   decisionState = null,
+  sourceContinuity = null,
+  customerParty = null,
 } = {}) {
   const currentVersion = status === "ISSUED" ? 2 : 1;
   const issuedAt = status === "ISSUED" ? "2026-08-27T21:37:29.762Z" : null;
@@ -87,9 +89,10 @@ function canonicalQuote({
     sourceBusinessDocument: {
       documentId: IDS.document,
       documentVersion,
+      ...(sourceContinuity || {}),
     },
     customerTermsSnapshot: null,
-    customerParty: null,
+    customerParty,
   };
 }
 
@@ -291,6 +294,75 @@ test("hard refresh and Saved Files reopen derive the same state from authenticat
   const reopened = await load();
   assert.deepEqual(reopened, initial);
   assert.deepEqual(methods, ["GET", "GET", "GET", "GET"]);
+});
+
+test("newer saved version hydrates only with server-attested source and exact customer authority", async () => {
+  const exactParty = Object.freeze({
+    businessContactId: "11111111-1111-4111-8111-111111111111",
+    customerRelationshipId: "22222222-2222-4222-8222-222222222222",
+  });
+  const newerDocument = Object.freeze({
+    ...document,
+    version: 2,
+    customerParty: exactParty,
+  });
+  const quote = canonicalQuote({
+    sourceContinuity: {
+      currentDocumentVersion: 2,
+      currentSnapshotMatchesSource: true,
+    },
+    customerParty: exactParty,
+  });
+  const calls = [];
+  const authority = await hydrateSavedQuoteAuthority({
+    document: newerDocument,
+    authFetchImpl: quoteListTransport([quote], calls),
+    fetchDeliveryImpl: async () => delivery(quote),
+  });
+  assert.equal(authority.sourceDocument.documentVersion, 2);
+  assert.equal(authority.canonicalQuote.sourceBusinessDocument.documentVersion, 1);
+  assert.equal(authority.canonicalQuote.sourceBusinessDocument.currentDocumentVersion, 2);
+  assert.deepEqual(authority.canonicalQuote.customerParty, exactParty);
+  assert.equal(
+    workingQuoteDeliveryPresentation({
+      canonicalQuote: authority.canonicalQuote,
+      deliveryEvidence: authority.delivery.existingDelivery,
+    }).actionDisabled,
+    false
+  );
+  assert.deepEqual(calls.map(({ options }) => options.method), ["GET"]);
+});
+
+test("source drift and customer authority drift remain fail-closed", async () => {
+  const exactParty = {
+    businessContactId: "11111111-1111-4111-8111-111111111111",
+    customerRelationshipId: "22222222-2222-4222-8222-222222222222",
+  };
+  const newerDocument = { ...document, version: 2, customerParty: exactParty };
+  await assert.rejects(() => hydrateSavedQuoteAuthority({
+    document: newerDocument,
+    authFetchImpl: quoteListTransport([canonicalQuote({
+      sourceContinuity: {
+        currentDocumentVersion: 2,
+        currentSnapshotMatchesSource: false,
+      },
+      customerParty: exactParty,
+    })], []),
+  }), { code: "SAVED_QUOTE_CANONICAL_MAPPING_MISMATCH" });
+
+  await assert.rejects(() => hydrateSavedQuoteAuthority({
+    document: newerDocument,
+    authFetchImpl: quoteListTransport([canonicalQuote({
+      sourceContinuity: {
+        currentDocumentVersion: 2,
+        currentSnapshotMatchesSource: true,
+      },
+      customerParty: {
+        ...exactParty,
+        customerRelationshipId: "33333333-3333-4333-8333-333333333333",
+      },
+    })], []),
+  }), { code: "SAVED_QUOTE_CUSTOMER_AUTHORITY_MISMATCH" });
 });
 
 test("hydrated issued checkpoint retries delivery without bridge or issue", async () => {

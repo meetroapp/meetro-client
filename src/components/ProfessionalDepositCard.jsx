@@ -281,6 +281,16 @@ export default function ProfessionalDepositCard({
       )}
 
       {canConfirmPayment && (
+        <button
+          type="button"
+          style={styles.secondaryButton}
+          onClick={() => setPage(`depositRequestBuilder?jobId=${encodeURIComponent(jobId)}`)}
+        >
+          Prepare Deposit Request
+        </button>
+      )}
+
+      {canConfirmPayment && (
         <button type="button" style={styles.primaryButton} onClick={openForm}>
           Confirm Deposit Received
         </button>

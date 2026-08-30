@@ -20,7 +20,7 @@ export function parseSavedQuoteRoute(hash = "") {
     jobId,
     draftId,
     valid:
-      ["quoteBuilder", "invoiceBuilder"].includes(page) &&
+      ["quoteBuilder", "invoiceBuilder", "depositRequestBuilder"].includes(page) &&
       !invalidJobId &&
       !invalidDraftId &&
       (page === "quoteBuilder" || !hasDraftId),

@@ -218,6 +218,7 @@ const assistantEnabledPages = new Set([
   "businessLeads",
   "quoteRequests",
   "quoteBuilder",
+  "depositRequestBuilder",
   "projectGallery",
   "completedJobDetails",
   "emergency",
@@ -308,6 +309,7 @@ function App() {
   "professionalOnboarding",
   "projectGallery",
   "quoteBuilder",
+  "depositRequestBuilder",
   "quoteRequests",
   "reportsCenter",
   "serviceTypesEvaluations",
@@ -1127,6 +1129,14 @@ if (page === "businessLeads") {
 
 if (page === "quoteBuilder") {
   return withStartupChrome(withAssistantLayer(<QuoteBuilder setPage={setPage} />, page, setPage), updateNotice);
+}
+
+if (page === "depositRequestBuilder") {
+  return withStartupChrome(withAssistantLayer(
+    <QuoteBuilder setPage={setPage} initialDocument="depositRequest" />,
+    page,
+    setPage
+  ), updateNotice);
 }
 
 if (page === "changeOrderRequest") {

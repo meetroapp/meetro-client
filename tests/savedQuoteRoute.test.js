@@ -215,7 +215,7 @@ test("exact saved-document bootstrap has precedence over rich Job/Evaluation pre
   assert.match(exactEffect, /getBusinessDocumentDraft/);
   assert.doesNotMatch(exactEffect, /buildJobLinkedQuotePrefill|setRecommendedSolution|fetchJobLinkedQuoteContext/);
   const jobEffect = source.slice(
-    source.indexOf("fetchJobLinkedQuoteContext({ jobId: routeCanonicalJobId"),
+    source.indexOf("fetchJobLinkedQuoteContext({ jobId: savedQuoteContextJobId"),
     source.indexOf("function openProtectedJobLinkedQuote")
   );
   assert.match(jobEffect, /routeSavedDocumentId/);

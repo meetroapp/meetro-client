@@ -462,6 +462,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   const invoiceBuilderSource =
     localStorage.getItem("invoiceBuilderSource") || "";
   const isUnifiedInvoiceEntry = initialDocument === "invoice";
+  const isUnifiedDepositRequestEntry = initialDocument === "depositRequest";
   const isWorkCenterReturn =
     quoteBuilderReturnPage === "workCenter" ||
     quoteBuilderReturnPage === "contractorDashboard";
@@ -945,7 +946,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     useState("");
   const [quickQuoteAttachedJob, setQuickQuoteAttachedJob] = useState(null);
   const [jobLinkedQuoteContext, setJobLinkedQuoteContext] = useState(() => ({
-    status: routeCanonicalJobId && !routeSavedDocumentId && !isUnifiedInvoiceEntry
+    status: routeCanonicalJobId && !isUnifiedInvoiceEntry
       ? "loading"
       : "standalone",
     reason: "",
@@ -1092,6 +1093,9 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     routeCanonicalJobId || cleanText(request.jobId || request.job_id);
   const canonicalJobId =
     quickQuoteAttachedJob?.jobId || requestedCanonicalJobId;
+  const savedQuoteContextJobId =
+    routeCanonicalJobId ||
+    (routeSavedDocumentId ? savedRouteBootstrap.document?.jobId || "" : "");
 
   useEffect(() => {
     if (!isUnifiedInvoiceEntry || !routeCanonicalJobId || routeSavedDocumentId) {
@@ -1195,7 +1199,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   }, [routeCanonicalJobId, routeSavedDocumentId, savedQuoteRoute.valid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
-    if (isUnifiedInvoiceEntry || !routeCanonicalJobId || routeSavedDocumentId || !savedQuoteRoute.valid) {
+    if (isUnifiedInvoiceEntry || !savedQuoteContextJobId || !savedQuoteRoute.valid) {
       return undefined;
     }
     let active = true;
@@ -1208,7 +1212,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
       reopenDocumentId: null,
     });
     void Promise.allSettled([
-      fetchJobLinkedQuoteContext({ jobId: routeCanonicalJobId, setPage }),
+      fetchJobLinkedQuoteContext({ jobId: savedQuoteContextJobId, setPage }),
       listBusinessDocumentDrafts({ type: "QUOTE", setPage }),
     ]).then(([contextResult, documentsResult]) => {
         if (!active) return;
@@ -1216,9 +1220,9 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
           ? contextResult.value
           : { status: "error", reason: "JOB_CONTEXT_FETCH_FAILED", context: null };
         const savedProtection = documentsResult.status === "fulfilled"
-          ? resolveOwnedSavedQuotesForJob(documentsResult.value, routeCanonicalJobId)
+          ? resolveOwnedSavedQuotesForJob(documentsResult.value, savedQuoteContextJobId)
           : { status: "unavailable", documents: [] };
-        if (savedProtection.status === "ambiguous") {
+        if (!routeSavedDocumentId && savedProtection.status === "ambiguous") {
           setJobLinkedQuoteContext({
             status: "ambiguous",
             reason: "MULTIPLE_SAVED_QUOTES",
@@ -1230,7 +1234,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
           return;
         }
         if (result.status !== "ready" || !result.context) {
-          if (savedProtection.status === "exact") {
+          if (!routeSavedDocumentId && savedProtection.status === "exact") {
             setJobLinkedQuoteContext({
               status: "protected",
               reason: "",
@@ -1291,7 +1295,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     return () => {
       active = false;
     };
-  }, [isUnifiedInvoiceEntry, routeCanonicalJobId, routeSavedDocumentId, savedQuoteRoute.valid]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [isUnifiedInvoiceEntry, routeSavedDocumentId, savedQuoteContextJobId, savedQuoteRoute.valid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   function openProtectedJobLinkedQuote() {
     const resume = jobLinkedQuoteContext.savedQuoteResume ||
@@ -3195,6 +3199,12 @@ ${businessIdentity.businessName}`;
   }
 
   function leaveUnifiedBusinessWorkspace() {
+    if (isUnifiedDepositRequestEntry) {
+      setPage(routeCanonicalJobId
+        ? `workCenter?jobId=${encodeURIComponent(routeCanonicalJobId)}`
+        : "workCenter");
+      return;
+    }
     if (isUnifiedInvoiceEntry) {
       const destination = invoiceBuilderReturnPage || "conversationThread";
       if (invoiceBuilderSource) localStorage.removeItem("invoiceBuilderSource");
@@ -3295,7 +3305,11 @@ ${businessIdentity.businessName}`;
         </div>
       );
     }
-    if (!isUnifiedInvoiceEntry && !routeSavedDocumentId && routeCanonicalJobId && jobLinkedQuoteContext.status === "loading") {
+    if (
+      !isUnifiedInvoiceEntry &&
+      savedQuoteContextJobId &&
+      ["loading", "standalone"].includes(jobLinkedQuoteContext.status)
+    ) {
       return (
         <div className="app-page meetro-form-page business-document-context-gate">
           <p role="status">Loading the authorized Job, customer, and Evaluation context…</p>
@@ -3304,8 +3318,7 @@ ${businessIdentity.businessName}`;
     }
     if (
       !isUnifiedInvoiceEntry &&
-      !routeSavedDocumentId &&
-      routeCanonicalJobId &&
+      savedQuoteContextJobId &&
       !["ready", "protected"].includes(jobLinkedQuoteContext.status)
     ) {
       const multipleSavedQuotes = jobLinkedQuoteContext.status === "ambiguous";
@@ -3321,7 +3334,7 @@ ${businessIdentity.businessName}`;
         </div>
       );
     }
-    if (!routeSavedDocumentId && routeCanonicalJobId && jobLinkedQuoteContext.existingQuoteProtected) {
+    if (!isUnifiedDepositRequestEntry && !routeSavedDocumentId && routeCanonicalJobId && jobLinkedQuoteContext.existingQuoteProtected) {
       const savedQuoteResume = jobLinkedQuoteContext.savedQuoteResume ||
         resolveJobLinkedSavedQuoteResume(jobLinkedQuoteContext.context);
       return (
@@ -3388,8 +3401,7 @@ ${businessIdentity.businessName}`;
               jobLinkedQuoteContext.context?.recommendations || [],
             customerLinkedFromJob:
               invoicePreparation.status === "ready" || (
-                !routeSavedDocumentId &&
-                jobLinkedQuoteContext.status === "ready" &&
+                ["ready", "protected"].includes(jobLinkedQuoteContext.status) &&
                 Boolean(jobLinkedQuoteContext.context?.customer.displayName)
               ),
             canonical: Boolean(canonicalJobId),

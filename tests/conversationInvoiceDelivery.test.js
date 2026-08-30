@@ -21,10 +21,11 @@ function message() {
       type: "INVOICE_SHARED", status: "SENT",
       payload: {
         schemaVersion: 1, invoiceId: INVOICE_ID, invoiceNumber: "INV-111111111111",
-        jobId: JOB_ID, status: "SENT", totalMinor: 92000, balanceMinor: 92000,
+        jobId: JOB_ID, status: "SENT", totalMinor: 92000, paidMinor: 0, balanceMinor: 92000,
         currency: "USD", due: { mode: "DUE_ON_RECEIPT", date: null },
         business: { displayName: "BGone Services" },
         job: { title: "Kitchen repair", service: "Plumbing" },
+        terms: "Due on receipt.",
         issuedAt: "2026-08-15T16:00:00.000Z",
       },
     },

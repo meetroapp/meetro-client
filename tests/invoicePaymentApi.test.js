@@ -92,6 +92,7 @@ test("workspace validator accepts only server-owned financial summary and exact 
       serviceTitle: "Kitchen repair", completedAt: "2026-08-15T12:00:00.000Z",
       completionVersion: 1, approvedAmount: { currency: "USD", totalMinor: 92000 },
       paymentsReceivedMinor: 46000, amountStillDueMinor: 46000,
+      paymentTerms: "50% deposit. Balance due on completion.",
       approvedWork: [{ description: "Replace disposal", quantity: 1, unitAmountMinor: 92000, lineTotalMinor: 92000 }],
     }],
     invoices: [{
@@ -110,10 +111,11 @@ test("workspace validator accepts only server-owned financial summary and exact 
 test("Invoice delivery snapshot is exact-identity and customer-safe", () => {
   const snapshot = {
     schemaVersion: 1, invoiceId: INVOICE_ID, invoiceNumber: "INV-111111111111",
-    jobId: JOB_ID, status: "SENT", totalMinor: 92000, balanceMinor: 92000,
+    jobId: JOB_ID, status: "SENT", totalMinor: 92000, paidMinor: 0, balanceMinor: 92000,
     currency: "USD", due: { mode: "DUE_ON_RECEIPT", date: null },
     business: { displayName: "BGone Services" },
     job: { title: "Kitchen repair", service: "Plumbing" },
+    terms: "Due on receipt.",
     issuedAt: "2026-08-15T16:00:00.000Z",
   };
   assert.ok(normalizeInvoiceDeliverySnapshot(snapshot, { invoiceId: INVOICE_ID, jobId: JOB_ID }));
@@ -151,10 +153,10 @@ test("Invoice commands send only exact governed fields and never accept client s
     };
   };
   await createCanonicalInvoice({ jobId: JOB_ID, expectedCompletionVersion: 1, due: { mode: "DUE_ON_RECEIPT", date: null }, idempotencyKey: "create-1", authFetchImpl });
-  await issueCanonicalInvoice({ invoiceId: INVOICE_ID, expectedVersion: 1, idempotencyKey: "issue-1", authFetchImpl });
+  await issueCanonicalInvoice({ invoiceId: INVOICE_ID, expectedVersion: 1, messageText: "Here is your final Invoice.", idempotencyKey: "issue-1", authFetchImpl });
   await recordCanonicalPayment({ invoiceId: INVOICE_ID, expectedVersion: 2, amountMinor: 46000, method: "CHECK", receivedDate: "2026-08-15", idempotencyKey: "payment-1", authFetchImpl });
   assert.deepEqual(calls[0].body, { expectedCompletionVersion: 1, due: { mode: "DUE_ON_RECEIPT", date: null }, customerNotes: null, terms: null, extraWork: [] });
-  assert.deepEqual(calls[1].body, { expectedVersion: 1 });
+  assert.deepEqual(calls[1].body, { expectedVersion: 1, messageText: "Here is your final Invoice." });
   assert.deepEqual(calls[2].body, { expectedVersion: 2, amountMinor: 46000, method: "CHECK", receivedDate: "2026-08-15", customerReference: null });
   assert.equal(calls.some(({ body }) => "status" in body || "paid" in body || "balanceMinor" in body), false);
 });

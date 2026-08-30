@@ -372,7 +372,7 @@ test("opening a Job-linked Quote does not call save, issue, Invoice, payment, or
     "utf8"
   );
   const hydrationEffect = quoteBuilder.slice(
-    quoteBuilder.indexOf("fetchJobLinkedQuoteContext({ jobId: routeCanonicalJobId"),
+    quoteBuilder.indexOf("fetchJobLinkedQuoteContext({ jobId: savedQuoteContextJobId"),
     quoteBuilder.indexOf("function inputKey")
   );
   assert.doesNotMatch(
@@ -394,7 +394,7 @@ test("hard-refresh protection opens the exact saved Quote instead of routing to 
     "utf8"
   );
   const protection = quoteBuilder.slice(
-    quoteBuilder.indexOf("if (!routeSavedDocumentId && routeCanonicalJobId && jobLinkedQuoteContext.existingQuoteProtected)"),
+    quoteBuilder.indexOf("if (!isUnifiedDepositRequestEntry && !routeSavedDocumentId && routeCanonicalJobId && jobLinkedQuoteContext.existingQuoteProtected)"),
     quoteBuilder.indexOf("return (\n      <>\n        <input")
   );
   assert.match(protection, /resolveJobLinkedSavedQuoteResume/);

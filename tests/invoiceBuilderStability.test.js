@@ -36,6 +36,7 @@ function representativeWorkspace() {
       approvedAmount: { currency: "USD", totalMinor: 68000 },
       paymentsReceivedMinor: 51000,
       amountStillDueMinor: 17000,
+      paymentTerms: "75% deposit required before scheduling. Remaining balance due upon completion.",
       approvedWork: [{
         description: "Approved cabinet repair",
         quantity: 1,
@@ -83,7 +84,8 @@ test("Job prefill is applied once per Job and leaves professional-only edits out
   assert.match(hydration, /invoicePreparationHydratedRef\.current === invoicePreparation\.jobId/);
   assert.match(hydration, /invoicePreparationHydratedRef\.current = invoicePreparation\.jobId/);
   assert.match(hydration, /setInvoice\(\(current\) => \(\{[\s\S]*\.\.\.current/);
-  assert.doesNotMatch(hydration, /extraWork|customerNotes|terms|dueDate/);
+  assert.doesNotMatch(hydration, /extraWork|customerNotes|dueDate/);
+  assert.match(hydration, /paymentTerms: invoicePreparation\.paymentTerms/);
   assert.match(hydration, /existingLookup\?\.key === lookupKey/);
   assert.match(hydration, /savedJobCustomerLookupRef\.current = \{ key: lookupKey, promise: lookup \}/);
 });

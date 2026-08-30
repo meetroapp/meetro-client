@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import BottomNav from "./BottomNav.jsx";
+import DepositRequestWorkspace from "./DepositRequestWorkspace.jsx";
 import MeetroIcon from "./MeetroIcon.jsx";
 import WorkflowMicrophoneInput from "./WorkflowMicrophoneInput.jsx";
 import {
@@ -54,6 +55,7 @@ import {
   workingQuoteSendReadiness,
 } from "../utils/workingQuoteCanonicalIssue.js";
 import { hydrateSavedQuoteAuthority } from "../utils/savedQuoteAuthorityHydration.js";
+import { hydrateSavedJobLinkedQuotePresentation } from "../utils/savedJobLinkedQuoteHydration.js";
 import {
   copyBusinessDocumentShareMessage,
   downloadBusinessDocumentPdfArtifact,
@@ -133,6 +135,10 @@ import {
   normalizeBusinessDocumentCustomerParty,
 } from "../utils/businessDocumentCustomerParty.js";
 import { t } from "../utils/language.js";
+import {
+  buildCanonicalConversationRoute,
+  CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
+} from "../utils/canonicalConversationMessaging.js";
 import "./UnifiedBusinessDocumentWorkspace.css";
 
 const NUMBERING_SETUP_PENDING = Symbol("BUSINESS_DOCUMENT_NUMBERING_SETUP_PENDING");
@@ -255,7 +261,7 @@ function invoiceTotal(invoice) {
   return override ? Number(override) || 0 : invoiceRows(invoice).reduce((sum, item) => sum + item.amount, 0);
 }
 
-function DocumentTabs({ activeDocument, onDocumentChange, onSavedFiles }) {
+function DocumentTabs({ activeDocument, onDocumentChange, onSavedFiles, onDepositRequest }) {
   return (
     <nav className="business-document-tabs" aria-label="Business documents">
       {[["quote", "Quote", "quickQuote"], ["invoice", "Invoice", "quickInvoice"]].map(([id, label, icon]) => (
@@ -263,6 +269,7 @@ function DocumentTabs({ activeDocument, onDocumentChange, onSavedFiles }) {
           <MeetroIcon name={icon} size={17} decorative />{label}
         </button>
       ))}
+      <button type="button" disabled={!onDepositRequest} onClick={onDepositRequest}><MeetroIcon name="payment" size={17} decorative />Deposit Request</button>
       <button type="button" onClick={onSavedFiles} aria-haspopup="dialog"><MeetroIcon name="history" size={17} decorative />Saved Files</button>
     </nav>
   );
@@ -375,18 +382,21 @@ function quoteProposalReviewSections(proposal, pricing, patch) {
   return { pricingRows, customerRows, paymentRows, otherRows };
 }
 
-function InvoicePreview({ invoice, preparation, branding, generalPhotos, beforePhotos, afterPhotos, saved = false, documentNumber = "" }) {
+function InvoicePreview({ invoice, preparation, canonicalInvoice = null, branding, generalPhotos, beforePhotos, afterPhotos, saved = false, documentNumber = "" }) {
   const rows = invoiceRows(invoice);
   const prepared = Boolean(preparation);
   const approvedMinor = preparation?.approvedAmount?.totalMinor || 0;
   const extraMinor = rows.reduce((sum, item) => sum + Math.round(item.amount * 100), 0);
-  const totalMinor = prepared ? approvedMinor + extraMinor : Math.round(invoiceTotal(invoice) * 100);
-  const paidMinor = prepared ? preparation.paymentsReceivedMinor : Math.round((Number(invoice.paidAmount || 0) || 0) * 100);
-  const balanceMinor = Math.max(0, totalMinor - paidMinor);
+  const totalMinor = canonicalInvoice?.totalMinor ?? (prepared ? approvedMinor + extraMinor : Math.round(invoiceTotal(invoice) * 100));
+  const paidMinor = canonicalInvoice?.paidMinor ?? (prepared ? preparation.paymentsReceivedMinor : Math.round((Number(invoice.paidAmount || 0) || 0) * 100));
+  const balanceMinor = canonicalInvoice?.balanceMinor ?? Math.max(0, totalMinor - paidMinor);
+  const status = canonicalInvoice
+    ? canonicalInvoice.status === "PAID" ? "INVOICE · PAID" : canonicalInvoice.status === "PARTIALLY_PAID" ? "INVOICE · PARTIALLY PAID" : "INVOICE · READY TO SEND"
+    : saved ? "SAVED DRAFT" : "DRAFT PREVIEW";
   return (
     <article className="business-live-document" aria-label="Live Invoice Preview">
-      <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>INVOICE</b><span>WORKING DRAFT</span></div></header>
-      <dl className="business-document-meta"><div><dt>Bill To</dt><dd>{invoice.customerName || "—"}</dd></div><div><dt>Job</dt><dd>{invoice.projectTitle || "—"}</dd></div><div><dt>Invoice #</dt><dd>{documentNumber || "Assigned on first save"}</dd></div><div><dt>Date</dt><dd>{invoice.invoiceDate || "—"}</dd></div><div><dt>Quote reference</dt><dd>{invoice.quoteReference || "Not linked"}</dd></div></dl>
+      <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>INVOICE</b><span>{status}</span></div></header>
+      <dl className="business-document-meta"><div><dt>Bill To</dt><dd>{invoice.customerName || "—"}</dd></div><div><dt>Job</dt><dd>{invoice.projectTitle || "—"}</dd></div><div><dt>Invoice #</dt><dd>{canonicalInvoice?.invoiceNumber || documentNumber || "Assigned on first save"}</dd></div><div><dt>Date</dt><dd>{canonicalInvoice?.invoiceDate || invoice.invoiceDate || "—"}</dd></div><div><dt>Quote reference</dt><dd>{invoice.quoteReference || "Not linked"}</dd></div></dl>
       <section className="business-document-copy"><h3>Work Completed</h3><p>{invoice.workPerformed || "Completion details have not been confirmed."}</p></section>
       <CustomerPhotoEvidence generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} />
       <div className="business-document-table" role="table" aria-label="Invoice summary">
@@ -395,9 +405,9 @@ function InvoicePreview({ invoice, preparation, branding, generalPhotos, beforeP
         {rows.length ? rows.map((item) => <div role="row" key={item.id || `${item.description}-${item.amount}`}><span>{item.description}</span><strong>{money(item.amount)}</strong></div>) : !prepared ? <div role="row"><span>Working draft</span><strong>—</strong></div> : null}
         <div role="row"><span>Invoice total</span><strong>{money(totalMinor / 100)}</strong></div>
         <div role="row"><span>Payments received</span><strong>{money(paidMinor / 100)}</strong></div>
-        <div className="total" role="row"><span>Amount still due</span><strong>{money(balanceMinor / 100)}</strong></div>
+        <div className="total" role="row"><span>BALANCE DUE</span><strong>{money(balanceMinor / 100)}</strong></div>
       </div>
-      <div className="business-document-footer-grid"><section><h3>Payment terms</h3><p>{invoice.paymentTerms || "Not confirmed."}</p></section><section><h3>Due date</h3><p>{invoice.dueDate || "Due on receipt"}</p></section><section><h3>Customer notes</h3><p>{invoice.notes || "None."}</p></section><section><h3>Status</h3><p>{saved ? "Saved draft · Ready for review" : prepared ? "Review invoice before creating it." : "Draft only. Payment and completion are not inferred."}</p></section></div>
+      <div className="business-document-footer-grid"><section><h3>Payment terms</h3><p>{canonicalInvoice?.terms || invoice.paymentTerms || "No approved payment terms were provided."}</p></section><section><h3>Due date</h3><p>{invoice.dueDate || "Due on receipt"}</p></section><section><h3>Customer notes</h3><p>{invoice.notes || "None."}</p></section><section><h3>Status</h3><p>{status}{canonicalInvoice ? "" : " · Payment and completion are not inferred."}</p></section></div>
       <footer>{branding.businessName}<span>Prepared with Meetro</span></footer>
     </article>
   );
@@ -762,7 +772,7 @@ function SavedFilesDrawer({ currentSavedIds = [], onClose, onDeleted, onOpen, se
       <form className="business-saved-search" onSubmit={(event) => { event.preventDefault(); void load(); }}><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer, job, number, or address…" aria-label="Search saved documents" /><button type="submit">Search</button></form>
       <div className="business-saved-filters" aria-label="Saved document filters"><label>Type<select value={type} onChange={(event) => setType(event.target.value)}><option value="">All Types</option><option value="QUOTE">Quotes</option><option value="INVOICE">Invoices</option></select></label><label>Status<select value="WORKING_DRAFT" disabled><option>WORKING_DRAFT</option></select></label><label>Time<select value={time} onChange={(event) => setTime(event.target.value)}><option value="ALL">All Time</option><option value="30D">Last 30 days</option><option value="90D">Last 90 days</option></select></label></div>
       {notice ? <p className="business-saved-notice" role="status">{notice}</p> : null}
-      {state.busy ? <p role="status">Loading saved documents…</p> : state.error ? <div className="business-saved-empty" role="alert"><strong>{state.error}</strong><button type="button" onClick={() => void load()}>Try Again</button></div> : state.documents.length ? <div className="business-saved-results">{state.documents.map((document) => <article key={document.id}><button type="button" className="business-saved-open" onClick={() => onOpen(document.id)}><MeetroIcon name={document.documentType === "QUOTE" ? "quickQuote" : "quickInvoice"} size={20} decorative /><span><strong>{document.content.projectTitle || document.content.customerName || displayDocumentNumber(document)}</strong><small>{document.documentType === "QUOTE" ? "Quote" : "Invoice"} · {document.content.customerName || "Customer not entered"} · {displayDocumentNumber(document)}</small><small>Updated {new Date(document.updatedAt).toLocaleString()}</small></span></button><button type="button" className="business-saved-delete" onClick={(event) => { deleteTriggerRef.current = event.currentTarget; setDeleteState({ busy: false, error: "" }); setDeleteTarget(document); }} aria-haspopup="dialog">Delete Draft</button></article>)}</div> : <div className="business-saved-empty" role="status"><MeetroIcon name="history" size={28} decorative /><strong>No saved documents match.</strong><p>Only governed server-saved working drafts appear here.</p></div>}
+      {state.busy ? <p role="status">Loading saved documents…</p> : state.error ? <div className="business-saved-empty" role="alert"><strong>{state.error}</strong><button type="button" onClick={() => void load()}>Try Again</button></div> : state.documents.length ? <div className="business-saved-results">{state.documents.map((document) => <article key={document.id}><button type="button" className="business-saved-open" onClick={() => onOpen(document.id)}><MeetroIcon name={document.documentType === "QUOTE" ? "quickQuote" : "quickInvoice"} size={20} decorative /><span><strong>{document.content.projectTitle || document.customerDisplayName || document.content.customerName || displayDocumentNumber(document)}</strong><small>{document.documentType === "QUOTE" ? "Quote" : "Invoice"} · {document.customerDisplayName || document.content.customerName || "Customer not entered"} · {displayDocumentNumber(document)}</small><small>Updated {new Date(document.updatedAt).toLocaleString()}</small></span></button><button type="button" className="business-saved-delete" onClick={(event) => { deleteTriggerRef.current = event.currentTarget; setDeleteState({ busy: false, error: "" }); setDeleteTarget(document); }} aria-haspopup="dialog">Delete Draft</button></article>)}</div> : <div className="business-saved-empty" role="status"><MeetroIcon name="history" size={28} decorative /><strong>No saved documents match.</strong><p>Only governed server-saved working drafts appear here.</p></div>}
     </aside>
     {deleteTarget ? <WorkspaceDialog titleId="business-document-delete-title" title="Delete this draft?" onClose={cancelDelete} actions={[{ label: "Cancel", onClick: cancelDelete, disabled: deleteState.busy }, { label: deleteState.busy ? "Deleting…" : "Delete Draft", destructive: true, disabled: deleteState.busy, onClick: () => void confirmDelete() }]}><p>This removes the saved working draft from Meetro. It does not delete the Job or customer.</p>{currentSavedIds.includes(deleteTarget.id) ? <p>Your currently open workspace will remain as an unsaved copy.</p> : null}{deleteState.error ? <p role="alert">{deleteState.error}</p> : null}</WorkspaceDialog> : null}
   </>;
@@ -1219,7 +1229,14 @@ function JobLinkedQuoteContext({ job }) {
   );
 }
 
-export default function UnifiedBusinessDocumentWorkspace({
+export default function UnifiedBusinessDocumentWorkspace(props) {
+  if (normalizeBusinessDocumentTab(props.initialDocument) === "depositRequest") {
+    return <DepositRequestWorkspace {...props} />;
+  }
+  return <QuoteInvoiceBusinessDocumentWorkspace {...props} />;
+}
+
+function QuoteInvoiceBusinessDocumentWorkspace({
   setPage, language = "en", initialDocument = "quote", initialSavedDocumentId = null,
   initialSavedDocument = null, onDurableDocumentOpened, job = {}, quote,
   invoicePreparation = null, onCreateCanonicalInvoice,
@@ -1332,6 +1349,7 @@ export default function UnifiedBusinessDocumentWorkspace({
       paidAmount: String(invoicePreparation.paymentsReceivedMinor / 100),
       balanceDue: String(invoicePreparation.amountStillDueMinor / 100),
       quoteReference: invoicePreparation.quoteReference,
+      paymentTerms: invoicePreparation.paymentTerms || "",
     };
     setInvoice((current) => ({
       ...current,
@@ -1517,16 +1535,21 @@ export default function UnifiedBusinessDocumentWorkspace({
   };
   const activeDirty = dirty[activeDocument];
   const activeSaved = savedDocuments[activeDocument];
-  const jobLinkedCustomerName = job.customerLinkedFromJob
-    ? String(job.customerName || "").trim()
-    : "";
-  const activeContent = activeDocument === "quote"
-    ? jobLinkedCustomerName
-      ? { ...quote, customerName: jobLinkedCustomerName }
-      : quote
-    : invoice;
   const activeCustomerParty = customerParties[activeDocument];
   const activeLinkedCustomer = linkedCustomerContacts[activeDocument];
+  const hydratedSavedQuotePresentation = hydrateSavedJobLinkedQuotePresentation({
+    content: quote,
+    documentJobId: documentJobIds.quote,
+    customerParty: customerParties.quote,
+    linkedContact: linkedCustomerContacts.quote,
+    job,
+  });
+  const jobLinkedCustomerName = job.customerLinkedFromJob
+    ? String(hydratedSavedQuotePresentation.customerName || job.customerName || "").trim()
+    : "";
+  const activeContent = activeDocument === "quote"
+    ? hydratedSavedQuotePresentation
+    : invoice;
   const activeJobContext = documentJobIds[activeDocument] ? job : {};
 
   useEffect(() => {
@@ -3835,6 +3858,15 @@ export default function UnifiedBusinessDocumentWorkspace({
     }
   }
 
+  function openCreatedInvoiceDelivery() {
+    const created = invoiceCreateState.invoice;
+    if (!created?.conversationId || !created?.invoiceId) return;
+    setPage(buildCanonicalConversationRoute(created.conversationId, "invoiceBuilder", {
+      shell: CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
+      invoiceId: created.invoiceId,
+    }));
+  }
+
   function scrollToNewest() {
     const container = turnsRef.current;
     if (!container) return;
@@ -3929,7 +3961,14 @@ export default function UnifiedBusinessDocumentWorkspace({
           {startNewState.error && startNewState.documentType === activeDocument ? <p className="business-document-start-new-error" role="alert">{startNewState.error}</p> : null}
         </div>
       </header>
-      <DocumentTabs activeDocument={activeDocument} onDocumentChange={switchDocument} onSavedFiles={() => setSavedFilesOpen(true)} />
+      <DocumentTabs
+        activeDocument={activeDocument}
+        onDocumentChange={switchDocument}
+        onSavedFiles={() => setSavedFilesOpen(true)}
+        onDepositRequest={job.id
+          ? () => setPage(`depositRequestBuilder?jobId=${encodeURIComponent(job.id)}`)
+          : null}
+      />
       <div className="business-document-mobile-switch" role="tablist" aria-label="Workspace view"><button type="button" role="tab" aria-selected={mobilePane === "conversation"} onClick={() => setMobilePane("conversation")}>Conversation</button><button type="button" role="tab" aria-selected={mobilePane === "preview"} onClick={() => setMobilePane("preview")}>Preview</button></div>
       <main className={`business-document-main ${documentPhotos.length ? "has-evidence" : ""}`}>
         <section className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`} aria-labelledby="business-document-conversation-title">
@@ -3950,7 +3989,7 @@ export default function UnifiedBusinessDocumentWorkspace({
           </div>
         </section>
         {documentPhotos.length ? <JobEvidencePanel photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onAddPhotos={() => onAddPhotos(activeDocument)} canAddPhotos={canAddPhotos} busy={photoBusy || currentAnalysisRequest.busy} /> : null}
-        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} jobLinked={Boolean((activeDocument === "quote" && job.customerLinkedFromJob) || invoicePreparation)} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={quote} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityPresentation={activeQuoteAuthorityPresentation} jobLinked={Boolean(job.customerLinkedFromJob)} /> : <InvoicePreview invoice={invoice} preparation={invoicePreparation} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || activeQuoteAuthorityPresentation.actionDisabled} onClick={() => void beginGovernedQuoteIssue()}>{quoteIssueState?.busy ? "Preparing…" : activeQuoteAuthorityPresentation.actionLabel}</button> : activeDocument === "invoice" && invoicePreparation ? <button type="button" className="business-document-primary" disabled={invoiceCreateState.busy || Boolean(invoiceCreateState.invoice)} onClick={() => void createReviewedInvoice()}>{invoiceCreateState.invoice ? "Invoice created" : invoiceCreateState.busy ? "Creating…" : "Create Invoice"}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{invoiceCreateState.error && mobilePane === "preview" ? <p className="business-document-notice" role="alert">{invoiceCreateState.error}</p> : null}{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
+        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} jobLinked={Boolean((activeDocument === "quote" && job.customerLinkedFromJob) || invoicePreparation)} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={activeContent} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityPresentation={activeQuoteAuthorityPresentation} jobLinked={Boolean(job.customerLinkedFromJob)} /> : <InvoicePreview invoice={invoice} preparation={invoicePreparation} canonicalInvoice={invoiceCreateState.invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || activeQuoteAuthorityPresentation.actionDisabled} onClick={() => void beginGovernedQuoteIssue()}>{quoteIssueState?.busy ? "Preparing…" : activeQuoteAuthorityPresentation.actionLabel}</button> : activeDocument === "invoice" && invoicePreparation ? invoiceCreateState.invoice ? <button type="button" className="business-document-primary" onClick={openCreatedInvoiceDelivery}>Send to Customer</button> : <button type="button" className="business-document-primary" disabled={invoiceCreateState.busy} onClick={() => void createReviewedInvoice()}>{invoiceCreateState.busy ? "Creating…" : "Create Invoice"}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{invoiceCreateState.error && mobilePane === "preview" ? <p className="business-document-notice" role="alert">{invoiceCreateState.error}</p> : null}{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}
       {photoReviewOpen && documentPhotos.length ? <PhotoReviewDialog photos={documentPhotos} assignments={photoAssignments} onCancel={() => setPhotoReviewOpen(false)} onApply={(assignments) => { setPhotoAssignments((current) => ({ ...current, ...Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...normalizeBusinessDocumentPhotoAssignment(assignment), documentType: activeDocument }])) })); setPhotoReviewOpen(false); }} /> : null}

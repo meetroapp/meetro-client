@@ -43,11 +43,17 @@ import UniversalDocumentCard from "../components/documents/UniversalDocumentCard
 import ConversationQuoteCard from "../components/ConversationQuoteCard";
 import ConversationQuoteDecisionEvent from "../components/ConversationQuoteDecisionEvent";
 import ConversationInvoiceCard from "../components/ConversationInvoiceCard";
+import ConversationPaymentLifecycleCard from "../components/ConversationPaymentLifecycleCard";
 import CanonicalConversationVisitCard from "../components/CanonicalConversationVisitCard";
 import { buildCustomerQuoteReviewRoute } from "../utils/customerQuoteReviewRoute";
 import { buildProfessionalWorkCenterRoute } from "../utils/professionalWorkCenterRoute";
 import { projectCanonicalQuoteDecisionEvents } from "../utils/quoteDecisionPresentation.js";
 import { buildCustomerInvoiceReviewRoute } from "../utils/customerInvoiceReviewRoute";
+import {
+  createInvoiceCommandKey,
+  fetchProfessionalInvoice,
+  issueCanonicalInvoice,
+} from "../utils/invoicePaymentApi.js";
 import { fetchCustomerJobQuotes } from "../utils/customerJobQuotesApi";
 import { fetchProfessionalQuotes } from "../utils/professionalQuotesProjection";
 import {
@@ -752,6 +758,9 @@ function ConversationThreadInner({
   const [canonicalDispatchErrorKey, setCanonicalDispatchErrorKey] =
     useState("");
   const [canonicalVisitEditorToken, setCanonicalVisitEditorToken] = useState(0);
+  const [invoiceSendReview, setInvoiceSendReview] = useState({
+    phase: "idle", invoice: null, message: "", error: "", delivery: null,
+  });
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
@@ -1197,6 +1206,42 @@ useEffect(() => {
     : activeAccountMode === "business"
     ? "business"
     : "homeowner";
+
+  useEffect(() => {
+    const invoiceId = canonicalRouteContext.invoiceId;
+    if (!invoiceId || !canonicalConversationId || currentViewerRole !== "business") {
+      setInvoiceSendReview((current) => current.phase === "idle"
+        ? current
+        : { phase: "idle", invoice: null, message: "", error: "", delivery: null });
+      return undefined;
+    }
+    let active = true;
+    setInvoiceSendReview({ phase: "loading", invoice: null, message: "", error: "", delivery: null });
+    void fetchProfessionalInvoice({ invoiceId, setPage }).then((invoice) => {
+      if (!active) return;
+      if (invoice.conversationId !== canonicalConversationId || invoice.status !== "DRAFT" || !invoice.actions.canIssue) {
+        setInvoiceSendReview({
+          phase: "error", invoice: null, message: "", error: "This Invoice is not available for delivery in this customer conversation.", delivery: null,
+        });
+        return;
+      }
+      const balance = new Intl.NumberFormat(language || "en", {
+        style: "currency", currency: invoice.currency,
+      }).format(invoice.balanceMinor / 100);
+      setInvoiceSendReview({
+        phase: "ready",
+        invoice,
+        message: `Hi ${invoice.customer.displayName}, here is the final invoice for the completed work. Your remaining balance is ${balance}. Please review the invoice and let me know if you have any questions.`,
+        error: "",
+        delivery: null,
+      });
+    }).catch((error) => {
+      if (active) setInvoiceSendReview({
+        phase: "error", invoice: null, message: "", error: error?.message || "The Invoice could not be loaded for delivery.", delivery: null,
+      });
+    });
+    return () => { active = false; };
+  }, [canonicalConversationId, canonicalRouteContext.invoiceId, currentViewerRole, language, setPage]);
 
   const canonicalJobId = String(
     canonicalConversationDetail?.relationship?.jobId || ""
@@ -3910,6 +3955,39 @@ useEffect(() => {
       setCanonicalSendErrorKey("conversationCanonicalSendFailed");
     } finally {
       setCanonicalSendPending(false);
+    }
+  };
+
+  const sendReviewedInvoice = async () => {
+    const invoice = invoiceSendReview.invoice;
+    const message = invoiceSendReview.message.trim();
+    if (invoiceSendReview.phase !== "ready" || !invoice || !message) return;
+    setInvoiceSendReview((current) => ({ ...current, phase: "sending", error: "" }));
+    try {
+      const result = await issueCanonicalInvoice({
+        invoiceId: invoice.invoiceId,
+        expectedVersion: invoice.currentVersion,
+        messageText: message,
+        idempotencyKey: createInvoiceCommandKey("invoice-send"),
+        setPage,
+      });
+      if (result.delivery.conversationId !== canonicalConversationId) {
+        throw new Error("Invoice delivery was not recorded in this customer conversation.");
+      }
+      setInvoiceSendReview((current) => ({
+        ...current,
+        phase: "sent",
+        invoice: result.invoice,
+        delivery: result.delivery,
+        error: "",
+      }));
+      setCanonicalReloadKey((current) => current + 1);
+    } catch (error) {
+      setInvoiceSendReview((current) => ({
+        ...current,
+        phase: "ready",
+        error: error?.message || "The Invoice was not sent. No delivery has been claimed.",
+      }));
     }
   };
 
@@ -6642,6 +6720,18 @@ const handleImageUpload = (event) => {
               );
             }
 
+            if (["payment_request", "payment_received"].includes(msg.type) && msg.paymentLifecycle) {
+              return (
+                <div
+                  key={msg.id}
+                  className="meetro-message-enter canonical-payment-message-row"
+                  style={{ ...operationalRow, justifyContent: mine ? "flex-end" : "flex-start" }}
+                >
+                  <ConversationPaymentLifecycleCard payment={msg.paymentLifecycle} language={language} />
+                </div>
+              );
+            }
+
             const isWorkflow = isWorkflowType(msg.type);
             const workflowMessageProps = isWorkflow
               ? getWorkflowMessageProps(msg, language)
@@ -7677,6 +7767,47 @@ const handleImageUpload = (event) => {
             </div>
           ) : (
           <>
+          {invoiceSendReview.phase !== "idle" ? (
+            <section className="canonical-invoice-send-review" style={invoiceSendReviewStyles.card} aria-label="Final Invoice delivery review">
+              <strong>Send final Invoice</strong>
+              {invoiceSendReview.invoice ? (
+                <div style={invoiceSendReviewStyles.summary}>
+                  <span>{invoiceSendReview.invoice.invoiceNumber}</span>
+                  <span>Invoice Total {new Intl.NumberFormat(language || "en", { style: "currency", currency: invoiceSendReview.invoice.currency }).format(invoiceSendReview.invoice.totalMinor / 100)}</span>
+                  <b>Balance Due {new Intl.NumberFormat(language || "en", { style: "currency", currency: invoiceSendReview.invoice.currency }).format(invoiceSendReview.invoice.balanceMinor / 100)}</b>
+                </div>
+              ) : null}
+              {["ready", "sending"].includes(invoiceSendReview.phase) ? (
+                <>
+                  <label htmlFor="canonical-invoice-customer-message">Customer message</label>
+                  <textarea
+                    id="canonical-invoice-customer-message"
+                    value={invoiceSendReview.message}
+                    maxLength={CANONICAL_MESSAGE_MAX_LENGTH}
+                    rows={4}
+                    disabled={invoiceSendReview.phase === "sending"}
+                    onChange={(event) => setInvoiceSendReview((current) => ({ ...current, message: event.target.value, error: "" }))}
+                  />
+                  <button
+                    type="button"
+                    style={invoiceSendReviewStyles.send}
+                    disabled={invoiceSendReview.phase === "sending" || !invoiceSendReview.message.trim()}
+                    onClick={() => void sendReviewedInvoice()}
+                  >
+                    {invoiceSendReview.phase === "sending" ? "Sending…" : "Send"}
+                  </button>
+                </>
+              ) : null}
+              {invoiceSendReview.phase === "loading" ? <span>Loading the exact Invoice version…</span> : null}
+              {invoiceSendReview.phase === "sent" ? (
+                <span role="status">
+                  Sent to {invoiceSendReview.invoice?.customer?.displayName || "customer"} via Meetro Message
+                  {invoiceSendReview.delivery?.sentAt ? ` · ${formatDateTimeDisplay(invoiceSendReview.delivery.sentAt, "", { language })}` : ""}.
+                </span>
+              ) : null}
+              {invoiceSendReview.error ? <span role="alert">{invoiceSendReview.error}</span> : null}
+            </section>
+          ) : null}
           <div className="chat-composer message-composer" style={composer}>
             {!isCanonicalThread ? (
             <button
@@ -10060,6 +10191,12 @@ const invoicePaidNotice = {
   borderRadius: "16px",
   padding: "12px",
   fontWeight: "900",
+};
+
+const invoiceSendReviewStyles = {
+  card: { display: "grid", gap: 10, padding: 14, margin: "0 12px 10px", border: "1px solid #bbd7c2", borderRadius: 12, background: "#f8fbf9", color: "#172317" },
+  summary: { display: "grid", gap: 4, fontSize: 13 },
+  send: { minHeight: 44, border: 0, borderRadius: 9, background: "#0f6337", color: "#fff", fontWeight: 900, cursor: "pointer" },
 };
 
 const invoiceQuestionNotice = {

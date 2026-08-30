@@ -216,7 +216,7 @@ function validateReadyJob(value) {
   if (!exact(value, [
     "jobId", "requestId", "relationshipId", "customerName", "serviceTitle",
     "completedAt", "completionVersion", "approvedAmount", "paymentsReceivedMinor",
-    "amountStillDueMinor", "approvedWork",
+    "amountStillDueMinor", "paymentTerms", "approvedWork",
   ])) return null;
   const amount = value.approvedAmount == null ? null : (() => {
     if (!exact(value.approvedAmount, ["currency", "totalMinor"])) return false;
@@ -237,6 +237,7 @@ function validateReadyJob(value) {
     approvedAmount: amount,
     paymentsReceivedMinor: integer(value.paymentsReceivedMinor, { zero: true }),
     amountStillDueMinor: integer(value.amountStillDueMinor, { zero: true }),
+    paymentTerms: text(value.paymentTerms, 2000, { nullable: true }),
     approvedWork: Array.isArray(value.approvedWork) ? value.approvedWork.map((item) => {
       if (!exact(item, ["description", "quantity", "unitAmountMinor", "lineTotalMinor"])) return null;
       const line = {
@@ -302,21 +303,23 @@ export function validateInvoiceWorkspace(value) {
 export function normalizeInvoiceDeliverySnapshot(value, { invoiceId, jobId } = {}) {
   const keys = [
     "schemaVersion", "invoiceId", "invoiceNumber", "jobId", "status", "totalMinor",
-    "balanceMinor", "currency", "due", "business", "job", "issuedAt",
+    "paidMinor", "balanceMinor", "currency", "due", "business", "job", "terms", "issuedAt",
   ];
   if (!exact(value, keys)) return null;
   const normalized = {
     schemaVersion: integer(value.schemaVersion), invoiceId: uuid(value.invoiceId),
     invoiceNumber: text(value.invoiceNumber, 40), jobId: uuid(value.jobId),
-    status: value.status === "SENT" ? "SENT" : "", totalMinor: integer(value.totalMinor),
+    status: STATUSES.has(value.status) && value.status !== "DRAFT" ? value.status : "",
+    totalMinor: integer(value.totalMinor), paidMinor: integer(value.paidMinor, { zero: true }),
     balanceMinor: integer(value.balanceMinor, { zero: true }), currency: currency(value.currency),
     due: validateDue(value.due), business: validateParty(value.business, "displayName"),
-    job: validateJob(value.job), issuedAt: timestamp(value.issuedAt),
+    job: validateJob(value.job), terms: text(value.terms, 2000, { nullable: true }),
+    issuedAt: timestamp(value.issuedAt),
   };
   return normalized.schemaVersion === 1 && normalized.invoiceId === uuid(invoiceId) &&
     normalized.jobId === uuid(jobId) && normalized.invoiceNumber && normalized.status &&
-    normalized.totalMinor && normalized.balanceMinor != null &&
-    normalized.balanceMinor <= normalized.totalMinor && normalized.currency &&
+    normalized.totalMinor && normalized.paidMinor != null && normalized.balanceMinor != null &&
+    normalized.totalMinor === normalized.paidMinor + normalized.balanceMinor && normalized.currency &&
     normalized.due && normalized.business && normalized.job && normalized.issuedAt
     ? Object.freeze(normalized) : null;
 }
@@ -412,11 +415,12 @@ export async function createCanonicalInvoice({ jobId, expectedCompletionVersion,
   return invoice;
 }
 
-export async function issueCanonicalInvoice({ invoiceId, expectedVersion, idempotencyKey, setPage, authFetchImpl = authFetch } = {}) {
+export async function issueCanonicalInvoice({ invoiceId, expectedVersion, messageText, idempotencyKey, setPage, authFetchImpl = authFetch } = {}) {
   const id = uuid(invoiceId);
   const version = integer(expectedVersion);
-  if (!id || !version || !text(idempotencyKey, 200)) throw new InvoicePaymentApiError({ status: 400, code: "INVALID_INVOICE_ISSUE_COMMAND" });
-  const data = await request(`/professional/invoices/${id}/issue`, commandOptions({ expectedVersion: version }, idempotencyKey), setPage, authFetchImpl);
+  const message = text(messageText, 5000);
+  if (!id || !version || !message || !text(idempotencyKey, 200)) throw new InvoicePaymentApiError({ status: 400, code: "INVALID_INVOICE_ISSUE_COMMAND" });
+  const data = await request(`/professional/invoices/${id}/issue`, commandOptions({ expectedVersion: version, messageText: message }, idempotencyKey), setPage, authFetchImpl);
   const invoice = validateInvoice(data.invoice, { audience: "professional", invoiceId: id });
   if (!invoice || !plain(data.delivery) || uuid(data.delivery.invoiceId) !== id) {
     throw new InvoicePaymentApiError({ status: 502, code: "UNSAFE_INVOICE_DELIVERY_RESPONSE" });

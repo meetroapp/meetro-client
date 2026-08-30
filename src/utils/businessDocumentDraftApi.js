@@ -1,6 +1,7 @@
 import { authFetch } from "./authFetch.js";
 
-const DOCUMENT_TYPES = new Set(["QUOTE", "INVOICE"]);
+const DOCUMENT_TYPES = new Set(["QUOTE", "INVOICE", "DEPOSIT_REQUEST"]);
+const NUMBERED_DOCUMENT_TYPES = new Set(["QUOTE", "INVOICE"]);
 const NUMBERING_INITIALIZATION_MODES = new Set(["START_NEW", "CONTINUE_EXISTING"]);
 const NUMBERING_PREFIX_PATTERN = /^[A-Z]{1,8}$/;
 const DOCUMENT_NUMBER_PATTERN = /^[A-Z]{1,8}-[0-9]{1,12}$/;
@@ -40,7 +41,7 @@ function validTimestamp(value) {
 
 export function validateBusinessDocumentNumbering(value) {
   if (!plain(value) || typeof value.initialized !== "boolean" ||
-      !DOCUMENT_TYPES.has(value.documentType)) return null;
+      !NUMBERED_DOCUMENT_TYPES.has(value.documentType)) return null;
   if (!value.initialized) {
     return Object.freeze({ initialized: false, documentType: value.documentType });
   }
@@ -139,9 +140,44 @@ function validateWorkspace(value, documentType) {
   });
 }
 
+function validateDepositRequestAuthority(value, document) {
+  if (document.documentType !== "DEPOSIT_REQUEST") {
+    return value == null && document.paymentRequirementId == null ? null : undefined;
+  }
+  if (!plain(value) ||
+      !UUID_PATTERN.test(String(document.paymentRequirementId || "")) ||
+      value.paymentRequirementId !== document.paymentRequirementId ||
+      value.jobId !== document.jobId ||
+      !UUID_PATTERN.test(String(value.quoteId || "")) ||
+      !UUID_PATTERN.test(String(value.customerDecisionId || "")) ||
+      !Number.isSafeInteger(value.relationshipId) || value.relationshipId < 1 ||
+      !Number.isSafeInteger(value.issuedQuoteVersion) || value.issuedQuoteVersion < 1 ||
+      !["DUE", "PARTIALLY_SATISFIED"].includes(value.state) ||
+      !/^[A-Z]{3}$/.test(value.currency || "") ||
+      ![value.quoteTotalMinor, value.requiredMinor, value.appliedMinor, value.remainingMinor]
+        .every((amount) => Number.isSafeInteger(amount) && amount >= 0) ||
+      value.requiredMinor <= 0 || value.requiredMinor > value.quoteTotalMinor ||
+      value.appliedMinor + value.remainingMinor !== value.requiredMinor ||
+      value.remainingMinor <= 0) return undefined;
+  return Object.freeze({
+    ...value,
+    depositRule: plain(value.depositRule)
+      ? Object.freeze({ ...value.depositRule })
+      : null,
+  });
+}
+
 export function validateBusinessDocumentDraft(value) {
   const workspace = plain(value) ? validateWorkspace(value.workspace, value.documentType) : null;
   const customerParty = plain(value) ? validateCustomerParty(value.customerParty) : undefined;
+  const customerDisplayName = typeof value?.customerDisplayName === "string"
+    ? value.customerDisplayName.trim()
+    : value?.customerDisplayName == null
+      ? null
+      : undefined;
+  const depositRequestAuthority = plain(value)
+    ? validateDepositRequestAuthority(value.depositRequestAuthority, value)
+    : undefined;
   if (!plain(value) ||
       !UUID_PATTERN.test(String(value.id || "")) ||
       !DOCUMENT_TYPES.has(value.documentType) ||
@@ -153,6 +189,9 @@ export function validateBusinessDocumentDraft(value) {
       !plain(value.content) || !workspace ||
       !Array.isArray(value.photos) || !value.photos.every(validatePhoto) ||
       customerParty === undefined ||
+      customerDisplayName === undefined ||
+      depositRequestAuthority === undefined ||
+      (value.documentType === "DEPOSIT_REQUEST" && value.documentNumber != null) ||
       Number.isNaN(Date.parse(value.createdAt)) || Number.isNaN(Date.parse(value.updatedAt))) {
     return null;
   }
@@ -160,6 +199,9 @@ export function validateBusinessDocumentDraft(value) {
     ...value,
     content: Object.freeze({ ...value.content }),
     customerParty,
+    customerDisplayName,
+    paymentRequirementId: value.paymentRequirementId || null,
+    depositRequestAuthority,
     workspace,
     photos: Object.freeze(value.photos.map((photo) => Object.freeze({ ...photo, media: Object.freeze({ ...photo.media }) }))),
   });

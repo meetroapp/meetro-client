@@ -17,10 +17,12 @@ export default function ConversationInvoiceCard({ invoice, language, canReview, 
         <span style={styles.number}>{invoice.invoiceNumber}</span>
       </div>
       <strong style={styles.business}>{invoice.business.displayName}</strong>
-      <strong style={styles.total}>
-        {formatLocaleCurrency(invoice.totalMinor / 100, invoice.currency, {}, language)}
-      </strong>
-      <span style={styles.status}>{copy.balance}: {formatLocaleCurrency(invoice.balanceMinor / 100, invoice.currency, {}, language)}</span>
+      <dl style={styles.summary}>
+        <div><dt>Invoice Total</dt><dd>{formatLocaleCurrency(invoice.totalMinor / 100, invoice.currency, {}, language)}</dd></div>
+        <div><dt>Payments Received</dt><dd>{formatLocaleCurrency(invoice.paidMinor / 100, invoice.currency, {}, language)}</dd></div>
+        <div style={styles.balance}><dt>Balance Due</dt><dd>{formatLocaleCurrency(invoice.balanceMinor / 100, invoice.currency, {}, language)}</dd></div>
+      </dl>
+      {invoice.terms ? <span style={styles.status}>{invoice.terms}</span> : null}
       {canReview && (
         <button type="button" style={styles.review} onClick={onReview}>
           {copy.reviewInvoice}
@@ -36,7 +38,8 @@ const styles = {
   eyebrow: { color: "#0f766e", fontSize: 12, fontWeight: 900 },
   number: { color: "#526052", fontSize: 12, fontWeight: 800, overflowWrap: "anywhere" },
   business: { overflowWrap: "anywhere" },
-  total: { fontSize: 24, letterSpacing: 0 },
+  summary: { display: "grid", gap: 6, margin: 0 },
+  balance: { fontSize: 20, fontWeight: 900, borderTop: "1px solid #d9e4dc", paddingTop: 8 },
   status: { color: "#526052", fontWeight: 700 },
   review: { minHeight: 44, width: "100%", padding: "0 16px", border: 0, borderRadius: 8, background: "#0f766e", color: "#fff", fontWeight: 800, cursor: "pointer" },
 };

@@ -1,6 +1,8 @@
 import { normalizeQuoteDeliverySnapshot } from "./quoteDeliveryApi.js";
 import { normalizeInvoiceDeliverySnapshot } from "./invoicePaymentApi.js";
 
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export const CONVERSATION_THREAD_TYPES = Object.freeze({
   CANONICAL: "canonical_conversation",
   LEGACY_QUOTE_REQUEST: "legacy_quote_request",
@@ -12,6 +14,7 @@ export const CANONICAL_CONVERSATION_ROUTE_PAGE = "conversationThread";
 export const CANONICAL_CONVERSATION_ROUTE_PARAM = "conversationId";
 export const CANONICAL_CONVERSATION_RETURN_PARAM = "returnPage";
 export const CANONICAL_CONVERSATION_SHELL_PARAM = "shell";
+export const CANONICAL_CONVERSATION_INVOICE_PARAM = "invoiceId";
 export const CANONICAL_CONVERSATION_COMMUNICATION_SHELL =
   "communicationCenter";
 
@@ -56,12 +59,18 @@ export function parseCanonicalConversationRoute(routeValue = "") {
   const shell = String(
     params.get(CANONICAL_CONVERSATION_SHELL_PARAM) || ""
   ).trim();
+  const invoiceId = String(
+    params.get(CANONICAL_CONVERSATION_INVOICE_PARAM) || ""
+  ).trim().toLowerCase();
 
   return {
     page,
     conversationId,
     returnPage,
     shell,
+    invoiceId: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(invoiceId)
+      ? invoiceId
+      : null,
     valid:
       page === CANONICAL_CONVERSATION_ROUTE_PAGE &&
       Boolean(conversationId),
@@ -95,6 +104,11 @@ export function buildCanonicalConversationRoute(
       CANONICAL_CONVERSATION_SHELL_PARAM,
       CANONICAL_CONVERSATION_COMMUNICATION_SHELL
     );
+  }
+
+  const invoiceId = String(options?.invoiceId || "").trim().toLowerCase();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(invoiceId)) {
+    params.set(CANONICAL_CONVERSATION_INVOICE_PARAM, invoiceId);
   }
 
   return `${CANONICAL_CONVERSATION_ROUTE_PAGE}?${params.toString()}`;
@@ -245,8 +259,11 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
     contentType === "quote_shared" || workflowType === "QUOTE_SHARED";
   const isInvoiceShared =
     contentType === "invoice_shared" || workflowType === "INVOICE_SHARED";
+  const isPaymentLifecycle = ["payment_request", "payment_received"].includes(contentType) &&
+    ["PAYMENT_REQUEST", "PAYMENT_RECEIVED"].includes(workflowType);
   let quoteShare = null;
   let invoiceShare = null;
+  let paymentLifecycle = null;
   let reference = null;
 
   if (isQuoteShared) {
@@ -291,6 +308,53 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
     reference = Object.freeze({ type: "invoice", invoiceId, jobId });
   }
 
+  if (isPaymentLifecycle) {
+    const payload = message?.workflow?.payload;
+    const quoteId = String(message?.reference?.quoteId || "").trim().toLowerCase();
+    const jobId = String(message?.reference?.jobId || "").trim().toLowerCase();
+    const integer = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null;
+    const requiredMinor = integer(payload?.requiredMinor);
+    const receivedMinor = integer(payload?.receivedMinor);
+    const remainingMinor = integer(payload?.remainingMinor);
+    const quoteTotalMinor = integer(payload?.quoteTotalMinor);
+    const balanceRemainingMinor = integer(payload?.balanceRemainingMinor);
+    const depositRequestBindingPresent = [
+      payload?.depositRequestDocumentId,
+      payload?.depositRequestReference,
+      payload?.paymentRequirementId,
+    ].some((value) => value != null);
+    const validDepositRequestBinding = !depositRequestBindingPresent || (
+      UUID_PATTERN.test(String(payload?.depositRequestDocumentId || "")) &&
+      UUID_PATTERN.test(String(payload?.paymentRequirementId || "")) &&
+      typeof payload?.depositRequestReference === "string" &&
+      /^WDR-[A-Z0-9]{8}$/.test(payload.depositRequestReference)
+    );
+    const referenceKeys = message?.reference && typeof message.reference === "object"
+      ? Object.keys(message.reference).sort()
+      : [];
+    const validState = contentType === "payment_request"
+      ? payload?.state === "PAYMENT_REQUIRED" && workflowType === "PAYMENT_REQUEST" && payload?.payment == null
+      : ["PARTIALLY_RECEIVED", "DEPOSIT_RECEIVED"].includes(payload?.state) &&
+        workflowType === "PAYMENT_RECEIVED" && typeof payload?.payment?.receiptId === "string";
+    if (!payload || workflowStatus !== "SENT" || message.reference?.type !== "payment" ||
+        JSON.stringify(referenceKeys) !== JSON.stringify(["jobId", "quoteId", "type"]) ||
+        payload.schemaVersion !== 1 || payload.quoteId !== quoteId || payload.jobId !== jobId ||
+        !Number.isSafeInteger(payload.issuedQuoteVersion) || payload.issuedQuoteVersion < 1 ||
+        !validState || !/^[A-Z]{3}$/.test(payload.currency || "") ||
+        !validDepositRequestBinding ||
+        [requiredMinor, receivedMinor, remainingMinor, quoteTotalMinor, balanceRemainingMinor].includes(null) ||
+        receivedMinor + remainingMinor !== requiredMinor) return null;
+    paymentLifecycle = Object.freeze({
+      ...payload,
+      quoteTotalMinor,
+      requiredMinor,
+      receivedMinor,
+      remainingMinor,
+      balanceRemainingMinor,
+    });
+    reference = Object.freeze({ type: "payment", quoteId, jobId });
+  }
+
   const isViewer = message?.sender?.isViewer === true;
   const senderRole = isViewer
     ? viewerRole
@@ -309,7 +373,7 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
     workflowType,
     workflowStatus,
     workflowPayload:
-      quoteShare || invoiceShare || (message?.workflow?.payload && typeof message.workflow.payload === "object"
+      quoteShare || invoiceShare || paymentLifecycle || (message?.workflow?.payload && typeof message.workflow.payload === "object"
         ? message.workflow.payload
         : {}),
     status: "delivered",
@@ -323,6 +387,10 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
   }
   if (invoiceShare) {
     normalized.invoiceShare = invoiceShare;
+    normalized.reference = reference;
+  }
+  if (paymentLifecycle) {
+    normalized.paymentLifecycle = paymentLifecycle;
     normalized.reference = reference;
   }
   return normalized;

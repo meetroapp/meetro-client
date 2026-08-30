@@ -14,6 +14,7 @@ function amount(value) {
 }
 
 export function normalizeBusinessDocumentTab(value) {
+  if (["depositRequest", "DEPOSIT_REQUEST"].includes(value)) return "depositRequest";
   return value === "invoice" ? "invoice" : "quote";
 }
 

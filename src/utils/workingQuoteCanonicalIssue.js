@@ -64,14 +64,52 @@ function responseError(error, phase, checkpoint, fallbackCode, fallbackMessage) 
 
 function normalizeSourceBusinessDocument(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const allowedKeys = new Set([
+    "documentId",
+    "documentVersion",
+    "currentDocumentVersion",
+    "currentSnapshotMatchesSource",
+  ]);
   const documentId = uuid(value.documentId);
   const documentVersion = positiveInteger(value.documentVersion);
+  const hasContinuityAttestation =
+    Object.hasOwn(value, "currentDocumentVersion") ||
+    Object.hasOwn(value, "currentSnapshotMatchesSource");
+  const currentDocumentVersion = hasContinuityAttestation
+    ? positiveInteger(value.currentDocumentVersion)
+    : null;
   if (
-    Object.keys(value).length !== 2 ||
+    !Object.keys(value).every((key) => allowedKeys.has(key)) ||
     !documentId ||
-    !documentVersion
+    !documentVersion ||
+    (hasContinuityAttestation && (
+      !currentDocumentVersion ||
+      typeof value.currentSnapshotMatchesSource !== "boolean"
+    ))
   ) return null;
-  return Object.freeze({ documentId, documentVersion });
+  return Object.freeze({
+    documentId,
+    documentVersion,
+    ...(hasContinuityAttestation
+      ? {
+          currentDocumentVersion,
+          currentSnapshotMatchesSource: value.currentSnapshotMatchesSource,
+        }
+      : {}),
+  });
+}
+
+function sourceBusinessDocumentMatchesIdentity(source, identity) {
+  return Boolean(
+    source?.documentId === identity.documentId &&
+    (
+      source.documentVersion === identity.documentVersion ||
+      (
+        source.currentDocumentVersion === identity.documentVersion &&
+        source.currentSnapshotMatchesSource === true
+      )
+    )
+  );
 }
 
 function normalizeCurrentVersion(value, expectedVersion) {
@@ -137,6 +175,12 @@ export function normalizeWorkingDocumentCanonicalQuote(value, {
     decisionVersion === currentVersion &&
     decidedAt != null &&
     value.status === "ISSUED";
+  const exactSourceVersion =
+    sourceBusinessDocument?.documentVersion === positiveInteger(documentVersion);
+  const verifiedCurrentSourceSnapshot = Boolean(
+    sourceBusinessDocument?.currentDocumentVersion === positiveInteger(documentVersion) &&
+    sourceBusinessDocument?.currentSnapshotMatchesSource === true
+  );
   if (
     !id ||
     !normalizedJobId ||
@@ -150,7 +194,7 @@ export function normalizeWorkingDocumentCanonicalQuote(value, {
     !/^[A-Z]{3}$/.test(String(value.currency || "")) ||
     !sourceBusinessDocument ||
     sourceBusinessDocument.documentId !== uuid(documentId) ||
-    sourceBusinessDocument.documentVersion !== positiveInteger(documentVersion) ||
+    (!exactSourceVersion && !verifiedCurrentSourceSnapshot) ||
     !current ||
     current.status !== value.status ||
     current.totalMinor !== totalMinor ||
@@ -570,8 +614,7 @@ export async function issueCanonicalWorkingQuote({
   if (
     quote?.status !== "DRAFT" ||
     quote.jobId !== identity.jobId ||
-    quote.sourceBusinessDocument?.documentId !== identity.documentId ||
-    quote.sourceBusinessDocument?.documentVersion !== identity.documentVersion
+    !sourceBusinessDocumentMatchesIdentity(quote.sourceBusinessDocument, identity)
   ) {
     throw new WorkingQuoteCanonicalIssueError(
       "The exact canonical Draft Quote is required before issuance.",

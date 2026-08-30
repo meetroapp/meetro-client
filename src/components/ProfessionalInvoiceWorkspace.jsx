@@ -13,9 +13,12 @@ import {
   createInvoiceCommandKey,
   fetchProfessionalInvoice,
   fetchProfessionalInvoiceWorkspace,
-  issueCanonicalInvoice,
   recordCanonicalPayment,
 } from "../utils/invoicePaymentApi.js";
+import {
+  buildCanonicalConversationRoute,
+  CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
+} from "../utils/canonicalConversationMessaging.js";
 import { getInvoiceCopy } from "../utils/invoicePaymentLanguage.js";
 import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage.js";
 import {
@@ -100,29 +103,13 @@ export default function ProfessionalInvoiceWorkspace({
     }
   }
 
-  async function handleIssue() {
-    if (!selected?.actions.canIssue) return;
-    setBusy("issue");
-    setNotice("");
-    try {
-      const result = await issueCanonicalInvoice({
-        invoiceId: selected.invoiceId,
-        expectedVersion: selected.currentVersion,
-        idempotencyKey: createInvoiceCommandKey("invoice-issue"),
-        setPage,
-      });
-      setSelected(result.invoice);
-      setConfirmIssue(false);
-      setNotice(copy.sent);
-      await loadWorkspace();
-    } catch (error) {
-      if (error?.code === "STALE_INVOICE_VERSION") {
-        await openInvoice(selected.invoiceId);
-      }
-      setNotice(error?.message || copy.unavailable);
-    } finally {
-      setBusy("");
-    }
+  function handleIssue() {
+    if (!selected?.actions.canIssue || !selected.conversationId) return;
+    setConfirmIssue(false);
+    setPage(buildCanonicalConversationRoute(selected.conversationId, "workCenter", {
+      shell: CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
+      invoiceId: selected.invoiceId,
+    }));
   }
 
   async function handlePayment(event) {
@@ -240,7 +227,7 @@ export default function ProfessionalInvoiceWorkspace({
       )}
       {selected.actions.canIssue && confirmIssue && (
         <div style={styles.confirmRow} role="group" aria-label={copy.confirmSend}>
-          <button type="button" style={styles.primaryButton} disabled={busy === "issue"} onClick={handleIssue}>
+          <button type="button" style={styles.primaryButton} onClick={handleIssue}>
             {copy.confirmSend}
           </button>
           <button type="button" style={styles.secondaryButton} onClick={() => setConfirmIssue(false)}>

@@ -123,7 +123,7 @@ test("018/019 Invoice initialization and review truth remain outside the layout 
   assert.match(builder, /existingRequest\?\.key === requestKey/);
   assert.match(builder, /fetchEffectiveApprovedInvoiceQuote/);
   assert.match(workspace, /return <CompletedJobInvoiceManualEditor/);
-  for (const label of ["Approved work", "Payments received", "Amount still due"]) {
+  for (const label of ["Approved work", "Payments received", "BALANCE DUE"]) {
     assert.match(workspace, new RegExp(label));
   }
 });
@@ -133,5 +133,5 @@ test("conversation layout activity has no Invoice creation authority", () => {
   assert.doesNotMatch(chat, /createReviewedInvoice|onCreateCanonicalInvoice|saveDocument|deliverBusinessDocumentDraft/);
   assert.match(workspace, /Approved work/);
   assert.match(workspace, /Payments received/);
-  assert.match(workspace, /Amount still due/);
+  assert.match(workspace, /BALANCE DUE/);
 });

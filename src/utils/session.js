@@ -496,6 +496,7 @@ const businessModePages = new Set([
   "quoteRequests",
   "quoteBuilder",
   "invoiceBuilder",
+  "depositRequestBuilder",
   "contractorDashboard",
   "workCenter",
   "completionSheet",

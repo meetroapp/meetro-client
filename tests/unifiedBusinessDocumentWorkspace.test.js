@@ -902,10 +902,10 @@ test("Live Preview keeps customer Observation separate and shows truthful Invoic
   assert.match(workspace, /<h3>Observation<\/h3>/);
   assert.match(workspace, /quote\.recommendedSolution && quote\.projectDescription/);
   assert.match(workspace, /Confirm terms before delivery\./);
-  assert.match(workspace, /Not confirmed\./);
-  assert.match(workspace, /Saved draft · Ready for review/);
-  assert.match(workspace, /WORKING DRAFT/);
-  for (const label of ["Approved work", "Extra work", "Invoice total", "Payments received", "Amount still due"]) assert.match(workspace, new RegExp(label));
+  assert.match(workspace, /No approved payment terms were provided\./);
+  assert.match(workspace, /SAVED DRAFT/);
+  assert.match(workspace, /DRAFT PREVIEW/);
+  for (const label of ["Approved work", "Extra work", "Invoice total", "Payments received", "BALANCE DUE"]) assert.match(workspace, new RegExp(label));
   assert.match(workspace, /saved=\{Boolean\(activeSaved && !activeDirty\)\}/);
 });
 

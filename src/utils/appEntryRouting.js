@@ -53,6 +53,7 @@ const APPLICATION_HASH_ROUTES = new Set([
   "home",
   "homeownerRequestDetails",
   "invoiceBuilder",
+  "depositRequestBuilder",
   "jobUpdate",
   "jobsHiring",
   "learn-meetro",

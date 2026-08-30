@@ -532,11 +532,33 @@ function validateQuoteProjection(value, options) {
   const documentNumber = hasDocumentNumber && value.documentNumber != null
     ? boundedText(value.documentNumber, 64)
     : null;
+  const sourceHasContinuity = Boolean(
+    value.sourceBusinessDocument &&
+    (
+      Object.hasOwn(value.sourceBusinessDocument, "currentDocumentVersion") ||
+      Object.hasOwn(value.sourceBusinessDocument, "currentSnapshotMatchesSource")
+    )
+  );
   const sourceBusinessDocument = hasSourceDocument && value.sourceBusinessDocument != null
-    ? hasExactKeys(value.sourceBusinessDocument, ["documentId", "documentVersion"])
+    ? hasExactKeys(value.sourceBusinessDocument, [
+        "documentId",
+        "documentVersion",
+        ...(sourceHasContinuity
+          ? ["currentDocumentVersion", "currentSnapshotMatchesSource"]
+          : []),
+      ])
       ? {
         documentId: canonicalUuid(value.sourceBusinessDocument?.documentId),
         documentVersion: positiveInteger(value.sourceBusinessDocument?.documentVersion),
+        ...(sourceHasContinuity
+          ? {
+              currentDocumentVersion: positiveInteger(
+                value.sourceBusinessDocument?.currentDocumentVersion
+              ),
+              currentSnapshotMatchesSource:
+                value.sourceBusinessDocument?.currentSnapshotMatchesSource,
+            }
+          : {}),
       }
       : { documentId: "", documentVersion: null }
     : null;
@@ -630,7 +652,14 @@ function validateQuoteProjection(value, options) {
     (!noDecision && !terminalDecision) ||
     (hasDocumentNumber && value.documentNumber != null && !documentNumber) ||
     (hasSourceDocument && value.sourceBusinessDocument != null &&
-      (!sourceBusinessDocument.documentId || !sourceBusinessDocument.documentVersion)) ||
+      (
+        !sourceBusinessDocument.documentId ||
+        !sourceBusinessDocument.documentVersion ||
+        (sourceHasContinuity && (
+          !sourceBusinessDocument.currentDocumentVersion ||
+          typeof sourceBusinessDocument.currentSnapshotMatchesSource !== "boolean"
+        ))
+      )) ||
     (hasCustomerParty && customerParty === undefined)
   ) {
     return null;
