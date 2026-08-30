@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import {
+  createStripeSubscriptionCheckout,
   fetchProfessionalSubscription,
+  manageProfessionalSubscription,
   verifyProfessionalSubscription,
 } from "../utils/subscriptionApi";
 import {
@@ -72,10 +74,13 @@ export default function ProfessionalSubscription({ setPage }) {
     setError("");
     setMessage("");
     try {
-      const result = await purchaseStoreKitSubscription({
-        productId: plan.providerProductId,
-        appAccountToken: state.appAccountToken,
-      });
+      if (!nativeIos) {
+        const checkout = await createStripeSubscriptionCheckout(plan.code, setPage);
+        if (!checkout?.url) throw new Error("Web checkout is unavailable.");
+        window.location.assign(checkout.url);
+        return;
+      }
+      const result = await purchaseStoreKitSubscription({ productId: plan.providerProductId, appAccountToken: state.appAccountToken });
       if (result?.state === "cancelled") setMessage("Purchase canceled. No charge was made.");
       else if (result?.state === "pending") setMessage("Purchase pending. Access will update after Apple confirms it.");
       else if (result?.state === "verified") {
@@ -88,6 +93,21 @@ export default function ProfessionalSubscription({ setPage }) {
     } finally {
       setBusy("");
     }
+  };
+
+  const manage = async () => {
+    setBusy("manage");
+    setError("");
+    try {
+      const result = await manageProfessionalSubscription(setPage);
+      if (result.provider === "APPLE_APP_STORE" && nativeIos) {
+        await manageStoreKitSubscription();
+      } else if (result.url) {
+        window.location.assign(result.url);
+      } else throw new Error("Subscription management is unavailable.");
+    } catch (cause) {
+      setError(cause.message || "Subscription management is unavailable.");
+    } finally { setBusy(""); }
   };
 
   const restore = async () => {
@@ -131,6 +151,7 @@ export default function ProfessionalSubscription({ setPage }) {
           <div><span style={labelStyle}>Status</span><strong>{statusCopy(subscription)}</strong></div>
           <div><span style={labelStyle}>Current plan</span><strong>{subscription.plan?.includes("5_USER") ? "Up to 5 users" : "Up to 2 users"}</strong></div>
           <div><span style={labelStyle}>Seats included</span><strong>{subscription.seatLimit}</strong></div>
+          <div><span style={labelStyle}>Billing provider</span><strong>{subscription.provider === "STRIPE" ? "Web / Stripe" : "Apple App Store"}</strong></div>
           {subscription.trialEndsAt && <div><span style={labelStyle}>Trial ends</span><strong>{dateLabel(subscription.trialEndsAt)}</strong></div>}
           {!subscription.trialEndsAt && subscription.accessEndsAt && <div><span style={labelStyle}>{subscription.willAutoRenew ? "Renews" : "Access until"}</span><strong>{dateLabel(subscription.accessEndsAt)}</strong></div>}
         </section>
@@ -141,13 +162,17 @@ export default function ProfessionalSubscription({ setPage }) {
           const storeProduct = productsById.get(plan.providerProductId);
           const eligibleTrial = storeProduct?.trialEligible === true && Boolean(storeProduct?.introductoryOffer);
           const displayPrice = storeProduct?.displayPrice || `$${(plan.amountMinor / 100).toFixed(2)}`;
-          const purchaseReady = nativeIos && plan.providerConfigured && Boolean(storeProduct);
+          const providerReady = nativeIos
+            ? plan.providers?.APPLE_APP_STORE?.configured && Boolean(storeProduct)
+            : plan.providers?.STRIPE?.configured;
+          const purchaseReady = providerReady && !state?.entitled && !state?.qaAccess;
+          const trialOffered = nativeIos ? eligibleTrial : plan.providers?.STRIPE?.configured;
           return (
             <article key={plan.code} style={planCardStyle}>
               <p style={eyebrowStyle}>{plan.seatLimit === 2 ? "PLAN A" : "PLAN B"}</p>
               <h2 style={planTitleStyle}>Up to {plan.seatLimit} users</h2>
-              {eligibleTrial ? <p style={trialStyle}>14 days free</p> : <p style={providerCopyStyle}>Trial eligibility checked by Apple</p>}
-              <p style={priceStyle}>{eligibleTrial ? "Then " : ""}{displayPrice}<span style={monthStyle}> / month</span></p>
+              {trialOffered ? <p style={trialStyle}>14 days free</p> : <p style={providerCopyStyle}>Trial eligibility checked by Apple</p>}
+              <p style={priceStyle}>{trialOffered ? "Then " : ""}{displayPrice}<span style={monthStyle}> / month</span></p>
               <p style={copyStyle}>Owner counts as one included professional user.</p>
               <button
                 type="button"
@@ -155,19 +180,20 @@ export default function ProfessionalSubscription({ setPage }) {
                 disabled={!purchaseReady || Boolean(busy)}
                 onClick={() => purchase(plan)}
               >
-                {busy === plan.code ? "Working…" : subscription ? "Choose this plan" : "Start with Apple"}
+                {busy === plan.code ? "Working…" : state?.entitled ? "Current access already active" : nativeIos ? "Start with Apple" : "Start on web"}
               </button>
-              {!purchaseReady && <p style={providerCopyStyle}>{nativeIos ? "Apple product configuration is required." : "Purchase in the Meetro iPhone app."}</p>}
+              {!providerReady && <p style={providerCopyStyle}>{nativeIos ? "Apple product configuration is required." : "Web subscription checkout is unavailable."}</p>}
+              {!nativeIos && providerReady && <p style={providerCopyStyle}>Stripe governs trial dates and billing status. Access starts only after server verification.</p>}
             </article>
           );
         })}
       </section>
 
       <section style={actionsStyle}>
-        {nativeIos && <button type="button" style={secondaryStyle} disabled={Boolean(busy)} onClick={restore}>Restore Purchases</button>}
-        <button type="button" style={secondaryStyle} onClick={() => manageStoreKitSubscription().catch(() => setError("Subscription management is unavailable."))}>Manage Subscription</button>
+        {nativeIos && subscription?.provider !== "STRIPE" && <button type="button" style={secondaryStyle} disabled={Boolean(busy)} onClick={restore}>Restore Purchases</button>}
+        <button type="button" style={secondaryStyle} disabled={!subscription || Boolean(busy)} onClick={manage}>Manage Subscription</button>
       </section>
-      <p style={footnoteStyle}>Apple determines trial eligibility, renewal timing, cancellations, and billing status. Meetro unlocks professional access only after server verification.</p>
+      <p style={footnoteStyle}>Apple or Stripe determines trial eligibility, renewals, cancellations, and billing status. One verified Meetro business entitlement works on web and iPhone; a second subscription is not required.</p>
       <BottomNav setPage={setPage} currentPage="professionalSubscription" />
     </div>
   );

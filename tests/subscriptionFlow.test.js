@@ -7,6 +7,7 @@ const app = fs.readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
 const storeKit = fs.readFileSync(new URL("../src/utils/storeKitSubscriptions.js", import.meta.url), "utf8");
 const native = fs.readFileSync(new URL("../ios/App/App/StoreKitSubscriptions.swift", import.meta.url), "utf8");
 const registry = fs.readFileSync(new URL("../src/utils/businessToolsRegistry.js", import.meta.url), "utf8");
+const api = fs.readFileSync(new URL("../src/utils/subscriptionApi.js", import.meta.url), "utf8");
 
 test("professional subscription screen exposes exactly the approved plans", () => {
   assert.match(page, /PLAN A/);
@@ -42,10 +43,37 @@ test("cancel, pending, failure, restore, and manage states are simple and safe",
   assert.match(page, /restore: true/);
 });
 
-test("web purchase is not fabricated and iOS bridge is required", () => {
-  assert.match(page, /Purchase in the Meetro iPhone app/);
+test("web purchase uses server-created Stripe Checkout while iOS uses StoreKit", () => {
+  assert.match(page, /createStripeSubscriptionCheckout\(plan\.code/);
+  assert.match(api, /"\/subscriptions\/stripe\/checkout"/);
+  assert.match(api, /body: JSON\.stringify\(\{ planCode \}\)/);
   assert.match(storeKit, /Capacitor\.getPlatform\(\) === "ios"/);
-  assert.doesNotMatch(page + storeKit, /stripe|paypal/i);
+  assert.doesNotMatch(page + storeKit + api, /STRIPE_SECRET_KEY|sk_(live|test)_|paypal/i);
+});
+
+test("provider redirect never sets entitlement and Stripe trial remains provider governed", () => {
+  assert.match(page, /window\.location\.assign\(checkout\.url\)/);
+  assert.match(page, /Stripe governs trial dates and billing status\. Access starts only after server verification/);
+  assert.doesNotMatch(page + api, /setState\([^)]*entitled:\s*true|localStorage.*subscri/i);
+});
+
+test("one provider entitlement prevents a second platform purchase", () => {
+  assert.match(page, /purchaseReady = providerReady && !state\?\.entitled && !state\?\.qaAccess/);
+  assert.match(page, /subscription\?\.provider !== "STRIPE"/);
+  assert.match(page, /Current access already active/);
+});
+
+test("Apple-on-web and Stripe-on-iPhone use the same platform-neutral entitlement gate", () => {
+  assert.match(app, /entitled: result\.entitled === true/);
+  assert.doesNotMatch(app, /provider === ["']APPLE_APP_STORE["']|provider === ["']STRIPE["']/);
+  assert.match(page, /state\?\.entitled/);
+  assert.match(page, /subscription\?\.provider !== "STRIPE"/);
+});
+
+test("management routing is server-owned and provider specific", () => {
+  assert.match(api, /"\/subscriptions\/manage"/);
+  assert.match(page, /result\.provider === "APPLE_APP_STORE" && nativeIos/);
+  assert.match(page, /window\.location\.assign\(result\.url\)/);
 });
 
 test("StoreKit bridge uses appAccountToken, verified JWS, restore, and Apple management", () => {
@@ -61,6 +89,22 @@ test("central professional gate excludes the subscription surface and homeowners
   assert.match(app, /isProfessionalOnlyPage\(page\)[\s\S]*isProfessionalSession\(\)[\s\S]*subscriptionGate/);
   assert.match(app, /page !== "professionalSubscription"/);
   assert.match(app, /setSubscriptionGate\(\{ status: "not_applicable", entitled: true \}\)/);
+});
+
+test("server-entitled staging professionals retain normal Job, Quote, Invoice, and Alert routes", () => {
+  const gate = app.indexOf('subscriptionGate.entitled !== true');
+  assert.ok(gate >= 0);
+  assert.match(app, /fetchProfessionalSubscription\(setPageState\)[\s\S]*entitled: result\.entitled === true/);
+  for (const route of [
+    'page === "businessDashboard"',
+    'page === "quoteBuilder"',
+    'page === "invoiceBuilder"',
+    'page === "contractorDashboard" || page === "workCenter"',
+    'page === "notifications"',
+  ]) {
+    assert.ok(app.indexOf(route) > gate, `${route} must remain behind the normal centralized entitlement gate`);
+  }
+  assert.doesNotMatch(app, /SUBSCRIPTION_STAGING_QA_ACCESS|NODE_ENV\s*===\s*["']staging["']/);
 });
 
 test("subscription is a ready Business Tool with an exact route", () => {

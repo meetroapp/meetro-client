@@ -29,3 +29,15 @@ export function verifyProfessionalSubscription(evidence, setPage, { restore = fa
     setPage
   );
 }
+
+export function createStripeSubscriptionCheckout(planCode, setPage) {
+  return subscriptionRequest("/subscriptions/stripe/checkout", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ planCode }),
+  }, setPage);
+}
+
+export function manageProfessionalSubscription(setPage) {
+  return subscriptionRequest("/subscriptions/manage", { method: "POST" }, setPage);
+}
