@@ -6,14 +6,20 @@ function uuid(value) {
   return UUID_PATTERN.test(normalized) ? normalized : null;
 }
 
-export function buildProfessionalWorkCenterRoute({ jobId, quoteId } = {}) {
+export function buildProfessionalWorkCenterRoute({
+  jobId,
+  quoteId = null,
+  visitId = null,
+  returnPage = "",
+} = {}) {
   const canonicalJobId = uuid(jobId);
   const canonicalQuoteId = uuid(quoteId);
-  if (!canonicalJobId || !canonicalQuoteId) return null;
-  const query = new URLSearchParams({
-    jobId: canonicalJobId,
-    quoteId: canonicalQuoteId,
-  });
+  const canonicalVisitId = uuid(visitId);
+  if (!canonicalJobId || (!canonicalQuoteId && !canonicalVisitId)) return null;
+  const query = new URLSearchParams({ jobId: canonicalJobId });
+  if (canonicalQuoteId) query.set("quoteId", canonicalQuoteId);
+  if (canonicalVisitId) query.set("visitId", canonicalVisitId);
+  if (returnPage === "notifications") query.set("returnPage", returnPage);
   return `workCenter?${query.toString()}`;
 }
 
@@ -22,10 +28,18 @@ export function parseProfessionalWorkCenterRoute(value) {
   const [page, query = ""] = route.split("?", 2);
   if (page !== "workCenter") return null;
   const params = new URLSearchParams(query);
-  if ([...params.keys()].some((key) => !["jobId", "quoteId"].includes(key))) {
+  if ([...params.keys()].some((key) => !["jobId", "quoteId", "visitId", "returnPage"].includes(key))) {
     return null;
   }
   const jobId = uuid(params.get("jobId"));
   const quoteId = uuid(params.get("quoteId"));
-  return jobId && quoteId ? Object.freeze({ jobId, quoteId }) : null;
+  const visitId = uuid(params.get("visitId"));
+  const returnPage = params.get("returnPage") === "notifications"
+    ? "notifications"
+    : "";
+  if (!jobId || (!quoteId && !visitId)) return null;
+  if (quoteId && !visitId && !returnPage) {
+    return Object.freeze({ jobId, quoteId });
+  }
+  return Object.freeze({ jobId, quoteId, visitId, returnPage });
 }

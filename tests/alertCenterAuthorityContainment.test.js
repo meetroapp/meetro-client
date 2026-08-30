@@ -61,12 +61,12 @@ test("alert read, dismiss, and read-all never mutate conversation read state", (
   assert.doesNotMatch(combinedSource, /resolveConversation|resolvedAt\s*=|readAt\s*=/);
 });
 
-test("only governed canonical conversation destinations may navigate", () => {
+test("only governed canonical Alert destinations may navigate", () => {
   assert.doesNotMatch(notificationsSource, /window\.location|location\.hash|history\.|navigate\(/);
   assert.doesNotMatch(notificationsSource, /requestId|emergencyRequestId|relationshipId|sourceEntityId|evaluationId|businessProfileId|reviewId/);
-  assert.match(notificationsSource, /getAlertConversationActionTarget/);
-  assert.match(notificationsSource, /onOpenConversation\(conversationTarget\.route\)/);
-  assert.match(notificationsSource, /onOpenConversation=\{\(route\) => setPage\(route\)\}/);
+  assert.match(notificationsSource, /getAlertDestinationActionTarget/);
+  assert.match(notificationsSource, /onOpenDestination\(destinationTarget\.route\)/);
+  assert.match(notificationsSource, /onOpenDestination=\{\(route\) => setPage\(route\)\}/);
   assert.doesNotMatch(notificationsSource, /setPage\("conversationThread"\)|conversationThread\?conversationId=/);
   assert.match(notificationsSource, /destinationKey/);
   assert.match(presentationSource, /alertCenterDestinationLater/);

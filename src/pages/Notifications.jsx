@@ -25,12 +25,12 @@ import {
   ALERT_CENTER_VIEWS,
   canAttemptCanonicalAlertDismiss,
   canMarkCanonicalAlertRead,
-  getAlertConversationActionTarget,
-  getAlertWorkCenterActionTarget,
+  getAlertDestinationActionTarget,
   getAlertCenterView,
   getAlertErrorKey,
   getAlertPresentation,
 } from "../utils/alertPresentation";
+import { isProfessionalSession } from "../utils/session";
 import { fetchProfessionalQuotes } from "../utils/professionalQuotesProjection.js";
 import {
   projectProfessionalQuoteDecisionAttentionList,
@@ -45,14 +45,13 @@ function AlertCard({
   pendingOperation,
   onDismiss,
   onMarkRead,
-  onOpenConversation,
-  onOpenWorkCenter,
+  onOpenDestination,
 }) {
   const presentation = getAlertPresentation(alert, language);
-  const conversationTarget = getAlertConversationActionTarget(
-    alert.destination
+  const destinationTarget = getAlertDestinationActionTarget(
+    alert.destination,
+    { professional: isProfessionalSession() }
   );
-  const workCenterTarget = getAlertWorkCenterActionTarget(alert.destination);
   const canMarkRead = canMarkCanonicalAlertRead(alert);
   const canDismiss = canAttemptCanonicalAlertDismiss(alert);
   const isPending = Boolean(pendingOperation);
@@ -99,7 +98,7 @@ function AlertCard({
           <span>{presentation.unreadCountText}</span>
         )}
         {presentation.timestamp && <time dateTime={alert.availableAt}>{presentation.timestamp}</time>}
-        {!conversationTarget.ok && (
+        {!destinationTarget.ok && (
           <span>{t(presentation.destinationKey, language)}</span>
         )}
       </div>
@@ -116,24 +115,15 @@ function AlertCard({
         </p>
       )}
 
-      {(conversationTarget.ok || workCenterTarget.ok || canMarkRead || canDismiss) && (
+      {(destinationTarget.ok || canMarkRead || canDismiss) && (
         <div className="alert-center-card__actions">
-          {conversationTarget.ok && (
+          {destinationTarget.ok && (
             <button
               type="button"
               className="alert-center-button alert-center-button--primary"
-              onClick={() => onOpenConversation(conversationTarget.route)}
+              onClick={() => onOpenDestination(destinationTarget.route)}
             >
-              {t("continueConversation", language)}
-            </button>
-          )}
-          {workCenterTarget.ok && (
-            <button
-              type="button"
-              className="alert-center-button alert-center-button--primary"
-              onClick={() => onOpenWorkCenter(workCenterTarget.route)}
-            >
-              {t("quoteDecisionOpenWorkCenter", language)}
+              {t(destinationTarget.labelKey, language)}
             </button>
           )}
           {canMarkRead && (
@@ -528,8 +518,7 @@ function Notifications({ setPage }) {
                     pendingOperation={pendingMutations[alert.id]}
                     onDismiss={(item) => runAlertMutation(item, "dismiss")}
                     onMarkRead={(item) => runAlertMutation(item, "read")}
-                    onOpenConversation={(route) => setPage(route)}
-                    onOpenWorkCenter={(route) => setPage(route)}
+                    onOpenDestination={(route) => setPage(route)}
                   />
                 ))}
               </div>

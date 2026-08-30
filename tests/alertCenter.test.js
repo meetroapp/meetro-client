@@ -22,6 +22,7 @@ import {
   canMarkCanonicalAlertRead,
   getAlertErrorKey,
   getAlertConversationActionTarget,
+  getAlertDestinationActionTarget,
   getAlertPresentation,
   getAlertPreview,
   getAlertUnreadCount,
@@ -266,10 +267,63 @@ test("canonical conversation destination produces the exact governed Alert retur
   assert.equal(route.conversationId, 91);
   assert.equal(route.returnPage, "notifications");
   assert.equal(route.shell, CANONICAL_CONVERSATION_COMMUNICATION_SHELL);
-  assert.match(notificationsSource, /t\("continueConversation", language\)/);
+  assert.match(notificationsSource, /t\(destinationTarget\.labelKey, language\)/);
   assert.match(
     notificationsSource,
-    /onOpenConversation\(conversationTarget\.route\)/
+    /onOpenDestination\(destinationTarget\.route\)/
+  );
+});
+
+test("workflow Alert destinations open exact role-specific contexts with Alert return paths", () => {
+  const jobId = "072c8736-5d97-4253-ba3e-dd1bce281a20";
+  const visitId = "f08a4f3b-8a21-4da8-a6b0-4258f5a8df9b";
+
+  assert.deepEqual(
+    getAlertDestinationActionTarget(
+      { type: "request", requestId: 41 },
+      { professional: true }
+    ),
+    {
+      ok: true,
+      route: "businessLeads?requestId=41&returnPage=notifications",
+      labelKey: "alertCenterOpenDetails",
+    }
+  );
+  assert.equal(
+    getAlertDestinationActionTarget(
+      { type: "request", requestId: 41 },
+      { professional: false }
+    ).route,
+    "homeownerRequestDetails?requestId=41&returnPage=notifications"
+  );
+  assert.equal(
+    getAlertDestinationActionTarget(
+      { type: "emergency_request", emergencyRequestId: 51 },
+      { professional: true }
+    ).route,
+    "businessLeads?emergencyRequestId=51&returnPage=notifications"
+  );
+  assert.equal(
+    getAlertDestinationActionTarget(
+      { type: "emergency_request", emergencyRequestId: 51 },
+      { professional: false }
+    ).route,
+    "emergencyRequest?requestId=51&returnPage=notifications"
+  );
+  const visit = {
+    type: "visit",
+    conversationId: 91,
+    jobId,
+    requestId: 41,
+    visitId,
+  };
+  assert.equal(
+    getAlertDestinationActionTarget(visit, { professional: true }).route,
+    `workCenter?jobId=${jobId}&visitId=${visitId}&returnPage=notifications`
+  );
+  assert.equal(
+    getAlertDestinationActionTarget(visit, { professional: false }).route,
+    `conversationThread?conversationId=91&returnPage=notifications&shell=communicationCenter&visitId=${visitId}`
   );
 });
 

@@ -6556,6 +6556,7 @@ const handleImageUpload = (event) => {
                     setPage={setPage}
                     displayMode="project-panel"
                     openEditorToken={canonicalVisitEditorToken}
+                    focusVisitId={canonicalRouteContext.visitId}
                     onVisitStateChange={handleCanonicalVisitStateChange}
                   />
                 </div>
@@ -6613,6 +6614,7 @@ const handleImageUpload = (event) => {
                     setPage={setPage}
                     displayMode="inline"
                     openEditorToken={canonicalVisitEditorToken}
+                    focusVisitId={canonicalRouteContext.visitId}
                     onVisitStateChange={handleCanonicalVisitStateChange}
                   />
                 </div>

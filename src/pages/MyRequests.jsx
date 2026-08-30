@@ -56,6 +56,7 @@ import {
   resolveHomeownerRequestById,
 } from "../utils/homeownerRequestCardIdentity";
 import { fetchCustomerJobQuotes } from "../utils/customerJobQuotesApi.js";
+import { parseHomeownerRequestAlertRoute } from "../utils/alertWorkflowRoutes.js";
 
 const UNSUPPORTED_WORKFLOW_STATUSES = new Set([
   "accepted",
@@ -663,6 +664,10 @@ function MyRequests({ setPage, view = "list" }) {
   const requestPhotoUploadEnabled = isRequestPhotoUploadEnabled();
   const mediaUploadDeferred =
     isFriendsAndFamilyMediaDeferred() && !requestPhotoUploadEnabled;
+  const alertRoute = parseHomeownerRequestAlertRoute(
+    typeof window === "undefined" ? "" : window.location.hash
+  );
+  const detailReturnPage = alertRoute?.returnPage || "myRequests";
 
   const [recoveryTick, setRecoveryTick] = useState(0);
   const [backendRequests, setBackendRequests] = useState([]);
@@ -884,7 +889,7 @@ function MyRequests({ setPage, view = "list" }) {
 
   const [selectedRequestId, setSelectedRequestId] = useState(() =>
     normalizeHomeownerRequestCardId(
-      localStorage.getItem("selectedHomeownerRequestId")
+      alertRoute?.requestId || localStorage.getItem("selectedHomeownerRequestId")
     )
   );
   const [previewImage, setPreviewImage] = useState(null);
@@ -1206,7 +1211,7 @@ function MyRequests({ setPage, view = "list" }) {
       <button
         style={backButton}
         onClick={
-          isDetailView ? () => setPage("myRequests") : goBackFromRequests
+          isDetailView ? () => setPage(detailReturnPage) : goBackFromRequests
         }
       >
         {isDetailView
@@ -1413,7 +1418,7 @@ function MyRequests({ setPage, view = "list" }) {
           <button
             className="meetro-visual-primary-button"
             style={primaryButton}
-            onClick={() => setPage("myRequests")}
+            onClick={() => setPage(detailReturnPage)}
           >
             {language === "es"
               ? "Volver al Centro de Trabajo"

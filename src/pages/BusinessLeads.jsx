@@ -37,6 +37,7 @@ import {
   prepareProfessionalResponseCommand,
   submitProfessionalResponse,
 } from "../utils/professionalResponseApi";
+import { parseBusinessLeadAlertRoute } from "../utils/alertWorkflowRoutes.js";
 
 function BusinessLeads({ setPage }) {
   const emergencyRefreshCoordinatorRef = useRef(null);
@@ -55,6 +56,23 @@ function BusinessLeads({ setPage }) {
     useState({});
   const [reloadKey, setReloadKey] = useState(0);
   const isProfessional = isProfessionalSession();
+  const alertRoute = parseBusinessLeadAlertRoute(
+    typeof window === "undefined" ? "" : window.location.hash
+  );
+  const alertFocusAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (!alertRoute || alertFocusAppliedRef.current) return;
+    const focusId = alertRoute.requestId || alertRoute.emergencyRequestId;
+    const selector = alertRoute.requestId
+      ? `[data-lead-request-id="${focusId}"]`
+      : `[data-emergency-request-id="${focusId}"]`;
+    const element = document.querySelector(selector);
+    if (!element) return;
+    alertFocusAppliedRef.current = true;
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    element.focus({ preventScroll: true });
+  }, [alertRoute, emergencyOpportunities, opportunities]);
 
   function openOpportunityConversation(opportunity) {
     const context = stageBusinessLeadConversation(opportunity);
@@ -354,7 +372,7 @@ function BusinessLeads({ setPage }) {
           </button>
         </div>
 
-        <SafeBackBar setPage={setPage} fallback="businessDashboard" />
+        <SafeBackBar setPage={setPage} fallback={alertRoute?.returnPage || "businessDashboard"} />
         <BottomNav setPage={setPage} currentPage="businessLeads" />
       </div>
     );
@@ -478,6 +496,8 @@ function BusinessLeads({ setPage }) {
                 <article
                   key={`emergency-${opportunity.id}`}
                   style={emergencyLeadCard}
+                  data-emergency-request-id={opportunity.id}
+                  tabIndex={-1}
                 >
                   <span style={emergencyLeadStatus}>
                     {t("emergency", language)}
@@ -559,7 +579,12 @@ function BusinessLeads({ setPage }) {
               responseState.phase === "confirmed";
 
             return (
-              <article key={cardKey} style={leadCard}>
+              <article
+                key={cardKey}
+                style={leadCard}
+                data-lead-request-id={requestId}
+                tabIndex={-1}
+              >
                 <span style={leadStatus}>Open request</span>
                 <h2 style={stateTitle}>{opportunity.project_title}</h2>
                 <p style={stateText}>{opportunity.project_description}</p>
@@ -636,7 +661,7 @@ function BusinessLeads({ setPage }) {
         </section>
       )}
 
-      <SafeBackBar setPage={setPage} fallback="businessDashboard" />
+      <SafeBackBar setPage={setPage} fallback={alertRoute?.returnPage || "businessDashboard"} />
       <BottomNav setPage={setPage} currentPage="businessLeads" />
     </div>
   );

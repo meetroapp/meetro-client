@@ -645,6 +645,35 @@ export async function fetchCanonicalVisitDetail({
   return visit;
 }
 
+export async function fetchCanonicalVisitByIdentity({
+  jobId,
+  visitId,
+  setPage,
+  authFetchImpl = authFetch,
+} = {}) {
+  const normalizedJobId = canonicalUuid(jobId);
+  const normalizedVisitId = canonicalUuid(visitId);
+  if (!normalizedJobId || !normalizedVisitId) {
+    throw new CanonicalVisitError({
+      status: 400,
+      code: "INVALID_VISIT_READ_SUBJECT",
+      message: "The Visit identity is invalid.",
+    });
+  }
+  const data = await request({
+    endpoint: `/jobs/${encodeURIComponent(normalizedJobId)}/visits/${encodeURIComponent(normalizedVisitId)}`,
+    options: { method: "GET", cache: "no-store" },
+    setPage,
+    authFetchImpl,
+  });
+  const visit = normalizeCanonicalVisit(data.visit, {
+    jobId: normalizedJobId,
+    detail: true,
+  });
+  if (!visit || visit.id !== normalizedVisitId) throw invalidResponse();
+  return visit;
+}
+
 export async function runCanonicalVisitCommand({
   jobId,
   command,

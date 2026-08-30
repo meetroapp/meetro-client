@@ -14,6 +14,8 @@ import {
 import {
   buildProfessionalWorkCenterRoute,
 } from "./professionalWorkCenterRoute.js";
+import { buildCanonicalConversationRoute } from "./canonicalConversationMessaging.js";
+import { buildEmergencyRequestRoute } from "./emergencyRoutes.js";
 
 export const DEFAULT_ALERT_CENTER_VIEW = "attention";
 export const ALERT_CENTER_PAGE_SIZE = 25;
@@ -94,6 +96,7 @@ const SUPPORTED_DESTINATIONS = new Set([
   "business_profile",
   "review",
   "notifications",
+  "visit",
 ]);
 
 export function getAlertCenterView(viewId) {
@@ -198,6 +201,83 @@ export function getAlertWorkCenterActionTarget(destination) {
     quoteId: normalized.quoteId,
   });
   return route ? { ok: true, route } : { ok: false, route: null };
+}
+
+function positiveIdentity(value) {
+  return Number.isSafeInteger(value) && value > 0 ? value : null;
+}
+
+export function getAlertDestinationActionTarget(
+  destination,
+  { professional = false } = {}
+) {
+  const normalized = normalizeCanonicalAlertDestination(destination);
+  if (!normalized) return { ok: false, route: null, labelKey: null };
+
+  if (normalized.type === "conversation") {
+    if (professional && normalized.jobId && normalized.quoteId) {
+      const workCenter = getAlertWorkCenterActionTarget(normalized);
+      if (workCenter.ok) {
+        return { ...workCenter, labelKey: "quoteDecisionOpenWorkCenter" };
+      }
+    }
+    const target = getAlertConversationActionTarget(normalized);
+    return target.ok
+      ? { ...target, labelKey: "continueConversation" }
+      : { ok: false, route: null, labelKey: null };
+  }
+
+  if (normalized.type === "request") {
+    const requestId = positiveIdentity(normalized.requestId);
+    if (!requestId) return { ok: false, route: null, labelKey: null };
+    const params = new URLSearchParams({
+      requestId: String(requestId),
+      returnPage: "notifications",
+    });
+    return {
+      ok: true,
+      route: `${professional ? "businessLeads" : "homeownerRequestDetails"}?${params}`,
+      labelKey: "alertCenterOpenDetails",
+    };
+  }
+
+  if (normalized.type === "emergency_request") {
+    const emergencyRequestId = positiveIdentity(normalized.emergencyRequestId);
+    if (!emergencyRequestId) return { ok: false, route: null, labelKey: null };
+    const route = professional
+      ? `businessLeads?${new URLSearchParams({
+          emergencyRequestId: String(emergencyRequestId),
+          returnPage: "notifications",
+        })}`
+      : buildEmergencyRequestRoute(emergencyRequestId, {
+          returnPage: "notifications",
+        });
+    return { ok: true, route, labelKey: "alertCenterOpenDetails" };
+  }
+
+  if (normalized.type === "visit") {
+    const route = professional
+      ? buildProfessionalWorkCenterRoute({
+          jobId: normalized.jobId,
+          visitId: normalized.visitId,
+          returnPage: "notifications",
+        })
+      : normalized.conversationId
+        ? buildCanonicalConversationRoute(
+            normalized.conversationId,
+            "notifications",
+            {
+              shell: "communicationCenter",
+              visitId: normalized.visitId,
+            }
+          )
+        : null;
+    return route
+      ? { ok: true, route, labelKey: "alertCenterOpenDetails" }
+      : { ok: false, route: null, labelKey: null };
+  }
+
+  return { ok: false, route: null, labelKey: null };
 }
 
 function quoteDecisionFacts(alert, language) {

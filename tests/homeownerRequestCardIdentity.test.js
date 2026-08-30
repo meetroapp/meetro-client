@@ -71,7 +71,8 @@ test("ordinary cards remain compact while full sections render only in detail mo
 });
 
 test("detail navigation, edit containment, cancellation, and Emergency routes stay explicit", () => {
-  assert.match(myRequestsSource, /isDetailView \? \(\) => setPage\("myRequests"\)/);
+  assert.match(myRequestsSource, /isDetailView \? \(\) => setPage\(detailReturnPage\)/);
+  assert.match(myRequestsSource, /parseHomeownerRequestAlertRoute/);
   assert.match(modificationPanelSource, /actions\.editRequest/);
   assert.match(modificationPanelSource, /data-homeowner-modification-state=\{loadState\}/);
   assert.doesNotMatch(myRequestsSource, /Edit Request unavailable/);

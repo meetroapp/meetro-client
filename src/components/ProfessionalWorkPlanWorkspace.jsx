@@ -69,8 +69,8 @@ function ReadinessCheck({ complete, label }) {
   return <div style={{ ...styles.readinessCheck, ...(complete ? styles.readinessCheckComplete : {}) }}><span aria-hidden="true" style={styles.checkIcon}>{complete ? "✓" : "○"}</span><span>{label}</span></div>;
 }
 
-function CompactSchedule({ visits, record, language, canonicalRecord, setPage }) {
-  const [controlsOpen, setControlsOpen] = useState(false);
+function CompactSchedule({ visits, record, language, canonicalRecord, setPage, focusVisitId = "" }) {
+  const [controlsOpen, setControlsOpen] = useState(Boolean(focusVisitId));
   const visit = [...visits].filter((item) => item.state !== "CANCELLED")
     .sort((left, right) => Date.parse(left.scheduledStartAt || 0) - Date.parse(right.scheduledStartAt || 0))[0];
   const professional = assignedName(record);
@@ -81,19 +81,19 @@ function CompactSchedule({ visits, record, language, canonicalRecord, setPage })
         <Status tone={["SCHEDULED", "STARTED", "COMPLETED"].includes(visit.state) ? "success" : "neutral"}>{visit.state === "SCHEDULED" ? "Confirmed" : readable(visit.state)}</Status>
       </div> : <p style={styles.muted}>No work visit is scheduled yet.</p>}
       <button type="button" style={styles.secondaryButton} aria-expanded={controlsOpen} aria-controls="work-plan-schedule-controls" onClick={() => setControlsOpen((current) => !current)}>{controlsOpen ? "Hide schedule options" : "View or edit schedule"}</button>
-      {controlsOpen && <div id="work-plan-schedule-controls" style={styles.scheduleControls}><CanonicalJobVisits record={canonicalRecord} setPage={setPage} purposeFilter="APPROVED_WORK" showDeposit={false} embedded /></div>}
+      {controlsOpen && <div id="work-plan-schedule-controls" style={styles.scheduleControls}><CanonicalJobVisits record={canonicalRecord} setPage={setPage} purposeFilter="APPROVED_WORK" showDeposit={false} embedded focusVisitId={focusVisitId} /></div>}
     </div>
   );
 }
 
-export function PreWorkPlanPresentation({ approvedWork, preparation, approvedVisits, readiness, record = {}, language = "en", canonicalRecord = {}, jobId, setPage, onCanonicalChange, preparationInitialOpen = "", showManageControls = true }) {
+export function PreWorkPlanPresentation({ approvedWork, preparation, approvedVisits, readiness, record = {}, language = "en", canonicalRecord = {}, jobId, setPage, onCanonicalChange, preparationInitialOpen = "", showManageControls = true, focusVisitId = "" }) {
   return <div style={styles.preWork} data-work-plan-review-state={preparationInitialOpen || "collapsed"}>
     <CompactArea id="approved-work" title="Approved Work" summary="What the customer approved." icon="workCenter" emphasis="primary">
       {!approvedWork?.scope.length ? <p style={styles.muted}>No approved Quote scope is available for this Job.</p> : <ul style={styles.scopeList}>{approvedWork.scope.map((item) => <li key={item.scopeItemId} style={styles.scopeItem} data-approved-scope-item-id={item.scopeItemId}><strong>{item.description}</strong>{item.quantity != null && <span>Qty {item.quantity} · Approved by customer</span>}</li>)}</ul>}
       {approvedWork && <details style={styles.supportingDetails}><summary>View approved scope details</summary><code>{approvedWork.quoteId}</code><span>Approved Quote version {approvedWork.approvedVersion}</span></details>}
     </CompactArea>
     <CompactArea id="materials-preparation" title="Materials & Preparation" summary="What you need before you start." icon="materials"><CompactWorkPlanPreparation preparation={preparation} jobId={jobId} language={language} setPage={setPage} onCanonicalChange={onCanonicalChange} initialOpen={preparationInitialOpen} showManageControls={showManageControls} /></CompactArea>
-    <CompactArea id="work-schedule" title="Work Schedule" summary="When the work is planned." icon="schedule"><CompactSchedule visits={approvedVisits} record={record} language={language} canonicalRecord={canonicalRecord} setPage={setPage} /></CompactArea>
+    <CompactArea id="work-schedule" title="Work Schedule" summary="When the work is planned." icon="schedule"><CompactSchedule visits={approvedVisits} record={record} language={language} canonicalRecord={canonicalRecord} setPage={setPage} focusVisitId={focusVisitId} /></CompactArea>
     <CompactArea id="work-readiness" title="Ready to Start" summary="Everything is in place." icon="completion">
       <div style={styles.readinessGrid}><ReadinessCheck complete={readiness.approvedScope} label="Customer approved" /><ReadinessCheck complete={readiness.depositSatisfied} label="Deposit received" /><ReadinessCheck complete={readiness.preparationReady} label="Materials ready" /><ReadinessCheck complete={readiness.scheduled} label="Work scheduled" /></div>
       <div style={readiness.readyToStart ? styles.readyNotice : styles.waitingNotice} role="status" data-work-authority-gap={WORK_LEVEL_AUTHORITY_GAPS[0]}><strong>{readiness.readyToStart ? "Start Work is temporarily unavailable." : "A few things still need attention"}</strong><span>{readiness.readyToStart ? "Everything is in place." : "Complete the unchecked items before starting this job."}</span></div>
@@ -101,7 +101,7 @@ export function PreWorkPlanPresentation({ approvedWork, preparation, approvedVis
   </div>;
 }
 
-export default function ProfessionalWorkPlanWorkspace({ jobId, record = {}, preferredQuoteId = "", liveJob = null, language = "en", setPage, onCanonicalChange }) {
+export default function ProfessionalWorkPlanWorkspace({ jobId, record = {}, preferredQuoteId = "", focusVisitId = "", liveJob = null, language = "en", setPage, onCanonicalChange }) {
   const [refreshKey, setRefreshKey] = useState(0);
   const [state, setState] = useState({ status: "loading", plan: null, quote: null, preparation: null, schedule: null, execution: null, errors: [] });
   const [completion, setCompletion] = useState(null);
@@ -208,7 +208,7 @@ export default function ProfessionalWorkPlanWorkspace({ jobId, record = {}, pref
       {state.status === "error" && <div role="alert" style={styles.error}><p>This Work Plan is temporarily unavailable.</p><button type="button" style={styles.secondaryButton} onClick={() => setRefreshKey((value) => value + 1)}>Retry</button></div>}
       {state.errors.length > 0 && state.status === "ready" && <p role="status" style={styles.partialNotice}>Some Work Plan details are temporarily unavailable.</p>}
 
-      {state.status === "ready" && mode === "PRE_WORK" && <PreWorkPlanPresentation approvedWork={approvedWork} preparation={state.preparation} approvedVisits={approvedVisits} readiness={readiness} record={record} language={language} canonicalRecord={canonicalRecord} jobId={jobId} setPage={setPage} onCanonicalChange={onCanonicalChange} />}
+      {state.status === "ready" && mode === "PRE_WORK" && <PreWorkPlanPresentation approvedWork={approvedWork} preparation={state.preparation} approvedVisits={approvedVisits} readiness={readiness} record={record} language={language} canonicalRecord={canonicalRecord} jobId={jobId} setPage={setPage} onCanonicalChange={onCanonicalChange} focusVisitId={focusVisitId} />}
 
       {state.status === "ready" && mode !== "PRE_WORK" && <>
         <CompactArea id="approved-work" title="Approved Work" summary="What the customer approved." icon="workCenter" emphasis="primary">{!approvedWork?.scope.length ? <p style={styles.muted}>No approved scope is available.</p> : <ul style={styles.scopeList}>{approvedWork.scope.map((item) => <li key={item.scopeItemId} style={styles.scopeItem}><strong>{item.description}</strong>{item.quantity != null && <span>Qty {item.quantity}</span>}</li>)}</ul>}</CompactArea>

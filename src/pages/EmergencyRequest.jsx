@@ -226,6 +226,9 @@ function EmergencyRequest({ setPage }) {
     () => routeSessionController.current()
   );
   const emergencyRoute = routeSession.route;
+  const detailReturnPage = emergencyRoute.returnPage === "notifications"
+    ? "notifications"
+    : "myRequests";
   const [language, setLanguage] = useState(getLanguage());
   const [ownedCanonicalRequest, setOwnedCanonicalRequest] =
     useState(null);
@@ -1700,7 +1703,11 @@ function EmergencyRequest({ setPage }) {
             <button
               type="button"
               style={backMini}
-              onClick={() => setPage("emergency")}
+              onClick={() => setPage(
+                emergencyRoute.returnPage === "notifications"
+                  ? "notifications"
+                  : "emergency"
+              )}
               aria-label={copy.back}
               disabled={pending}
             >
@@ -2169,7 +2176,7 @@ function EmergencyRequest({ setPage }) {
                 selectionPending={selectionPending}
                 cancellationAvailable={cancellationAvailable}
                 mutationPending={pending}
-                onBack={() => setPage("myRequests")}
+                onBack={() => setPage(detailReturnPage)}
                 onOpenConversation={
                   openCanonicalEmergencyConversation
                 }
@@ -2195,7 +2202,7 @@ function EmergencyRequest({ setPage }) {
                   <button
                     type="button"
                     style={secondaryButton}
-                    onClick={() => setPage("myRequests")}
+                    onClick={() => setPage(detailReturnPage)}
                   >
                     {copy.viewMyEmergencyRequests}
                   </button>

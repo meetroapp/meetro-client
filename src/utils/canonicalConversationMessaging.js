@@ -15,6 +15,7 @@ export const CANONICAL_CONVERSATION_ROUTE_PARAM = "conversationId";
 export const CANONICAL_CONVERSATION_RETURN_PARAM = "returnPage";
 export const CANONICAL_CONVERSATION_SHELL_PARAM = "shell";
 export const CANONICAL_CONVERSATION_INVOICE_PARAM = "invoiceId";
+export const CANONICAL_CONVERSATION_VISIT_PARAM = "visitId";
 export const CANONICAL_CONVERSATION_COMMUNICATION_SHELL =
   "communicationCenter";
 
@@ -62,6 +63,9 @@ export function parseCanonicalConversationRoute(routeValue = "") {
   const invoiceId = String(
     params.get(CANONICAL_CONVERSATION_INVOICE_PARAM) || ""
   ).trim().toLowerCase();
+  const visitId = String(
+    params.get(CANONICAL_CONVERSATION_VISIT_PARAM) || ""
+  ).trim().toLowerCase();
 
   return {
     page,
@@ -71,6 +75,7 @@ export function parseCanonicalConversationRoute(routeValue = "") {
     invoiceId: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(invoiceId)
       ? invoiceId
       : null,
+    ...(UUID_PATTERN.test(visitId) ? { visitId } : {}),
     valid:
       page === CANONICAL_CONVERSATION_ROUTE_PAGE &&
       Boolean(conversationId),
@@ -109,6 +114,11 @@ export function buildCanonicalConversationRoute(
   const invoiceId = String(options?.invoiceId || "").trim().toLowerCase();
   if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(invoiceId)) {
     params.set(CANONICAL_CONVERSATION_INVOICE_PARAM, invoiceId);
+  }
+
+  const visitId = String(options?.visitId || "").trim().toLowerCase();
+  if (UUID_PATTERN.test(visitId)) {
+    params.set(CANONICAL_CONVERSATION_VISIT_PARAM, visitId);
   }
 
   return `${CANONICAL_CONVERSATION_ROUTE_PAGE}?${params.toString()}`;

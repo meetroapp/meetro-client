@@ -367,6 +367,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     useState(null);
   const appliedEvaluationVisitHandoffRef = useRef("");
   const [selectedWorkCenterQuoteId, setSelectedWorkCenterQuoteId] = useState("");
+  const [selectedWorkCenterVisitId, setSelectedWorkCenterVisitId] = useState("");
   const workCenterRouteRecordRef = useRef(
     parseProfessionalWorkCenterRoute(
       typeof window === "undefined" ? "" : window.location.hash
@@ -8530,7 +8531,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
       const current = workCenterRouteRecordRef.current;
       if (
         current?.jobId === next?.jobId &&
-        current?.quoteId === next?.quoteId
+        current?.quoteId === next?.quoteId &&
+        current?.visitId === next?.visitId
       ) {
         return;
       }
@@ -8547,7 +8549,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const target = workCenterRouteRecordRef.current;
     if (!target) return;
     if (canonicalWorkCenterHydration.status !== "ready") return;
-    const token = `${target.jobId}:${target.quoteId}`;
+    const token = `${target.jobId}:${target.quoteId || ""}:${target.visitId || ""}`;
     const exactJob = findCanonicalWorkCenterEntryByJobId(
       canonicalWorkCenterHydration.entries,
       target.jobId
@@ -8555,6 +8557,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     if (!exactJob) {
       setSelectedWorkCenterJob(null);
       setSelectedWorkCenterQuoteId("");
+      setSelectedWorkCenterVisitId("");
       return;
     }
     if (appliedWorkCenterRouteRef.current === token) {
@@ -8571,8 +8574,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
     setIsWorkCenterSectionOpen(false);
     setSelectedJobDetailView("");
     setIsJobHistoryMode(false);
-    setSelectedWorkCenterQuoteId(target.quoteId);
-    setWorkCenterJobReturnSurface("quotes");
+    if (target.quoteId) {
+      setSelectedWorkCenterQuoteId(target.quoteId);
+    } else {
+      setSelectedWorkCenterQuoteId("");
+    }
+    setSelectedWorkCenterVisitId(target.visitId || "");
+    setWorkCenterJobReturnSurface(target.returnPage || (target.quoteId ? "quotes" : "jobs"));
     setSelectedWorkCenterJob(exactJob);
   }, [
     canonicalWorkCenterHydration.entries,
@@ -11028,6 +11036,15 @@ function ContractorDashboard({ setPage, language = "en" }) {
               <div className="work-center-workspace" style={jobWorkspacePanel}>
                 <WorkCenterBackButton
 	                  onClick={() => {
+	                    if (workCenterJobReturnSurface === "notifications") {
+	                      setSelectedJobDetailView("");
+	                      setSelectedWorkCenterJob(null);
+	                      setSelectedWorkCenterQuoteId("");
+	                      setSelectedWorkCenterVisitId("");
+	                      setWorkCenterJobReturnSurface("jobs");
+	                      setPage("notifications");
+	                      return;
+	                    }
 	                    setSelectedJobDetailView("");
 	                    setSelectedWorkCenterJob(null);
 	                    const returnTab = workCenterJobReturnSurface === "quotes"
@@ -11040,11 +11057,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                    setIsJobHistoryMode(false);
 	                    setIsWorkCenterSectionOpen(true);
 	                    setSelectedWorkCenterQuoteId("");
+	                    setSelectedWorkCenterVisitId("");
 	                    setWorkCenterJobReturnSurface("jobs");
 	                    localStorage.setItem("meetroWorkCenterTab", returnTab);
 	                    localStorage.setItem("activeWorkCenterTab", returnTab);
 	                  }}
-	                  label={workCenterJobReturnSurface === "quotes"
+	                  label={workCenterJobReturnSurface === "notifications"
+	                    ? translate("alertCenterBack", activeLanguage)
+	                    : workCenterJobReturnSurface === "quotes"
 	                    ? translate("professionalQuotesBack", activeLanguage)
 	                    : workCenterJobReturnSurface === "workPlan"
 	                      ? workPlanCopy.backToWorkCenter
@@ -11290,6 +11310,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             summary={workCenterWorkspaceCopy.evaluationSummary}
                             defaultOpen={
                               canonicalEvaluationHandoffIsCurrent ||
+                              Boolean(selectedWorkCenterVisitId) ||
                               ["evaluation", "findings"].includes(
                                 canonicalNextActionSection
                               )
@@ -11330,6 +11351,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                              purposeFilter="EVALUATION"
 	                              showDeposit={false}
 	                              embedded
+	                              focusVisitId={selectedWorkCenterVisitId}
 	                            />
 	                          </WorkCenterAccordion>
 	                          <WorkCenterAccordion
@@ -11370,7 +11392,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             title={workCenterWorkspaceCopy.workPlan}
                             summary={workCenterWorkspaceCopy.workPlanSummary}
                             status={jobDisplayStatus}
-                            defaultOpen={canonicalNextActionSection === "workPlan"}
+                            defaultOpen={canonicalNextActionSection === "workPlan" || Boolean(selectedWorkCenterVisitId)}
                             autoOpenToken={canonicalAutoOpenToken}
                           >
 	                            <ProfessionalWorkPlanWorkspace
@@ -11381,6 +11403,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                                requestId: workCenterLifecycleProjection.projection.requestId || workCenterLifecycleProjection.postId,
 	                              }}
 	                              preferredQuoteId={selectedWorkCenterQuoteId}
+	                              focusVisitId={selectedWorkCenterVisitId}
 	                              liveJob={canonicalLiveJob}
 	                              language={activeLanguage}
                               setPage={setPage}

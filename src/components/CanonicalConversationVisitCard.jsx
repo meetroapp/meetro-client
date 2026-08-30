@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import {
   fetchCanonicalVisitDetail,
+  fetchCanonicalVisitByIdentity,
   fetchCanonicalVisits,
   runCanonicalVisitCommand,
 } from "../utils/canonicalVisitProjection.js";
@@ -85,14 +86,17 @@ function currentEvaluationVisit(visits) {
 }
 
 function stateCopy(visit, viewerIsProfessional) {
+  const visitLabel = visit?.purpose === "APPROVED_WORK"
+    ? "Work Visit"
+    : "Evaluation Visit";
   if (!visit) {
     return viewerIsProfessional
       ? {
-          title: "Schedule Evaluation Visit",
+          title: `Schedule ${visitLabel}`,
           guidance: "Choose a date and arrival time to inspect the project.",
         }
       : {
-          title: "Evaluation visit not scheduled",
+          title: `${visitLabel} not scheduled`,
           guidance: "The selected professional will propose a visit time here.",
         };
   }
@@ -103,14 +107,14 @@ function stateCopy(visit, viewerIsProfessional) {
           guidance: "Approve this exact Visit version or edit the schedule.",
         }
       : {
-          title: "Evaluation Visit Proposed",
+          title: `${visitLabel} Proposed`,
           guidance: "Approve this exact time or propose a new one.",
         };
   }
   if (visit.state === "PROPOSED") {
     return viewerIsProfessional
       ? {
-          title: "Evaluation Visit Proposed",
+          title: `${visitLabel} Proposed`,
           guidance: "Waiting for the customer to approve or propose a new time.",
         }
       : {
@@ -120,7 +124,7 @@ function stateCopy(visit, viewerIsProfessional) {
   }
   if (visit.state === "SCHEDULED") {
     return {
-      title: "Evaluation Visit Confirmed",
+      title: `${visitLabel} Confirmed`,
       guidance: viewerIsProfessional
         ? "Start the Visit when the appointment begins."
         : "Both sides confirmed this exact schedule.",
@@ -128,23 +132,25 @@ function stateCopy(visit, viewerIsProfessional) {
   }
   if (visit.state === "STARTED") {
     return {
-      title: "Evaluation Visit In Progress",
+      title: visit.purpose === "APPROVED_WORK"
+        ? "Work Visit In Progress"
+        : "Evaluation Visit In Progress",
       guidance: viewerIsProfessional
         ? "Document the assessment, then complete the Visit when it ends."
-        : "The professional has started the Evaluation Visit.",
+        : `The professional has started the ${visitLabel}.`,
     };
   }
   if (visit.state === "COMPLETED") {
     return {
-      title: "Evaluation Visit Completed",
+      title: `${visitLabel} Completed`,
       guidance: viewerIsProfessional
         ? "The Evaluation can now be documented from this Visit."
         : "The professional can now document the assessment.",
     };
   }
   return {
-    title: "Evaluation Visit Cancelled",
-    guidance: "No active Evaluation Visit is scheduled.",
+    title: `${visitLabel} Cancelled`,
+    guidance: `No active ${visitLabel} is scheduled.`,
   };
 }
 
@@ -155,6 +161,7 @@ export default function CanonicalConversationVisitCard({
   setPage,
   displayMode = "inline",
   openEditorToken = 0,
+  focusVisitId = null,
   onVisitStateChange,
 }) {
   const viewerIsProfessional = viewerRole === "professional" || viewerRole === "business";
@@ -170,20 +177,24 @@ export default function CanonicalConversationVisitCard({
     queueMicrotask(() => {
       if (active) setState((current) => ({ ...current, phase: "loading", error: "" }));
     });
-    void fetchCanonicalVisits({
-      jobId,
-      purpose: "EVALUATION",
-      setPage,
-    }).then(async (visits) => {
-      const summary = currentEvaluationVisit(visits);
-      const visit = summary
-        ? await fetchCanonicalVisitDetail({
-            jobId,
-            visitId: summary.id,
-            purpose: "EVALUATION",
-            setPage,
-          })
-        : null;
+    const read = focusVisitId
+      ? fetchCanonicalVisitByIdentity({ jobId, visitId: focusVisitId, setPage })
+      : fetchCanonicalVisits({
+          jobId,
+          purpose: "EVALUATION",
+          setPage,
+        }).then(async (visits) => {
+          const summary = currentEvaluationVisit(visits);
+          return summary
+            ? fetchCanonicalVisitDetail({
+                jobId,
+                visitId: summary.id,
+                purpose: "EVALUATION",
+                setPage,
+              })
+            : null;
+        });
+    void read.then((visit) => {
       if (active) setState({ phase: "ready", visit, error: "" });
     }).catch((error) => {
       if (active) {
@@ -195,7 +206,7 @@ export default function CanonicalConversationVisitCard({
       }
     });
     return () => { active = false; };
-  }, [jobId, reload, setPage]);
+  }, [focusVisitId, jobId, reload, setPage]);
 
   useEffect(() => {
     if (!openEditorToken || !viewerIsProfessional || state.phase !== "ready") return;
@@ -233,11 +244,16 @@ export default function CanonicalConversationVisitCard({
     setRunning(true);
     setNotice("");
     try {
+      const purpose = state.visit?.purpose || "EVALUATION";
       const updated = await runCanonicalVisitCommand({
         jobId,
         command: commandName,
         visit: state.visit,
-        purpose: "EVALUATION",
+        purpose,
+        approvedQuoteDecisionId:
+          purpose === "APPROVED_WORK"
+            ? state.visit?.approvedQuoteDecisionEvidence?.decisionId
+            : null,
         schedule,
         reason: form.note.trim() || null,
         acknowledgeScheduleVariance,
@@ -245,12 +261,12 @@ export default function CanonicalConversationVisitCard({
       });
       setEditor(null);
       setState({ phase: "ready", visit: updated, error: "" });
-      setNotice("Evaluation Visit updated.");
+      setNotice(`${purpose === "APPROVED_WORK" ? "Work" : "Evaluation"} Visit updated.`);
       setReload((value) => value + 1);
       window.dispatchEvent(new CustomEvent("meetro-canonical-visit-changed", {
         detail: { jobId, visitId: updated.id, source: "conversation" },
       }));
-      if (commandName === "start") {
+      if (commandName === "start" && purpose === "EVALUATION") {
         const handoff = requestEvaluationVisitHandoff({
           jobId,
           visit: updated,
@@ -285,7 +301,7 @@ export default function CanonicalConversationVisitCard({
     event.preventDefault();
     if (running) return;
     const schedule = buildProfessionalScheduleCommandSchedule({
-      purpose: "EVALUATION",
+      purpose: state.visit?.purpose || "EVALUATION",
       date: form.date,
       startTime: form.startTime,
       endTime: form.endTime,
@@ -320,7 +336,9 @@ export default function CanonicalConversationVisitCard({
     >
       <div style={styles.header}>
         <div>
-          <span style={styles.eyebrow}>Evaluation Visit</span>
+          <span style={styles.eyebrow}>
+            {visit?.purpose === "APPROVED_WORK" ? "Work Visit" : "Evaluation Visit"}
+          </span>
           <h3 style={styles.title}>{copy.title}</h3>
         </div>
         {visit && <span style={styles.version}>Version {visit.currentVersion}</span>}

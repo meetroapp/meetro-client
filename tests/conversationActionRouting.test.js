@@ -170,7 +170,7 @@ test("Communication Center and Alert Center share one canonical route target con
   );
   assert.match(
     notificationsSource,
-    /getAlertConversationActionTarget/
+    /getAlertDestinationActionTarget/
   );
   assert.doesNotMatch(
     notificationsSource,

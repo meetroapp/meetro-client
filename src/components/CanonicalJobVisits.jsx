@@ -139,6 +139,7 @@ export default function CanonicalJobVisits({
   purposeFilter = "ALL",
   showDeposit = true,
   embedded = false,
+  focusVisitId = "",
 }) {
   const environmentEnabled = isCanonicalWorkCenterHydrationEnabled();
   const jobId = String(record.jobId || "").trim();
@@ -239,6 +240,19 @@ export default function CanonicalJobVisits({
       ? all
       : all.filter((subject) => subject.purpose === purposeFilter);
   }, [purposeFilter, workspace.approvedWork, workspace.evaluation]);
+
+  useEffect(() => {
+    if (workspace.status !== "ready" || !focusVisitId) return undefined;
+    const timeoutId = window.setTimeout(() => {
+      const element = document.querySelector(
+        `[data-canonical-visit-card-id="${focusVisitId}"]`
+      );
+      if (!element) return;
+      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      element.focus({ preventScroll: true });
+    }, 100);
+    return () => window.clearTimeout(timeoutId);
+  }, [focusVisitId, workspace.status]);
 
   function reload() {
     setReloadVersion((current) => current + 1);
@@ -588,7 +602,12 @@ export default function CanonicalJobVisits({
                     {subject.visits.map((visit) => {
                       const changeRequest = unresolvedChangeRequest(visit);
                       return (
-                        <section key={visit.id} style={styles.visitCard}>
+                        <section
+                          key={visit.id}
+                          style={styles.visitCard}
+                          data-canonical-visit-card-id={visit.id}
+                          tabIndex={visit.id === focusVisitId ? -1 : undefined}
+                        >
                           <div style={styles.visitHeader}>
                             <strong>
                               {visit.state === "PROPOSED" && visit.actions.canConfirm

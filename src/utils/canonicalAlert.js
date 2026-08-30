@@ -184,10 +184,37 @@ export function normalizeCanonicalAlertDestination(value) {
   }
 
   const jobResourceDestinations = {
-    visit: "visitId",
     quote: "quoteId",
     invoice: "invoiceId",
   };
+  if (value.type === "visit") {
+    const basic = hasExactKeys(value, ["type", "jobId", "visitId"]);
+    const conversationContext = hasExactKeys(value, [
+      "type",
+      "conversationId",
+      "jobId",
+      "requestId",
+      "visitId",
+    ]);
+    if (!basic && !conversationContext) return null;
+    if (
+      typeof value.jobId !== "string" ||
+      typeof value.visitId !== "string" ||
+      !UUID_PATTERN.test(value.jobId) ||
+      !UUID_PATTERN.test(value.visitId)
+    ) return null;
+    const normalized = {
+      type: value.type,
+      jobId: value.jobId.toLowerCase(),
+      visitId: value.visitId.toLowerCase(),
+    };
+    if (basic) return normalized;
+    const conversationId = normalizePositiveNumericIdentity(value.conversationId);
+    const requestId = normalizePositiveNumericIdentity(value.requestId);
+    return conversationId && requestId
+      ? { ...normalized, conversationId, requestId }
+      : null;
+  }
   const resourceField = jobResourceDestinations[value.type];
   if (resourceField) {
     if (!hasExactKeys(value, ["type", "jobId", resourceField])) return null;
