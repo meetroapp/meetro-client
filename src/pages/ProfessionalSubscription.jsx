@@ -61,7 +61,7 @@ function fallbackPlanPositioning(plan) {
   return "For professional businesses";
 }
 
-export default function ProfessionalSubscription({ setPage }) {
+export default function ProfessionalSubscription({ setPage, onSubscriptionState }) {
   const [state, setState] = useState(null);
   const [products, setProducts] = useState([]);
   const [busy, setBusy] = useState("");
@@ -73,13 +73,14 @@ export default function ProfessionalSubscription({ setPage }) {
     setError("");
     const loaded = await fetchProfessionalSubscription(setPage);
     setState(loaded);
+    onSubscriptionState?.(loaded);
     const ids = (loaded.catalog || []).map((plan) => plan.providerProductId).filter(Boolean);
     if (nativeIos && ids.length) {
       const store = await loadStoreKitProducts(ids);
       setProducts(Array.isArray(store?.products) ? store.products : []);
     }
     return loaded;
-  }, [nativeIos, setPage]);
+  }, [nativeIos, onSubscriptionState, setPage]);
 
   useEffect(() => {
     let active = true;

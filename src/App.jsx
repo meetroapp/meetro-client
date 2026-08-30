@@ -1,11 +1,13 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import {
   getAccountModeForPage,
   getDashboardPageForAccountMode,
   getExplicitBusinessProfileOwnership,
+  getAuthenticatedIdentitySnapshot,
   isProfessionalSession,
   restoreAuthenticatedSessionFromStorage,
+  subscribeAuthenticatedIdentity,
   syncAccountModeForPage,
 } from "./utils/session";
 import { readBusinessServiceProfile } from "./utils/businessServiceProfile";
@@ -562,15 +564,29 @@ function App() {
       : getInitialPage()
   );
   const [subscriptionGate, setSubscriptionGate] = useState({ status: "idle", entitled: false });
+  const [authenticatedIdentity, setAuthenticatedIdentity] = useState(
+    getAuthenticatedIdentitySnapshot
+  );
+  const updateSubscriptionGate = useCallback((result = {}) => {
+    setSubscriptionGate({
+      status: "ready",
+      entitled: result.entitled === true,
+    });
+  }, []);
   const isStartupReady =
     startupReadiness.status === STARTUP_READINESS.ready &&
     sessionHydration.status !== SESSION_HYDRATION.restoring;
+
+  useEffect(
+    () => subscribeAuthenticatedIdentity(setAuthenticatedIdentity),
+    []
+  );
 
   useEffect(() => {
     let active = true;
     Promise.resolve().then(() => {
       if (
-        sessionHydration.status !== SESSION_HYDRATION.authenticated ||
+        authenticatedIdentity.status !== "authenticated" ||
         !isProfessionalSession()
       ) {
         if (active) setSubscriptionGate({ status: "not_applicable", entitled: true });
@@ -579,14 +595,14 @@ function App() {
       if (active) setSubscriptionGate({ status: "loading", entitled: false });
       fetchProfessionalSubscription(setPageState)
         .then((result) => {
-          if (active) setSubscriptionGate({ status: "ready", entitled: result.entitled === true });
+          if (active) updateSubscriptionGate(result);
         })
         .catch(() => {
           if (active) setSubscriptionGate({ status: "unavailable", entitled: false });
         });
       });
     return () => { active = false; };
-  }, [sessionHydration.status]);
+  }, [authenticatedIdentity.sessionGeneration, authenticatedIdentity.status, updateSubscriptionGate]);
 
   useEffect(() => {
     if (
@@ -1005,7 +1021,13 @@ if (
   subscriptionGate.status !== "idle" &&
   subscriptionGate.entitled !== true
 ) {
-  return withStartupChrome(<ProfessionalSubscription setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    <ProfessionalSubscription
+      setPage={setPage}
+      onSubscriptionState={updateSubscriptionGate}
+    />,
+    updateNotice
+  );
 }
 
 if (page === "login") {
@@ -1205,7 +1227,13 @@ if (page === "businessCommandCenter") {
 }
 
 if (page === "professionalSubscription") {
-  return withStartupChrome(<ProfessionalSubscription setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    <ProfessionalSubscription
+      setPage={setPage}
+      onSubscriptionState={updateSubscriptionGate}
+    />,
+    updateNotice
+  );
 }
 
 if (page === "businessAvailability") {

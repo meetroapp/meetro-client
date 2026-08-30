@@ -8,6 +8,8 @@ const storeKit = fs.readFileSync(new URL("../src/utils/storeKitSubscriptions.js"
 const native = fs.readFileSync(new URL("../ios/App/App/StoreKitSubscriptions.swift", import.meta.url), "utf8");
 const registry = fs.readFileSync(new URL("../src/utils/businessToolsRegistry.js", import.meta.url), "utf8");
 const api = fs.readFileSync(new URL("../src/utils/subscriptionApi.js", import.meta.url), "utf8");
+const login = fs.readFileSync(new URL("../src/pages/Login.jsx", import.meta.url), "utf8");
+const contractorProfile = fs.readFileSync(new URL("../src/pages/ContractorProfile.jsx", import.meta.url), "utf8");
 
 test("professional subscription screen exposes the three approved paid plans", () => {
   assert.match(page, /Starter/);
@@ -117,10 +119,42 @@ test("normal no-entitlement access routes cleanly to plans without treating it a
   assert.doesNotMatch(page, /The subscription operation could not be completed/);
 });
 
+test("new professional account creation reaches plan selection before Welcome or business onboarding", () => {
+  const firstLoginBlock = login.slice(
+    login.indexOf("if (isFirstLogin) {", login.indexOf("const sessionResult")),
+    login.indexOf("routeUser(sessionResult)")
+  );
+  const planRoute = firstLoginBlock.indexOf('setPage("professionalSubscription")');
+  const welcomeRoute = firstLoginBlock.indexOf('setPage("welcome")');
+  assert.ok(planRoute >= 0 && welcomeRoute > planRoute);
+  assert.match(firstLoginBlock, /sessionResult\.finalMode === "business"/);
+  assert.match(firstLoginBlock, /localStorage\.removeItem\("firstLogin"\)/);
+});
+
+test("Personal to Business activation enters the same plan gate after durable profile creation", () => {
+  const createStart = contractorProfile.indexOf("async function handleCreateProfile()");
+  const createEnd = contractorProfile.indexOf("async function handleUpdateProfile()", createStart);
+  const createBlock = contractorProfile.slice(createStart, createEnd);
+  const confirmedProfile = createBlock.indexOf("getConfirmedBusinessProfile(result)");
+  const projectedProfile = createBlock.indexOf("projectConfirmedBusinessProfile(savedProfile)");
+  const planRoute = createBlock.indexOf('setPage("professionalSubscription")');
+  assert.ok(confirmedProfile >= 0 && projectedProfile > confirmedProfile && planRoute > projectedProfile);
+  assert.doesNotMatch(createBlock, /setPage\("businessDashboard"\)|setPage\("professionalOnboarding"\)/);
+});
+
+test("the centralized entitlement gate refreshes on authenticated identity and verified subscription state", () => {
+  assert.match(app, /subscribeAuthenticatedIdentity\(setAuthenticatedIdentity\)/);
+  assert.match(app, /authenticatedIdentity\.status !== "authenticated"/);
+  assert.match(app, /authenticatedIdentity\.sessionGeneration/);
+  assert.match(page, /onSubscriptionState\?\.\(loaded\)/);
+  assert.match(app, /onSubscriptionState=\{updateSubscriptionGate\}/);
+});
+
 test("server-entitled staging professionals retain normal Job, Quote, Invoice, and Alert routes", () => {
   const gate = app.indexOf('subscriptionGate.entitled !== true');
   assert.ok(gate >= 0);
-  assert.match(app, /fetchProfessionalSubscription\(setPageState\)[\s\S]*entitled: result\.entitled === true/);
+  assert.match(app, /fetchProfessionalSubscription\(setPageState\)[\s\S]*updateSubscriptionGate\(result\)/);
+  assert.match(app, /entitled: result\.entitled === true/);
   for (const route of [
     'page === "businessDashboard"',
     'page === "quoteBuilder"',
