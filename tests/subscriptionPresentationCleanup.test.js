@@ -77,14 +77,14 @@ test("the three approved plan identities, prices, and seat limits derive from en
     ["Professional", "6 of 10 professional seats used"]
   );
 
-  assert.equal(presentation("STARTER", "TRIAL").billingLabel, "Then $34.99/month");
-  assert.equal(presentation("GROWTH", "TRIAL").billingLabel, "Then $69.99/month");
-  assert.equal(presentation("PROFESSIONAL", "TRIAL").billingLabel, "Then $129.99/month");
+  assert.equal(presentation("STARTER", "TRIAL").billingLabel, "");
+  assert.equal(presentation("GROWTH", "TRIAL").billingLabel, "");
+  assert.equal(presentation("PROFESSIONAL", "TRIAL").billingLabel, "");
 });
 
 test("plan status and management remain server-owned and use the existing route", () => {
   assert.equal(presentation("GROWTH").statusLabel, "Active");
-  assert.equal(presentation("GROWTH", "TRIAL").planName, "Growth — Trial");
+  assert.equal(presentation("GROWTH", "TRIAL").planName, "Growth");
   assert.match(cardSource, /fetchProfessionalSubscription\(setPage\)/);
   assert.match(cardSource, /setPage\("professionalSubscription"\)/);
   assert.doesNotMatch(cardSource, /APPLE_APP_STORE|STRIPE|localStorage|setTimeout|setInterval/);
@@ -96,6 +96,24 @@ test("staging QA access is presented accurately without fake provider billing", 
   assert.equal(qa.statusLabel, "Testing access");
   assert.equal(qa.billingLabel, "No Apple or Stripe subscription is active.");
   assert.match(qa.seatLabel, /cannot activate in production/);
+});
+
+test("the server-owned Meetro Business Trial is plan-neutral and uses server dates", () => {
+  const trial = getBusinessPlanPresentation({
+    applicable: true,
+    entitled: true,
+    businessTrial: {
+      source: "MEETRO_SERVER",
+      status: "ACTIVE",
+      daysRemaining: 9,
+      endsAt: "2026-09-08T12:00:00.000Z",
+    },
+  });
+  assert.equal(trial.kind, "trial");
+  assert.equal(trial.planName, "Meetro Business Trial");
+  assert.equal(trial.statusLabel, "9 days remaining");
+  assert.match(trial.billingLabel, /Trial ends Sep 8, 2026/);
+  assert.doesNotMatch(JSON.stringify(trial), /Apple|Stripe|Starter|Growth|Professional/);
 });
 
 test("QA bypass produces one separate status and informational commercial plans", () => {
@@ -122,17 +140,17 @@ test("web uses Stripe presentation and native iOS continues to use Apple", () =>
     plan: { providers: { STRIPE: { configured: false } } },
   });
   assert.equal(web.providerName, "Stripe");
-  assert.equal(web.eligibilityLabel, "Trial eligibility determined by Stripe");
+  assert.equal(web.eligibilityLabel, "Paid monthly plan");
   assert.equal(web.unavailableLabel, "Stripe TEST checkout is not configured in staging.");
 
   const ios = getSubscriptionPurchaseChannel({
     nativeIos: true,
     plan: { providers: { APPLE_APP_STORE: { configured: true } } },
-    storeProduct: { trialEligible: false },
+    storeProduct: {},
   });
   assert.equal(ios.providerName, "Apple");
-  assert.equal(ios.eligibilityLabel, "Trial eligibility determined by Apple");
-  assert.doesNotMatch(subscriptionPageSource, /Trial eligibility checked by Apple|Web subscription checkout is unavailable/);
+  assert.equal(ios.eligibilityLabel, "Paid monthly plan");
+  assert.doesNotMatch(subscriptionPageSource, /Trial eligibility checked by Apple|Trial eligibility determined by|Web subscription checkout is unavailable/);
 });
 
 test("real Apple and Stripe subscriptions win over QA bypass and remain provider-managed", () => {
@@ -159,14 +177,22 @@ test("real Apple and Stripe subscriptions win over QA bypass and remain provider
 test("a normal no-entitlement professional retains provider-appropriate purchase actions", () => {
   const action = getSubscriptionPlanAction({
     providerReady: true,
-    trialOffered: true,
     nativeIos: false,
   });
   assert.deepEqual(action, {
     kind: "purchase",
-    label: "Start 14-Day Free Trial",
+    label: "Continue with Stripe",
     enabled: true,
   });
+
+  const trialConversion = getSubscriptionPlanAction({
+    entitled: true,
+    businessTrialActive: true,
+    providerReady: true,
+    nativeIos: true,
+  });
+  assert.equal(trialConversion.label, "Continue with Apple");
+  assert.equal(trialConversion.enabled, true);
 });
 
 test("Business Dashboard suppresses only the loaded staging QA status card", () => {
@@ -174,7 +200,7 @@ test("Business Dashboard suppresses only the loaded staging QA status card", () 
   assert.match(cardSource, /hideQa && \(loading \|\| presentation\.kind === "qa"\)/);
 });
 
-test("Homeowner Profile stays free and Business activation preserves the existing plan gate", () => {
+test("Homeowner Profile stays free and Business activation enters the trial-backed business flow", () => {
   const personalBranchStart = profileSource.indexOf("if (!isBusinessMode)");
   const businessBranchStart = profileSource.indexOf(
     "\n  }\n\n  return (\n    <div className={profileShellClassName}",
@@ -185,7 +211,7 @@ test("Homeowner Profile stays free and Business activation preserves the existin
   assert.doesNotMatch(personalBranch, /BusinessPlanStatusCard|professionalSubscription/);
   assert.match(profileSource, /!hasBusinessAccess[\s\S]*Set Up Business Account[\s\S]*setPage\("contractorProfile"\)/);
   assert.match(appSource, /isProfessionalOnlyPage\(page\)[\s\S]*subscriptionGate\.entitled !== true/);
-  assert.match(loginSource, /setPage\("professionalSubscription"\)/);
+  assert.doesNotMatch(loginSource, /if \(isFirstLogin\)[\s\S]{0,260}professionalSubscription/);
 });
 
 test("the replacement presentation does not add Billing, Alerts, premium leads, or Employee Team behavior", () => {

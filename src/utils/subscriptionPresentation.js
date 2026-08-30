@@ -1,5 +1,5 @@
 const STATUS_LABELS = Object.freeze({
-  TRIAL: "Trial",
+  TRIAL: "Provider verification required",
   ACTIVE: "Active",
   GRACE: "Payment issue",
   CANCELED_AT_PERIOD_END: "Active until period end",
@@ -12,20 +12,21 @@ function positiveInteger(value) {
   return Number.isSafeInteger(number) && number > 0 ? number : null;
 }
 
-function money(amountMinor, currency = "USD") {
-  const amount = Number(amountMinor);
-  if (!Number.isSafeInteger(amount) || amount < 0) return "";
-  return new Intl.NumberFormat("en-US", {
-    style: "currency",
-    currency: String(currency || "USD").toUpperCase(),
-  }).format(amount / 100);
-}
-
 function fallbackPlanName(seatLimit) {
   if (seatLimit === 2) return "Starter";
   if (seatLimit === 5) return "Growth";
   if (seatLimit === 10) return "Professional";
   return "Business Plan";
+}
+
+function dateLabel(value) {
+  if (!value) return "";
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? "" : parsed.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
 }
 
 function resolveUsedSeats(state = {}, subscription = {}) {
@@ -43,6 +44,22 @@ function resolveUsedSeats(state = {}, subscription = {}) {
 
 export function getBusinessPlanPresentation(state = {}) {
   const subscription = state?.subscription;
+  const businessTrial = state?.businessTrial;
+
+  if (!subscription && businessTrial?.status === "ACTIVE") {
+    const remaining = positiveInteger(businessTrial.daysRemaining);
+    const ends = dateLabel(businessTrial.endsAt);
+    return Object.freeze({
+      kind: "trial",
+      eyebrow: "Business Plan",
+      planName: "Meetro Business Trial",
+      statusLabel: remaining ? `${remaining} ${remaining === 1 ? "day" : "days"} remaining` : "Active",
+      seatLabel: "Full professional access during your trial.",
+      billingLabel: ends ? `Trial ends ${ends}. Choose a paid plan any time.` : "Choose a paid plan any time.",
+      manageLabel: "View Plans",
+    });
+  }
+
   if (state?.qaAccess && !subscription) {
     return Object.freeze({
       kind: "qa",
@@ -56,11 +73,12 @@ export function getBusinessPlanPresentation(state = {}) {
   }
 
   if (!subscription) {
+    const trialEnded = businessTrial?.status === "EXPIRED" || businessTrial?.status === "CONVERTED";
     return Object.freeze({
       kind: state?.applicable === true ? "required" : "unavailable",
       eyebrow: "Business Plan",
-      planName: state?.applicable === true ? "Plan selection required" : "Plan status unavailable",
-      statusLabel: state?.applicable === true ? "Professional access locked" : "Try again from Plan & Subscription",
+      planName: state?.applicable === true ? (trialEnded ? "Business Trial ended" : "Plan selection required") : "Plan status unavailable",
+      statusLabel: state?.applicable === true ? "Choose a paid plan to continue" : "Try again from Plan & Subscription",
       seatLabel: "",
       billingLabel: "",
       manageLabel: state?.applicable === true ? "Choose Plan" : "Plan & Subscription",
@@ -75,13 +93,11 @@ export function getBusinessPlanPresentation(state = {}) {
     positiveInteger(catalogPlan?.seatLimit);
   const usedSeats = resolveUsedSeats(state, subscription);
   const planName = catalogPlan?.name || fallbackPlanName(seatLimit);
-  const trial = subscription.status === "TRIAL";
-  const price = money(catalogPlan?.amountMinor, catalogPlan?.currency);
 
   return Object.freeze({
     kind: "subscription",
     eyebrow: "Business Plan",
-    planName: trial ? `${planName} — Trial` : planName,
+    planName,
     statusLabel: STATUS_LABELS[subscription.status] || "Plan status unavailable",
     seatLabel:
       usedSeats && seatLimit
@@ -89,7 +105,7 @@ export function getBusinessPlanPresentation(state = {}) {
         : seatLimit
         ? `Up to ${seatLimit} professional seats`
         : "",
-    billingLabel: trial && price ? `Then ${price}/month` : "",
+    billingLabel: "",
     manageLabel: "Manage Plan",
   });
 }

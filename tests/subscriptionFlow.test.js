@@ -17,10 +17,10 @@ test("professional subscription screen exposes the three approved paid plans", (
   assert.match(page, /Growth/);
   assert.match(page, /Professional/);
   assert.match(page, /Up to \{plan\.seatLimit\} professional users/);
-  assert.match(planPresentation, /14 days free/);
   assert.match(page, /amountMinor \/ 100/);
-  assert.match(planPresentation, /Start 14-Day Free Trial/);
-  assert.match(page, /Free for 14 days, then \$\{displayPrice\}\/month\. Cancel anytime\./);
+  assert.match(planPresentation, /Paid monthly plan/);
+  assert.match(planPresentation, /Continue with Stripe/);
+  assert.match(page, /Meetro Business Trial/);
   assert.doesNotMatch(page, /annual|per-lead|premium AI|priority leads/i);
 });
 
@@ -40,11 +40,10 @@ test("all paid plans share the complete Meetro Business platform", () => {
   assert.match(page, /Included with every Meetro Business plan/);
 });
 
-test("trial promise requires provider eligibility and introductory offer", () => {
-  assert.match(planPresentation, /storeProduct\?\.trialEligible === true/);
-  assert.match(planPresentation, /Boolean\(storeProduct\?\.introductoryOffer\)/);
-  assert.match(planPresentation, /Trial eligibility determined by \$\{providerName\}/);
-  assert.doesNotMatch(page + planPresentation, /trialEligible\s*=\s*true/);
+test("the initial trial is presented as Meetro-owned rather than provider-owned", () => {
+  assert.match(page, /Meetro governs the one-time 14-day Business Trial/);
+  assert.match(planPresentation, /Meetro governs the initial Business Trial/);
+  assert.doesNotMatch(page + planPresentation, /Trial eligibility determined by|Start 14-Day Free Trial|introductoryOffer|trialEligible/);
 });
 
 test("purchase only unlocks after server verification", () => {
@@ -73,14 +72,14 @@ test("web purchase uses server-created Stripe Checkout while iOS uses StoreKit",
   assert.doesNotMatch(page + storeKit + api, /STRIPE_SECRET_KEY|sk_(live|test)_|paypal/i);
 });
 
-test("provider redirect never sets entitlement and Stripe trial remains provider governed", () => {
+test("provider redirect never sets entitlement and paid status remains provider governed", () => {
   assert.match(page, /window\.location\.assign\(checkout\.url\)/);
-  assert.match(planPresentation, /governs trial dates and billing status\. Access starts only after server verification/);
+  assert.match(planPresentation, /governs paid billing status after server verification/);
   assert.doesNotMatch(page + api, /setState\([^)]*entitled:\s*true|localStorage.*subscri/i);
 });
 
-test("one provider entitlement prevents a second platform purchase", () => {
-  assert.match(planPresentation, /if \(subscription \|\| entitled\)/);
+test("one provider entitlement prevents a second platform purchase while an active Meetro trial permits paid conversion", () => {
+  assert.match(planPresentation, /if \(subscription \|\| \(entitled && !businessTrialActive\)\)/);
   assert.match(page, /subscription\?\.provider !== "STRIPE"/);
   assert.doesNotMatch(page, /Current access already active/);
   assert.match(planPresentation, /subscription\?\.plan === planCode \? "Current plan" : "Plan comparison"/);
@@ -121,27 +120,26 @@ test("normal no-entitlement access routes cleanly to plans without treating it a
   assert.doesNotMatch(page, /The subscription operation could not be completed/);
 });
 
-test("new professional account creation reaches plan selection before Welcome or business onboarding", () => {
+test("new professional account creation enters Meetro after verification without a provider plan gate", () => {
   const firstLoginBlock = login.slice(
     login.indexOf("if (isFirstLogin) {", login.indexOf("const sessionResult")),
     login.indexOf("routeUser(sessionResult)")
   );
-  const planRoute = firstLoginBlock.indexOf('setPage("professionalSubscription")');
   const welcomeRoute = firstLoginBlock.indexOf('setPage("welcome")');
-  assert.ok(planRoute >= 0 && welcomeRoute > planRoute);
-  assert.match(firstLoginBlock, /sessionResult\.finalMode === "business"/);
+  assert.ok(welcomeRoute >= 0);
+  assert.doesNotMatch(firstLoginBlock, /professionalSubscription/);
   assert.match(firstLoginBlock, /localStorage\.removeItem\("firstLogin"\)/);
 });
 
-test("Personal to Business activation enters the same plan gate after durable profile creation", () => {
+test("Personal to Business activation enters professional onboarding after durable trial-backed profile creation", () => {
   const createStart = contractorProfile.indexOf("async function handleCreateProfile()");
   const createEnd = contractorProfile.indexOf("async function handleUpdateProfile()", createStart);
   const createBlock = contractorProfile.slice(createStart, createEnd);
   const confirmedProfile = createBlock.indexOf("getConfirmedBusinessProfile(result)");
   const projectedProfile = createBlock.indexOf("projectConfirmedBusinessProfile(savedProfile)");
-  const planRoute = createBlock.indexOf('setPage("professionalSubscription")');
-  assert.ok(confirmedProfile >= 0 && projectedProfile > confirmedProfile && planRoute > projectedProfile);
-  assert.doesNotMatch(createBlock, /setPage\("businessDashboard"\)|setPage\("professionalOnboarding"\)/);
+  const businessRoute = createBlock.indexOf('setPage("businessDashboard")');
+  assert.ok(confirmedProfile >= 0 && projectedProfile > confirmedProfile && businessRoute > projectedProfile);
+  assert.doesNotMatch(createBlock, /setPage\("professionalSubscription"\)/);
 });
 
 test("the centralized entitlement gate refreshes on authenticated identity and verified subscription state", () => {

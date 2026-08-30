@@ -515,7 +515,7 @@ function ContractorProfile({ setPage, currentPage }) {
         setProfile(savedProfile);
         fillForm(savedProfile);
         projectConfirmedBusinessProfile(savedProfile);
-        setPage("professionalSubscription");
+        setPage("businessDashboard");
       } else {
         alert(result?.data?.error || t("failedCreateProfile"));
       }

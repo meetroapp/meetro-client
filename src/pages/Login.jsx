@@ -847,10 +847,6 @@ function Login({ setPage }) {
 
       if (isFirstLogin) {
         localStorage.removeItem("firstLogin");
-        if (sessionResult.finalMode === "business") {
-          setPage("professionalSubscription");
-          return;
-        }
         setPage("welcome");
         return;
       }

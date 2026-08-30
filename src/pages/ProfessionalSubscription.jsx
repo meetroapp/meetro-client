@@ -28,7 +28,7 @@ function dateLabel(value) {
 
 function statusCopy(subscription) {
   const labels = {
-    TRIAL: "Free trial",
+    TRIAL: "Provider verification required",
     ACTIVE: "Active",
     GRACE: "Payment issue — access remains available",
     CANCELED_AT_PERIOD_END: "Canceled",
@@ -162,6 +162,8 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
   };
 
   const subscription = state?.subscription;
+  const businessTrial = state?.businessTrial;
+  const businessTrialActive = businessTrial?.status === "ACTIVE";
   const currentPlan = (state?.catalog || []).find((plan) => plan.code === subscription?.plan);
   return (
     <div className="app-page subscription-page" style={pageStyle}>
@@ -174,6 +176,15 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
 
       {error && <div role="alert" style={errorStyle}>{error}</div>}
       {message && <div role="status" style={messageStyle}>{message}</div>}
+
+      {businessTrial && !subscription && !state?.qaAccess && (
+        <section style={trialStatusStyle} aria-label="Meetro Business Trial">
+          <div><span style={labelStyle}>Status</span><strong>{businessTrialActive ? "Meetro Business Trial" : "Trial ended"}</strong></div>
+          <div><span style={labelStyle}>Professional access</span><strong>{businessTrialActive ? "Full access" : "Choose a paid plan to continue"}</strong></div>
+          {businessTrial.endsAt && <div><span style={labelStyle}>{businessTrialActive ? "Trial ends" : "Trial ended"}</span><strong>{dateLabel(businessTrial.endsAt)}</strong></div>}
+          {businessTrialActive && <div><span style={labelStyle}>Time remaining</span><strong>{businessTrial.daysRemaining} {businessTrial.daysRemaining === 1 ? "day" : "days"}</strong></div>}
+        </section>
+      )}
 
       {state?.qaAccess && !subscription && (
         <section style={qaStyle} aria-label="Staging QA Access">
@@ -207,8 +218,8 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
             subscription,
             planCode: plan.code,
             providerReady: channel.providerReady,
-            trialOffered: channel.trialOffered,
             nativeIos,
+            businessTrialActive,
           });
           const planName = plan.name || fallbackPlanName(plan);
           const positioning = plan.positioning || fallbackPlanPositioning(plan);
@@ -217,9 +228,9 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
               <p style={eyebrowStyle}>{planName.toUpperCase()}</p>
               <h2 style={planTitleStyle}>{positioning}</h2>
               <p style={seatStyle}>Up to {plan.seatLimit} professional users</p>
-              <p style={channel.trialOffered ? trialStyle : providerCopyStyle}>{channel.eligibilityLabel}</p>
-              <p style={priceStyle}>{channel.trialOffered ? "Then " : ""}{displayPrice}<span style={monthStyle}> / month</span></p>
-              <p style={trialCopyStyle}>{channel.trialOffered ? `Free for 14 days, then ${displayPrice}/month. Cancel anytime.` : `${displayPrice}/month. ${channel.providerName} determines trial eligibility.`}</p>
+              <p style={paidPlanStyle}>{channel.eligibilityLabel}</p>
+              <p style={priceStyle}>{displayPrice}<span style={monthStyle}> / month</span></p>
+              <p style={trialCopyStyle}>{`${displayPrice}/month. ${channel.providerName} becomes billing authority only after the paid subscription is verified.`}</p>
               <p style={copyStyle}>Owner counts as one included professional user.</p>
               {action.kind === "purchase" ? (
                 <button
@@ -255,7 +266,7 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
           {subscription && <button type="button" style={secondaryStyle} disabled={Boolean(busy)} onClick={manage}>Manage Subscription</button>}
         </section>
       )}
-      <p style={footnoteStyle}>{nativeIos ? "Apple" : "Stripe"} determines trial eligibility and purchase status for this channel. One verified Meetro business entitlement works on web and iPhone; a second subscription is not required.</p>
+      <p style={footnoteStyle}>Meetro governs the one-time 14-day Business Trial. {nativeIos ? "Apple" : "Stripe"} governs paid subscription status for this channel. One verified Meetro business entitlement works on web and iPhone; a second subscription is not required.</p>
       <BottomNav setPage={setPage} currentPage="professionalSubscription" />
     </div>
   );
@@ -271,7 +282,7 @@ const plansGridStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,
 const planCardStyle = { border: "1px solid #d7e3de", borderRadius: 18, background: "#fff", padding: 22, boxShadow: "0 8px 24px rgba(23,53,43,.07)" };
 const planTitleStyle = { margin: "4px 0 14px", fontSize: 24 };
 const seatStyle = { color: "#254e40", fontSize: 17, fontWeight: 750, margin: "0 0 12px" };
-const trialStyle = { color: "#17613f", background: "#e8f6ed", borderRadius: 999, display: "inline-block", padding: "7px 12px", fontWeight: 800 };
+const paidPlanStyle = { color: "#17613f", background: "#e8f6ed", borderRadius: 999, display: "inline-block", padding: "7px 12px", fontWeight: 800 };
 const trialCopyStyle = { color: "#405c52", fontSize: 14, lineHeight: 1.45, minHeight: 40 };
 const providerCopyStyle = { color: "#6b7772", fontSize: 13, minHeight: 20 };
 const priceStyle = { fontSize: 30, fontWeight: 850, margin: "12px 0" };
@@ -280,6 +291,7 @@ const purchaseStyle = { width: "100%", minHeight: 48, border: 0, borderRadius: 1
 const actionsStyle = { display: "flex", flexWrap: "wrap", gap: 10, marginTop: 18 };
 const secondaryStyle = { minHeight: 44, padding: "0 16px", borderRadius: 11, border: "1px solid #9db6ac", background: "white", color: "#174c39", fontWeight: 750, cursor: "pointer" };
 const statusCardStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: 14, background: "#edf7f0", border: "1px solid #cce2d3", borderRadius: 16, padding: 18 };
+const trialStatusStyle = { ...statusCardStyle, marginBottom: 18 };
 const labelStyle = { display: "block", color: "#60766e", fontSize: 12, fontWeight: 700, marginBottom: 4 };
 const errorStyle = { background: "#fff1ef", color: "#8c2f24", borderRadius: 12, padding: 14, marginBottom: 14 };
 const messageStyle = { background: "#edf7f0", color: "#185d3d", borderRadius: 12, padding: 14, marginBottom: 14 };
