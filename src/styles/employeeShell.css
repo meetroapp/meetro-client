@@ -654,6 +654,420 @@
   }
 }
 
+/* =========================================================
+   FIELD MESSAGES — ASSIGNMENT-SCOPED TEAM | CUSTOMER
+   ========================================================= */
+
+.field-messages-workspace,
+.field-messages-workspace * {
+  box-sizing: border-box;
+}
+
+.field-messages-workspace {
+  width: 100%;
+  max-width: 1180px;
+  min-width: 0;
+  margin: 0 auto;
+  display: grid;
+  gap: 16px;
+}
+
+.field-messages-header,
+.field-messages-jobs,
+.field-messages-thread-card,
+.field-messages-unavailable {
+  min-width: 0;
+  border: 1px solid var(--employee-line);
+  border-radius: 20px;
+  background: var(--employee-surface);
+  box-shadow: var(--employee-shadow);
+}
+
+.field-messages-header {
+  padding: 22px 24px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+
+.field-messages-header h2,
+.field-messages-jobs h3,
+.field-messages-thread-heading h3,
+.field-messages-unavailable h3 {
+  margin: 4px 0 6px;
+  color: var(--employee-text);
+}
+
+.field-messages-header p:last-child,
+.field-messages-thread-heading span,
+.field-messages-unavailable p {
+  margin: 0;
+  color: var(--employee-muted);
+  line-height: 1.5;
+}
+
+.field-messages-eyebrow {
+  margin: 0;
+  color: #5b7d66;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.field-messages-audience {
+  flex: 0 0 auto;
+  padding: 4px;
+  border: 1px solid #cfddd2;
+  border-radius: 13px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(92px, 1fr));
+  background: #f3f8f4;
+}
+
+.field-messages-audience button {
+  min-height: 42px;
+  border: 0;
+  border-radius: 10px;
+  padding: 9px 15px;
+  background: transparent;
+  color: #4d6757;
+  font: inherit;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.field-messages-audience button.is-active {
+  background: var(--employee-forest);
+  color: #fff;
+  box-shadow: 0 5px 14px rgba(15, 75, 48, 0.18);
+}
+
+.field-messages-audience button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.field-messages-layout {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(230px, 0.32fr) minmax(0, 0.68fr);
+  align-items: start;
+  gap: 16px;
+}
+
+.field-messages-jobs {
+  padding: 19px;
+}
+
+.field-messages-job-list {
+  margin-top: 14px;
+  display: grid;
+  gap: 9px;
+}
+
+.field-messages-job-list button {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid #dbe6de;
+  border-radius: 13px;
+  padding: 13px 14px;
+  display: grid;
+  gap: 4px;
+  text-align: left;
+  background: #fbfdfb;
+  color: var(--employee-text);
+  font: inherit;
+  cursor: pointer;
+}
+
+.field-messages-job-list button.is-selected {
+  border-color: #6e9a79;
+  background: var(--employee-sage);
+  box-shadow: inset 3px 0 0 var(--employee-green);
+}
+
+.field-messages-job-list strong,
+.field-messages-job-list span,
+.field-messages-job-list small {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.field-messages-job-list span,
+.field-messages-job-list small {
+  color: var(--employee-muted);
+  font-size: 12px;
+}
+
+.field-messages-thread-card {
+  padding: 20px;
+  overflow: hidden;
+}
+
+.field-messages-thread-heading {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 14px;
+}
+
+.field-messages-thread-heading > div {
+  min-width: 0;
+}
+
+.field-messages-thread-heading h3,
+.field-messages-thread-heading span {
+  overflow-wrap: anywhere;
+}
+
+.field-messages-open-job {
+  flex: 0 0 auto;
+  border: 0;
+  padding: 7px 0;
+  background: transparent;
+  color: var(--employee-green);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.field-messages-visibility {
+  margin-top: 16px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.field-messages-visibility--team {
+  background: #f1f5f2;
+  color: #4e6857;
+}
+
+.field-messages-visibility--customer {
+  background: #e8f4eb;
+  color: #175d36;
+}
+
+.field-messages-thread {
+  width: 100%;
+  min-width: 0;
+  min-height: 270px;
+  max-height: min(52dvh, 540px);
+  margin-top: 14px;
+  padding: 4px 3px 4px 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.field-messages-message {
+  width: min(86%, 620px);
+  min-width: 0;
+  padding: 13px 14px;
+  border: 1px solid #dfe8e2;
+  border-radius: 14px;
+  align-self: flex-start;
+  background: #fbfdfb;
+}
+
+.field-messages-message--team,
+.field-messages-message--business,
+.field-messages-message--field_employee {
+  align-self: flex-end;
+  background: #edf6ef;
+  border-color: #cfe1d3;
+}
+
+.field-messages-message > div {
+  min-width: 0;
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.field-messages-message strong,
+.field-messages-message small,
+.field-messages-message p {
+  overflow-wrap: anywhere;
+}
+
+.field-messages-message strong {
+  color: #204a32;
+  font-size: 12px;
+}
+
+.field-messages-message small {
+  color: #748279;
+  font-size: 10px;
+  text-align: right;
+}
+
+.field-messages-message p {
+  margin: 8px 0 0;
+  color: #425e4c;
+  font-size: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.field-messages-empty,
+.field-messages-error {
+  width: 100%;
+  min-height: 76px;
+  border-radius: 13px;
+  padding: 14px;
+  display: grid;
+  place-items: center;
+  text-align: center;
+  color: var(--employee-muted);
+  background: #f7faf8;
+}
+
+.field-messages-error {
+  min-height: 0;
+  color: #8b2e2e;
+  background: #fff4f2;
+}
+
+.field-messages-composer {
+  width: 100%;
+  min-width: 0;
+  margin-top: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 11px;
+}
+
+.field-messages-composer label {
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+  color: #345540;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.field-messages-composer textarea {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 92px;
+  border: 1px solid #cfdcd2;
+  border-radius: 12px;
+  padding: 12px;
+  resize: vertical;
+  background: #fff;
+  color: #183c27;
+  font: inherit;
+}
+
+.field-messages-composer button {
+  min-height: 48px;
+  max-width: 100%;
+  border: 1px solid var(--employee-green);
+  border-radius: 11px;
+  padding: 10px 16px;
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  background: var(--employee-green);
+  color: #fff;
+  font: inherit;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.field-messages-composer button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.field-messages-unavailable {
+  padding: 32px 22px;
+  display: grid;
+  justify-items: center;
+  text-align: center;
+}
+
+@media (max-width: 900px) {
+  .field-messages-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .field-messages-job-list {
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .field-messages-workspace {
+    gap: 11px;
+  }
+
+  .field-messages-header {
+    padding: 17px 14px;
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .field-messages-audience {
+    width: 100%;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .field-messages-jobs,
+  .field-messages-thread-card {
+    padding: 14px;
+    border-radius: 16px;
+  }
+
+  .field-messages-job-list {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .field-messages-thread-heading {
+    align-items: flex-start;
+  }
+
+  .field-messages-thread {
+    min-height: 220px;
+    max-height: none;
+  }
+
+  .field-messages-message {
+    width: 94%;
+  }
+
+  .field-messages-message > div {
+    display: grid;
+    gap: 3px;
+  }
+
+  .field-messages-message small {
+    text-align: left;
+  }
+
+  .field-messages-composer {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .field-messages-composer button {
+    width: 100%;
+  }
+}
+
 @media (max-width: 390px) {
   .employee-shell__header-copy h1 {
     font-size: 25px;
@@ -1898,6 +2312,26 @@ input:focus-visible +
 .employee-field-comms-heading div > span {
   color: #6c7c73;
   font-size: 12px;
+}
+
+.employee-field-message-hub-actions {
+  margin-top: 13px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 9px;
+}
+
+.employee-field-message-hub-actions button {
+  min-height: 40px;
+  border: 1px solid #bdd2c2;
+  border-radius: 10px;
+  padding: 8px 12px;
+  background: #f8fbf9;
+  color: #145b34;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
 }
 
 .employee-field-message-list {

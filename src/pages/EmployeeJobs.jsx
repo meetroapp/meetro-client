@@ -1177,6 +1177,29 @@ function FieldOperationsPanel({
                 </div>
               </div>
 
+              {assignment.state === "ACTIVE" &&
+                (!assignment.memberStatus || assignment.memberStatus === "ACTIVE") &&
+                (!assignment.memberRole || assignment.memberRole === "FIELD_EMPLOYEE") && (
+                  <div className="employee-field-message-hub-actions">
+                    <button
+                      type="button"
+                      onClick={() => setPage(
+                        `employeeMessages?businessId=${businessId}&jobId=${encodeURIComponent(job.id)}&audience=team`
+                      )}
+                    >
+                      {t("fieldOpenTeamMessages", language)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setPage(
+                        `employeeMessages?businessId=${businessId}&jobId=${encodeURIComponent(job.id)}&audience=customer`
+                      )}
+                    >
+                      {t("fieldOpenCustomerMessages", language)}
+                    </button>
+                  </div>
+                )}
+
               <div
                 className="employee-field-message-list"
                 aria-label={t("fieldInternalMessagesAria", language)}

@@ -4,7 +4,14 @@ import MeetroIcon from "../components/MeetroIcon";
 import useLanguage from "../hooks/useLanguage";
 import { TimeEvidencePanel } from "./EmployeeJobs";
 import { fetchEmployeeJobs, fetchEmployeeSchedule } from "../utils/jobAssignmentApi";
-import { fetchFieldOperations } from "../utils/fieldOperationsApi";
+import {
+  fetchFieldOperations,
+  sendFieldMessage,
+} from "../utils/fieldOperationsApi";
+import {
+  fetchFieldCustomerConversation,
+  sendFieldCustomerMessage,
+} from "../utils/fieldCustomerCommunicationApi";
 import { fetchOwnTime } from "../utils/timeEvidenceApi";
 import {
   requestTeamExperienceMode,
@@ -69,6 +76,32 @@ function locationText(location, language) {
   return location?.serviceArea || t("fieldServiceLocationPending", language);
 }
 
+function routeValue(name) {
+  try {
+    const query = String(window.location.hash || "").split("?")[1] || "";
+    return new URLSearchParams(query).get(name) || "";
+  } catch {
+    return "";
+  }
+}
+
+function messageCommandKey(prefix) {
+  if (globalThis.crypto?.randomUUID) {
+    return `${prefix}-${globalThis.crypto.randomUUID()}`;
+  }
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
+function hasActiveMessageAssignment(item) {
+  const assignment = item?.assignment;
+  return Boolean(
+    assignment &&
+      assignment.state === "ACTIVE" &&
+      (!assignment.memberStatus || assignment.memberStatus === "ACTIVE") &&
+      (!assignment.memberRole || assignment.memberRole === "FIELD_EMPLOYEE")
+  );
+}
+
 export default function EmployeePortal({ membership, setPage, view = "home" }) {
   const language = useLanguage();
   const meta = VIEW_META[view] || VIEW_META.home;
@@ -89,7 +122,12 @@ export default function EmployeePortal({ membership, setPage, view = "home" }) {
       ]);
       const jobs = jobsResult.jobs || [];
       const operations = await Promise.all(jobs.map(async (job) => {
-        const assignment = job.assignments?.[0];
+        const assignment = (job.assignments || []).find(
+          (item) =>
+            item.state === "ACTIVE" &&
+            (!item.memberStatus || item.memberStatus === "ACTIVE") &&
+            (!item.memberRole || item.memberRole === "FIELD_EMPLOYEE")
+        );
         if (!assignment) return { job, assignment: null, operations: null };
         try {
           const result = await fetchFieldOperations(
@@ -151,7 +189,16 @@ function PortalView({ view, membership, workspace, current, recentMessage, setPa
       />
     );
   }
-  if (view === "messages") return <MessagesView operations={workspace.operations} setPage={setPage} membership={membership} language={language} />;
+  if (view === "messages") {
+    return (
+      <MessagesView
+        operations={workspace.operations}
+        setPage={setPage}
+        membership={membership}
+        language={language}
+      />
+    );
+  }
   if (view === "profile") {
     return <ProfileView membership={membership} language={language} />;
   }
@@ -415,6 +462,10 @@ function HomeView({
               setPage(
                 `employeeMessages?businessId=${
                   membership.businessId
+                }${
+                  recentMessage?.job?.id
+                    ? `&jobId=${encodeURIComponent(recentMessage.job.id)}&audience=team`
+                    : ""
                 }`
               )
             }
@@ -431,9 +482,404 @@ function ScheduleView({ schedule, language }) {
   return <section style={cardStyle}><p style={eyebrowStyle}>{t("fieldAssignedVisits", language)}</p><h2 style={headingStyle}>{t("fieldMySchedule", language)}</h2>{schedule.length ? schedule.map((item) => <article key={item.visitId} style={rowStyle}><div><strong>{item.jobTitle}</strong><p style={copyStyle}>{readable(item.purpose, language)} · {readable(item.state, language)}</p></div><div><strong>{when(item.startsAt, language)}</strong><p style={copyStyle}>{item.location?.remote ? t("fieldRemote", language) : locationText(item.location, language)}</p></div></article>) : <p style={copyStyle}>{t("fieldNoActiveVisitScheduled", language)}</p>}</section>;
 }
 
+function customerAuthor(message, language) {
+  const type = message?.author?.type;
+  if (type === "FIELD_EMPLOYEE") {
+    return `${message.author.displayName || t("fieldEmployeeRole", language)} · ${t("fieldEmployeeRole", language)}`;
+  }
+  if (type === "CUSTOMER") {
+    return message.author?.displayName || t("fieldCustomer", language);
+  }
+  return message?.author?.displayName || t("fieldBusiness", language);
+}
+
 function MessagesView({ operations, setPage, membership, language }) {
-  const messages = operations.flatMap((item) => (item.operations?.messages || []).map((message) => ({ ...message, job: item.job }))).sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
-  return <section style={cardStyle}><p style={eyebrowStyle}>{t("fieldInternalOnly", language)}</p><h2 style={headingStyle}>{t("fieldMessagesTitle", language)}</h2><p style={copyStyle}>{t("fieldMessagesPrivacy", language)}</p>{messages.length ? messages.map((message) => <article key={message.id} style={rowStyle}><div><strong>{message.job.title}</strong><p style={copyStyle}>{message.message}</p><small>{message.senderName} · {when(message.createdAt, language)}</small></div><button type="button" style={textButton} onClick={() => setPage(`employeeJobs?businessId=${membership.businessId}&jobId=${encodeURIComponent(message.job.id)}`)}>{t("fieldOpenJob", language)}</button></article>) : <p style={copyStyle}>{t("fieldNoInternalMessages", language)}</p>}</section>;
+  const eligibleJobs = useMemo(
+    () => operations.filter(hasActiveMessageAssignment),
+    [operations]
+  );
+  const requestedJobId = routeValue("jobId");
+  const routedJob = eligibleJobs.find((item) => item.job.id === requestedJobId);
+  const requestedAudience = routeValue("audience");
+  const routedAudience = ["team", "customer"].includes(requestedAudience)
+    ? requestedAudience
+    : "team";
+  const [selectedJobId, setSelectedJobId] = useState(
+    () => routedJob?.job.id || eligibleJobs[0]?.job.id || ""
+  );
+  const [audience, setAudience] = useState(
+    () => (routedJob ? routedAudience : "team")
+  );
+  const [drafts, setDrafts] = useState({});
+  const [customerCommandKeys, setCustomerCommandKeys] = useState({});
+  const [teamOperations, setTeamOperations] = useState({});
+  const [customerThreads, setCustomerThreads] = useState({});
+  const [working, setWorking] = useState("");
+
+  const selected = eligibleJobs.find((item) => item.job.id === selectedJobId) || null;
+  const selectedOperations = selected
+    ? teamOperations[selectedJobId] || selected.operations
+    : null;
+  const customerThread = customerThreads[selectedJobId] || {};
+  const draftKey = selectedJobId ? `${selectedJobId}:${audience}` : "";
+  const draft = drafts[draftKey] || "";
+
+  useEffect(() => {
+    if (eligibleJobs.some((item) => item.job.id === selectedJobId)) return;
+    setSelectedJobId(eligibleJobs[0]?.job.id || "");
+    setAudience("team");
+  }, [eligibleJobs, selectedJobId]);
+
+  useEffect(() => {
+    if (audience !== "customer" || !selected) return undefined;
+    let active = true;
+    const assignmentId = selected.assignment.id;
+    setCustomerThreads((current) => ({
+      ...current,
+      [selectedJobId]: {
+        ...current[selectedJobId],
+        loading: true,
+        error: "",
+      },
+    }));
+    fetchFieldCustomerConversation(
+      selected.job.id,
+      { businessId: membership.businessId, assignmentId },
+      setPage
+    ).then((result) => {
+      if (!active) return;
+      setCustomerThreads((current) => ({
+        ...current,
+        [selectedJobId]: {
+          loading: false,
+          error: "",
+          conversation: result.conversation || null,
+        },
+      }));
+    }).catch(() => {
+      if (!active) return;
+      setCustomerThreads((current) => ({
+        ...current,
+        [selectedJobId]: {
+          loading: false,
+          error: t("fieldCustomerConversationUnavailable", language),
+          conversation: null,
+        },
+      }));
+    });
+    return () => {
+      active = false;
+    };
+  }, [audience, language, membership.businessId, selected, selectedJobId, setPage]);
+
+  function updateRoute(jobId, nextAudience) {
+    setPage(
+      `employeeMessages?businessId=${membership.businessId}&jobId=${encodeURIComponent(jobId)}&audience=${nextAudience}`
+    );
+  }
+
+  function selectJob(jobId) {
+    if (!eligibleJobs.some((item) => item.job.id === jobId)) return;
+    setSelectedJobId(jobId);
+    updateRoute(jobId, audience);
+  }
+
+  function selectAudience(nextAudience) {
+    if (!selected || !["team", "customer"].includes(nextAudience)) return;
+    setAudience(nextAudience);
+    updateRoute(selected.job.id, nextAudience);
+  }
+
+  function updateDraft(value) {
+    if (!draftKey) return;
+    setDrafts((current) => ({ ...current, [draftKey]: value }));
+    if (audience === "customer") {
+      setCustomerCommandKeys((current) => ({
+        ...current,
+        [selectedJobId]: "",
+      }));
+    }
+  }
+
+  async function submitTeamMessage(event) {
+    event.preventDefault();
+    if (!selected || !selectedOperations || !draft.trim()) return;
+    setWorking("team");
+    try {
+      await sendFieldMessage(selected.job.id, {
+        businessId: membership.businessId,
+        assignmentId: selected.assignment.id,
+        message: draft.trim(),
+        idempotencyKey: messageCommandKey("field-message"),
+      }, { managed: false, setPage });
+      const refreshed = await fetchFieldOperations(
+        selected.job.id,
+        {
+          businessId: membership.businessId,
+          assignmentId: selected.assignment.id,
+          managed: false,
+        },
+        setPage
+      );
+      setTeamOperations((current) => ({
+        ...current,
+        [selected.job.id]: refreshed.operations,
+      }));
+      updateDraft("");
+    } catch {
+      setTeamOperations((current) => ({
+        ...current,
+        [selected.job.id]: {
+          ...selectedOperations,
+          messageError: t("fieldMessageSendFailed", language),
+        },
+      }));
+    } finally {
+      setWorking("");
+    }
+  }
+
+  async function submitCustomerMessage(event) {
+    event.preventDefault();
+    if (!selected || !customerThread.conversation || !draft.trim()) return;
+    setWorking("customer");
+    const idempotencyKey =
+      customerCommandKeys[selectedJobId] ||
+      messageCommandKey("field-customer-message");
+    setCustomerCommandKeys((current) => ({
+      ...current,
+      [selectedJobId]: idempotencyKey,
+    }));
+    try {
+      const result = await sendFieldCustomerMessage(
+        selected.job.id,
+        {
+          businessId: membership.businessId,
+          assignmentId: selected.assignment.id,
+          message: draft.trim(),
+          idempotencyKey,
+        },
+        setPage
+      );
+      const conversation = result.conversation || (
+        await fetchFieldCustomerConversation(
+          selected.job.id,
+          {
+            businessId: membership.businessId,
+            assignmentId: selected.assignment.id,
+          },
+          setPage
+        )
+      ).conversation;
+      setCustomerThreads((current) => ({
+        ...current,
+        [selected.job.id]: {
+          loading: false,
+          error: "",
+          conversation: conversation || null,
+        },
+      }));
+      updateDraft("");
+      setCustomerCommandKeys((current) => ({
+        ...current,
+        [selected.job.id]: "",
+      }));
+    } catch {
+      setCustomerThreads((current) => ({
+        ...current,
+        [selected.job.id]: {
+          ...current[selected.job.id],
+          loading: false,
+          error: t("fieldCustomerMessageFailed", language),
+        },
+      }));
+    } finally {
+      setWorking("");
+    }
+  }
+
+  const teamMessages = selectedOperations?.messages || [];
+  const customerMessages = customerThread.conversation?.messages || [];
+  const composerDisabled =
+    !selected ||
+    !draft.trim() ||
+    Boolean(working) ||
+    (audience === "team"
+      ? !selectedOperations
+      : !customerThread.conversation || customerThread.loading);
+
+  return (
+    <section className="field-messages-workspace">
+      <header className="field-messages-header">
+        <div>
+          <p className="field-messages-eyebrow">{t("fieldMessagesHub", language)}</p>
+          <h2>{t("fieldMessagesTitle", language)}</h2>
+          <p>{t("fieldMessagesHubCopy", language)}</p>
+        </div>
+        <div
+          className="field-messages-audience"
+          role="group"
+          aria-label={t("fieldMessageAudience", language)}
+        >
+          {[
+            ["team", "fieldAudienceTeam"],
+            ["customer", "fieldAudienceCustomer"],
+          ].map(([value, key]) => (
+            <button
+              type="button"
+              key={value}
+              className={audience === value ? "is-active" : ""}
+              aria-pressed={audience === value}
+              disabled={!selected}
+              onClick={() => selectAudience(value)}
+            >
+              {t(key, language)}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      {eligibleJobs.length ? (
+        <div className="field-messages-layout">
+          <aside className="field-messages-jobs" aria-label={t("fieldAssignedJob", language)}>
+            <p className="field-messages-eyebrow">{t("fieldAssignedJob", language)}</p>
+            <h3>{t("fieldSelectJob", language)}</h3>
+            <div className="field-messages-job-list">
+              {eligibleJobs.map((item) => (
+                <button
+                  type="button"
+                  key={item.job.id}
+                  className={item.job.id === selectedJobId ? "is-selected" : ""}
+                  aria-pressed={item.job.id === selectedJobId}
+                  onClick={() => selectJob(item.job.id)}
+                >
+                  <strong>{item.job.title}</strong>
+                  <span>
+                    {item.job.customer?.displayName || t("fieldCustomerUnavailable", language)}
+                  </span>
+                  <small>{readable(item.operations?.currentStatus || item.assignment.state, language)}</small>
+                </button>
+              ))}
+            </div>
+          </aside>
+
+          <div className="field-messages-thread-card">
+            <div className="field-messages-thread-heading">
+              <div>
+                <p className="field-messages-eyebrow">
+                  {audience === "team"
+                    ? t("fieldTeamMessages", language)
+                    : t("fieldCustomerMessages", language)}
+                </p>
+                <h3>{selected?.job.title}</h3>
+                <span>
+                  {selected?.job.customer?.displayName || t("fieldCustomerUnavailable", language)}
+                </span>
+              </div>
+              <button
+                type="button"
+                className="field-messages-open-job"
+                onClick={() => setPage(`employeeJobs?businessId=${membership.businessId}&jobId=${encodeURIComponent(selected.job.id)}`)}
+              >
+                {t("fieldOpenJob", language)}
+              </button>
+            </div>
+
+            <div className={`field-messages-visibility field-messages-visibility--${audience}`}>
+              <MeetroIcon name={audience === "team" ? "businessTools" : "profile"} size={19} decorative />
+              <span>
+                {audience === "team"
+                  ? t("fieldPrivateToTeam", language)
+                  : t("fieldVisibleToCustomer", language)}
+              </span>
+            </div>
+
+            {audience === "team" ? (
+              <div className="field-messages-thread" aria-label={t("fieldInternalMessagesAria", language)}>
+                {selectedOperations?.messageError && (
+                  <div role="alert" className="field-messages-error">{selectedOperations.messageError}</div>
+                )}
+                {!selectedOperations ? (
+                  <div className="field-messages-empty">{t("fieldUpdatesUnavailable", language)}</div>
+                ) : teamMessages.length ? teamMessages.map((message) => (
+                  <article key={message.id} className="field-messages-message field-messages-message--team">
+                    <div>
+                      <strong>{message.senderName}</strong>
+                      <small>{when(message.createdAt, language)}</small>
+                    </div>
+                    <p>{message.message}</p>
+                  </article>
+                )) : (
+                  <div className="field-messages-empty">{t("fieldNoTeamMessages", language)}</div>
+                )}
+              </div>
+            ) : (
+              <div className="field-messages-thread" aria-label={t("fieldCustomerMessages", language)}>
+                {customerThread.error && (
+                  <div role="alert" className="field-messages-error">{customerThread.error}</div>
+                )}
+                {customerThread.loading ? (
+                  <div className="field-messages-empty" role="status">{t("fieldCustomerMessagesLoading", language)}</div>
+                ) : customerMessages.length ? customerMessages.map((message) => (
+                  <article
+                    key={message.id}
+                    className={`field-messages-message field-messages-message--${String(message.author?.type || "BUSINESS").toLowerCase()}`}
+                  >
+                    <div>
+                      <strong>{customerAuthor(message, language)}</strong>
+                      <small>{when(message.createdAt, language)}</small>
+                    </div>
+                    <p>{message.text}</p>
+                  </article>
+                )) : customerThread.conversation ? (
+                  <div className="field-messages-empty">{t("fieldNoCustomerMessages", language)}</div>
+                ) : !customerThread.error ? (
+                  <div className="field-messages-empty">{t("fieldCustomerConversationUnavailable", language)}</div>
+                ) : null}
+              </div>
+            )}
+
+            <form
+              className="field-messages-composer"
+              onSubmit={audience === "team" ? submitTeamMessage : submitCustomerMessage}
+            >
+              <label>
+                <span>
+                  {audience === "team"
+                    ? t("fieldWriteMessagePlaceholder", language)
+                    : t("fieldWriteCustomerMessage", language)}
+                </span>
+                <textarea
+                  value={draft}
+                  onChange={(event) => updateDraft(event.target.value)}
+                  maxLength={5000}
+                  rows={3}
+                  placeholder={audience === "team"
+                    ? t("fieldWriteMessagePlaceholder", language)
+                    : t("fieldWriteCustomerMessage", language)}
+                  disabled={!selected || (audience === "team" ? !selectedOperations : !customerThread.conversation)}
+                />
+              </label>
+              <button type="submit" disabled={composerDisabled}>
+                <MeetroIcon name="messages" size={18} decorative />
+                {working === audience
+                  ? t("fieldSending", language)
+                  : audience === "team"
+                    ? t("fieldSendMessage", language)
+                    : t("fieldSendToCustomer", language)}
+              </button>
+            </form>
+          </div>
+        </div>
+      ) : (
+        <div className="field-messages-unavailable">
+          <MeetroIcon name="messages" size={28} decorative />
+          <h3>{t("fieldNoActiveAssignment", language)}</h3>
+          <p>{t("fieldMessagesAssignmentUnavailable", language)}</p>
+        </div>
+      )}
+    </section>
+  );
 }
 
 function ProfileView({ membership, language }) {
