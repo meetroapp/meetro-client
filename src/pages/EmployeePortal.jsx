@@ -791,6 +791,7 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
   const [pendingCustomerSend, setPendingCustomerSend] = useState(null);
   const [customerNotice, setCustomerNotice] = useState("");
   const pendingCustomerController = useRef(null);
+  const customerRefreshRequest = useRef(0);
   const messageHistoryRef = useRef(null);
   const keepLatestMessageVisible = useRef(true);
 
@@ -832,47 +833,78 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
     history.scrollTop = history.scrollHeight;
   }, [audience, customerMessages.length, selectedJobId, teamMessages.length]);
 
-  useEffect(() => {
-    if (audience !== "customer" || !selected) return undefined;
-    let active = true;
+  const refreshCustomerThread = useCallback(({ loading = true } = {}) => {
+    if (audience !== "customer" || !selected) return Promise.resolve();
+    const jobId = selected.job.id;
     const assignmentId = selected.assignment.id;
-    setCustomerThreads((current) => ({
-      ...current,
-      [selectedJobId]: {
-        ...current[selectedJobId],
-        loading: true,
-        error: "",
-      },
-    }));
-    fetchFieldCustomerConversation(
-      selected.job.id,
+    const requestId = customerRefreshRequest.current + 1;
+    customerRefreshRequest.current = requestId;
+    if (loading) {
+      setCustomerThreads((current) => ({
+        ...current,
+        [jobId]: {
+          ...current[jobId],
+          loading: true,
+          error: "",
+        },
+      }));
+    }
+    return fetchFieldCustomerConversation(
+      jobId,
       { businessId: membership.businessId, assignmentId },
       setPage
     ).then((result) => {
-      if (!active) return;
+      if (customerRefreshRequest.current !== requestId) return;
       setCustomerThreads((current) => ({
         ...current,
-        [selectedJobId]: {
+        [jobId]: {
           loading: false,
           error: "",
           conversation: result.conversation || null,
         },
       }));
     }).catch(() => {
-      if (!active) return;
+      if (customerRefreshRequest.current !== requestId) return;
       setCustomerThreads((current) => ({
         ...current,
-        [selectedJobId]: {
+        [jobId]: {
           loading: false,
           error: t("fieldCustomerConversationUnavailable", language),
           conversation: null,
         },
       }));
     });
+  }, [audience, language, membership.businessId, selected, setPage]);
+
+  useEffect(() => {
+    if (audience !== "customer" || !selected) return undefined;
+    let active = true;
+    Promise.resolve().then(() => {
+      if (active) void refreshCustomerThread();
+    });
     return () => {
       active = false;
+      customerRefreshRequest.current += 1;
     };
-  }, [audience, language, membership.businessId, selected, selectedJobId, setPage]);
+  }, [audience, refreshCustomerThread, selected]);
+
+  useEffect(() => {
+    if (audience !== "customer" || !selected) return undefined;
+    const refreshVisibleCustomerThread = () => {
+      void refreshCustomerThread({ loading: false });
+    };
+    const refreshWhenVisible = () => {
+      if (document.visibilityState === "visible") {
+        refreshVisibleCustomerThread();
+      }
+    };
+    window.addEventListener("focus", refreshVisibleCustomerThread);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshVisibleCustomerThread);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, [audience, refreshCustomerThread, selected]);
 
   function updateRoute(jobId, nextAudience) {
     setPage(

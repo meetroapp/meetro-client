@@ -163,6 +163,51 @@ test("Customer projection renders server author types and employee attribution w
   assert.doesNotMatch(portalSource, /quote|invoice|deposit|payment|workflow_payload/i);
 });
 
+test("active Customer thread refreshes on entry, window focus, and visible app state", () => {
+  const refreshBlock = portalSource.slice(
+    portalSource.indexOf("const refreshCustomerThread = useCallback"),
+    portalSource.indexOf("function updateRoute")
+  );
+  assert.match(refreshBlock, /audience !== "customer" \|\| !selected/);
+  assert.match(refreshBlock, /const jobId = selected\.job\.id/);
+  assert.match(refreshBlock, /const assignmentId = selected\.assignment\.id/);
+  assert.match(refreshBlock, /fetchFieldCustomerConversation\(\s*jobId/);
+  assert.match(
+    refreshBlock,
+    /\{ businessId: membership\.businessId, assignmentId \}/
+  );
+  assert.match(refreshBlock, /void refreshCustomerThread\(\)/);
+  assert.match(
+    refreshBlock,
+    /window\.addEventListener\("focus", refreshVisibleCustomerThread\)/
+  );
+  assert.match(
+    refreshBlock,
+    /document\.addEventListener\("visibilitychange", refreshWhenVisible\)/
+  );
+  assert.match(
+    refreshBlock,
+    /document\.visibilityState === "visible"/
+  );
+  assert.match(
+    refreshBlock,
+    /refreshCustomerThread\(\{ loading: false \}\)/
+  );
+  assert.match(
+    refreshBlock,
+    /window\.removeEventListener\("focus", refreshVisibleCustomerThread\)/
+  );
+  assert.match(
+    refreshBlock,
+    /document\.removeEventListener\("visibilitychange", refreshWhenVisible\)/
+  );
+  assert.match(
+    refreshBlock,
+    /customerRefreshRequest\.current !== requestId/
+  );
+  assert.doesNotMatch(refreshBlock, /setInterval|setTimeout|WebSocket/);
+});
+
 test("composers state the audience and preserve Customer text on failure", () => {
   assert.match(portalSource, /fieldPrivateToTeam/);
   assert.match(portalSource, /fieldVisibleToCustomer/);
