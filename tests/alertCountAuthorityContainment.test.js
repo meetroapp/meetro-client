@@ -68,9 +68,10 @@ test("navigation Alert count identity comes from authenticated session identity"
   );
 });
 
-test("Alert Center mutation integration only requests canonical invalidation", () => {
+test("Alert Center observes shared refreshes without owning identity or count truth", () => {
   assert.match(notificationsSource, /refreshAlertCounts/);
-  assert.doesNotMatch(notificationsSource, /setAlertCountIdentity|subscribeAlertCounts|resetAlertCounts/);
+  assert.match(notificationsSource, /subscribeAlertCounts/);
+  assert.doesNotMatch(notificationsSource, /setAlertCountIdentity|resetAlertCounts/);
   assert.doesNotMatch(notificationsSource, /counts?\.(?:unread|active)\s*=/);
 });
 

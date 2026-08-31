@@ -26,6 +26,7 @@ import {
   subscribeAlertCounts,
 } from "../utils/alertCountCoordinator";
 import MeetroIcon from "./MeetroIcon";
+import { getCommunicationAttention } from "../utils/communicationAttention";
 
 const EmbeddedProfile = lazy(() => import("../pages/Profile"));
 
@@ -545,8 +546,12 @@ function BottomNav({ setPage, currentPage = "" }) {
     return Number.isSafeInteger(count) && count >= 0 ? count : 0;
   };
 
+  const communicationAttention = getCommunicationAttention(
+    alertCountSnapshot,
+    alertCountIdentity
+  );
   const communicationAlertCount = Math.max(
-    canonicalCategoryUnreadCount("communication"),
+    canonicalCategoryUnreadCount("communication") + communicationAttention.teamUnread,
     canonicalCategoryUnreadCount("emergency"),
     getUnreadMessageCount()
   );
@@ -556,7 +561,7 @@ function BottomNav({ setPage, currentPage = "" }) {
     canonicalCategoryUnreadCount("invoice"),
     canonicalCategoryUnreadCount("payment"),
     canonicalCategoryUnreadCount("schedule"),
-    canonicalCategoryUnreadCount("work"),
+    Math.max(0, canonicalCategoryUnreadCount("work") - communicationAttention.teamUnread),
     canonicalCategoryUnreadCount("completion"),
     canonicalCategoryUnreadCount("review"),
     getAcceptedQuoteReadyCount(),

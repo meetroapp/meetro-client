@@ -20,11 +20,36 @@ function deferred() {
 function countResponse(unread, {
   active = unread,
   byCategory = {},
+  communication = {
+    unread: 0,
+    customerUnread: 0,
+    teamUnread: 0,
+    byJob: [],
+    byConversation: [],
+  },
 } = {}) {
   return {
     success: true,
     code: "ALERT_COUNTS_RETRIEVED",
-    counts: { active, unread, byCategory },
+    counts: { active, unread, byCategory, communication },
+  };
+}
+
+function createFocusSource() {
+  const listeners = new Set();
+  return {
+    addEventListener(type, listener) {
+      if (type === "focus") listeners.add(listener);
+    },
+    removeEventListener(type, listener) {
+      if (type === "focus") listeners.delete(listener);
+    },
+    focus() {
+      listeners.forEach((listener) => listener());
+    },
+    get listenerCount() {
+      return listeners.size;
+    },
   };
 }
 
@@ -116,13 +141,15 @@ function createHarness({ initiallyHidden = false } = {}) {
   const transport = createControlledTransport();
   const scheduler = createControlledScheduler();
   const visibility = createVisibilitySource(initiallyHidden);
+  const focus = createFocusSource();
   const coordinator = createAlertCountCoordinator({
     request: () => transport.request(),
     schedule: (callback, delay) => scheduler.schedule(callback, delay),
     cancelSchedule: (timer) => scheduler.cancel(timer),
     visibilitySource: visibility,
+    focusSource: focus,
   });
-  return { coordinator, scheduler, transport, visibility };
+  return { coordinator, focus, scheduler, transport, visibility };
 }
 
 async function settleTurn() {
@@ -336,6 +363,24 @@ test("hidden documents stop polling and visibility resume performs one refresh",
   assert.equal(scheduler.size, 1);
   assert.equal(coordinator.getSnapshot().response.counts.unread, 2);
   unsubscribe();
+});
+
+test("window focus refreshes immediately through the same bounded coordinator", async () => {
+  const { coordinator, focus, transport } = createHarness();
+  coordinator.setIdentity("id:user-a");
+  const unsubscribe = coordinator.subscribe(() => {});
+  transport.calls[0].resolve(countResponse(1));
+  await coordinator.waitForIdle();
+  assert.equal(focus.listenerCount, 1);
+
+  focus.focus();
+  assert.equal(transport.calls.length, 2);
+  transport.calls[1].resolve(countResponse(2));
+  await coordinator.waitForIdle();
+  assert.equal(coordinator.getSnapshot().response.counts.unread, 2);
+
+  unsubscribe();
+  assert.equal(focus.listenerCount, 0);
 });
 
 test("polling is bounded, single-flight, and fully cleaned after final unsubscribe", async () => {

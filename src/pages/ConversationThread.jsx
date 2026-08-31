@@ -24,9 +24,13 @@ import {
   validateCanonicalMessageText,
 } from "../utils/canonicalConversationMessaging";
 import { markCanonicalConversationRead } from "../utils/conversationReadApi";
-import { refreshAlertCounts } from "../utils/alertCountCoordinator";
+import {
+  getAlertCountSnapshot,
+  refreshAlertCounts,
+  subscribeAlertCounts,
+} from "../utils/alertCountCoordinator";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
-import { isProfessionalSession } from "../utils/session";
+import { getAuthenticatedIdentitySnapshot, isProfessionalSession } from "../utils/session";
 import { transitionEmergencyStatus } from "../utils/emergencyLifecycle";
 import {
   EMERGENCY_DISPATCH_ACTIONS,
@@ -62,9 +66,16 @@ import {
   shouldRenderCurrentVisitInline,
 } from "../utils/communicationSchedulePlacement";
 import {
+  acknowledgeFieldMessageAttention,
   fetchManagedFieldCommunications,
   sendFieldMessage,
 } from "../utils/fieldOperationsApi";
+import {
+  formatAttentionCount,
+  getCommunicationAttention,
+  getConversationCustomerAttention,
+  getJobCommunicationAttention,
+} from "../utils/communicationAttention";
 import {
   getWorkflowMessageProps,
   isWorkflowMessageType,
@@ -752,6 +763,7 @@ function BusinessTeamCommunicationPane({
 
       <form style={businessTeamComposer} onSubmit={onSubmit}>
         <textarea
+          className="business-team-communication__composer-input"
           value={draft}
           maxLength={5000}
           rows={2}
@@ -760,6 +772,7 @@ function BusinessTeamCommunicationPane({
           placeholder={t("conversationTeamMessagePlaceholder", language)}
         />
         <button
+          className="business-team-communication__composer-send"
           type="submit"
           disabled={!selected || sending || !draft.trim()}
         >
@@ -768,6 +781,34 @@ function BusinessTeamCommunicationPane({
             : t("conversationTeamSend", language)}
         </button>
       </form>
+      <style>{`
+        .business-team-communication__composer-input {
+          box-sizing: border-box; width: 100%; min-width: 0; min-height: 46px;
+          max-height: 132px; resize: vertical; border: 1px solid #a9c3b0;
+          border-radius: 10px; background: #ffffff; color: #153d29;
+          padding: 11px 14px; font: inherit; line-height: 1.4;
+        }
+        .business-team-communication__composer-input:focus-visible {
+          outline: 3px solid rgba(39, 112, 67, 0.22); outline-offset: 1px;
+          border-color: #277043;
+        }
+        .business-team-communication__composer-send {
+          box-sizing: border-box; min-width: 82px; height: 46px; align-self: end;
+          border: 1px solid #174c2f; border-radius: 10px; background: #174c2f;
+          color: #ffffff; padding: 0 18px; font: inherit; font-weight: 850;
+          cursor: pointer;
+        }
+        .business-team-communication__composer-send:focus-visible {
+          outline: 3px solid rgba(39, 112, 67, 0.28); outline-offset: 2px;
+        }
+        .business-team-communication__composer-input:disabled,
+        .business-team-communication__composer-send:disabled {
+          cursor: not-allowed; opacity: 0.56;
+        }
+        @media (max-width: 430px) {
+          .business-team-communication__composer-send { min-width: 72px; padding-inline: 13px; }
+        }
+      `}</style>
       {error ? <div style={businessTeamError} role="alert">{error}</div> : null}
     </section>
   );
@@ -880,6 +921,7 @@ function ConversationThreadInner({
   const [teamDrafts, setTeamDrafts] = useState({});
   const [teamCommandKeys, setTeamCommandKeys] = useState({});
   const [teamSendPending, setTeamSendPending] = useState(false);
+  const [alertCountSnapshot, setAlertCountSnapshot] = useState(getAlertCountSnapshot);
   const managedTeamRequestRef = useRef(0);
   const [canonicalReloadKey, setCanonicalReloadKey] = useState(0);
   const [canonicalReadSnapshot, setCanonicalReadSnapshot] = useState(null);
@@ -909,6 +951,8 @@ function ConversationThreadInner({
   const canonicalReadRouteGenerationRef = useRef(0);
   const canonicalReadHydrationGenerationRef = useRef(0);
   const canonicalReadCoordinatorRef = useRef(null);
+
+  useEffect(() => subscribeAlertCounts(setAlertCountSnapshot), []);
 
   useEffect(() => {
     canonicalReadMountedRef.current = true;
@@ -1431,6 +1475,7 @@ useEffect(() => {
             ? current
             : communications[0]?.assignmentId || ""
         );
+        return communications;
       } catch {
         if (managedTeamRequestRef.current !== requestId) return;
         setManagedTeamState({
@@ -1440,6 +1485,7 @@ useEffect(() => {
         });
         setSelectedTeamAssignmentId("");
         setCommunicationAudience("customer");
+        return null;
       }
     },
     [
@@ -1503,6 +1549,59 @@ useEffect(() => {
     ? `${canonicalJobId}:team:${selectedTeamCommunication.assignmentId}`
     : "";
   const teamDraft = teamDrafts[teamDraftKey] || "";
+  const attentionIdentity = String(getAuthenticatedIdentitySnapshot()?.userId || "");
+  const communicationAttention = getCommunicationAttention(
+    alertCountSnapshot,
+    attentionIdentity
+  );
+  const businessJobAttention = getJobCommunicationAttention(
+    communicationAttention,
+    canonicalBusinessId,
+    canonicalJobId
+  );
+  const customerAudienceUnread = getConversationCustomerAttention(
+    communicationAttention,
+    canonicalConversationId
+  );
+
+  useEffect(() => {
+    if (
+      communicationAudience !== "team" ||
+      !selectedTeamAssignmentId ||
+      businessJobAttention.teamUnread < 1
+    ) return;
+    let active = true;
+    const acknowledgeLoadedTeam = async () => {
+      const communications = await refreshManagedTeamCommunications({ loading: false });
+      if (!active || !communications?.some(
+        (item) => item.assignmentId === selectedTeamAssignmentId
+      )) return;
+      try {
+        await acknowledgeFieldMessageAttention(
+          canonicalJobId,
+          {
+            businessId: canonicalBusinessId,
+            assignmentId: selectedTeamAssignmentId,
+            managed: true,
+            setPage,
+          }
+        );
+        if (active) await refreshAlertCounts();
+      } catch {
+        // Current assignment authority is required; stale scopes keep their attention.
+      }
+    };
+    void acknowledgeLoadedTeam();
+    return () => { active = false; };
+  }, [
+    businessJobAttention.teamUnread,
+    canonicalBusinessId,
+    canonicalJobId,
+    communicationAudience,
+    refreshManagedTeamCommunications,
+    selectedTeamAssignmentId,
+    setPage,
+  ]);
 
   const updateManagedTeamDraft = (value) => {
     if (!teamDraftKey) return;
@@ -1543,6 +1642,7 @@ useEffect(() => {
       );
       setTeamCommandKeys((current) => ({ ...current, [teamDraftKey]: "" }));
       await refreshManagedTeamCommunications({ loading: false });
+      await refreshAlertCounts();
     } catch {
       setManagedTeamState((current) => ({
         ...current,
@@ -5896,6 +5996,11 @@ const handleImageUpload = (event) => {
               onClick={() => selectCommunicationAudience("customer")}
             >
               {t("conversationAudienceCustomer", language)}
+              {customerAudienceUnread > 0 ? (
+                <span style={businessCommunicationAudienceCount}>
+                  {formatAttentionCount(customerAudienceUnread)}
+                </span>
+              ) : null}
             </button>
             <button
               type="button"
@@ -5908,7 +6013,13 @@ const handleImageUpload = (event) => {
               aria-pressed={communicationAudience === "team"}
               onClick={() => selectCommunicationAudience("team")}
             >
+              <span aria-hidden="true">&#128274;</span>
               {t("conversationAudienceTeamPrivate", language)}
+              {businessJobAttention.teamUnread > 0 ? (
+                <span style={businessCommunicationAudienceCount}>
+                  {formatAttentionCount(businessJobAttention.teamUnread)}
+                </span>
+              ) : null}
             </button>
           </div>
         ) : null}
@@ -11352,19 +11463,37 @@ const businessCommunicationAudienceButton = {
   minHeight: "38px",
   border: "1px solid #d8dee8",
   borderRadius: "12px",
-  background: "#f8fafc",
-  color: "#475467",
+  background: "#f0f5f1",
+  color: "#315b43",
   fontWeight: 800,
   cursor: "pointer",
   overflow: "hidden",
   textOverflow: "ellipsis",
   whiteSpace: "nowrap",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "6px",
 };
 
 const businessCommunicationAudienceButtonActive = {
   background: "var(--meetro-color-forest, #1f4d34)",
   borderColor: "var(--meetro-color-forest, #1f4d34)",
   color: "#ffffff",
+};
+
+const businessCommunicationAudienceCount = {
+  minWidth: "19px",
+  height: "19px",
+  padding: "0 5px",
+  borderRadius: "999px",
+  display: "inline-grid",
+  placeItems: "center",
+  background: "#c92f3e",
+  color: "#ffffff",
+  fontSize: "10px",
+  lineHeight: 1,
+  fontWeight: 900,
 };
 
 const businessTeamPane = {
@@ -11455,6 +11584,7 @@ const businessTeamComposer = {
   borderTop: "1px solid #dfe8e1",
   background: "#ffffff",
   minWidth: 0,
+  maxWidth: "100%",
 };
 
 const businessTeamError = {

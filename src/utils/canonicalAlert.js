@@ -369,6 +369,50 @@ function normalizeCount(value) {
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
+function normalizeCommunicationAttention(value) {
+  if (
+    !hasExactKeys(value, [
+      "unread",
+      "customerUnread",
+      "teamUnread",
+      "byJob",
+      "byConversation",
+    ]) ||
+    !Array.isArray(value.byJob) ||
+    !Array.isArray(value.byConversation)
+  ) return null;
+  const unread = normalizeCount(value.unread);
+  const customerUnread = normalizeCount(value.customerUnread);
+  const teamUnread = normalizeCount(value.teamUnread);
+  if (
+    unread === null ||
+    customerUnread === null ||
+    teamUnread === null ||
+    unread !== customerUnread + teamUnread
+  ) return null;
+  const byJob = value.byJob.map((scope) => {
+    if (!hasExactKeys(scope, ["businessId", "jobId", "customerUnread", "teamUnread"])) return null;
+    const businessId = Number(scope.businessId);
+    const jobId = typeof scope.jobId === "string" ? scope.jobId.toLowerCase() : "";
+    const customer = normalizeCount(scope.customerUnread);
+    const team = normalizeCount(scope.teamUnread);
+    return Number.isSafeInteger(businessId) && businessId > 0 &&
+      UUID_PATTERN.test(jobId) && customer !== null && team !== null
+      ? { businessId, jobId, customerUnread: customer, teamUnread: team }
+      : null;
+  });
+  const byConversation = value.byConversation.map((scope) => {
+    if (!hasExactKeys(scope, ["conversationId", "customerUnread"])) return null;
+    const conversationId = Number(scope.conversationId);
+    const customer = normalizeCount(scope.customerUnread);
+    return Number.isSafeInteger(conversationId) && conversationId > 0 && customer !== null
+      ? { conversationId, customerUnread: customer }
+      : null;
+  });
+  if (byJob.some((scope) => !scope) || byConversation.some((scope) => !scope)) return null;
+  return { unread, customerUnread, teamUnread, byJob, byConversation };
+}
+
 export function normalizeAlertListResponse(value) {
   if (
     !normalizeSuccessEnvelope(value, "ALERTS_RETRIEVED") ||
@@ -415,7 +459,8 @@ export function normalizeAlertCountsResponse(value) {
 
   const active = normalizeCount(value.counts.active);
   const unread = normalizeCount(value.counts.unread);
-  if (active === null || unread === null) return null;
+  const communication = normalizeCommunicationAttention(value.counts.communication);
+  if (active === null || unread === null || !communication) return null;
 
   const byCategory = {};
   for (const [category, counts] of Object.entries(value.counts.byCategory)) {
@@ -432,7 +477,7 @@ export function normalizeAlertCountsResponse(value) {
   return {
     success: true,
     code: value.code,
-    counts: { active, unread, byCategory },
+    counts: { active, unread, byCategory, communication },
   };
 }
 

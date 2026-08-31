@@ -1,6 +1,17 @@
+import { useEffect, useState } from "react";
 import MeetroIcon from "./MeetroIcon";
 import useLanguage from "../hooks/useLanguage";
 import { t } from "../utils/language";
+import {
+  getAlertCountSnapshot,
+  setAlertCountIdentity,
+  subscribeAlertCounts,
+} from "../utils/alertCountCoordinator";
+import {
+  getAuthenticatedIdentitySnapshot,
+  subscribeAuthenticatedIdentity,
+} from "../utils/session";
+import { formatAttentionCount, getCommunicationAttention } from "../utils/communicationAttention";
 import "../styles/employeeShell.css";
 
 const EMPLOYEE_NAV_ITEMS = Object.freeze([
@@ -38,6 +49,26 @@ export default function EmployeeShell({
 }) {
   const language = useLanguage();
   const employeeNavigationLabel = t("fieldEmployeeNavigation", language);
+  const [identitySnapshot, setIdentitySnapshot] = useState(getAuthenticatedIdentitySnapshot);
+  const [alertSnapshot, setAlertSnapshot] = useState(getAlertCountSnapshot);
+  const alertIdentity = identitySnapshot?.status === "authenticated"
+    ? String(identitySnapshot.userId || "")
+    : "";
+  const attention = getCommunicationAttention(alertSnapshot, alertIdentity);
+  const alertUnread = alertSnapshot.identity === alertIdentity
+    ? alertSnapshot.response?.counts?.unread || 0
+    : 0;
+
+  useEffect(() => subscribeAuthenticatedIdentity(setIdentitySnapshot), []);
+  useEffect(() => {
+    setAlertCountIdentity(alertIdentity);
+    return subscribeAlertCounts(setAlertSnapshot);
+  }, [alertIdentity]);
+
+  const unreadByRoute = {
+    employeeMessages: attention.unread,
+    employeeAlerts: alertUnread,
+  };
 
   return (
     <div
@@ -75,6 +106,7 @@ export default function EmployeeShell({
           language={language}
           navigationLocked={navigationLocked}
           navigationLockReason={navigationLockReason}
+          unreadByRoute={unreadByRoute}
         />
       </aside>
 
@@ -129,6 +161,7 @@ export default function EmployeeShell({
           mobile
           navigationLocked={navigationLocked}
           navigationLockReason={navigationLockReason}
+          unreadByRoute={unreadByRoute}
         />
       </nav>
     </div>
@@ -144,6 +177,7 @@ function EmployeeNav({
   mobile = false,
   navigationLocked = false,
   navigationLockReason = "",
+  unreadByRoute = {},
 }) {
   return (
     <div
@@ -162,6 +196,7 @@ function EmployeeNav({
     >
       {navigation.map((item) => {
         const active = currentPage === item.route;
+        const unread = Number(unreadByRoute[item.route]) || 0;
 
         return (
           <button
@@ -186,6 +221,14 @@ function EmployeeNav({
                 ? t(item.labelKey, language)
                 : item.label}
             </strong>
+            {unread > 0 ? (
+              <span
+                className="employee-shell__nav-badge"
+                aria-label={`${formatAttentionCount(unread)} unread`}
+              >
+                {formatAttentionCount(unread)}
+              </span>
+            ) : null}
           </button>
         );
       })}

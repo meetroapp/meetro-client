@@ -449,12 +449,36 @@ test("counts preserve backend totals and returned categories without recalculati
       byCategory: {
         communication: { active: 2, unread: 1 },
       },
+      communication: {
+        unread: 3,
+        customerUnread: 2,
+        teamUnread: 1,
+        byJob: [{
+          businessId: 7,
+          jobId: "072c8736-5d97-4253-ba3e-dd1bce281a20",
+          customerUnread: 2,
+          teamUnread: 1,
+        }],
+        byConversation: [{ conversationId: 342, customerUnread: 2 }],
+      },
     },
   });
   assert.deepEqual(normalized.counts, {
     active: 9,
     unread: 8,
     byCategory: { communication: { active: 2, unread: 1 } },
+    communication: {
+      unread: 3,
+      customerUnread: 2,
+      teamUnread: 1,
+      byJob: [{
+        businessId: 7,
+        jobId: "072c8736-5d97-4253-ba3e-dd1bce281a20",
+        customerUnread: 2,
+        teamUnread: 1,
+      }],
+      byConversation: [{ conversationId: 342, customerUnread: 2 }],
+    },
   });
   assert.equal(Object.hasOwn(normalized.counts.byCategory, "emergency"), false);
 

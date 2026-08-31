@@ -103,7 +103,7 @@ test("the shared shell owns one subscription for both render branches", () => {
 });
 
 test("successful Alert mutations invalidate canonical counts without local count edits", () => {
-  assert.equal((notificationsSource.match(/refreshAlertCounts\(\)/g) || []).length, 2);
+  assert.equal((notificationsSource.match(/refreshAlertCounts\(\)/g) || []).length, 3);
   assert.match(
     notificationsSource,
     /await markAlertRead\(alert\.id, \{ setPage \}\)[\s\S]*await dismissAlert\(alert\.id, \{ setPage \}\)[\s\S]*void refreshAlertCounts\(\)/

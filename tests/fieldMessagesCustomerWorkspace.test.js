@@ -134,8 +134,8 @@ test("customer API normalizes server failures into useful Error identity", async
 });
 
 test("Field Messages keeps Team and Customer as separate assignment-scoped authorities", () => {
-  assert.match(portalSource, /\["team", "fieldAudienceTeam"\]/);
-  assert.match(portalSource, /\["customer", "fieldAudienceCustomer"\]/);
+  assert.match(portalSource, /\["team", "fieldAudienceTeam", selectedAttention\.teamUnread\]/);
+  assert.match(portalSource, /\["customer", "fieldAudienceCustomer", selectedAttention\.customerUnread\]/);
   assert.match(portalSource, /operations\.filter\(hasActiveMessageAssignment\)/);
   assert.match(portalSource, /routedJob \? routedAudience : "team"/);
   assert.match(portalSource, /eligibleJobs\.find\(\(item\) => item\.job\.id === requestedJobId\)/);

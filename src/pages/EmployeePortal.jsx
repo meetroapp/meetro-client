@@ -5,13 +5,26 @@ import useLanguage from "../hooks/useLanguage";
 import { TimeEvidencePanel } from "./EmployeeJobs";
 import { fetchEmployeeJobs, fetchEmployeeSchedule } from "../utils/jobAssignmentApi";
 import {
+  acknowledgeFieldMessageAttention,
   fetchFieldOperations,
   sendFieldMessage,
 } from "../utils/fieldOperationsApi";
 import {
+  acknowledgeFieldCustomerAttention,
   fetchFieldCustomerConversation,
   sendFieldCustomerMessage,
 } from "../utils/fieldCustomerCommunicationApi";
+import {
+  getAlertCountSnapshot,
+  refreshAlertCounts,
+  subscribeAlertCounts,
+} from "../utils/alertCountCoordinator";
+import { getAuthenticatedIdentitySnapshot } from "../utils/session";
+import {
+  formatAttentionCount,
+  getCommunicationAttention,
+  getJobCommunicationAttention,
+} from "../utils/communicationAttention";
 import {
   captureFieldCustomerSend,
   FIELD_CUSTOMER_UNDO_SECONDS,
@@ -790,10 +803,12 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
   const [working, setWorking] = useState("");
   const [pendingCustomerSend, setPendingCustomerSend] = useState(null);
   const [customerNotice, setCustomerNotice] = useState("");
+  const [alertSnapshot, setAlertSnapshot] = useState(getAlertCountSnapshot);
   const pendingCustomerController = useRef(null);
   const customerRefreshRequest = useRef(0);
   const messageHistoryRef = useRef(null);
   const keepLatestMessageVisible = useRef(true);
+  const identity = String(getAuthenticatedIdentitySnapshot()?.userId || "");
 
   const selected = eligibleJobs.find((item) => item.job.id === selectedJobId) || null;
   const selectedOperations = selected
@@ -804,6 +819,14 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
   const draft = drafts[draftKey] || "";
   const teamMessages = selectedOperations?.messages || [];
   const customerMessages = customerThread.conversation?.messages || [];
+  const attention = getCommunicationAttention(alertSnapshot, identity);
+  const selectedAttention = getJobCommunicationAttention(
+    attention,
+    membership.businessId,
+    selectedJobId
+  );
+
+  useEffect(() => subscribeAlertCounts(setAlertSnapshot), []);
 
   useEffect(() => {
     if (pendingCustomerSend) return;
@@ -863,6 +886,11 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
           conversation: result.conversation || null,
         },
       }));
+      void acknowledgeFieldCustomerAttention(
+        jobId,
+        { businessId: membership.businessId, assignmentId },
+        setPage
+      ).then(() => refreshAlertCounts()).catch(() => {});
     }).catch(() => {
       if (customerRefreshRequest.current !== requestId) return;
       setCustomerThreads((current) => ({
@@ -875,6 +903,39 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
       }));
     });
   }, [audience, language, membership.businessId, selected, setPage]);
+
+  const refreshTeamThread = useCallback(async () => {
+    if (audience !== "team" || !selected) return;
+    const jobId = selected.job.id;
+    const assignmentId = selected.assignment.id;
+    try {
+      const refreshed = await fetchFieldOperations(
+        jobId,
+        {
+          businessId: membership.businessId,
+          assignmentId,
+          managed: false,
+        },
+        setPage
+      );
+      setTeamOperations((current) => ({
+        ...current,
+        [jobId]: refreshed.operations,
+      }));
+      await acknowledgeFieldMessageAttention(
+        jobId,
+        { businessId: membership.businessId, assignmentId, managed: false, setPage }
+      );
+      await refreshAlertCounts();
+    } catch {
+      // Exact stale or unauthorized destinations fail closed without clearing attention.
+    }
+  }, [audience, membership.businessId, selected, setPage]);
+
+  useEffect(() => {
+    if (audience !== "team" || !selected) return;
+    void refreshTeamThread();
+  }, [audience, refreshTeamThread, selected, selectedAttention.teamUnread]);
 
   useEffect(() => {
     if (audience !== "customer" || !selected) return undefined;
@@ -972,6 +1033,7 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
         [selected.job.id]: refreshed.operations,
       }));
       updateDraft("");
+      await refreshAlertCounts();
     } catch {
       setTeamOperations((current) => ({
         ...current,
@@ -1022,6 +1084,7 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
         ...current,
         [captured.jobId]: "",
       }));
+      await refreshAlertCounts();
     } catch {
       setDrafts((current) => ({
         ...current,
@@ -1133,9 +1196,9 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
           aria-label={t("fieldMessageAudience", language)}
         >
           {[
-            ["team", "fieldAudienceTeam"],
-            ["customer", "fieldAudienceCustomer"],
-          ].map(([value, key]) => (
+            ["team", "fieldAudienceTeam", selectedAttention.teamUnread],
+            ["customer", "fieldAudienceCustomer", selectedAttention.customerUnread],
+          ].map(([value, key, unread]) => (
             <button
               type="button"
               key={value}
@@ -1145,6 +1208,11 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
               onClick={() => selectAudience(value)}
             >
               {t(key, language)}
+              {unread > 0 ? (
+                <span className="field-messages-audience-count">
+                  {formatAttentionCount(unread)}
+                </span>
+              ) : null}
             </button>
           ))}
         </div>

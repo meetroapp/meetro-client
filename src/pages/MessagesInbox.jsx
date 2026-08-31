@@ -10,7 +10,15 @@ import { EmergencyConversationContextPanel } from "../components/EmergencyRelati
 import ConversationThread from "./ConversationThread";
 import { authFetch, clearMeetroSession } from "../utils/authFetch";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
-import { getDashboardPageForAccountMode } from "../utils/session";
+import { getAuthenticatedIdentitySnapshot, getDashboardPageForAccountMode } from "../utils/session";
+import {
+  getAlertCountSnapshot,
+  subscribeAlertCounts,
+} from "../utils/alertCountCoordinator";
+import {
+  getCommunicationAttention,
+  getConversationCustomerAttention,
+} from "../utils/communicationAttention";
 import {
   getAccountConnectionStateFromAuthResult,
   getStoredAccountConnectionState,
@@ -679,6 +687,14 @@ function MessagesInbox({ setPage, currentPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
   const appLayoutMetrics = useAppLayoutMetrics();
   const communicationLayout = getCommunicationLayout(appLayoutMetrics);
+  const [alertCountSnapshot, setAlertCountSnapshot] = useState(getAlertCountSnapshot);
+  const attentionIdentity = String(getAuthenticatedIdentitySnapshot()?.userId || "");
+  const communicationAttention = getCommunicationAttention(
+    alertCountSnapshot,
+    attentionIdentity
+  );
+
+  useEffect(() => subscribeAlertCounts(setAlertCountSnapshot), []);
   const isSplitPane = communicationLayout.mode === "desktop";
   const isWideWorkspace = communicationLayout.columns === 3;
   const canonicalRouteContext = parseCanonicalConversationRoute(
@@ -3837,6 +3853,27 @@ function MessagesInbox({ setPage, currentPage }) {
           : t("messagesRelationship", language)),
     });
     const isEmergencyRow = isEmergencyConversationType(conversation);
+    const conversationId = Number(
+      conversation.conversationId || conversation.id
+    );
+    const jobId = String(
+      conversation.relationship?.jobId ||
+      conversation.jobId ||
+      conversation.job_id ||
+      (String(canonicalWorkContext?.conversationId || "") === String(conversationId)
+        ? canonicalWorkContext?.jobId
+        : "") ||
+      ""
+    ).trim().toLowerCase();
+    const customerAttention = getConversationCustomerAttention(
+      communicationAttention,
+      conversationId
+    );
+    const teamAttention = communicationAttention.byJob.find(
+      (scope) => scope.jobId === jobId
+    )?.teamUnread || 0;
+    const authoritativeUnread = customerAttention + teamAttention;
+    const rowUnread = authoritativeUnread || (conversation.unread ? 1 : 0);
 
     return (
       <button
@@ -3851,7 +3888,7 @@ function MessagesInbox({ setPage, currentPage }) {
         }}
         style={{
           ...conversationRow,
-          ...(conversation.unread ? unreadConversationRow : {}),
+          ...(rowUnread > 0 ? unreadConversationRow : {}),
           ...(isEmergencyRow ? emergencyConversationRow : {}),
           ...(isSplitPane && isActiveSplitConversation(conversation)
             ? activeConversationRow
@@ -3863,7 +3900,7 @@ function MessagesInbox({ setPage, currentPage }) {
           style={{
             ...conversationRowAvatar,
             ...(isSplitPane ? splitAvatarCircle : {}),
-            ...(conversation.unread ? unreadAvatar : {}),
+            ...(rowUnread > 0 ? unreadAvatar : {}),
             ...(isEmergencyRow ? emergencyAvatar : {}),
           }}
         >
@@ -3894,8 +3931,8 @@ function MessagesInbox({ setPage, currentPage }) {
 
             <div style={conversationRowRight}>
               <span style={timeText}>{getConversationDisplayTime(conversation)}</span>
-              {conversation.unread && (
-                <span style={conversationUnreadBadge}>1</span>
+              {rowUnread > 0 && (
+                <span style={conversationUnreadBadge}>{rowUnread > 99 ? "99+" : rowUnread}</span>
               )}
             </div>
           </div>
@@ -3909,7 +3946,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 style={{
                   ...conversationStatusChip,
                   ...(isEmergencyRow ? emergencyStatusBadge : {}),
-                  ...(conversation.unread ? unreadStatusBadge : {}),
+                  ...(rowUnread > 0 ? unreadStatusBadge : {}),
                 }}
               >
                 {statusChip}

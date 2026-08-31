@@ -184,6 +184,26 @@ export async function fetchFieldCustomerConversation(
   );
 }
 
+export async function acknowledgeFieldCustomerAttention(
+  jobId,
+  input,
+  setPage,
+  authFetchImpl = authFetch
+) {
+  const exactJob = exactJobId(jobId);
+  const authority = exactInput(input, READ_FIELDS);
+  return customerCommunicationRequest(
+    `/employee/jobs/${encodeURIComponent(exactJob)}/customer-conversation/read`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(authority),
+    },
+    setPage,
+    authFetchImpl
+  );
+}
+
 export async function sendFieldCustomerMessage(
   jobId,
   input,

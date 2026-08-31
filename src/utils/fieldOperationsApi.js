@@ -136,3 +136,21 @@ export function sendFieldMessage(jobId, input, { managed, setPage }) {
     setPage
   );
 }
+
+export function acknowledgeFieldMessageAttention(
+  jobId,
+  { businessId, assignmentId, managed, setPage },
+  authFetchImpl = authFetch
+) {
+  const surface = managed ? "team" : "employee";
+  return fieldRequest(
+    `/${surface}/jobs/${encodeURIComponent(jobId)}/field-communications/read`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ businessId, assignmentId }),
+    },
+    setPage,
+    authFetchImpl
+  );
+}

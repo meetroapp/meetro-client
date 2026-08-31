@@ -19,7 +19,10 @@ import {
   createAlertCenterInitialState,
   isCurrentAlertMutationCompletion,
 } from "../utils/alertCenterController";
-import { refreshAlertCounts } from "../utils/alertCountCoordinator";
+import {
+  refreshAlertCounts,
+  subscribeAlertCounts,
+} from "../utils/alertCountCoordinator";
 import { fetchCanonicalLiveJobProjection } from "../utils/canonicalLiveJobProjection.js";
 import {
   buildFieldCustomerAlertRoute,
@@ -197,6 +200,7 @@ function Notifications({
   const mutationTokensRef = useRef(new Map());
   const destinationTokensRef = useRef(new Map());
   const readAllTokenRef = useRef(null);
+  const observedCountResponseRef = useRef(null);
   const controllerRef = useRef(null);
   if (!controllerRef.current) {
     controllerRef.current = createAlertCenterController({
@@ -250,6 +254,20 @@ function Notifications({
       controller.deactivate();
     };
   }, [controller]);
+
+  useEffect(() => {
+    if (!employeeMode) return undefined;
+    return subscribeAlertCounts((countSnapshot) => {
+      if (countSnapshot.phase !== "ready" || !countSnapshot.response) return;
+      if (!observedCountResponseRef.current) {
+        observedCountResponseRef.current = countSnapshot.response;
+        return;
+      }
+      if (observedCountResponseRef.current === countSnapshot.response) return;
+      observedCountResponseRef.current = countSnapshot.response;
+      if (mountedRef.current) void controller.refresh();
+    });
+  }, [controller, employeeMode]);
 
   useEffect(() => {
     if (employeeMode) return undefined;
@@ -313,6 +331,7 @@ function Notifications({
         mountedRef.current &&
         destinationTokensRef.current.get(alert.id) === token
       ) {
+        await refreshAlertCounts();
         setPageRef.current(route);
       }
     } catch {

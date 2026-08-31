@@ -158,6 +158,27 @@
   font-weight: 700;
 }
 
+.employee-shell__nav-badge {
+  min-width: 21px;
+  height: 21px;
+  margin-left: auto;
+  padding: 0 6px;
+  border-radius: 999px;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  background: #c92f3e;
+  color: #ffffff;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 900;
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.18);
+}
+
+.employee-shell__nav button.is-active .employee-shell__nav-badge {
+  box-shadow: 0 0 0 2px #eff8f1;
+}
+
 .employee-shell__nav button:last-child {
   margin-top: 21px;
 }
@@ -1128,6 +1149,25 @@
   font: inherit;
   font-weight: 850;
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+}
+
+.field-messages-audience-count {
+  min-width: 19px;
+  height: 19px;
+  padding: 0 5px;
+  border-radius: 999px;
+  box-sizing: border-box;
+  display: inline-grid;
+  place-items: center;
+  background: #c92f3e;
+  color: #ffffff;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 900;
 }
 
 .field-messages-audience button.is-active {
