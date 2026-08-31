@@ -43,7 +43,13 @@ import { fetchMyTeamAuthority } from "./utils/teamApi";
 import {
   getRoleAwareRoute,
   resolvePrimaryTeamExperience,
+  TEAM_EXPERIENCE_MODES,
 } from "./utils/teamRoleExperience";
+import {
+  readTeamExperienceMode,
+  supportsPersonalWorkSwitch,
+  TEAM_EXPERIENCE_MODE_CHANGED_EVENT,
+} from "./utils/teamExperienceMode";
 
 const Home = lazy(() => import("./pages/Home"));
 import MyRequests from "./pages/MyRequests";
@@ -579,6 +585,7 @@ function App() {
   const [teamExperienceGate, setTeamExperienceGate] = useState({
     status: "idle",
     experience: resolvePrimaryTeamExperience(),
+    mode: TEAM_EXPERIENCE_MODES.WORK,
   });
   const updateSubscriptionGate = useCallback((result = {}) => {
     setSubscriptionGate({
@@ -603,6 +610,7 @@ function App() {
           setTeamExperienceGate({
             status: "not_applicable",
             experience: resolvePrimaryTeamExperience(),
+            mode: TEAM_EXPERIENCE_MODES.WORK,
           });
         }
       });
@@ -614,9 +622,16 @@ function App() {
       fetchMyTeamAuthority(setPageState)
         .then((authority) => {
           if (active) {
+            const experience =
+              resolvePrimaryTeamExperience(authority);
+
             setTeamExperienceGate({
               status: "ready",
-              experience: resolvePrimaryTeamExperience(authority),
+              experience,
+              mode: readTeamExperienceMode(
+                authenticatedIdentity.userId,
+                experience
+              ),
             });
           }
         })
@@ -625,6 +640,7 @@ function App() {
             setTeamExperienceGate({
               status: "unavailable",
               experience: resolvePrimaryTeamExperience(),
+              mode: TEAM_EXPERIENCE_MODES.WORK,
             });
           }
         });
@@ -641,10 +657,65 @@ function App() {
   useEffect(() => {
     if (teamExperienceGate.status !== "ready") return;
     const currentRoute = getHashRoute() || page;
-    const roleRoute = getRoleAwareRoute(currentRoute, teamExperienceGate.experience);
+    const roleRoute = getRoleAwareRoute(
+      currentRoute,
+      teamExperienceGate.experience,
+      teamExperienceGate.mode
+    );
     if (!roleRoute || roleRoute === currentRoute) return;
     window.location.hash = roleRoute;
   }, [page, teamExperienceGate]);
+
+  useEffect(() => {
+    if (teamExperienceGate.status !== "ready") {
+      return undefined;
+    }
+
+    const handleTeamExperienceModeChange = (event) => {
+      const experience = teamExperienceGate.experience;
+
+      if (!supportsPersonalWorkSwitch(experience)) {
+        return;
+      }
+
+      const mode =
+        event?.detail?.mode ===
+        TEAM_EXPERIENCE_MODES.PERSONAL
+          ? TEAM_EXPERIENCE_MODES.PERSONAL
+          : TEAM_EXPERIENCE_MODES.WORK;
+
+      setTeamExperienceGate((current) => ({
+        ...current,
+        mode,
+      }));
+
+      const route =
+        mode === TEAM_EXPERIENCE_MODES.PERSONAL
+          ? "home"
+          : experience.landingRoute;
+
+      if (!route) return;
+
+      syncAccountModeForPage(getRoutePage(route));
+      window.location.hash = route;
+      setPageState(getRoutePage(route));
+    };
+
+    window.addEventListener(
+      TEAM_EXPERIENCE_MODE_CHANGED_EVENT,
+      handleTeamExperienceModeChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        TEAM_EXPERIENCE_MODE_CHANGED_EVENT,
+        handleTeamExperienceModeChange
+      );
+    };
+  }, [
+    teamExperienceGate.experience,
+    teamExperienceGate.status,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -1060,7 +1131,8 @@ function App() {
 	      : newPage;
 	    const finalPage = getRoleAwareRoute(
 	      intendedPage,
-	      teamExperienceGate.experience
+	      teamExperienceGate.experience,
+      teamExperienceGate.mode
 	    );
 	    const finalRoutePage = getRoutePage(finalPage);
 	    syncAccountModeForPage(finalRoutePage);
@@ -1076,7 +1148,8 @@ const bookkeeperMembership = teamExperienceGate.experience?.kind === "BOOKKEEPER
   : null;
 const currentRoleRoute = getRoleAwareRoute(
   getHashRoute() || page,
-  teamExperienceGate.experience
+  teamExperienceGate.experience,
+  teamExperienceGate.mode
 );
 
 if (

@@ -18,6 +18,11 @@ export const EMPLOYEE_APP_ROUTES = Object.freeze([
 const employeeRouteSet = new Set(EMPLOYEE_APP_ROUTES);
 const bookkeeperRouteSet = new Set(["teamOperations", "bookkeeperProfile"]);
 
+export const TEAM_EXPERIENCE_MODES = Object.freeze({
+  PERSONAL: "personal",
+  WORK: "work",
+});
+
 function pageName(route = "") {
   return String(route || "").split("?", 1)[0];
 }
@@ -56,12 +61,37 @@ export function isEmployeeAppRoute(route = "") {
   return employeeRouteSet.has(pageName(route));
 }
 
-export function getRoleAwareRoute(route = "", experience = {}) {
+export function getRoleAwareRoute(
+  route = "",
+  experience = {},
+  experienceMode = TEAM_EXPERIENCE_MODES.WORK
+) {
+  const mode =
+    experienceMode === TEAM_EXPERIENCE_MODES.PERSONAL
+      ? TEAM_EXPERIENCE_MODES.PERSONAL
+      : TEAM_EXPERIENCE_MODES.WORK;
+
   if (experience?.kind === "FIELD_EMPLOYEE") {
-    return isEmployeeAppRoute(route) ? route : experience.landingRoute;
+    if (mode === TEAM_EXPERIENCE_MODES.PERSONAL) {
+      return isEmployeeAppRoute(route) ? "home" : route;
+    }
+
+    return isEmployeeAppRoute(route)
+      ? route
+      : experience.landingRoute;
   }
+
   if (experience?.kind === "BOOKKEEPER_FINANCE") {
-    return bookkeeperRouteSet.has(pageName(route)) ? route : experience.landingRoute;
+    if (mode === TEAM_EXPERIENCE_MODES.PERSONAL) {
+      return bookkeeperRouteSet.has(pageName(route))
+        ? "home"
+        : route;
+    }
+
+    return bookkeeperRouteSet.has(pageName(route))
+      ? route
+      : experience.landingRoute;
   }
+
   return route;
 }

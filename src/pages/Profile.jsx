@@ -47,6 +47,12 @@ import {
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { fetchMyTeamAuthority } from "../utils/teamApi";
 import {
+  resolvePrimaryTeamExperience,
+} from "../utils/teamRoleExperience";
+import {
+  requestTeamExperienceMode,
+} from "../utils/teamExperienceMode";
+import {
   createTemporaryProfilePhotoPreview,
   isPersonalProfilePhotoUploadEnabled,
   uploadPersonalProfilePhoto,
@@ -104,6 +110,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
     localStorage.getItem("meetroAssistantVoicePreference") || "auto"
   );
   const [teamMembersMembership, setTeamMembersMembership] = useState(null);
+  const [teamWorkMembership, setTeamWorkMembership] = useState(null);
   const [relationshipInsightsEnabled, setRelationshipInsightsEnabledState] = useState(() =>
     areRelationshipInsightsEnabled({ role: localStorage.getItem("activeAccountMode") || "personal" })
   );
@@ -178,6 +185,43 @@ function Profile({ setPage, currentPage, embedded = false }) {
         console.error("Failed to load business profile", error);
       });
   }, [activeMode, setPage]);
+
+  useEffect(() => {
+    if (isBusinessMode) {
+      setTeamWorkMembership(null);
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    fetchMyTeamAuthority(setPage)
+      .then((authority) => {
+        if (cancelled) return;
+
+        const experience =
+          resolvePrimaryTeamExperience(authority);
+
+        if (
+          ["FIELD_EMPLOYEE", "BOOKKEEPER_FINANCE"].includes(
+            experience.kind
+          )
+        ) {
+          setTeamWorkMembership(experience.membership);
+          return;
+        }
+
+        setTeamWorkMembership(null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setTeamWorkMembership(null);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isBusinessMode, setPage]);
 
   useEffect(() => {
     if (!isBusinessMode) {
@@ -867,6 +911,58 @@ function Profile({ setPage, currentPage, embedded = false }) {
             </p>
           </div>
         </section>
+
+        {teamWorkMembership &&
+          ["FIELD_EMPLOYEE", "BOOKKEEPER_FINANCE"].includes(
+            teamWorkMembership.role
+          ) && (
+            <section style={teamWorkAccessCard}>
+              <div style={teamWorkAccessCopy}>
+                <p style={settingsEyebrow}>Work Access</p>
+                <h2 style={teamWorkAccessTitle}>
+                  {teamWorkMembership.businessName ||
+                    "Your Team"}
+                </h2>
+                <p style={settingsSubtitle}>
+                  {teamWorkMembership.role === "FIELD_EMPLOYEE"
+                    ? "Field Employee"
+                    : "Bookkeeper / Finance"}
+                  {" · "}
+                  Active
+                </p>
+              </div>
+
+              <div style={teamWorkAccessActions}>
+                <button
+                  type="button"
+                  style={{
+                    ...teamExperienceButton,
+                    ...teamExperienceButtonActive,
+                  }}
+                  aria-pressed="true"
+                  disabled
+                >
+                  Personal
+                </button>
+
+                <button
+                  type="button"
+                  style={teamExperienceButton}
+                  aria-pressed="false"
+                  onClick={() =>
+                    requestTeamExperienceMode({
+                      userId: teamWorkMembership.userId,
+                      mode: "work",
+                    })
+                  }
+                >
+                  Work —{" "}
+                  {teamWorkMembership.businessName ||
+                    "Team"}
+                </button>
+              </div>
+            </section>
+          )}
 
         <section style={quickActionRow} aria-label={t("quickActions")}>
           <ProfileActionButton
@@ -2005,6 +2101,53 @@ function FeedbackField({ label, value, onChange }) {
     </label>
   );
 }
+
+const teamWorkAccessCard = {
+  display: "flex",
+  justifyContent: "space-between",
+  alignItems: "center",
+  gap: 18,
+  flexWrap: "wrap",
+  padding: 18,
+  margin: "0 0 18px",
+  background: "#f7faf7",
+  border: "1px solid #dbe7de",
+  borderRadius: 16,
+};
+
+const teamWorkAccessCopy = {
+  minWidth: 0,
+  flex: "1 1 240px",
+};
+
+const teamWorkAccessTitle = {
+  margin: "4px 0",
+  color: "#173f28",
+  fontSize: 21,
+};
+
+const teamWorkAccessActions = {
+  display: "flex",
+  gap: 9,
+  flexWrap: "wrap",
+};
+
+const teamExperienceButton = {
+  minHeight: 42,
+  padding: "9px 13px",
+  border: "1px solid #bfd2c4",
+  borderRadius: 10,
+  background: "#fff",
+  color: "#173f28",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+
+const teamExperienceButtonActive = {
+  background: "#173f28",
+  color: "#fff",
+  borderColor: "#173f28",
+};
 
 const pageWrapper = {
   background: "var(--meetro-gradient-community-page)",

@@ -4,6 +4,9 @@ import { TimeEvidencePanel } from "./EmployeeJobs";
 import { fetchEmployeeJobs, fetchEmployeeSchedule } from "../utils/jobAssignmentApi";
 import { fetchFieldOperations } from "../utils/fieldOperationsApi";
 import { fetchOwnTime } from "../utils/timeEvidenceApi";
+import {
+  requestTeamExperienceMode,
+} from "../utils/teamExperienceMode";
 
 const VIEW_META = Object.freeze({
   home: { page: "employeeHome", title: "Home", description: "Today’s field work at a glance." },
@@ -103,7 +106,9 @@ function PortalView({ view, membership, workspace, current, recentMessage, setPa
     return <TimeEvidencePanel businessId={membership.businessId} job={current?.job || null} assignment={current?.assignment || null} setPage={setPage} />;
   }
   if (view === "messages") return <MessagesView operations={workspace.operations} setPage={setPage} membership={membership} />;
-  if (view === "profile") return <ProfileView membership={membership} />;
+  if (view === "profile") {
+    return <ProfileView membership={membership} />;
+  }
   return <HomeView membership={membership} workspace={workspace} current={current} recentMessage={recentMessage} setPage={setPage} />;
 }
 
@@ -157,7 +162,81 @@ function MessagesView({ operations, setPage, membership }) {
 }
 
 function ProfileView({ membership }) {
-  return <div style={gridStyle}><section style={{ ...cardStyle, gridColumn: "1 / -1" }}><p style={eyebrowStyle}>Team Access</p><h2 style={headingStyle}>{membership.businessName || "Your business"}</h2><dl style={definitionStyle}><div><dt>Role</dt><dd>Field Employee</dd></div><div><dt>Access</dt><dd>Access managed by your business</dd></div><div><dt>Status</dt><dd>{readable(membership.status, "Active")}</dd></div></dl><p style={copyStyle}>Subscription plans and Business billing are managed by the Business Owner and are not part of your employee profile.</p></section></div>;
+  const businessName =
+    membership.businessName || "Your business";
+
+  return (
+    <div style={gridStyle}>
+      <section
+        style={{
+          ...cardStyle,
+          gridColumn: "1 / -1",
+        }}
+      >
+        <p style={eyebrowStyle}>Team Access</p>
+        <h2 style={headingStyle}>{businessName}</h2>
+
+        <dl style={definitionStyle}>
+          <div>
+            <dt>Role</dt>
+            <dd>Field Employee</dd>
+          </div>
+          <div>
+            <dt>Access</dt>
+            <dd>Access managed by your business</dd>
+          </div>
+          <div>
+            <dt>Status</dt>
+            <dd>{readable(membership.status, "Active")}</dd>
+          </div>
+        </dl>
+
+        <div style={experienceSwitchCard}>
+          <p style={eyebrowStyle}>Using Meetro as</p>
+
+          <div style={experienceSwitchActions}>
+            <button
+              type="button"
+              style={{
+                ...experienceModeButton,
+                ...experienceModeButtonActive,
+              }}
+              aria-pressed="true"
+              disabled
+            >
+              Work — {businessName}
+            </button>
+
+            <button
+              type="button"
+              style={experienceModeButton}
+              aria-pressed="false"
+              onClick={() =>
+                requestTeamExperienceMode({
+                  userId: membership.userId,
+                  mode: "personal",
+                })
+              }
+            >
+              Personal
+            </button>
+          </div>
+
+          <p style={copyStyle}>
+            Your Personal Meetro account and your Work access
+            use the same identity. Switching views does not
+            change your Team permissions.
+          </p>
+        </div>
+
+        <p style={copyStyle}>
+          Subscription plans and Business billing are managed
+          by the Business Owner and are not part of your
+          employee profile.
+        </p>
+      </section>
+    </div>
+  );
 }
 
 const cardStyle = { background: "#fff", border: "1px solid #dbe7de", borderRadius: 18, padding: 20, boxShadow: "0 10px 30px rgba(20,63,39,.06)", minWidth: 0 };
@@ -170,3 +249,31 @@ const textButton = { border: 0, background: "transparent", padding: 0, color: "#
 const lightButton = { minHeight: 43, border: 0, borderRadius: 11, padding: "10px 15px", background: "#fff", color: "#16562f", fontWeight: 800, cursor: "pointer" };
 const errorStyle = { ...cardStyle, color: "#8b2e2e", background: "#fff4f2", marginBottom: 14 };
 const definitionStyle = { display: "grid", gap: 10, margin: "18px 0", gridTemplateColumns: "repeat(auto-fit,minmax(150px,1fr))" };
+const experienceSwitchCard = {
+  margin: "20px 0",
+  padding: 16,
+  border: "1px solid #dbe7de",
+  borderRadius: 14,
+  background: "#f7faf7",
+};
+const experienceSwitchActions = {
+  display: "flex",
+  gap: 10,
+  flexWrap: "wrap",
+  marginBottom: 10,
+};
+const experienceModeButton = {
+  minHeight: 42,
+  border: "1px solid #bfd2c4",
+  borderRadius: 10,
+  padding: "9px 13px",
+  background: "#fff",
+  color: "#173f28",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+const experienceModeButtonActive = {
+  background: "#173f28",
+  color: "#fff",
+  borderColor: "#173f28",
+};
