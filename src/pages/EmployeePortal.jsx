@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import EmployeeShell from "../components/EmployeeShell";
 import MeetroIcon from "../components/MeetroIcon";
 import useLanguage from "../hooks/useLanguage";
@@ -12,6 +12,23 @@ import {
   fetchFieldCustomerConversation,
   sendFieldCustomerMessage,
 } from "../utils/fieldCustomerCommunicationApi";
+import {
+  captureFieldCustomerSend,
+  FIELD_CUSTOMER_UNDO_SECONDS,
+  isFieldCustomerNavigationLocked,
+  startFieldCustomerSendCountdown,
+} from "../utils/fieldCustomerPendingSend";
+import {
+  buildFieldScheduleWeek,
+  fieldScheduleDateKey,
+  fieldScheduleVisitsForDay,
+  formatFieldScheduleDate,
+  formatFieldScheduleTimeRange,
+  formatFieldScheduleWeekRange,
+  reconcileFieldEmployeeSchedule,
+  resolveFieldScheduleTimeZone,
+  shiftFieldScheduleWeek,
+} from "../utils/fieldEmployeeSchedule";
 import { fetchOwnTime } from "../utils/timeEvidenceApi";
 import {
   requestTeamExperienceMode,
@@ -29,6 +46,15 @@ const VIEW_META = Object.freeze({
   messages: { page: "employeeMessages", titleKey: "fieldNavMessages", descriptionKey: "fieldMessagesDescription" },
   profile: { page: "employeeProfile", titleKey: "fieldNavProfile", descriptionKey: "fieldProfileDescription" },
 });
+
+const QUICK_CUSTOMER_UPDATES = Object.freeze([
+  Object.freeze({ labelKey: "fieldQuickOnMyWay", textKey: "fieldQuickOnMyWayText" }),
+  Object.freeze({ labelKey: "fieldQuick15MinAway", textKey: "fieldQuick15MinAwayText" }),
+  Object.freeze({ labelKey: "fieldQuick30MinAway", textKey: "fieldQuick30MinAwayText" }),
+  Object.freeze({ labelKey: "fieldQuickRunningLate", textKey: "fieldQuickRunningLateText" }),
+  Object.freeze({ labelKey: "fieldQuickArrived", textKey: "fieldQuickArrivedText" }),
+  Object.freeze({ labelKey: "fieldQuickNeedAccess", textKey: "fieldQuickNeedAccessText" }),
+]);
 
 const STATUS_KEYS = Object.freeze({
   ASSIGNED: "fieldStatusAssigned",
@@ -106,9 +132,16 @@ export default function EmployeePortal({ membership, setPage, view = "home" }) {
   const language = useLanguage();
   const meta = VIEW_META[view] || VIEW_META.home;
   const businessId = membership?.businessId;
-  const [workspace, setWorkspace] = useState({ jobs: [], schedule: [], operations: [], time: null });
+  const [workspace, setWorkspace] = useState({
+    jobs: [],
+    schedule: [],
+    scheduleTimeZone: null,
+    operations: [],
+    time: null,
+  });
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [navigationLocked, setNavigationLocked] = useState(false);
 
   const load = useCallback(async () => {
     if (!businessId) return;
@@ -140,7 +173,13 @@ export default function EmployeePortal({ membership, setPage, view = "home" }) {
           return { job, assignment, operations: null };
         }
       }));
-      setWorkspace({ jobs, schedule: scheduleResult.schedule || [], operations, time: timeResult });
+      setWorkspace({
+        jobs,
+        schedule: scheduleResult.schedule || [],
+        scheduleTimeZone: scheduleResult.timeZone || null,
+        operations,
+        time: timeResult,
+      });
     } catch (loadError) {
       setError(loadError.message || t("fieldWorkspaceUnavailable", language));
     } finally {
@@ -159,7 +198,15 @@ export default function EmployeePortal({ membership, setPage, view = "home" }) {
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0] || null, [workspace.operations]);
 
   return (
-    <EmployeeShell membership={membership} currentPage={meta.page} setPage={setPage} title={t(meta.titleKey, language)} description={t(meta.descriptionKey, language)}>
+    <EmployeeShell
+      membership={membership}
+      currentPage={meta.page}
+      setPage={setPage}
+      title={t(meta.titleKey, language)}
+      description={t(meta.descriptionKey, language)}
+      navigationLocked={navigationLocked}
+      navigationLockReason={t("fieldPendingNavigationLocked", language)}
+    >
       {error && <div role="alert" style={errorStyle}>{error}</div>}
       {loading ? <section style={cardStyle} role="status">{t("fieldWorkspaceLoading", language)}</section> : (
         <PortalView
@@ -170,14 +217,26 @@ export default function EmployeePortal({ membership, setPage, view = "home" }) {
           recentMessage={recentMessage}
           setPage={setPage}
           language={language}
+          onNavigationLockChange={setNavigationLocked}
         />
       )}
     </EmployeeShell>
   );
 }
 
-function PortalView({ view, membership, workspace, current, recentMessage, setPage, language }) {
-  if (view === "schedule") return <ScheduleView schedule={workspace.schedule} language={language} />;
+function PortalView({ view, membership, workspace, current, recentMessage, setPage, language, onNavigationLockChange }) {
+  if (view === "schedule") {
+    return (
+      <ScheduleView
+        jobs={workspace.jobs}
+        schedule={workspace.schedule}
+        scheduleTimeZone={workspace.scheduleTimeZone}
+        businessId={membership.businessId}
+        setPage={setPage}
+        language={language}
+      />
+    );
+  }
   if (view === "time") {
     return (
       <TimeEvidencePanel
@@ -196,6 +255,7 @@ function PortalView({ view, membership, workspace, current, recentMessage, setPa
         setPage={setPage}
         membership={membership}
         language={language}
+        onNavigationLockChange={onNavigationLockChange}
       />
     );
   }
@@ -478,8 +538,221 @@ function HomeView({
   );
 }
 
-function ScheduleView({ schedule, language }) {
-  return <section style={cardStyle}><p style={eyebrowStyle}>{t("fieldAssignedVisits", language)}</p><h2 style={headingStyle}>{t("fieldMySchedule", language)}</h2>{schedule.length ? schedule.map((item) => <article key={item.visitId} style={rowStyle}><div><strong>{item.jobTitle}</strong><p style={copyStyle}>{readable(item.purpose, language)} · {readable(item.state, language)}</p></div><div><strong>{when(item.startsAt, language)}</strong><p style={copyStyle}>{item.location?.remote ? t("fieldRemote", language) : locationText(item.location, language)}</p></div></article>) : <p style={copyStyle}>{t("fieldNoActiveVisitScheduled", language)}</p>}</section>;
+function ScheduleView({
+  jobs,
+  schedule,
+  scheduleTimeZone,
+  businessId,
+  setPage,
+  language,
+}) {
+  const projection = useMemo(
+    () => reconcileFieldEmployeeSchedule({ jobs, schedule }),
+    [jobs, schedule]
+  );
+  const timeZone = useMemo(
+    () => resolveFieldScheduleTimeZone(schedule, scheduleTimeZone),
+    [schedule, scheduleTimeZone]
+  );
+  const todayDateKey = fieldScheduleDateKey(new Date(), timeZone);
+  const [selectedDateKey, setSelectedDateKey] = useState(todayDateKey);
+  const weekDays = useMemo(
+    () => buildFieldScheduleWeek(selectedDateKey, todayDateKey),
+    [selectedDateKey, todayDateKey]
+  );
+  const selectedVisits = useMemo(
+    () => fieldScheduleVisitsForDay(projection.visits, selectedDateKey),
+    [projection.visits, selectedDateKey]
+  );
+  const visitCounts = useMemo(() => {
+    const counts = new Map();
+    for (const visit of projection.visits) {
+      counts.set(visit.dateKey, (counts.get(visit.dateKey) || 0) + 1);
+    }
+    return counts;
+  }, [projection.visits]);
+
+  const openJob = (jobId) => {
+    setPage(
+      `employeeJobs?businessId=${businessId}&jobId=${encodeURIComponent(jobId)}`
+    );
+  };
+
+  return (
+    <div className="employee-schedule">
+      <section className="employee-schedule__week-card">
+        <div className="employee-schedule__title-row">
+          <div>
+            <p className="employee-schedule__eyebrow">
+              {t("fieldWeekPreview", language)}
+            </p>
+            <h2>{t("fieldMySchedule", language)}</h2>
+          </div>
+          <strong>{formatFieldScheduleWeekRange(weekDays, language)}</strong>
+        </div>
+
+        <div className="employee-schedule__week-controls">
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedDateKey((current) =>
+                shiftFieldScheduleWeek(current, -1)
+              )
+            }
+            aria-label={t("fieldPreviousWeek", language)}
+          >
+            <span aria-hidden="true">‹</span>
+            {t("fieldPreviousWeek", language)}
+          </button>
+          <button
+            type="button"
+            className="employee-schedule__today"
+            onClick={() => setSelectedDateKey(todayDateKey)}
+          >
+            {t("fieldToday", language)}
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              setSelectedDateKey((current) =>
+                shiftFieldScheduleWeek(current, 1)
+              )
+            }
+            aria-label={t("fieldNextWeek", language)}
+          >
+            {t("fieldNextWeek", language)}
+            <span aria-hidden="true">›</span>
+          </button>
+        </div>
+
+        <div
+          className="employee-schedule__week-strip"
+          aria-label={t("fieldWeekPreview", language)}
+        >
+          {weekDays.map((day) => {
+            const count = visitCounts.get(day.dateKey) || 0;
+            return (
+              <button
+                type="button"
+                key={day.dateKey}
+                className={[
+                  "employee-schedule__day",
+                  day.isSelected ? "is-selected" : "",
+                  day.isToday ? "is-today" : "",
+                ].filter(Boolean).join(" ")}
+                aria-pressed={day.isSelected}
+                onClick={() => setSelectedDateKey(day.dateKey)}
+              >
+                <span>
+                  {formatFieldScheduleDate(day.dateKey, language, {
+                    weekday: "short",
+                  })}
+                </span>
+                <strong>
+                  {formatFieldScheduleDate(day.dateKey, language, {
+                    day: "numeric",
+                  })}
+                </strong>
+                <small className={count ? "has-visits" : ""}>
+                  {count ? `• ${count}` : " "}
+                </small>
+                {day.isToday && <em>{t("fieldToday", language)}</em>}
+              </button>
+            );
+          })}
+        </div>
+
+        <p className="employee-schedule__timezone">
+          {t("fieldScheduleTimeZone", language, { timeZone })}
+        </p>
+      </section>
+
+      <section className="employee-schedule__agenda-card">
+        <p className="employee-schedule__eyebrow">
+          {t("fieldSelectedDayAgenda", language)}
+        </p>
+        <h2>
+          {formatFieldScheduleDate(selectedDateKey, language, {
+            weekday: "long",
+            month: "long",
+            day: "numeric",
+          })}
+        </h2>
+
+        {selectedVisits.length ? (
+          <div className="employee-schedule__agenda-list">
+            {selectedVisits.map((visit) => (
+              <article
+                key={visit.visitId}
+                className="employee-schedule__visit"
+              >
+                <div className="employee-schedule__visit-time">
+                  <strong>{formatFieldScheduleTimeRange(visit, language)}</strong>
+                  <small>{visit.timeZone}</small>
+                </div>
+                <div className="employee-schedule__visit-copy">
+                  <h3>{visit.jobTitle}</h3>
+                  <p>
+                    {visit.customerDisplayName ||
+                      t("fieldCustomerUnavailable", language)}
+                  </p>
+                  <div className="employee-schedule__visit-badges">
+                    <span>{readable(visit.purpose, language)}</span>
+                    <span>{readable(visit.state, language)}</span>
+                  </div>
+                  <p className="employee-schedule__location">
+                    {visit.location?.remote
+                      ? t("fieldRemote", language)
+                      : locationText(visit.location, language)}
+                  </p>
+                </div>
+                <button type="button" onClick={() => openJob(visit.jobId)}>
+                  {t("fieldOpenJob", language)}
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="employee-schedule__empty" role="status">
+            {t("fieldNoVisitsForDay", language)}
+          </div>
+        )}
+      </section>
+
+      <section className="employee-schedule__awaiting-card">
+        <p className="employee-schedule__eyebrow">
+          {t("fieldAwaitingSchedule", language)}
+        </p>
+        <h2>{t("fieldAwaitingSchedule", language)}</h2>
+
+        {projection.awaitingSchedule.length ? (
+          <div className="employee-schedule__awaiting-list">
+            {projection.awaitingSchedule.map((job) => (
+              <article key={job.id} className="employee-schedule__awaiting-job">
+                <div>
+                  <h3>{job.title}</h3>
+                  <p>
+                    {job.customer?.displayName ||
+                      t("fieldCustomerUnavailable", language)}
+                  </p>
+                  <strong>{t("fieldNotScheduledYet", language)}</strong>
+                  <span>{t("fieldAssignedJobNoScheduledVisit", language)}</span>
+                  <small>{locationText(job.location, language)}</small>
+                </div>
+                <button type="button" onClick={() => openJob(job.id)}>
+                  {t("fieldOpenJob", language)}
+                </button>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <div className="employee-schedule__empty" role="status">
+            {t("fieldNoAssignedWorkScheduled", language)}
+          </div>
+        )}
+      </section>
+    </div>
+  );
 }
 
 function customerAuthor(message, language) {
@@ -493,7 +766,7 @@ function customerAuthor(message, language) {
   return message?.author?.displayName || t("fieldBusiness", language);
 }
 
-function MessagesView({ operations, setPage, membership, language }) {
+function MessagesView({ operations, setPage, membership, language, onNavigationLockChange }) {
   const eligibleJobs = useMemo(
     () => operations.filter(hasActiveMessageAssignment),
     [operations]
@@ -515,6 +788,11 @@ function MessagesView({ operations, setPage, membership, language }) {
   const [teamOperations, setTeamOperations] = useState({});
   const [customerThreads, setCustomerThreads] = useState({});
   const [working, setWorking] = useState("");
+  const [pendingCustomerSend, setPendingCustomerSend] = useState(null);
+  const [customerNotice, setCustomerNotice] = useState("");
+  const pendingCustomerController = useRef(null);
+  const messageHistoryRef = useRef(null);
+  const keepLatestMessageVisible = useRef(true);
 
   const selected = eligibleJobs.find((item) => item.job.id === selectedJobId) || null;
   const selectedOperations = selected
@@ -523,12 +801,36 @@ function MessagesView({ operations, setPage, membership, language }) {
   const customerThread = customerThreads[selectedJobId] || {};
   const draftKey = selectedJobId ? `${selectedJobId}:${audience}` : "";
   const draft = drafts[draftKey] || "";
+  const teamMessages = selectedOperations?.messages || [];
+  const customerMessages = customerThread.conversation?.messages || [];
 
   useEffect(() => {
+    if (pendingCustomerSend) return;
     if (eligibleJobs.some((item) => item.job.id === selectedJobId)) return;
     setSelectedJobId(eligibleJobs[0]?.job.id || "");
     setAudience("team");
-  }, [eligibleJobs, selectedJobId]);
+  }, [eligibleJobs, pendingCustomerSend, selectedJobId]);
+
+  useEffect(() => () => {
+    pendingCustomerController.current?.cancel();
+    pendingCustomerController.current = null;
+  }, []);
+
+  useEffect(() => {
+    const locked = isFieldCustomerNavigationLocked(pendingCustomerSend);
+    onNavigationLockChange?.(locked);
+    return () => onNavigationLockChange?.(false);
+  }, [onNavigationLockChange, pendingCustomerSend?.phase]);
+
+  useEffect(() => {
+    keepLatestMessageVisible.current = true;
+  }, [audience, selectedJobId]);
+
+  useEffect(() => {
+    const history = messageHistoryRef.current;
+    if (!history || !keepLatestMessageVisible.current) return;
+    history.scrollTop = history.scrollHeight;
+  }, [audience, customerMessages.length, selectedJobId, teamMessages.length]);
 
   useEffect(() => {
     if (audience !== "customer" || !selected) return undefined;
@@ -579,13 +881,17 @@ function MessagesView({ operations, setPage, membership, language }) {
   }
 
   function selectJob(jobId) {
+    if (pendingCustomerSend) return;
     if (!eligibleJobs.some((item) => item.job.id === jobId)) return;
+    setCustomerNotice("");
     setSelectedJobId(jobId);
     updateRoute(jobId, audience);
   }
 
   function selectAudience(nextAudience) {
+    if (pendingCustomerSend) return;
     if (!selected || !["team", "customer"].includes(nextAudience)) return;
+    setCustomerNotice("");
     setAudience(nextAudience);
     updateRoute(selected.job.id, nextAudience);
   }
@@ -594,11 +900,19 @@ function MessagesView({ operations, setPage, membership, language }) {
     if (!draftKey) return;
     setDrafts((current) => ({ ...current, [draftKey]: value }));
     if (audience === "customer") {
+      setCustomerNotice("");
       setCustomerCommandKeys((current) => ({
         ...current,
         [selectedJobId]: "",
       }));
     }
+  }
+
+  function trackMessageHistoryPosition(event) {
+    const history = event.currentTarget;
+    const distanceFromBottom =
+      history.scrollHeight - history.scrollTop - history.clientHeight;
+    keepLatestMessageVisible.current = distanceFromBottom <= 72;
   }
 
   async function submitTeamMessage(event) {
@@ -639,71 +953,136 @@ function MessagesView({ operations, setPage, membership, language }) {
     }
   }
 
-  async function submitCustomerMessage(event) {
-    event.preventDefault();
-    if (!selected || !customerThread.conversation || !draft.trim()) return;
-    setWorking("customer");
-    const idempotencyKey =
-      customerCommandKeys[selectedJobId] ||
-      messageCommandKey("field-customer-message");
-    setCustomerCommandKeys((current) => ({
-      ...current,
-      [selectedJobId]: idempotencyKey,
-    }));
+  async function deliverPendingCustomerMessage(captured) {
+    setPendingCustomerSend((current) => current?.command === captured
+      ? { ...current, phase: "sending", remainingSeconds: 0 }
+      : current);
     try {
       const result = await sendFieldCustomerMessage(
-        selected.job.id,
+        captured.jobId,
         {
-          businessId: membership.businessId,
-          assignmentId: selected.assignment.id,
-          message: draft.trim(),
-          idempotencyKey,
+          businessId: captured.businessId,
+          assignmentId: captured.assignmentId,
+          message: captured.message,
+          idempotencyKey: captured.idempotencyKey,
         },
         setPage
       );
       const conversation = result.conversation || (
         await fetchFieldCustomerConversation(
-          selected.job.id,
+          captured.jobId,
           {
-            businessId: membership.businessId,
-            assignmentId: selected.assignment.id,
+            businessId: captured.businessId,
+            assignmentId: captured.assignmentId,
           },
           setPage
         )
       ).conversation;
       setCustomerThreads((current) => ({
         ...current,
-        [selected.job.id]: {
+        [captured.jobId]: {
           loading: false,
           error: "",
           conversation: conversation || null,
         },
       }));
-      updateDraft("");
       setCustomerCommandKeys((current) => ({
         ...current,
-        [selected.job.id]: "",
+        [captured.jobId]: "",
       }));
     } catch {
+      setDrafts((current) => ({
+        ...current,
+        [`${captured.jobId}:customer`]: captured.message,
+      }));
+      setCustomerCommandKeys((current) => ({
+        ...current,
+        [captured.jobId]: captured.idempotencyKey,
+      }));
+      setCustomerNotice(t("fieldMessageRestored", language));
       setCustomerThreads((current) => ({
         ...current,
-        [selected.job.id]: {
-          ...current[selected.job.id],
+        [captured.jobId]: {
+          ...current[captured.jobId],
           loading: false,
           error: t("fieldCustomerMessageFailed", language),
         },
       }));
     } finally {
-      setWorking("");
+      pendingCustomerController.current = null;
+      setPendingCustomerSend(null);
     }
   }
 
-  const teamMessages = selectedOperations?.messages || [];
-  const customerMessages = customerThread.conversation?.messages || [];
+  function submitCustomerMessage(event) {
+    event.preventDefault();
+    if (pendingCustomerSend || !selected || !customerThread.conversation || !draft.trim()) return;
+    const idempotencyKey =
+      customerCommandKeys[selectedJobId] ||
+      messageCommandKey("field-customer-message");
+    const command = captureFieldCustomerSend({
+      jobId: selected.job.id,
+      businessId: membership.businessId,
+      assignmentId: selected.assignment.id,
+      message: draft,
+      idempotencyKey,
+    });
+    if (!command) return;
+
+    setCustomerCommandKeys((current) => ({
+      ...current,
+      [command.jobId]: command.idempotencyKey,
+    }));
+    setDrafts((current) => ({
+      ...current,
+      [`${command.jobId}:customer`]: "",
+    }));
+    setCustomerNotice("");
+    setCustomerThreads((current) => ({
+      ...current,
+      [command.jobId]: {
+        ...current[command.jobId],
+        error: "",
+      },
+    }));
+    setPendingCustomerSend({
+      command,
+      phase: "countdown",
+      remainingSeconds: FIELD_CUSTOMER_UNDO_SECONDS,
+    });
+    pendingCustomerController.current = startFieldCustomerSendCountdown({
+      pending: command,
+      onTick: (remainingSeconds) => {
+        setPendingCustomerSend((current) => current?.command === command
+          ? { ...current, remainingSeconds }
+          : current);
+      },
+      onExpire: deliverPendingCustomerMessage,
+    });
+  }
+
+  function undoPendingCustomerMessage() {
+    const pending = pendingCustomerSend;
+    if (!pending || pending.phase !== "countdown") return;
+    if (!pendingCustomerController.current?.cancel()) return;
+    pendingCustomerController.current = null;
+    setDrafts((current) => ({
+      ...current,
+      [`${pending.command.jobId}:customer`]: pending.command.message,
+    }));
+    setCustomerCommandKeys((current) => ({
+      ...current,
+      [pending.command.jobId]: pending.command.idempotencyKey,
+    }));
+    setCustomerNotice(t("fieldMessageRestored", language));
+    setPendingCustomerSend(null);
+  }
+
   const composerDisabled =
     !selected ||
     !draft.trim() ||
     Boolean(working) ||
+    Boolean(pendingCustomerSend) ||
     (audience === "team"
       ? !selectedOperations
       : !customerThread.conversation || customerThread.loading);
@@ -730,7 +1109,7 @@ function MessagesView({ operations, setPage, membership, language }) {
               key={value}
               className={audience === value ? "is-active" : ""}
               aria-pressed={audience === value}
-              disabled={!selected}
+              disabled={!selected || Boolean(pendingCustomerSend)}
               onClick={() => selectAudience(value)}
             >
               {t(key, language)}
@@ -751,6 +1130,7 @@ function MessagesView({ operations, setPage, membership, language }) {
                   key={item.job.id}
                   className={item.job.id === selectedJobId ? "is-selected" : ""}
                   aria-pressed={item.job.id === selectedJobId}
+                  disabled={Boolean(pendingCustomerSend)}
                   onClick={() => selectJob(item.job.id)}
                 >
                   <strong>{item.job.title}</strong>
@@ -779,6 +1159,7 @@ function MessagesView({ operations, setPage, membership, language }) {
               <button
                 type="button"
                 className="field-messages-open-job"
+                disabled={Boolean(pendingCustomerSend)}
                 onClick={() => setPage(`employeeJobs?businessId=${membership.businessId}&jobId=${encodeURIComponent(selected.job.id)}`)}
               >
                 {t("fieldOpenJob", language)}
@@ -795,7 +1176,13 @@ function MessagesView({ operations, setPage, membership, language }) {
             </div>
 
             {audience === "team" ? (
-              <div className="field-messages-thread" aria-label={t("fieldInternalMessagesAria", language)}>
+              <div
+                ref={messageHistoryRef}
+                className="field-messages-thread"
+                data-scroll-region="message-history"
+                aria-label={t("fieldInternalMessagesAria", language)}
+                onScroll={trackMessageHistoryPosition}
+              >
                 {selectedOperations?.messageError && (
                   <div role="alert" className="field-messages-error">{selectedOperations.messageError}</div>
                 )}
@@ -814,7 +1201,13 @@ function MessagesView({ operations, setPage, membership, language }) {
                 )}
               </div>
             ) : (
-              <div className="field-messages-thread" aria-label={t("fieldCustomerMessages", language)}>
+              <div
+                ref={messageHistoryRef}
+                className="field-messages-thread"
+                data-scroll-region="message-history"
+                aria-label={t("fieldCustomerMessages", language)}
+                onScroll={trackMessageHistoryPosition}
+              >
                 {customerThread.error && (
                   <div role="alert" className="field-messages-error">{customerThread.error}</div>
                 )}
@@ -826,7 +1219,14 @@ function MessagesView({ operations, setPage, membership, language }) {
                     className={`field-messages-message field-messages-message--${String(message.author?.type || "BUSINESS").toLowerCase()}`}
                   >
                     <div>
-                      <strong>{customerAuthor(message, language)}</strong>
+                      <strong className="field-messages-author">
+                        <span>{customerAuthor(message, language)}</span>
+                        {message.author?.type === "FIELD_EMPLOYEE" ? (
+                          <span className="field-messages-employee-pill">
+                            {t("fieldEmployeeTag", language)}
+                          </span>
+                        ) : null}
+                      </strong>
                       <small>{when(message.createdAt, language)}</small>
                     </div>
                     <p>{message.text}</p>
@@ -838,6 +1238,47 @@ function MessagesView({ operations, setPage, membership, language }) {
                 ) : null}
               </div>
             )}
+
+            {audience === "customer" && pendingCustomerSend ? (
+              <div className="field-messages-pending-send" role="status" aria-live="polite">
+                <div>
+                  <strong>{t("fieldMessageSending", language)}</strong>
+                  {pendingCustomerSend.phase === "countdown" ? (
+                    <span>{t("fieldSendingInSeconds", language, { seconds: pendingCustomerSend.remainingSeconds })}</span>
+                  ) : (
+                    <span>{t("fieldSending", language)}</span>
+                  )}
+                </div>
+                {pendingCustomerSend.phase === "countdown" ? (
+                  <button type="button" onClick={undoPendingCustomerMessage}>
+                    {t("fieldUndo", language)}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
+            {audience === "customer" && customerNotice ? (
+              <div className="field-messages-notice" role="status">{customerNotice}</div>
+            ) : null}
+
+            {audience === "customer" ? (
+              <section className="field-messages-quick-updates" aria-label={t("fieldQuickCustomerUpdates", language)}>
+                <p className="field-messages-eyebrow">{t("fieldQuickCustomerUpdates", language)}</p>
+                <div>
+                  {QUICK_CUSTOMER_UPDATES.map((quickUpdate) => (
+                    <button
+                      type="button"
+                      key={quickUpdate.labelKey}
+                      disabled={Boolean(pendingCustomerSend) || !customerThread.conversation}
+                      onClick={() => updateDraft(t(quickUpdate.textKey, language))}
+                    >
+                      <MeetroIcon name="messages" size={15} decorative />
+                      {t(quickUpdate.labelKey, language)}
+                    </button>
+                  ))}
+                </div>
+              </section>
+            ) : null}
 
             <form
               className="field-messages-composer"
@@ -857,7 +1298,7 @@ function MessagesView({ operations, setPage, membership, language }) {
                   placeholder={audience === "team"
                     ? t("fieldWriteMessagePlaceholder", language)
                     : t("fieldWriteCustomerMessage", language)}
-                  disabled={!selected || (audience === "team" ? !selectedOperations : !customerThread.conversation)}
+                  disabled={!selected || Boolean(pendingCustomerSend) || (audience === "team" ? !selectedOperations : !customerThread.conversation)}
                 />
               </label>
               <button type="submit" disabled={composerDisabled}>

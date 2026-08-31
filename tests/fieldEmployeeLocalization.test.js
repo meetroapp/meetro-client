@@ -95,8 +95,10 @@ test("every Field Employee translation key is populated in all four supported la
     count: "{count}",
     language: "{language}",
     quantity: "{quantity}",
+    seconds: "{seconds}",
     status: "{status}",
     time: "{time}",
+    timeZone: "{timeZone}",
     version: "{version}",
   };
 

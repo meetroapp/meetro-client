@@ -58,16 +58,23 @@ test("field workspace renders only server projections and contains no local assi
   assert.doesNotMatch(pageSource, /localStorage|sessionStorage|meetroTeamMembers/);
 });
 
-test("field status and communication extend My Jobs with server-owned exact assignment authority", () => {
+test("field status and communication hubs use server-owned exact assignment authority", () => {
   assert.match(fieldApiSource, /\/employee\/jobs\/\$\{encodeURIComponent\(jobId\)\}\/field-status/);
   assert.match(fieldApiSource, /const surface = managed \? "team" : "employee"/);
   assert.match(fieldApiSource, /\/\$\{surface\}\/jobs\/\$\{encodeURIComponent\(jobId\)\}\/field-messages/);
   assert.match(pageSource, /fetchFieldOperations/);
   assert.match(pageSource, /updateFieldStatus/);
-  assert.match(pageSource, /sendFieldMessage/);
-  assert.match(pageSource, /fieldCustomersDoNotReceive/);
+  assert.doesNotMatch(pageSource, /sendFieldMessage/);
+  assert.doesNotMatch(pageSource, /operations\?*\.messages/);
+  assert.doesNotMatch(pageSource, /employee-field-message-form/);
+  assert.doesNotMatch(pageSource, /employee-field-message-list/);
+  assert.match(pageSource, /fieldCommunicationAssignedJob/);
   assert.match(pageSource, /fieldWorkMarkedComplete/);
-  assert.match(t("fieldCustomersDoNotReceive", "en"), /Customers do not receive these messages/);
+  assert.equal(t("fieldCommunication", "en"), "Communication");
+  assert.equal(
+    t("fieldCommunicationAssignedJob", "en"),
+    "Team and customer communication for this assigned Job."
+  );
   assert.match(t("fieldWorkMarkedComplete", "en"), /The Job stays open until the business completes it/);
   assert.doesNotMatch(fieldApiSource, /localStorage|sessionStorage|customerMessage|GPS|payroll/i);
 });

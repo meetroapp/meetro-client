@@ -371,6 +371,20 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
     : viewerRole === "business"
     ? "homeowner"
     : "business";
+  const delegatedDisplayName =
+    typeof message?.delegatedAuthor?.displayName === "string"
+      ? message.delegatedAuthor.displayName.trim()
+      : "";
+  const delegatedAuthor =
+    message?.delegatedAuthor?.type === "FIELD_EMPLOYEE" &&
+    message?.delegatedAuthor?.role === "FIELD_EMPLOYEE" &&
+    delegatedDisplayName
+      ? Object.freeze({
+          type: "FIELD_EMPLOYEE",
+          displayName: delegatedDisplayName,
+          role: "FIELD_EMPLOYEE",
+        })
+      : null;
 
   const normalized = {
     id: `canonical-message-${backendId}`,
@@ -402,6 +416,9 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
   if (paymentLifecycle) {
     normalized.paymentLifecycle = paymentLifecycle;
     normalized.reference = reference;
+  }
+  if (delegatedAuthor) {
+    normalized.delegatedAuthor = delegatedAuthor;
   }
   return normalized;
 }

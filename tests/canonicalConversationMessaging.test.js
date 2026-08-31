@@ -551,6 +551,58 @@ test("professional canonical message renders once for the homeowner", () => {
   assert.equal(messages[0].text, "I can help with this repair.");
 });
 
+test("canonical message normalization preserves only safe delegated employee attribution", () => {
+  const valid = normalizeCanonicalMessageCollection(
+    {
+      success: true,
+      conversationId: 91,
+      messages: [{
+        ...message(203, false, "I’m on my way."),
+        delegatedAuthor: {
+          type: "FIELD_EMPLOYEE",
+          displayName: "  Liam Molina  ",
+          role: "FIELD_EMPLOYEE",
+          actorUserId: 44,
+        },
+      }],
+    },
+    91,
+    "homeowner"
+  );
+  assert.deepEqual(valid[0].delegatedAuthor, {
+    type: "FIELD_EMPLOYEE",
+    displayName: "Liam Molina",
+    role: "FIELD_EMPLOYEE",
+  });
+  assert.deepEqual(Object.keys(valid[0].delegatedAuthor).sort(), ["displayName", "role", "type"]);
+
+  for (const delegatedAuthor of [
+    null,
+    { type: "BUSINESS", displayName: "Liam", role: "FIELD_EMPLOYEE" },
+    { type: "FIELD_EMPLOYEE", displayName: " ", role: "FIELD_EMPLOYEE" },
+    { type: "FIELD_EMPLOYEE", displayName: "Liam", role: "OWNER" },
+  ]) {
+    const [normalized] = normalizeCanonicalMessageCollection(
+      {
+        success: true,
+        conversationId: 91,
+        messages: [{ ...message(204, true, "Hello"), delegatedAuthor }],
+      },
+      91,
+      "business"
+    );
+    assert.equal(Object.hasOwn(normalized, "delegatedAuthor"), false);
+  }
+});
+
+test("ConversationThread limits the localized EMPLOYEE pill to server-attributed ordinary text", () => {
+  assert.match(threadSource, /msg\.type === "text" && msg\.delegatedAuthor/);
+  assert.match(threadSource, /msg\.delegatedAuthor\.displayName/);
+  assert.match(threadSource, /conversationDelegatedFieldEmployeeRole/);
+  assert.match(threadSource, /conversationEmployeeTag/);
+  assert.doesNotMatch(threadSource, /sender_id.*FIELD_EMPLOYEE|senderRole.*FIELD_EMPLOYEE/);
+});
+
 test("canonical message collection rejects mismatched or malformed responses", () => {
   assert.equal(
     normalizeCanonicalMessageCollection(

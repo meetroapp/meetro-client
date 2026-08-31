@@ -33,6 +33,8 @@ export default function EmployeeShell({
   roleLabel,
   brandLabel,
   accessLabel,
+  navigationLocked = false,
+  navigationLockReason = "",
 }) {
   const language = useLanguage();
   const employeeNavigationLabel = t("fieldEmployeeNavigation", language);
@@ -44,6 +46,7 @@ export default function EmployeeShell({
     >
       <aside
         className="employee-shell__rail"
+        data-scroll-region="employee-navigation"
         aria-label={employeeNavigationLabel}
       >
         <div className="employee-shell__brand">
@@ -70,10 +73,15 @@ export default function EmployeeShell({
           currentPage={currentPage}
           setPage={setPage}
           language={language}
+          navigationLocked={navigationLocked}
+          navigationLockReason={navigationLockReason}
         />
       </aside>
 
-      <div className="employee-shell__main">
+      <div
+        className="employee-shell__main"
+        data-scroll-region="employee-workspace"
+      >
         <header className="employee-shell__header">
           <div className="employee-shell__header-copy">
             <p>{roleLabel || t("fieldEmployeeRole", language)}</p>
@@ -81,14 +89,25 @@ export default function EmployeeShell({
             {description && <span>{description}</span>}
           </div>
 
-          <span className="employee-shell__access">
-            <MeetroIcon
-              name="customerRelationships"
-              size={17}
-              decorative
-            />
-            {accessLabel || t("fieldTeamAccess", language)}
-          </span>
+          <div className="employee-shell__header-actions">
+            <span className="employee-shell__access">
+              <MeetroIcon
+                name="customerRelationships"
+                size={17}
+                decorative
+              />
+              {accessLabel || t("fieldTeamAccess", language)}
+            </span>
+            {navigationLocked ? (
+              <span
+                id="employee-navigation-lock-reason"
+                className="employee-shell__navigation-lock"
+                role="status"
+              >
+                {navigationLockReason}
+              </span>
+            ) : null}
+          </div>
         </header>
 
         <main className="employee-shell__content">
@@ -99,6 +118,7 @@ export default function EmployeeShell({
       <nav
         className="employee-shell__mobile-nav"
         aria-label={employeeNavigationLabel}
+        aria-describedby={navigationLocked ? "employee-navigation-lock-reason" : undefined}
       >
         <EmployeeNav
           navigation={navigation}
@@ -107,6 +127,8 @@ export default function EmployeeShell({
           setPage={setPage}
           language={language}
           mobile
+          navigationLocked={navigationLocked}
+          navigationLockReason={navigationLockReason}
         />
       </nav>
     </div>
@@ -120,6 +142,8 @@ function EmployeeNav({
   setPage,
   language,
   mobile = false,
+  navigationLocked = false,
+  navigationLockReason = "",
 }) {
   return (
     <div
@@ -133,6 +157,8 @@ function EmployeeNav({
           ? { "--employee-nav-count": navigation.length }
           : undefined
       }
+      aria-disabled={navigationLocked}
+      aria-describedby={navigationLocked ? "employee-navigation-lock-reason" : undefined}
     >
       {navigation.map((item) => {
         const active = currentPage === item.route;
@@ -143,8 +169,11 @@ function EmployeeNav({
             key={item.route}
             className={active ? "is-active" : ""}
             aria-current={active ? "page" : undefined}
+            aria-disabled={navigationLocked}
+            disabled={navigationLocked}
+            title={navigationLocked ? navigationLockReason : undefined}
             onClick={() =>
-              setPage(routeFor(item, membership))
+              !navigationLocked && setPage(routeFor(item, membership))
             }
           >
             <MeetroIcon

@@ -13,7 +13,6 @@ import {
 } from "../utils/jobAssignmentApi";
 import {
   fetchFieldOperations,
-  sendFieldMessage,
   updateFieldStatus,
 } from "../utils/fieldOperationsApi";
 import {
@@ -923,7 +922,6 @@ function FieldOperationsPanel({
 }) {
   const language = useLanguage();
   const [operations, setOperations] = useState(null);
-  const [message, setMessage] = useState("");
   const [note, setNote] = useState("");
   const [loading, setLoading] = useState(true);
   const [working, setWorking] = useState("");
@@ -981,27 +979,6 @@ function FieldOperationsPanel({
       setNote("");
     } catch (statusError) {
       setError(statusError.message || t("fieldStatusUpdateFailed", language));
-    } finally {
-      setWorking("");
-    }
-  }
-
-  async function submitMessage(event) {
-    event.preventDefault();
-    if (!message.trim()) return;
-    setWorking("message");
-    setError("");
-    try {
-      await sendFieldMessage(job.id, {
-        businessId,
-        assignmentId: assignment.id,
-        message: message.trim(),
-        idempotencyKey: operationKey("field-message"),
-      }, { managed, setPage });
-      setMessage("");
-      await load();
-    } catch (messageError) {
-      setError(messageError.message || t("fieldMessageSendFailed", language));
     } finally {
       setWorking("");
     }
@@ -1168,11 +1145,11 @@ function FieldOperationsPanel({
 
                 <div>
                   <p className="employee-jobs-detail-label">
-                    {t("fieldTeamMessages", language)}
+                    {t("fieldCommunication", language)}
                   </p>
-                  <h4>{t("fieldMessageYourTeam", language)}</h4>
+                  <h4>{t("fieldCommunication", language)}</h4>
                   <span>
-                    {t("fieldCustomersDoNotReceive", language)}
+                    {t("fieldCommunicationAssignedJob", language)}
                   </span>
                 </div>
               </div>
@@ -1199,77 +1176,6 @@ function FieldOperationsPanel({
                     </button>
                   </div>
                 )}
-
-              <div
-                className="employee-field-message-list"
-                aria-label={t("fieldInternalMessagesAria", language)}
-              >
-                {(operations?.messages || []).length ? (
-                  operations.messages.map((item) => (
-                    <article
-                      key={item.id}
-                      className="employee-field-message"
-                    >
-                      <div className="employee-field-message-header">
-                        <strong>{item.senderName}</strong>
-
-                        <span>
-                          {roleLabel(item.senderRole, language)} ·{" "}
-                          {formatSchedule(item.createdAt, language)}
-                        </span>
-                      </div>
-
-                      <p>{item.message}</p>
-                    </article>
-                  ))
-                ) : (
-                  <div className="employee-field-no-messages">
-                    <MeetroIcon
-                      name="messages"
-                      size={22}
-                      decorative
-                    />
-                    <span>{t("fieldNoTeamMessages", language)}</span>
-                  </div>
-                )}
-              </div>
-
-              <form
-                onSubmit={submitMessage}
-                className="employee-field-message-form"
-              >
-                <label>
-                  <span>{t("fieldWriteMessage", language)}</span>
-
-                  <textarea
-                    value={message}
-                    onChange={(event) =>
-                      setMessage(event.target.value)
-                    }
-                    maxLength={5000}
-                    rows={3}
-                    placeholder={t("fieldWriteMessagePlaceholder", language)}
-                  />
-                </label>
-
-                <button
-                  type="submit"
-                  disabled={
-                    !message.trim() ||
-                    working === "message"
-                  }
-                >
-                  <MeetroIcon
-                    name="messages"
-                    size={18}
-                    decorative
-                  />
-
-                  {working === "message"
-                    ? t("fieldSending", language)
-                    : t("fieldSendMessage", language)}
-                </button>
-              </form>
             </section>
           </>
         )}
@@ -1282,7 +1188,7 @@ function FieldOperationsPanel({
       <div style={rowStyle}>
         <div>
           <p style={eyebrowStyle}>Field operations · {assignment.memberName || "Field Employee"}</p>
-          <h3 style={detailTitleStyle}>Status and internal Job communication</h3>
+          <h3 style={detailTitleStyle}>Field status</h3>
         </div>
         <span style={pillStyle}>{readableStatus(operations?.currentStatus)}</span>
       </div>
@@ -1309,31 +1215,6 @@ function FieldOperationsPanel({
           {!managed && !operations?.nextStatus && (
             <p role="status" style={completeStyle}>Field work has been reported complete. Business and customer completion remain separate.</p>
           )}
-          <div style={messageListStyle} aria-label="Internal Job messages">
-            {(operations?.messages || []).length ? operations.messages.map((item) => (
-              <article key={item.id} style={messageStyle}>
-                <strong>{item.senderName}</strong>
-                <span style={messageMetaStyle}>{roleLabel(item.senderRole)} · {formatSchedule(item.createdAt)}</span>
-                <p style={messageTextStyle}>{item.message}</p>
-              </article>
-            )) : <p style={detailCopyStyle}>No internal Job messages yet.</p>}
-          </div>
-          <form onSubmit={submitMessage} style={messageFormStyle}>
-            <label style={fieldLabelStyle}>
-              Message {managed ? assignment.memberName || "Field Employee" : "the business Team"}
-              <textarea
-                value={message}
-                onChange={(event) => setMessage(event.target.value)}
-                maxLength={5000}
-                rows={3}
-                style={textareaStyle}
-                placeholder="Internal Job communication only — customers do not receive this message"
-              />
-            </label>
-            <button type="submit" style={primaryButton} disabled={!message.trim() || working === "message"}>
-              {working === "message" ? "Sending…" : "Send internal message"}
-            </button>
-          </form>
         </>
       )}
     </div>
@@ -2080,13 +1961,7 @@ const operationsStyle = { borderTop: "1px solid #d7e5db", marginTop: 20, padding
 const statusActionStyle = { display: "flex", alignItems: "flex-end", gap: 12, margin: "14px 0", flexWrap: "wrap" };
 const fieldLabelStyle = { display: "grid", gap: 7, color: "#294c37", fontWeight: 700, flex: "1 1 260px" };
 const textInputStyle = { minHeight: 42, border: "1px solid #cbdacf", borderRadius: 10, padding: "9px 11px", color: "#183c27", background: "#fff" };
-const textareaStyle = { ...textInputStyle, minHeight: 82, resize: "vertical", fontFamily: "inherit" };
 const completeStyle = { padding: 12, borderRadius: 10, background: "#edf8ef", color: "#1a5d31", lineHeight: 1.5 };
-const messageListStyle = { display: "grid", gap: 8, maxHeight: 320, overflowY: "auto", margin: "16px 0" };
-const messageStyle = { padding: 12, border: "1px solid #e1eae3", borderRadius: 11, background: "#fbfdfb", color: "#294c37" };
-const messageMetaStyle = { display: "block", color: "#64776b", fontSize: 12, marginTop: 3 };
-const messageTextStyle = { margin: "8px 0 0", whiteSpace: "pre-wrap", lineHeight: 1.45 };
-const messageFormStyle = { display: "flex", alignItems: "flex-end", gap: 12, flexWrap: "wrap" };
 const inlineErrorStyle = { padding: 10, borderRadius: 9, background: "#fff4f2", color: "#8b2e2e", margin: "10px 0" };
 const timePanelStyle = { ...cardStyle };
 const timerActionStyle = { display: "flex", justifyContent: "space-between", alignItems: "flex-end", gap: 14, flexWrap: "wrap", margin: "16px 0" };

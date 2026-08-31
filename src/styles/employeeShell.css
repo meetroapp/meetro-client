@@ -13,7 +13,10 @@
   --employee-shadow:
     0 12px 30px rgba(17, 66, 42, 0.055);
 
-  min-height: 100dvh;
+  width: 100%;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
   background: var(--employee-page);
   color: var(--employee-text);
   display: grid;
@@ -21,9 +24,8 @@
 }
 
 .employee-shell__rail {
-  position: sticky;
-  top: 0;
   height: 100dvh;
+  min-height: 0;
   box-sizing: border-box;
   padding: 34px 20px 28px;
   overflow-y: auto;
@@ -172,7 +174,11 @@
 
 .employee-shell__main {
   min-width: 0;
-  min-height: 100dvh;
+  min-height: 0;
+  height: 100dvh;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   background:
     radial-gradient(
       circle at 92% 76%,
@@ -247,8 +253,35 @@
     inset 0 0 0 1px rgba(30, 97, 54, 0.035);
 }
 
+.employee-shell__header-actions {
+  min-width: 0;
+  display: grid;
+  justify-items: end;
+  gap: 8px;
+}
+
+.employee-shell__navigation-lock {
+  max-width: 290px;
+  padding: 7px 10px;
+  border: 1px solid #c6d9ca;
+  border-radius: 10px;
+  background: #f1f7f2;
+  color: #315c40;
+  font-size: 11px;
+  font-weight: 800;
+  line-height: 1.35;
+  text-align: right;
+}
+
+.employee-shell__nav button:disabled {
+  opacity: 0.52;
+  cursor: not-allowed;
+  transform: none;
+}
+
 .employee-shell__content {
   width: min(1180px, 100%);
+  min-width: 0;
   box-sizing: border-box;
   margin: 0 auto;
   padding:
@@ -509,10 +542,19 @@
 @media (max-width: 760px) {
   .employee-shell {
     display: block;
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
   }
 
   .employee-shell__rail {
     display: none;
+  }
+
+  .employee-shell__main {
+    height: auto;
+    min-height: 100dvh;
+    overflow: visible;
   }
 
   .employee-shell__header {
@@ -541,6 +583,16 @@
     padding: 7px 10px;
     margin-top: 2px;
     font-size: 10px;
+  }
+
+  .employee-shell__header-actions {
+    justify-items: end;
+  }
+
+  .employee-shell__navigation-lock {
+    max-width: 170px;
+    padding: 5px 7px;
+    font-size: 9px;
   }
 
   .employee-shell__access .meetro-icon {
@@ -651,6 +703,346 @@
   .employee-home__card--recent {
     min-height: 205px;
     grid-column: auto;
+  }
+}
+
+/* =========================================================
+   FIELD SCHEDULE — WEEK STRIP + DAY AGENDA
+   ========================================================= */
+
+.employee-schedule,
+.employee-schedule * {
+  box-sizing: border-box;
+}
+
+.employee-schedule {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 16px;
+}
+
+.employee-schedule__week-card,
+.employee-schedule__agenda-card,
+.employee-schedule__awaiting-card {
+  min-width: 0;
+  padding: 22px 24px;
+  border: 1px solid var(--employee-line);
+  border-radius: 20px;
+  background: var(--employee-surface);
+  box-shadow: var(--employee-shadow);
+}
+
+.employee-schedule__title-row {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 20px;
+}
+
+.employee-schedule__title-row h2,
+.employee-schedule__agenda-card h2,
+.employee-schedule__awaiting-card h2 {
+  margin: 5px 0 0;
+  color: var(--employee-text);
+}
+
+.employee-schedule__title-row > strong {
+  color: #315c40;
+  font-size: 14px;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.employee-schedule__eyebrow {
+  margin: 0;
+  color: #5b7d66;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.employee-schedule__week-controls {
+  margin-top: 18px;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  gap: 10px;
+}
+
+.employee-schedule__week-controls button,
+.employee-schedule__visit > button,
+.employee-schedule__awaiting-job > button {
+  min-height: 44px;
+  border: 1px solid #c6d9ca;
+  border-radius: 11px;
+  padding: 9px 13px;
+  background: #f8fbf9;
+  color: #145b34;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.employee-schedule__week-controls button:first-child {
+  justify-self: start;
+}
+
+.employee-schedule__week-controls button:last-child {
+  justify-self: end;
+}
+
+.employee-schedule__week-controls .employee-schedule__today {
+  border-color: #17663a;
+  background: #17663a;
+  color: #fff;
+}
+
+.employee-schedule__week-strip {
+  width: 100%;
+  min-width: 0;
+  margin-top: 15px;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.employee-schedule__day {
+  position: relative;
+  min-width: 0;
+  min-height: 92px;
+  border: 1px solid #d8e4da;
+  border-radius: 13px;
+  padding: 10px 6px 8px;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 3px;
+  background: #fbfdfb;
+  color: #486451;
+  font: inherit;
+  cursor: pointer;
+}
+
+.employee-schedule__day > span {
+  font-size: 10px;
+  font-weight: 850;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.employee-schedule__day > strong {
+  color: #173f29;
+  font-size: 20px;
+}
+
+.employee-schedule__day > small {
+  min-height: 15px;
+  color: #87958c;
+  font-size: 10px;
+}
+
+.employee-schedule__day > small.has-visits {
+  color: #17663a;
+  font-weight: 900;
+}
+
+.employee-schedule__day > em {
+  color: #367249;
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.employee-schedule__day.is-today {
+  border-color: #8fba9a;
+  background: #f2f8f3;
+}
+
+.employee-schedule__day.is-selected {
+  border-color: #17663a;
+  background: #17663a;
+  color: #dfeee2;
+  box-shadow: 0 7px 16px rgba(23, 102, 58, 0.18);
+}
+
+.employee-schedule__day.is-selected > strong,
+.employee-schedule__day.is-selected > small,
+.employee-schedule__day.is-selected > em {
+  color: #fff;
+}
+
+.employee-schedule__timezone {
+  margin: 12px 0 0;
+  color: #708078;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.employee-schedule__agenda-list,
+.employee-schedule__awaiting-list {
+  margin-top: 16px;
+  display: grid;
+  gap: 11px;
+}
+
+.employee-schedule__visit {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #dfe8e1;
+  border-radius: 15px;
+  display: grid;
+  grid-template-columns: minmax(135px, 0.25fr) minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 17px;
+  background: #fbfdfb;
+}
+
+.employee-schedule__visit-time,
+.employee-schedule__visit-copy,
+.employee-schedule__awaiting-job > div {
+  min-width: 0;
+  display: grid;
+  gap: 5px;
+}
+
+.employee-schedule__visit-time strong {
+  color: #164c2f;
+  font-size: 14px;
+}
+
+.employee-schedule__visit-time small,
+.employee-schedule__awaiting-job small {
+  color: #748279;
+  font-size: 10px;
+  overflow-wrap: anywhere;
+}
+
+.employee-schedule__visit h3,
+.employee-schedule__awaiting-job h3 {
+  margin: 0;
+  color: #183f2a;
+  font-size: 16px;
+  overflow-wrap: anywhere;
+}
+
+.employee-schedule__visit-copy > p,
+.employee-schedule__awaiting-job p {
+  margin: 0;
+  color: #64776b;
+  font-size: 12px;
+}
+
+.employee-schedule__visit-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.employee-schedule__visit-badges span {
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #e8f2ea;
+  color: #245638;
+  font-size: 9px;
+  font-weight: 850;
+}
+
+.employee-schedule__location {
+  overflow-wrap: anywhere;
+}
+
+.employee-schedule__empty {
+  margin-top: 15px;
+  padding: 17px;
+  border-radius: 13px;
+  background: #f5f8f6;
+  color: #66776d;
+  font-size: 13px;
+}
+
+.employee-schedule__awaiting-job {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid #e0e7e1;
+  border-radius: 15px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 16px;
+  background: #fbfcfb;
+}
+
+.employee-schedule__awaiting-job strong {
+  color: #8a5d18;
+  font-size: 11px;
+}
+
+.employee-schedule__awaiting-job span {
+  color: #52675a;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+@media (max-width: 760px) {
+  .employee-schedule {
+    gap: 13px;
+  }
+
+  .employee-schedule__week-card,
+  .employee-schedule__agenda-card,
+  .employee-schedule__awaiting-card {
+    padding: 18px 15px;
+    border-radius: 16px;
+  }
+
+  .employee-schedule__title-row {
+    display: grid;
+    gap: 9px;
+  }
+
+  .employee-schedule__title-row > strong {
+    font-size: 12px;
+  }
+
+  .employee-schedule__week-controls {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  .employee-schedule__week-controls button {
+    width: 100%;
+    padding: 7px 5px;
+    font-size: 10px;
+  }
+
+  .employee-schedule__week-strip {
+    grid-template-columns: none;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(68px, 1fr);
+    overflow-x: auto;
+    overscroll-behavior-inline: contain;
+    scrollbar-width: thin;
+    padding-bottom: 5px;
+  }
+
+  .employee-schedule__day {
+    min-height: 88px;
+  }
+
+  .employee-schedule__visit,
+  .employee-schedule__awaiting-job {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: stretch;
+  }
+
+  .employee-schedule__visit > button,
+  .employee-schedule__awaiting-job > button {
+    width: 100%;
   }
 }
 
@@ -788,6 +1180,12 @@
   box-shadow: inset 3px 0 0 var(--employee-green);
 }
 
+.field-messages-job-list button:disabled,
+.field-messages-open-job:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .field-messages-job-list strong,
 .field-messages-job-list span,
 .field-messages-job-list small {
@@ -802,7 +1200,16 @@
 }
 
 .field-messages-thread-card {
+  min-height: 0;
   padding: 20px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows:
+    auto
+    auto
+    minmax(260px, min(48dvh, 520px));
+  grid-auto-rows: max-content;
+  align-self: start;
   overflow: hidden;
 }
 
@@ -859,15 +1266,17 @@
 .field-messages-thread {
   width: 100%;
   min-width: 0;
-  min-height: 270px;
-  max-height: min(52dvh, 540px);
+  min-height: 0;
+  align-self: stretch;
   margin-top: 14px;
   padding: 4px 3px 4px 0;
   display: flex;
   flex-direction: column;
   gap: 10px;
+  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+  scrollbar-gutter: stable;
 }
 
 .field-messages-message {
@@ -906,6 +1315,26 @@
   font-size: 12px;
 }
 
+.field-messages-author {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.field-messages-employee-pill {
+  padding: 2px 6px;
+  border: 1px solid rgba(31, 77, 52, 0.22);
+  border-radius: 999px;
+  background: #dfeee2;
+  color: #1f4d34;
+  font-size: 9px;
+  font-weight: 900;
+  letter-spacing: 0.05em;
+  line-height: 1.3;
+}
+
 .field-messages-message small {
   color: #748279;
   font-size: 10px;
@@ -931,6 +1360,87 @@
   text-align: center;
   color: var(--employee-muted);
   background: #f7faf8;
+}
+
+.field-messages-quick-updates {
+  margin-top: 15px;
+  padding: 13px;
+  border: 1px solid #d8e5db;
+  border-radius: 14px;
+  background: #f7faf8;
+}
+
+.field-messages-quick-updates > div {
+  margin-top: 9px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+}
+
+.field-messages-quick-updates button {
+  min-height: 34px;
+  border: 1px solid #c6d9ca;
+  border-radius: 999px;
+  padding: 7px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #fff;
+  color: #245638;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.field-messages-quick-updates button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.field-messages-pending-send {
+  margin-top: 11px;
+  padding: 11px 13px;
+  border: 1px solid #bcd4c1;
+  border-radius: 13px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  background: #e9f4eb;
+  color: #1f4d34;
+}
+
+.field-messages-pending-send > div {
+  display: grid;
+  gap: 2px;
+}
+
+.field-messages-pending-send strong {
+  font-size: 12px;
+}
+
+.field-messages-pending-send span {
+  font-size: 11px;
+}
+
+.field-messages-pending-send button {
+  border: 1px solid #6f9879;
+  border-radius: 9px;
+  padding: 7px 11px;
+  background: #fff;
+  color: #1f4d34;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.field-messages-notice {
+  margin-top: 9px;
+  color: #386147;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .field-messages-error {
@@ -1033,6 +1543,13 @@
     border-radius: 16px;
   }
 
+  .field-messages-thread-card {
+    grid-template-rows:
+      auto
+      auto
+      minmax(220px, min(38dvh, 360px));
+  }
+
   .field-messages-job-list {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1042,8 +1559,7 @@
   }
 
   .field-messages-thread {
-    min-height: 220px;
-    max-height: none;
+    min-height: 0;
   }
 
   .field-messages-message {
@@ -2229,8 +2745,7 @@ input:focus-visible +
   gap: 7px;
 }
 
-.employee-field-note > span,
-.employee-field-message-form label > span {
+.employee-field-note > span {
   color: #294d38;
   font-size: 12px;
   font-weight: 800;
@@ -2248,8 +2763,7 @@ input:focus-visible +
   font: inherit;
 }
 
-.employee-field-note input:focus,
-.employee-field-message-form textarea:focus {
+.employee-field-note input:focus {
   border-color: #74a985;
   outline: 3px solid rgba(94, 159, 114, 0.13);
 }
@@ -2332,103 +2846,6 @@ input:focus-visible +
   font-size: 12px;
   font-weight: 850;
   cursor: pointer;
-}
-
-.employee-field-message-list {
-  margin-top: 16px;
-  display: grid;
-  gap: 9px;
-  max-height: 310px;
-  overflow-y: auto;
-}
-
-.employee-field-message {
-  padding: 13px 14px;
-  border: 1px solid #e0e8e2;
-  border-radius: 12px;
-  background: #fbfdfb;
-}
-
-.employee-field-message-header {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.employee-field-message-header strong {
-  color: #214a32;
-  font-size: 13px;
-}
-
-.employee-field-message-header span {
-  color: #75837b;
-  font-size: 11px;
-}
-
-.employee-field-message p {
-  margin: 8px 0 0;
-  color: #52675a;
-  font-size: 13px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-}
-
-.employee-field-no-messages {
-  min-height: 68px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 9px;
-  background: #f7faf8;
-  color: #6b7b72;
-  font-size: 13px;
-}
-
-.employee-field-message-form {
-  margin-top: 12px;
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 11px;
-}
-
-.employee-field-message-form label {
-  display: grid;
-  gap: 7px;
-}
-
-.employee-field-message-form textarea {
-  width: 100%;
-  min-height: 92px;
-  box-sizing: border-box;
-  border: 1px solid #cfdcd2;
-  border-radius: 11px;
-  padding: 11px 12px;
-  resize: vertical;
-  background: #fff;
-  color: #183c27;
-  font: inherit;
-}
-
-.employee-field-message-form button {
-  min-height: 48px;
-  border: 1px solid #116438;
-  border-radius: 11px;
-  padding: 10px 17px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  background: #116438;
-  color: #fff;
-  font-weight: 800;
-  cursor: pointer;
-}
-
-.employee-field-message-form button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 /* =========================================================
@@ -2692,14 +3109,6 @@ input:focus-visible +
     align-self: flex-start;
   }
 
-  .employee-field-message-form {
-    grid-template-columns: 1fr;
-  }
-
-  .employee-field-message-form button {
-    width: 100%;
-  }
-
   .employee-compact-time {
     padding: 20px 16px 17px;
   }
@@ -2726,10 +3135,6 @@ input:focus-visible +
     justify-content: flex-start;
   }
 
-  .employee-field-message-header {
-    flex-direction: column;
-    gap: 3px;
-  }
 }
 
 

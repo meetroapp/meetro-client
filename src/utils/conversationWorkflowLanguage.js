@@ -75,6 +75,8 @@ const rows = [
   ["conversationCanonicalMessageRequired", "Enter a message.", "Escribe un mensaje.", "Saisissez un message.", "Digite uma mensagem."],
   ["conversationCanonicalMessageTooLong", "Messages must be 5,000 characters or fewer.", "Los mensajes deben tener 5,000 caracteres o menos.", "Les messages doivent contenir 5 000 caractères ou moins.", "As mensagens devem ter 5.000 caracteres ou menos."],
   ["conversationCanonicalSendFailed", "Message could not be sent. Try again.", "No se pudo enviar el mensaje. Inténtalo de nuevo.", "Impossible d'envoyer le message. Réessayez.", "Não foi possível enviar a mensagem. Tente novamente."],
+  ["conversationDelegatedFieldEmployeeRole", "Field Employee", "Empleado de campo", "Employé de terrain", "Funcionário de campo"],
+  ["conversationEmployeeTag", "EMPLOYEE", "EMPLEADO", "EMPLOYÉ", "FUNCIONÁRIO"],
   ["conversationCustomerApprovalRequired", "Customer approval required", "Requiere aprobación del cliente", "Approbation du client requise", "Aprovação do cliente necessária"],
   ["conversationMaterialsSent", "Materials sent to customer", "Materiales enviados al cliente", "Matériaux envoyés au client", "Materiais enviados ao cliente"],
   ["conversationTicketCreated", "Ticket Created", "Ticket creado", "Ticket créé", "Chamado criado"],

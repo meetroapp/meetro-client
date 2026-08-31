@@ -7345,6 +7345,17 @@ const handleImageUpload = (event) => {
                     setActiveMessageId(activeMessageId === msg.id ? null : msg.id);
                   }}
                 >
+                  {msg.type === "text" && msg.delegatedAuthor ? (
+                    <div style={delegatedAuthorLine}>
+                      <span>
+                        {msg.delegatedAuthor.displayName} · {t("conversationDelegatedFieldEmployeeRole", language)}
+                      </span>
+                      <span style={delegatedAuthorPill}>
+                        {t("conversationEmployeeTag", language)}
+                      </span>
+                    </div>
+                  ) : null}
+
                   {msg.replyTo && (
                     <div style={mine ? replyPreviewMine : replyPreviewTheirs}>
                       <strong>
@@ -8519,6 +8530,29 @@ const embeddedPhone = {
 const messageTextBlock = {
   whiteSpace: "pre-wrap",
   lineHeight: 1.5,
+};
+
+const delegatedAuthorLine = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: "6px",
+  marginBottom: "7px",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "11px",
+  fontWeight: "800",
+  lineHeight: 1.35,
+};
+
+const delegatedAuthorPill = {
+  padding: "2px 6px",
+  border: "1px solid rgba(31, 77, 52, 0.22)",
+  borderRadius: "999px",
+  background: "var(--meetro-color-sage, #dfeee2)",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "9px",
+  fontWeight: "900",
+  letterSpacing: "0.05em",
 };
 
 const messagesScroll = {

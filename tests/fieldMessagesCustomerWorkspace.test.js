@@ -18,6 +18,10 @@ const fieldApiSource = readFileSync("src/utils/fieldOperationsApi.js", "utf8");
 const fieldCss = readFileSync("src/styles/employeeShell.css", "utf8");
 const messagesInboxSource = readFileSync("src/pages/MessagesInbox.jsx", "utf8");
 const conversationThreadSource = readFileSync("src/pages/ConversationThread.jsx", "utf8");
+const fieldOperationsSource = jobsSource.slice(
+  jobsSource.indexOf("function FieldOperationsPanel"),
+  jobsSource.indexOf("const TIME_CATEGORY_LABEL_KEYS")
+);
 
 const JOB_ID = "072c8736-5d97-4253-ba3e-dd1bce281a20";
 const ASSIGNMENT_ID = "a7c9a660-c087-4af1-b139-8d77f8d69b33";
@@ -152,6 +156,9 @@ test("Customer projection renders server author types and employee attribution w
   assert.match(portalSource, /type === "CUSTOMER"/);
   assert.match(portalSource, /message\.author\.displayName/);
   assert.match(portalSource, /message\.author\?\.type/);
+  assert.match(portalSource, /message\.author\?\.type === "FIELD_EMPLOYEE"/);
+  assert.match(portalSource, /fieldEmployeeTag/);
+  assert.match(portalSource, /field-messages-employee-pill/);
   assert.doesNotMatch(portalSource, /message\.senderId|message\.receiverId|sender_id|receiver_id/);
   assert.doesNotMatch(portalSource, /quote|invoice|deposit|payment|workflow_payload/i);
 });
@@ -161,21 +168,92 @@ test("composers state the audience and preserve Customer text on failure", () =>
   assert.match(portalSource, /fieldVisibleToCustomer/);
   assert.match(portalSource, /fieldWriteCustomerMessage/);
   assert.match(portalSource, /fieldSendToCustomer/);
-  const customerSubmit = portalSource.slice(
-    portalSource.indexOf("async function submitCustomerMessage"),
-    portalSource.indexOf("const teamMessages")
+  const customerDelivery = portalSource.slice(
+    portalSource.indexOf("async function deliverPendingCustomerMessage"),
+    portalSource.indexOf("function submitCustomerMessage")
   );
-  assert.match(customerSubmit, /result\.conversation/);
-  assert.match(customerSubmit, /fieldCustomerMessageFailed/);
-  const failureBranch = customerSubmit.slice(customerSubmit.indexOf("} catch"));
-  assert.doesNotMatch(failureBranch, /updateDraft\(""\)/);
+  assert.match(customerDelivery, /result\.conversation/);
+  assert.match(customerDelivery, /fieldCustomerMessageFailed/);
+  assert.match(customerDelivery, /captured\.message/);
+  assert.match(customerDelivery, /captured\.idempotencyKey/);
+  assert.match(customerDelivery, /fieldMessageRestored/);
+});
+
+test("Quick Customer Updates are localized prefill-only controls in Customer mode", () => {
+  assert.match(portalSource, /audience === "customer" \? \([\s\S]*fieldQuickCustomerUpdates/);
+  for (const key of [
+    "fieldQuickOnMyWayText",
+    "fieldQuick15MinAwayText",
+    "fieldQuick30MinAwayText",
+    "fieldQuickRunningLateText",
+    "fieldQuickArrivedText",
+    "fieldQuickNeedAccessText",
+  ]) {
+    assert.match(portalSource, new RegExp(key));
+  }
+  const quickUpdateUi = portalSource.slice(
+    portalSource.indexOf('<section className="field-messages-quick-updates"'),
+    portalSource.indexOf("</section>", portalSource.indexOf('<section className="field-messages-quick-updates"'))
+  );
+  assert.match(quickUpdateUi, /updateDraft\(t\(quickUpdate\.textKey, language\)\)/);
+  assert.doesNotMatch(quickUpdateUi, /sendFieldCustomerMessage|sendFieldMessage|updateFieldStatus/);
+});
+
+test("Customer send schedules one captured command while Team send remains immediate", () => {
+  const scheduleBlock = portalSource.slice(
+    portalSource.indexOf("function submitCustomerMessage"),
+    portalSource.indexOf("function undoPendingCustomerMessage")
+  );
+  assert.match(scheduleBlock, /if \(pendingCustomerSend/);
+  assert.match(scheduleBlock, /captureFieldCustomerSend/);
+  assert.match(scheduleBlock, /startFieldCustomerSendCountdown/);
+  assert.doesNotMatch(scheduleBlock, /sendFieldCustomerMessage/);
+  assert.match(portalSource, /pendingCustomerController\.current\?\.cancel\(\)/);
+  assert.match(portalSource, /\[selectedJobId\]: ""/);
+  assert.match(portalSource, /\[captured\.jobId\]: captured\.idempotencyKey/);
+  assert.match(portalSource, /\[captured\.jobId\]: ""/);
+  assert.match(portalSource, /setPendingCustomerSend\(null\)/);
+  assert.match(portalSource, /disabled=\{!selected \|\| Boolean\(pendingCustomerSend\)\}/);
+  assert.match(portalSource, /disabled=\{Boolean\(pendingCustomerSend\)\}/);
+  assert.match(portalSource, /disabled=\{Boolean\(pendingCustomerSend\) \|\| !customerThread\.conversation\}/);
+
+  const teamSendBlock = portalSource.slice(
+    portalSource.indexOf("async function submitTeamMessage"),
+    portalSource.indexOf("async function deliverPendingCustomerMessage")
+  );
+  assert.match(teamSendBlock, /await sendFieldMessage/);
+  assert.doesNotMatch(teamSendBlock, /startFieldCustomerSendCountdown|pendingCustomerSend/);
+  assert.doesNotMatch(portalSource, /updateFieldStatus/);
 });
 
 test("My Jobs deep-links exact active assignments to Team or Customer Field Messages", () => {
+  assert.match(
+    fieldOperationsSource,
+    /assignment\.state === "ACTIVE" &&[\s\S]*assignment\.memberStatus === "ACTIVE"[\s\S]*assignment\.memberRole === "FIELD_EMPLOYEE"[\s\S]*employee-field-message-hub-actions/
+  );
   assert.match(jobsSource, /employeeMessages\?businessId=\$\{businessId\}&jobId=\$\{encodeURIComponent\(job\.id\)\}&audience=team/);
   assert.match(jobsSource, /employeeMessages\?businessId=\$\{businessId\}&jobId=\$\{encodeURIComponent\(job\.id\)\}&audience=customer/);
   assert.match(jobsSource, /fieldOpenTeamMessages/);
   assert.match(jobsSource, /fieldOpenCustomerMessages/);
+  assert.equal((fieldOperationsSource.match(/employee-field-message-hub-actions/g) || []).length, 1);
+});
+
+test("My Jobs has no inline Team history, empty state, composer, or send action", () => {
+  assert.doesNotMatch(fieldOperationsSource, /sendFieldMessage/);
+  assert.doesNotMatch(fieldOperationsSource, /operations\?*\.messages/);
+  assert.doesNotMatch(fieldOperationsSource, /fieldNoTeamMessages|fieldInternalMessagesAria/);
+  assert.doesNotMatch(fieldOperationsSource, /employee-field-message-list|employee-field-message-form/);
+  assert.doesNotMatch(fieldOperationsSource, /<textarea|submitMessage|working === "message"/);
+  assert.match(fieldOperationsSource, /fieldCommunicationAssignedJob/);
+});
+
+test("My Jobs preserves status evidence notes and transition behavior", () => {
+  assert.match(fieldOperationsSource, /fieldOptionalNote/);
+  assert.match(fieldOperationsSource, /value=\{note\}/);
+  assert.match(fieldOperationsSource, /note: note\.trim\(\) \|\| null/);
+  assert.match(fieldOperationsSource, /toStatus: operations\.nextStatus/);
+  assert.match(fieldOperationsSource, /await updateFieldStatus/);
+  assert.equal(t("fieldOptionalNote", "en"), "Add a note (optional)");
 });
 
 test("all new Field Messages copy has EN, ES, FR, and PT-BR parity", () => {
@@ -193,6 +271,21 @@ test("all new Field Messages copy has EN, ES, FR, and PT-BR parity", () => {
     "fieldCustomerMessageFailed",
     "fieldSelectJob",
     "fieldAssignedJob",
+    "fieldEmployeeTag",
+    "fieldQuickCustomerUpdates",
+    "fieldQuickOnMyWayText",
+    "fieldQuick15MinAwayText",
+    "fieldQuick30MinAwayText",
+    "fieldQuickRunningLateText",
+    "fieldQuickArrivedText",
+    "fieldQuickNeedAccessText",
+    "fieldSendingInSeconds",
+    "fieldUndo",
+    "fieldMessageRestored",
+    "fieldMessageSending",
+    "fieldPendingNavigationLocked",
+    "fieldCommunication",
+    "fieldCommunicationAssignedJob",
   ];
   for (const language of ["en", "es", "fr", "pt-BR"]) {
     for (const key of keys) {
@@ -202,6 +295,12 @@ test("all new Field Messages copy has EN, ES, FR, and PT-BR parity", () => {
   }
   assert.equal(t("fieldPrivateToTeam", "en"), "Private to your team");
   assert.equal(t("fieldVisibleToCustomer", "en"), "Visible to customer");
+  assert.equal(t("fieldQuickOnMyWayText", "en"), "I’m on my way to your location.");
+  assert.equal(t("fieldQuick15MinAwayText", "en"), "I’m on my way and expect to arrive in about 15 minutes.");
+  assert.equal(t("fieldQuick30MinAwayText", "en"), "I’m on my way and expect to arrive in about 30 minutes.");
+  assert.equal(t("fieldQuickRunningLateText", "en"), "I’m running a little behind schedule. I’ll keep you updated on my arrival time.");
+  assert.equal(t("fieldQuickArrivedText", "en"), "I’ve arrived at the property.");
+  assert.equal(t("fieldQuickNeedAccessText", "en"), "I’m at the property and need assistance accessing the service area.");
 });
 
 test("Field Messages is responsive without coupling to Business Communication Center layout", () => {
