@@ -8,6 +8,7 @@ import {
   isEmployeeAppRoute,
   resolvePrimaryTeamExperience,
 } from "../src/utils/teamRoleExperience.js";
+import { t } from "../src/utils/language.js";
 
 const appSource = readFileSync("src/App.jsx", "utf8");
 const shellSource = readFileSync("src/components/EmployeeShell.jsx", "utf8");
@@ -60,21 +61,33 @@ test("employee application routes and seven-item navigation are explicit", () =>
     assert.equal(isRecognizedApplicationHash(`#${route}`), true);
     assert.equal(isEmployeeAppRoute(route), true);
   }
-  for (const label of ["Home", "My Jobs", "Schedule", "Time", "Messages", "Alerts", "Profile"]) {
-    assert.match(shellSource, new RegExp(`label: "${label}"`));
+  for (const [key, label] of [
+    ["fieldNavHome", "Home"],
+    ["fieldNavMyJobs", "My Jobs"],
+    ["fieldNavSchedule", "Schedule"],
+    ["fieldNavTime", "Time"],
+    ["fieldNavMessages", "Messages"],
+    ["fieldNavAlerts", "Alerts"],
+    ["fieldNavProfile", "Profile"],
+  ]) {
+    assert.match(shellSource, new RegExp(`labelKey: "${key}"`));
+    assert.equal(t(key, "en"), label);
   }
+  assert.match(shellSource, /useLanguage/);
   assert.match(appSource, /Preparing your Team workspace/);
   assert.match(appSource, /Opening your role-aware workspace/);
   assert.match(appSource, /Team access could not be verified/);
 });
 
 test("Field Home and Profile present role-aware operational facts without Business billing", () => {
-  for (const phrase of ["Current assignment", "Today’s work", "Next field action", "Current timer", "Recent internal update"]) {
-    assert.match(employeePortalSource, new RegExp(phrase));
+  for (const key of ["fieldCurrentAssignment", "fieldTodaysWork", "fieldNextAction", "fieldCurrentTimer", "fieldRecentUpdate"]) {
+    assert.match(employeePortalSource, new RegExp(key));
+    assert.ok(t(key, "en"));
   }
-  assert.match(employeePortalSource, /Team Access/);
-  assert.match(employeePortalSource, /Field Employee/);
-  assert.match(employeePortalSource, /Access managed by your business/);
+  assert.match(employeePortalSource, /fieldProfileTeamAccess/);
+  assert.match(employeePortalSource, /fieldEmployeeRole/);
+  assert.match(employeePortalSource, /fieldProfileAccessManaged/);
+  assert.equal(t("fieldEmployeeRole", "en"), "Field Employee");
   assert.doesNotMatch(employeePortalSource, /Starter|Growth|Professional Plan|Manage Subscription/);
 });
 

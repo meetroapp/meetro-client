@@ -108,17 +108,19 @@ test("Personal Work preference is identity-scoped UI state, not Team authority",
 });
 
 test("Field Employee Profile exposes explicit Personal and Work choices", () => {
-  assert.match(employeePortalSource, /Using Meetro as/);
-  assert.match(employeePortalSource, /Work — \{businessName\}/);
-  assert.match(employeePortalSource, />\s*Personal\s*</);
+  assert.match(employeePortalSource, /fieldUsingMeetroAs/);
+  assert.match(employeePortalSource, /fieldWorkExperience/);
+  assert.match(employeePortalSource, /fieldPersonalExperience/);
   assert.match(
     employeePortalSource,
-    /Switching views does not\s+change your Team permissions/
+    /fieldExperienceIdentityCopy/
   );
   assert.match(
     employeePortalSource,
     /requestTeamExperienceMode/
   );
+  assert.match(employeePortalSource, /SUPPORTED_LANGUAGES\.map/);
+  assert.match(employeePortalSource, /setLanguage\(option\.code\)/);
 });
 
 test("Personal Profile exposes active Work access for the same identity", () => {

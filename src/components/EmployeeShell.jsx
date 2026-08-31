@@ -1,14 +1,16 @@
 import MeetroIcon from "./MeetroIcon";
+import useLanguage from "../hooks/useLanguage";
+import { t } from "../utils/language";
 import "../styles/employeeShell.css";
 
 const EMPLOYEE_NAV_ITEMS = Object.freeze([
-  { route: "employeeHome", label: "Home", icon: "home" },
-  { route: "employeeJobs", label: "My Jobs", icon: "businessTools" },
-  { route: "employeeSchedule", label: "Schedule", icon: "schedule" },
-  { route: "employeeTime", label: "Time", icon: "jobHistory" },
-  { route: "employeeMessages", label: "Messages", icon: "messages" },
-  { route: "employeeAlerts", label: "Alerts", icon: "notifications" },
-  { route: "employeeProfile", label: "Profile", icon: "profile" },
+  { route: "employeeHome", labelKey: "fieldNavHome", icon: "home" },
+  { route: "employeeJobs", labelKey: "fieldNavMyJobs", icon: "businessTools" },
+  { route: "employeeSchedule", labelKey: "fieldNavSchedule", icon: "schedule" },
+  { route: "employeeTime", labelKey: "fieldNavTime", icon: "jobHistory" },
+  { route: "employeeMessages", labelKey: "fieldNavMessages", icon: "messages" },
+  { route: "employeeAlerts", labelKey: "fieldNavAlerts", icon: "notifications" },
+  { route: "employeeProfile", labelKey: "fieldNavProfile", icon: "profile" },
 ]);
 
 function routeFor(item, membership) {
@@ -28,10 +30,13 @@ export default function EmployeeShell({
   description,
   children,
   navigation = EMPLOYEE_NAV_ITEMS,
-  roleLabel = "Field Employee",
-  brandLabel = "Field",
-  accessLabel = "Team access",
+  roleLabel,
+  brandLabel,
+  accessLabel,
 }) {
+  const language = useLanguage();
+  const employeeNavigationLabel = t("fieldEmployeeNavigation", language);
+
   return (
     <div
       className="employee-shell"
@@ -39,7 +44,7 @@ export default function EmployeeShell({
     >
       <aside
         className="employee-shell__rail"
-        aria-label="Employee navigation"
+        aria-label={employeeNavigationLabel}
       >
         <div className="employee-shell__brand">
           <span
@@ -51,12 +56,12 @@ export default function EmployeeShell({
 
           <div className="employee-shell__brand-copy">
             <strong>Meetro</strong>
-            <small>{brandLabel}</small>
+            <small>{brandLabel || t("fieldBrand", language)}</small>
           </div>
         </div>
 
         <p className="employee-shell__business">
-          {membership?.businessName || "Your business"}
+          {membership?.businessName || t("fieldYourBusiness", language)}
         </p>
 
         <EmployeeNav
@@ -64,13 +69,14 @@ export default function EmployeeShell({
           membership={membership}
           currentPage={currentPage}
           setPage={setPage}
+          language={language}
         />
       </aside>
 
       <div className="employee-shell__main">
         <header className="employee-shell__header">
           <div className="employee-shell__header-copy">
-            <p>{roleLabel}</p>
+            <p>{roleLabel || t("fieldEmployeeRole", language)}</p>
             <h1>{title}</h1>
             {description && <span>{description}</span>}
           </div>
@@ -81,7 +87,7 @@ export default function EmployeeShell({
               size={17}
               decorative
             />
-            {accessLabel}
+            {accessLabel || t("fieldTeamAccess", language)}
           </span>
         </header>
 
@@ -92,13 +98,14 @@ export default function EmployeeShell({
 
       <nav
         className="employee-shell__mobile-nav"
-        aria-label="Employee navigation"
+        aria-label={employeeNavigationLabel}
       >
         <EmployeeNav
           navigation={navigation}
           membership={membership}
           currentPage={currentPage}
           setPage={setPage}
+          language={language}
           mobile
         />
       </nav>
@@ -111,6 +118,7 @@ function EmployeeNav({
   membership,
   currentPage,
   setPage,
+  language,
   mobile = false,
 }) {
   return (
@@ -144,7 +152,11 @@ function EmployeeNav({
               size={mobile ? 18 : 20}
               decorative
             />
-            <strong>{item.label}</strong>
+            <strong>
+              {item.labelKey
+                ? t(item.labelKey, language)
+                : item.label}
+            </strong>
           </button>
         );
       })}

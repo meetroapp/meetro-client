@@ -47,11 +47,14 @@ test("client APIs preserve separate management, assigned Jobs, and Schedule auth
 test("field workspace renders only server projections and contains no local assignment authority", () => {
   assert.match(pageSource, /fetchEmployeeJobs/);
   assert.match(pageSource, /fetchEmployeeSchedule/);
-  assert.match(pageSource, /Approved work/);
-  assert.match(pageSource, /Photos and documents/);
-  assert.match(pageSource, /Upcoming visits/);
-  assert.match(pageSource, /Schedule/);
-  assert.match(pageSource, /Service location/);
+  assert.match(pageSource, /fieldApprovedWork/);
+  assert.match(pageSource, /fieldPhotosDocuments/);
+  assert.match(pageSource, /fieldUpcomingVisits/);
+  assert.match(pageSource, /fieldSchedule/);
+  assert.match(pageSource, /fieldServiceLocationPending/);
+  assert.equal(t("fieldApprovedWork", "en"), "Approved work");
+  assert.equal(t("fieldPhotosDocuments", "en"), "Photos and documents");
+  assert.equal(t("fieldUpcomingVisits", "en"), "Upcoming visits");
   assert.doesNotMatch(pageSource, /localStorage|sessionStorage|meetroTeamMembers/);
 });
 
@@ -62,8 +65,10 @@ test("field status and communication extend My Jobs with server-owned exact assi
   assert.match(pageSource, /fetchFieldOperations/);
   assert.match(pageSource, /updateFieldStatus/);
   assert.match(pageSource, /sendFieldMessage/);
-  assert.match(pageSource, /Customers do not receive these messages/);
-  assert.match(pageSource, /The Job stays open until the business completes it/);
+  assert.match(pageSource, /fieldCustomersDoNotReceive/);
+  assert.match(pageSource, /fieldWorkMarkedComplete/);
+  assert.match(t("fieldCustomersDoNotReceive", "en"), /Customers do not receive these messages/);
+  assert.match(t("fieldWorkMarkedComplete", "en"), /The Job stays open until the business completes it/);
   assert.doesNotMatch(fieldApiSource, /localStorage|sessionStorage|customerMessage|GPS|payroll/i);
 });
 
@@ -96,13 +101,15 @@ test("assignment lifecycle Alert copy is permanent across all supported language
 });
 
 test("employee Job workspace exposes governed Clock In and Clock Out without payroll or canonical completion", () => {
-  assert.match(pageSource, /Time tracking/);
-  assert.match(pageSource, /Clock In/);
-  assert.match(pageSource, /Clock Out/);
-  assert.match(pageSource, /Meetro records the official time when you clock in or out/);
-  assert.match(pageSource, /Add location when I clock in or out/);
-  assert.match(pageSource, /Time history/);
-  assert.match(pageSource, /Clocking out does not mark the Job complete/);
+  assert.match(pageSource, /fieldTimeTracking/);
+  assert.match(pageSource, /fieldClockIn/);
+  assert.match(pageSource, /fieldClockOut/);
+  assert.match(pageSource, /fieldOfficialTimeCopy/);
+  assert.match(pageSource, /fieldAddLocationCompact/);
+  assert.match(pageSource, /fieldTimeHistory/);
+  assert.match(pageSource, /fieldClockOutDoesNotComplete/);
+  assert.equal(t("fieldOfficialTimeCopy", "en"), "Meetro records the official time when you clock in or out.");
+  assert.equal(t("fieldClockOutDoesNotComplete", "en"), "Clocking out does not mark the Job complete.");
   assert.match(pageSource, /Payroll, wages, taxes, and customer billing are not calculated here/);
   assert.match(timeApiSource, /\/employee\/time\/clock-in/);
   assert.match(timeApiSource, /\/employee\/time\/clock-out/);

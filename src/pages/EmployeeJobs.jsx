@@ -3,6 +3,8 @@ import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
 import EmployeeShell from "../components/EmployeeShell";
 import MeetroIcon from "../components/MeetroIcon";
+import useLanguage from "../hooks/useLanguage";
+import { t } from "../utils/language";
 import {
   fetchEmployeeJobs,
   fetchEmployeeSchedule,
@@ -31,8 +33,8 @@ function routeValue(name) {
   }
 }
 
-function roleLabel(role) {
-  if (role === "FIELD_EMPLOYEE") return "Field Employee";
+function roleLabel(role, language) {
+  if (role === "FIELD_EMPLOYEE") return t("fieldEmployeeRole", language);
   if (role === "BOOKKEEPER_FINANCE") return "Bookkeeper / Finance";
   if (role === "MANAGER") return "Manager";
   return role === "OWNER" ? "Owner" : role || "Team member";
@@ -43,28 +45,29 @@ function assignmentCommandKey() {
   return `job-assignment-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function formatSchedule(value) {
-  if (!value) return "Time pending";
+function formatSchedule(value, language) {
+  if (!value) return t("fieldTimePending", language);
   const date = new Date(value);
   return Number.isNaN(date.getTime())
-    ? "Time pending"
-    : new Intl.DateTimeFormat(undefined, {
+    ? t("fieldTimePending", language)
+    : new Intl.DateTimeFormat(language, {
         dateStyle: "medium",
         timeStyle: "short",
       }).format(date);
 }
 
-function locationText(location) {
+function locationText(location, language) {
   const address = location?.address;
   if (address) {
     return [address.line1, address.city, address.region, address.postalCode]
       .filter(Boolean)
       .join(", ");
   }
-  return location?.serviceArea || "Service location is available when confirmed.";
+  return location?.serviceArea || t("fieldServiceLocationPending", language);
 }
 
 function EmployeeJobs({ setPage, roleMembership = null }) {
+  const language = useLanguage();
   const [authority, setAuthority] = useState(() => roleMembership ? { memberships: [roleMembership] } : null);
   const [workspace, setWorkspace] = useState(null);
   const [team, setTeam] = useState(null);
@@ -161,11 +164,11 @@ function EmployeeJobs({ setPage, roleMembership = null }) {
         );
       }
     } catch (loadError) {
-      setError(loadError.message || "The employee workspace is unavailable.");
+      setError(loadError.message || t("fieldJobsUnavailable", language));
     } finally {
       setLoading(false);
     }
-  }, [setPage]);
+  }, [language, setPage]);
 
   useEffect(() => {
     const timer = window.setTimeout(loadWorkspace, 0);
@@ -234,7 +237,11 @@ function EmployeeJobs({ setPage, roleMembership = null }) {
       {notice && <div role="status" style={noticeStyle}>{notice}</div>}
 
       {loading ? (
-        <div role="status" style={cardStyle}>Loading server-owned Job authority…</div>
+        <div role="status" style={cardStyle}>
+          {selectedMembership?.role === "FIELD_EMPLOYEE"
+            ? t("fieldJobsLoading", language)
+            : "Loading server-owned Job authority…"}
+        </div>
       ) : !selectedMembership ? (
         <section style={cardStyle}>
           <h2 style={headingStyle}>No field workspace authority</h2>
@@ -291,8 +298,8 @@ function EmployeeJobs({ setPage, roleMembership = null }) {
         membership={selectedMembership}
         currentPage="employeeJobs"
         setPage={setPage}
-        title="My Jobs"
-        description="View assigned work, update progress, and message your team."
+        title={t("fieldNavMyJobs", language)}
+        description={t("fieldMyJobsDescription", language)}
       >
         {workspaceContent}
       </EmployeeShell>
@@ -398,6 +405,7 @@ function FieldWorkspace({
   businessId,
   setPage,
 }) {
+  const language = useLanguage();
   const [currentStatus, setCurrentStatus] = useState(null);
 
   useEffect(() => {
@@ -418,11 +426,10 @@ function FieldWorkspace({
           />
         </span>
 
-        <h2>No assigned Jobs</h2>
+        <h2>{t("fieldNoAssignedJobs", language)}</h2>
 
         <p>
-          When an Owner or Manager assigns work to you,
-          the Job details will appear here.
+          {t("fieldNoAssignedJobsCopy", language)}
         </p>
       </section>
     );
@@ -438,7 +445,7 @@ function FieldWorkspace({
     <div className="employee-jobs-workspace">
       <section
         className="employee-jobs-summary-grid"
-        aria-label="Assigned Job summary"
+        aria-label={t("fieldAssignedJobs", language)}
       >
         <article className="employee-jobs-summary-card">
           <span
@@ -453,7 +460,7 @@ function FieldWorkspace({
           </span>
 
           <div>
-            <p>Assigned Jobs</p>
+            <p>{t("fieldAssignedJobs", language)}</p>
             <strong>{jobs.length}</strong>
           </div>
         </article>
@@ -471,7 +478,7 @@ function FieldWorkspace({
           </span>
 
           <div>
-            <p>Scheduled Visits</p>
+            <p>{t("fieldScheduledVisitsLabel", language)}</p>
             <strong>{schedule.length}</strong>
           </div>
         </article>
@@ -489,13 +496,13 @@ function FieldWorkspace({
           </span>
 
           <div>
-            <p>Current Status</p>
+            <p>{t("fieldCurrentStatus", language)}</p>
             <strong>
               {selectedJob
                 ? currentStatus
-                  ? readableStatus(currentStatus)
-                  : "Loading…"
-                : "No Job selected"}
+                  ? readableStatus(currentStatus, language)
+                  : t("fieldLoading", language)
+                : t("fieldNoJobSelected", language)}
             </strong>
           </div>
         </article>
@@ -505,9 +512,9 @@ function FieldWorkspace({
         <section className="employee-jobs-selector">
           <div>
             <p className="employee-jobs-eyebrow">
-              Assigned work
+              {t("fieldAssignedWork", language)}
             </p>
-            <h2>Select a Job</h2>
+            <h2>{t("fieldSelectJob", language)}</h2>
           </div>
 
           <div className="employee-jobs-selector-grid">
@@ -525,7 +532,7 @@ function FieldWorkspace({
                 <strong>{job.title}</strong>
                 <span>
                   {job.customer?.displayName ||
-                    "Customer unavailable"}
+                    t("fieldCustomerUnavailable", language)}
                 </span>
               </button>
             ))}
@@ -539,7 +546,7 @@ function FieldWorkspace({
             <div className="employee-jobs-assignment-header">
               <div>
                 <p className="employee-jobs-eyebrow">
-                  Current assignment
+                  {t("fieldCurrentAssignment", language)}
                 </p>
 
                 <div className="employee-jobs-customer-row">
@@ -557,7 +564,7 @@ function FieldWorkspace({
                   <div>
                     <h2>
                       {selectedJob.customer?.displayName ||
-                        "Customer unavailable"}
+                        t("fieldCustomerUnavailable", language)}
                     </h2>
 
                     <p>
@@ -566,7 +573,7 @@ function FieldWorkspace({
                         size={14}
                         decorative
                       />
-                      {locationText(selectedJob.location)}
+                      {locationText(selectedJob.location, language)}
                     </p>
                   </div>
                 </div>
@@ -574,8 +581,8 @@ function FieldWorkspace({
 
               <span className="employee-jobs-status-pill">
                 {currentStatus
-                  ? readableStatus(currentStatus)
-                  : "Loading status"}
+                  ? readableStatus(currentStatus, language)
+                  : t("fieldLoadingStatus", language)}
               </span>
             </div>
 
@@ -593,7 +600,7 @@ function FieldWorkspace({
 
               <div>
                 <p className="employee-jobs-detail-label">
-                  Job
+                  {t("fieldJob", language)}
                 </p>
                 <h3>{selectedJob.title}</h3>
               </div>
@@ -613,19 +620,19 @@ function FieldWorkspace({
 
               <div>
                 <p className="employee-jobs-detail-label">
-                  Instructions
+                  {t("fieldInstructions", language)}
                 </p>
 
                 <p className="employee-jobs-detail-copy">
                   {selectedJob.instructions ||
-                    "No additional Job instructions were recorded."}
+                    t("fieldNoInstructions", language)}
                 </p>
               </div>
             </div>
 
             <div className="employee-jobs-scope">
               <p className="employee-jobs-detail-label">
-                Approved work
+                {t("fieldApprovedWork", language)}
               </p>
 
               {selectedJob.approvedScope?.length ? (
@@ -647,7 +654,7 @@ function FieldWorkspace({
                         <strong>{item.description}</strong>
                         {item.quantity != null && (
                           <small>
-                            Quantity {item.quantity}
+                            {t("fieldQuantity", language, { quantity: item.quantity })}
                           </small>
                         )}
                       </span>
@@ -656,19 +663,19 @@ function FieldWorkspace({
                 </ul>
               ) : (
                 <p className="employee-jobs-detail-copy">
-                  No approved work has been added yet.
+                  {t("fieldNoApprovedWork", language)}
                 </p>
               )}
             </div>
 
             <details className="employee-jobs-evidence">
               <summary>
-                Photos and documents
+                {t("fieldPhotosDocuments", language)}
               </summary>
 
               <div className="employee-jobs-evidence-section">
                 <p className="employee-jobs-detail-label">
-                  Job photos
+                  {t("fieldJobPhotos", language)}
                 </p>
 
                 {selectedJob.photos?.length ? (
@@ -677,20 +684,20 @@ function FieldWorkspace({
                       <img
                         key={photo.publicId || photo.url}
                         src={photo.url}
-                        alt="Job evidence"
+                        alt={t("fieldJobEvidenceAlt", language)}
                       />
                     ))}
                   </div>
                 ) : (
                   <p className="employee-jobs-detail-copy">
-                    No Job photos are currently attached.
+                    {t("fieldNoJobPhotos", language)}
                   </p>
                 )}
               </div>
 
               <div className="employee-jobs-evidence-section">
                 <p className="employee-jobs-detail-label">
-                  Documents
+                  {t("fieldDocuments", language)}
                 </p>
 
                 {selectedJob.documents?.length ? (
@@ -699,16 +706,18 @@ function FieldWorkspace({
                       key={document.id}
                       className="employee-jobs-document-row"
                     >
-                      <strong>Approved Quote</strong>
+                      <strong>{t("fieldApprovedQuote", language)}</strong>
                       <span>
-                        Version {document.version} ·{" "}
-                        {document.status}
+                        {t("fieldDocumentVersion", language, {
+                          version: document.version,
+                          status: readableStatus(document.status, language),
+                        })}
                       </span>
                     </div>
                   ))
                 ) : (
                   <p className="employee-jobs-detail-copy">
-                    No approved Job document is currently available.
+                    {t("fieldNoApprovedDocument", language)}
                   </p>
                 )}
               </div>
@@ -728,10 +737,10 @@ function FieldWorkspace({
 
           <aside className="employee-jobs-history-card">
             <p className="employee-jobs-eyebrow">
-              Assignment history
+              {t("fieldAssignmentHistory", language)}
             </p>
 
-            <h2>Assignment details</h2>
+            <h2>{t("fieldAssignmentDetails", language)}</h2>
 
             {assignments.length ? (
               <div className="employee-jobs-history-list">
@@ -760,25 +769,27 @@ function FieldWorkspace({
                     <div>
                       <strong>
                         {item.state === "ACTIVE"
-                          ? "Current assignment"
-                          : readableStatus(item.state)}
+                          ? t("fieldCurrentAssignment", language)
+                          : readableStatus(item.state, language)}
                       </strong>
 
                       <span>
                         {item.memberName ||
                           item.memberEmail ||
-                          "Team member"}
+                          t("fieldTeamMember", language)}
                       </span>
 
                       <small>
                         {item.state === "ACTIVE"
-                          ? `Assigned ${formatSchedule(
-                              item.assignedAt
-                            )}`
-                          : `Updated ${formatSchedule(
-                              item.changedAt ||
-                                item.assignedAt
-                            )}`}
+                          ? t("fieldAssignedAt", language, {
+                              time: formatSchedule(item.assignedAt, language),
+                            })
+                          : t("fieldUpdatedAt", language, {
+                              time: formatSchedule(
+                                item.changedAt || item.assignedAt,
+                                language
+                              ),
+                            })}
                       </small>
                     </div>
                   </article>
@@ -786,7 +797,7 @@ function FieldWorkspace({
               </div>
             ) : (
               <p className="employee-jobs-detail-copy">
-                No assignment history is available.
+                {t("fieldNoAssignmentHistory", language)}
               </p>
             )}
 
@@ -798,8 +809,7 @@ function FieldWorkspace({
               />
 
               <span>
-                Job progress is tracked separately from
-                assignment history.
+                {t("fieldProgressSeparate", language)}
               </span>
             </div>
           </aside>
@@ -821,9 +831,9 @@ function FieldWorkspace({
 
           <div>
             <p className="employee-jobs-eyebrow">
-              Schedule
+              {t("fieldSchedule", language)}
             </p>
-            <h2>Upcoming visits</h2>
+            <h2>{t("fieldUpcomingVisits", language)}</h2>
           </div>
         </div>
 
@@ -838,20 +848,20 @@ function FieldWorkspace({
                   <strong>{item.jobTitle}</strong>
 
                   <p>
-                    {item.purpose.replaceAll("_", " ")} ·{" "}
-                    {item.state}
+                    {readableStatus(item.purpose, language)} ·{" "}
+                    {readableStatus(item.state, language)}
                   </p>
                 </div>
 
                 <div className="employee-jobs-schedule-time">
                   <strong>
-                    {formatSchedule(item.startsAt)}
+                    {formatSchedule(item.startsAt, language)}
                   </strong>
 
                   <span>
                     {item.location?.remote
-                      ? "Remote"
-                      : locationText(item.location)}
+                      ? t("fieldRemote", language)
+                      : locationText(item.location, language)}
                   </span>
                 </div>
               </article>
@@ -859,7 +869,7 @@ function FieldWorkspace({
           </div>
         ) : (
           <p className="employee-jobs-detail-copy">
-            No visits are scheduled yet.
+            {t("fieldNoVisitsScheduled", language)}
           </p>
         )}
       </section>
@@ -867,7 +877,30 @@ function FieldWorkspace({
   );
 }
 
-function readableStatus(value) {
+const FIELD_STATUS_KEYS = Object.freeze({
+  ASSIGNED: "fieldStatusAssigned",
+  ON_MY_WAY: "fieldStatusOnMyWay",
+  ARRIVED: "fieldStatusArrived",
+  WORKING: "fieldStatusWorking",
+  FIELD_WORK_COMPLETED: "fieldStatusCompleted",
+  ACTIVE: "fieldStatusActive",
+  INACTIVE: "fieldStatusInactive",
+  UNASSIGNED: "fieldStatusUnassigned",
+  EVALUATION: "fieldVisitEvaluation",
+  APPROVED_WORK: "fieldVisitApprovedWork",
+  FOLLOW_UP: "fieldVisitFollowUp",
+  SCHEDULED: "fieldVisitScheduled",
+  PROPOSED: "fieldVisitProposed",
+  AVAILABLE: "fieldVisitAvailable",
+  COMPLETED: "fieldVisitCompleted",
+  RESCHEDULED: "fieldVisitRescheduled",
+  CANCELLED: "fieldVisitCancelled",
+  LOCKED: "fieldVisitLocked",
+});
+
+function readableStatus(value, language) {
+  const key = FIELD_STATUS_KEYS[String(value || "ASSIGNED").toUpperCase()];
+  if (key) return t(key, language);
   return String(value || "ASSIGNED")
     .toLowerCase()
     .split("_")
@@ -888,6 +921,7 @@ function FieldOperationsPanel({
   setPage,
   onStatusChange = null,
 }) {
+  const language = useLanguage();
   const [operations, setOperations] = useState(null);
   const [message, setMessage] = useState("");
   const [note, setNote] = useState("");
@@ -909,7 +943,7 @@ function FieldOperationsPanel({
         result.operations?.currentStatus || "ASSIGNED"
       );
     } catch (loadError) {
-      setError(loadError.message || "Field updates are unavailable.");
+      setError(loadError.message || t("fieldUpdatesUnavailable", language));
     } finally {
       setLoading(false);
     }
@@ -918,6 +952,7 @@ function FieldOperationsPanel({
     businessId,
     job.id,
     managed,
+    language,
     onStatusChange,
     setPage,
   ]);
@@ -945,7 +980,7 @@ function FieldOperationsPanel({
       );
       setNote("");
     } catch (statusError) {
-      setError(statusError.message || "Field status could not be updated.");
+      setError(statusError.message || t("fieldStatusUpdateFailed", language));
     } finally {
       setWorking("");
     }
@@ -966,7 +1001,7 @@ function FieldOperationsPanel({
       setMessage("");
       await load();
     } catch (messageError) {
-      setError(messageError.message || "The internal Job message could not be sent.");
+      setError(messageError.message || t("fieldMessageSendFailed", language));
     } finally {
       setWorking("");
     }
@@ -980,24 +1015,24 @@ function FieldOperationsPanel({
     return (
       <section
         className="employee-field-ops"
-        aria-label="Field operations"
+        aria-label={t("fieldOperationsAria", language)}
       >
         <div className="employee-field-ops-header">
           <div>
             <p className="employee-jobs-eyebrow">
-              Job progress
+              {t("fieldJobProgress", language)}
             </p>
 
-            <h3>Update progress and message your team</h3>
+            <h3>{t("fieldUpdateProgressTitle", language)}</h3>
 
             <p>
-              Keep your status current and your team informed.
+              {t("fieldKeepTeamInformed", language)}
             </p>
           </div>
 
           <span className="employee-field-ops-status">
             <span aria-hidden="true" />
-            {readableStatus(currentStatus)}
+            {readableStatus(currentStatus, language)}
           </span>
         </div>
 
@@ -1015,7 +1050,7 @@ function FieldOperationsPanel({
             role="status"
             className="employee-field-ops-loading"
           >
-            Loading field evidence…
+            {t("fieldLoadingUpdates", language)}
           </div>
         ) : (
           <>
@@ -1032,15 +1067,16 @@ function FieldOperationsPanel({
               </span>
 
               <div className="employee-field-progress-copy">
-                <span>Current status</span>
+                <span>{t("fieldCurrentStatus", language)}</span>
                 <strong>
-                  {readableStatus(currentStatus)}
+                  {readableStatus(currentStatus, language)}
                 </strong>
 
                 {nextStatus && (
                   <small>
-                    Next:{" "}
-                    {readableStatus(nextStatus)}
+                    {t("fieldNextStatus", language, {
+                      status: readableStatus(nextStatus, language),
+                    })}
                   </small>
                 )}
               </div>
@@ -1051,11 +1087,13 @@ function FieldOperationsPanel({
                 <div className="employee-field-action-heading">
                   <div>
                     <p className="employee-jobs-detail-label">
-                      Next step
+                      {t("fieldNextStep", language)}
                     </p>
 
                     <h4>
-                      Mark {readableStatus(nextStatus)}
+                      {t("fieldMarkStatus", language, {
+                        status: readableStatus(nextStatus, language),
+                      })}
                     </h4>
                   </div>
 
@@ -1067,7 +1105,7 @@ function FieldOperationsPanel({
                 </div>
 
                 <label className="employee-field-note">
-                  <span>Add a note (optional)</span>
+                  <span>{t("fieldOptionalNote", language)}</span>
 
                   <input
                     value={note}
@@ -1075,7 +1113,7 @@ function FieldOperationsPanel({
                       setNote(event.target.value)
                     }
                     maxLength={1000}
-                    placeholder="Add a quick note for your team"
+                    placeholder={t("fieldOptionalNotePlaceholder", language)}
                   />
                 </label>
 
@@ -1092,8 +1130,10 @@ function FieldOperationsPanel({
                   />
 
                   {working === "status"
-                    ? "Recording…"
-                    : `Mark ${readableStatus(nextStatus)}`}
+                    ? t("fieldRecording", language)
+                    : t("fieldMarkStatus", language, {
+                        status: readableStatus(nextStatus, language),
+                      })}
                 </button>
               </div>
             ) : (
@@ -1108,8 +1148,7 @@ function FieldOperationsPanel({
                 />
 
                 <span>
-                  Your field work is marked complete.
-                  The Job stays open until the business completes it.
+                  {t("fieldWorkMarkedComplete", language)}
                 </span>
               </div>
             )}
@@ -1129,18 +1168,18 @@ function FieldOperationsPanel({
 
                 <div>
                   <p className="employee-jobs-detail-label">
-                    Team messages
+                    {t("fieldTeamMessages", language)}
                   </p>
-                  <h4>Message your team</h4>
+                  <h4>{t("fieldMessageYourTeam", language)}</h4>
                   <span>
-                    Customers do not receive these messages.
+                    {t("fieldCustomersDoNotReceive", language)}
                   </span>
                 </div>
               </div>
 
               <div
                 className="employee-field-message-list"
-                aria-label="Internal Job messages"
+                aria-label={t("fieldInternalMessagesAria", language)}
               >
                 {(operations?.messages || []).length ? (
                   operations.messages.map((item) => (
@@ -1152,8 +1191,8 @@ function FieldOperationsPanel({
                         <strong>{item.senderName}</strong>
 
                         <span>
-                          {roleLabel(item.senderRole)} ·{" "}
-                          {formatSchedule(item.createdAt)}
+                          {roleLabel(item.senderRole, language)} ·{" "}
+                          {formatSchedule(item.createdAt, language)}
                         </span>
                       </div>
 
@@ -1167,7 +1206,7 @@ function FieldOperationsPanel({
                       size={22}
                       decorative
                     />
-                    <span>No team messages yet.</span>
+                    <span>{t("fieldNoTeamMessages", language)}</span>
                   </div>
                 )}
               </div>
@@ -1177,7 +1216,7 @@ function FieldOperationsPanel({
                 className="employee-field-message-form"
               >
                 <label>
-                  <span>Write a message</span>
+                  <span>{t("fieldWriteMessage", language)}</span>
 
                   <textarea
                     value={message}
@@ -1186,7 +1225,7 @@ function FieldOperationsPanel({
                     }
                     maxLength={5000}
                     rows={3}
-                    placeholder="Write a message to your team"
+                    placeholder={t("fieldWriteMessagePlaceholder", language)}
                   />
                 </label>
 
@@ -1204,8 +1243,8 @@ function FieldOperationsPanel({
                   />
 
                   {working === "message"
-                    ? "Sending…"
-                    : "Send message"}
+                    ? t("fieldSending", language)
+                    : t("fieldSendMessage", language)}
                 </button>
               </form>
             </section>
@@ -1278,41 +1317,46 @@ function FieldOperationsPanel({
   );
 }
 
-const TIME_CATEGORY_LABELS = Object.freeze({
-  JOB_WORK: "Job Work",
-  DRIVING: "Driving",
-  OFFICE: "Office",
-  SUPPLIES: "Supplies",
-  BREAK: "Break",
-  GENERAL: "General",
+const TIME_CATEGORY_LABEL_KEYS = Object.freeze({
+  JOB_WORK: "fieldTimeJobWork",
+  DRIVING: "fieldTimeDriving",
+  OFFICE: "fieldTimeOffice",
+  SUPPLIES: "fieldTimeSupplies",
+  BREAK: "fieldTimeBreak",
+  GENERAL: "fieldTimeGeneral",
 });
 
 const TIME_CATEGORY_META = Object.freeze({
   JOB_WORK: {
     icon: "activeWork",
-    description: "Working on an assigned Job",
+    descriptionKey: "fieldTimeJobWorkDescription",
   },
   DRIVING: {
     icon: "onTheWay",
-    description: "Driving for work",
+    descriptionKey: "fieldTimeDrivingDescription",
   },
   OFFICE: {
     icon: "businessDashboard",
-    description: "Office or admin work",
+    descriptionKey: "fieldTimeOfficeDescription",
   },
   SUPPLIES: {
     icon: "materials",
-    description: "Picking up or purchasing supplies",
+    descriptionKey: "fieldTimeSuppliesDescription",
   },
   BREAK: {
     icon: "jobHistory",
-    description: "Meal or rest break",
+    descriptionKey: "fieldTimeBreakDescription",
   },
   GENERAL: {
     icon: "settings",
-    description: "Other work activity",
+    descriptionKey: "fieldTimeGeneralDescription",
   },
 });
+
+function timeCategoryLabel(value, language) {
+  const key = TIME_CATEGORY_LABEL_KEYS[value];
+  return key ? t(key, language) : value;
+}
 
 function formatDuration(seconds) {
   const total = Math.max(0, Math.floor(Number(seconds) || 0));
@@ -1362,6 +1406,7 @@ export function TimeEvidencePanel({
   setPage,
   variant = "compact",
 }) {
+  const language = useLanguage();
   const [time, setTime] = useState(null);
   const [category, setCategory] = useState(() => job && assignment ? "JOB_WORK" : "GENERAL");
   const [includeLocation, setIncludeLocation] = useState(false);
@@ -1374,9 +1419,9 @@ export function TimeEvidencePanel({
       setError("");
       setTime(await fetchOwnTime(businessId, setPage));
     } catch (loadError) {
-      setError(loadError.message || "Time tracking is unavailable right now.");
+      setError(loadError.message || t("fieldTimeUnavailable", language));
     }
-  }, [businessId, setPage]);
+  }, [businessId, language, setPage]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, 0);
@@ -1408,7 +1453,7 @@ export function TimeEvidencePanel({
       }, setPage);
       await load();
     } catch (clockError) {
-      setError(clockError.message || "Clock In could not be recorded.");
+      setError(clockError.message || t("fieldClockInFailed", language));
     } finally {
       setWorking(false);
     }
@@ -1428,7 +1473,7 @@ export function TimeEvidencePanel({
       }, setPage);
       await load();
     } catch (clockError) {
-      setError(clockError.message || "Clock Out could not be recorded.");
+      setError(clockError.message || t("fieldClockOutFailed", language));
     } finally {
       setWorking(false);
     }
@@ -1446,10 +1491,10 @@ export function TimeEvidencePanel({
       <div className="employee-time-page">
         <section
           className="employee-time-hero"
-          aria-label="Current timer"
+          aria-label={t("fieldCurrentTimerAria", language)}
         >
           <p className="employee-time-label">
-            Current timer
+            {t("fieldCurrentTimer", language)}
           </p>
 
           <span
@@ -1465,9 +1510,8 @@ export function TimeEvidencePanel({
 
           <h2>
             {active
-              ? TIME_CATEGORY_LABELS[active.category] ||
-                active.category
-              : "Not clocked in"}
+              ? timeCategoryLabel(active.category, language)
+              : t("fieldNotClockedIn", language)}
           </h2>
 
           <div
@@ -1480,8 +1524,10 @@ export function TimeEvidencePanel({
           <p className="employee-time-hero-copy">
             {active
               ? active.jobTitle ||
-                `Started ${formatSchedule(active.clockedInAt)}`
-              : "Choose what you're doing, then clock in."}
+                t("fieldStartedAt", language, {
+                  time: formatSchedule(active.clockedInAt, language),
+                })
+              : t("fieldChooseThenClockIn", language)}
           </p>
 
           <button
@@ -1505,31 +1551,31 @@ export function TimeEvidencePanel({
               decorative
             />
             {working
-              ? "Recording…"
+              ? t("fieldRecording", language)
               : active
-              ? "Clock Out"
-              : "Clock In"}
+              ? t("fieldClockOut", language)
+              : t("fieldClockIn", language)}
           </button>
         </section>
 
         <section className="employee-time-categories">
           <p className="employee-time-label">
-            Time category
+            {t("fieldTimeCategory", language)}
           </p>
 
-          <h2>Choose your work activity</h2>
+          <h2>{t("fieldChooseWorkActivity", language)}</h2>
 
           <p className="employee-time-section-copy">
-            Select the option that best matches what you're doing.
+            {t("fieldChooseWorkActivityCopy", language)}
           </p>
 
           <div
             className="employee-time-category-grid"
             role="radiogroup"
-            aria-label="Time category"
+            aria-label={t("fieldTimeCategory", language)}
           >
-            {Object.entries(TIME_CATEGORY_LABELS).map(
-              ([value, label]) => {
+            {Object.entries(TIME_CATEGORY_LABEL_KEYS).map(
+              ([value, labelKey]) => {
                 const selected =
                   visibleCategory === value;
 
@@ -1589,12 +1635,12 @@ export function TimeEvidencePanel({
                       />
                     </span>
 
-                    <strong>{label}</strong>
+                    <strong>{t(labelKey, language)}</strong>
 
                     <small>
                       {unavailable
-                        ? "Assigned Job needed"
-                        : meta.description}
+                        ? t("fieldAssignedJobNeeded", language)
+                        : t(meta.descriptionKey, language)}
                     </small>
                   </button>
                 );
@@ -1606,7 +1652,7 @@ export function TimeEvidencePanel({
             category === "JOB_WORK" &&
             !jobWorkAvailable && (
               <p className="employee-time-job-warning">
-                Select an actively assigned Job before recording Job Work.
+                {t("fieldSelectAssignedJobWarning", language)}
               </p>
             )}
         </section>
@@ -1626,14 +1672,13 @@ export function TimeEvidencePanel({
 
             <div>
               <p className="employee-time-label">
-                Location (optional)
+                {t("fieldLocationOptional", language)}
               </p>
 
-              <h2>Add your location</h2>
+              <h2>{t("fieldAddLocation", language)}</h2>
 
               <p className="employee-time-section-copy">
-                Turn this on to add your location when you
-                clock in or out.
+                {t("fieldAddLocationCopy", language)}
               </p>
             </div>
           </div>
@@ -1658,8 +1703,8 @@ export function TimeEvidencePanel({
 
             <small>
               {includeLocation
-                ? "Location on"
-                : "Location off"}
+                ? t("fieldLocationOn", language)
+                : t("fieldLocationOff", language)}
             </small>
           </label>
         </section>
@@ -1687,9 +1732,9 @@ export function TimeEvidencePanel({
             </span>
 
             <span className="employee-time-history-copy">
-              <strong>Time history</strong>
+              <strong>{t("fieldTimeHistory", language)}</strong>
               <small>
-                Review your recent clock-ins and clock-outs
+                {t("fieldTimeHistoryCopy", language)}
               </small>
             </span>
 
@@ -1712,7 +1757,7 @@ export function TimeEvidencePanel({
               ))
             ) : (
               <p style={detailCopyStyle}>
-                No time has been recorded yet.
+                {t("fieldNoTimeRecorded", language)}
               </p>
             )}
           </div>
@@ -1732,10 +1777,10 @@ export function TimeEvidencePanel({
 
           <div>
             <strong>
-              Meetro records the official time when you clock in or out.
+              {t("fieldOfficialTimeCopy", language)}
             </strong>
             <span>
-              Clocking out does not mark the Job complete.
+              {t("fieldClockOutDoesNotComplete", language)}
             </span>
           </div>
         </div>
@@ -1746,18 +1791,18 @@ export function TimeEvidencePanel({
   return (
     <section
       className="employee-compact-time"
-      aria-label="Clock In and Clock Out"
+      aria-label={t("fieldClockInOutAria", language)}
     >
       <div className="employee-compact-time-header">
         <div>
           <p className="employee-jobs-eyebrow">
-            Time tracking
+            {t("fieldTimeTracking", language)}
           </p>
 
-          <h3>Current timer</h3>
+          <h3>{t("fieldCurrentTimer", language)}</h3>
 
           <span className="employee-compact-time-authority">
-            Track time for this Job
+            {t("fieldTrackTimeForJob", language)}
           </span>
         </div>
 
@@ -1766,7 +1811,7 @@ export function TimeEvidencePanel({
           className="employee-compact-time-open"
           onClick={() => setPage("employeeTime")}
         >
-          Open Time
+          {t("fieldOpenTime", language)}
           <span aria-hidden="true">›</span>
         </button>
       </div>
@@ -1799,9 +1844,8 @@ export function TimeEvidencePanel({
         <div className="employee-compact-time-state">
           <span>
             {active
-              ? TIME_CATEGORY_LABELS[active.category] ||
-                active.category
-              : "Not clocked in"}
+              ? timeCategoryLabel(active.category, language)
+              : t("fieldNotClockedIn", language)}
           </span>
 
           <strong aria-live="polite">
@@ -1811,13 +1855,15 @@ export function TimeEvidencePanel({
           <small>
             {active
               ? active.jobTitle ||
-                `Started ${formatSchedule(
-                  active.clockedInAt
-                )}`
+                t("fieldStartedAt", language, {
+                  time: formatSchedule(active.clockedInAt, language),
+                })
               : category === "JOB_WORK" &&
                 jobWorkAvailable
-              ? job?.title || "Assigned Job"
-              : `${TIME_CATEGORY_LABELS[category]} time`}
+              ? job?.title || t("fieldAssignedJob", language)
+              : t("fieldCategoryTime", language, {
+                  category: timeCategoryLabel(category, language),
+                })}
           </small>
         </div>
 
@@ -1843,20 +1889,19 @@ export function TimeEvidencePanel({
           />
 
           {working
-            ? "Recording…"
+            ? t("fieldRecording", language)
             : active
-            ? "Clock Out"
-            : "Clock In"}
+            ? t("fieldClockOut", language)
+            : t("fieldClockIn", language)}
         </button>
       </div>
 
       <div className="employee-compact-time-footer">
         <div className="employee-compact-time-category">
-          <span>Time category</span>
+          <span>{t("fieldTimeCategory", language)}</span>
 
           <strong>
-            {TIME_CATEGORY_LABELS[visibleCategory] ||
-              visibleCategory}
+            {timeCategoryLabel(visibleCategory, language)}
           </strong>
 
           {!active && (
@@ -1864,7 +1909,7 @@ export function TimeEvidencePanel({
               type="button"
               onClick={() => setPage("employeeTime")}
             >
-              Change category
+              {t("fieldChangeCategory", language)}
             </button>
           )}
         </div>
@@ -1886,7 +1931,7 @@ export function TimeEvidencePanel({
           </span>
 
           <span>
-            Add location when I clock in or out
+            {t("fieldAddLocationCompact", language)}
           </span>
         </label>
       </div>
@@ -1895,7 +1940,7 @@ export function TimeEvidencePanel({
         category === "JOB_WORK" &&
         !jobWorkAvailable && (
           <p className="employee-time-job-warning">
-            Select an actively assigned Job before recording Job Work.
+            {t("fieldSelectAssignedJobWarning", language)}
           </p>
         )}
 
@@ -1907,8 +1952,7 @@ export function TimeEvidencePanel({
         />
 
         <span>
-          Meetro records the official clock-in and clock-out time.
-          View your history on the Time page.
+          {t("fieldCompactTimeAuthority", language)}
         </span>
       </div>
     </section>
@@ -1917,15 +1961,16 @@ export function TimeEvidencePanel({
 }
 
 function TimeRow({ session, now }) {
+  const language = useLanguage();
   return (
     <article style={timeRowStyle}>
       <div>
-        <strong>{session.employeeName || "Team member"} · {TIME_CATEGORY_LABELS[session.category] || session.category}</strong>
-        <p style={rowMetaStyle}>{session.jobTitle || "No Job required"}</p>
+        <strong>{session.employeeName || t("fieldTeamMember", language)} · {timeCategoryLabel(session.category, language)}</strong>
+        <p style={rowMetaStyle}>{session.jobTitle || t("fieldNoJobRequired", language)}</p>
       </div>
       <div style={scheduleTimeStyle}>
         <strong>{formatDuration(sessionDuration(session, now))}</strong>
-        <span>{formatSchedule(session.clockedInAt)} → {session.clockedOutAt ? formatSchedule(session.clockedOutAt) : "Active"}</span>
+        <span>{formatSchedule(session.clockedInAt, language)} → {session.clockedOutAt ? formatSchedule(session.clockedOutAt, language) : t("fieldSessionActive", language)}</span>
       </div>
     </article>
   );

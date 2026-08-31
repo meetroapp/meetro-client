@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import EmployeeShell from "../components/EmployeeShell";
 import MeetroIcon from "../components/MeetroIcon";
+import useLanguage from "../hooks/useLanguage";
 import { TimeEvidencePanel } from "./EmployeeJobs";
 import { fetchEmployeeJobs, fetchEmployeeSchedule } from "../utils/jobAssignmentApi";
 import { fetchFieldOperations } from "../utils/fieldOperationsApi";
@@ -8,33 +9,68 @@ import { fetchOwnTime } from "../utils/timeEvidenceApi";
 import {
   requestTeamExperienceMode,
 } from "../utils/teamExperienceMode";
+import {
+  setLanguage,
+  SUPPORTED_LANGUAGES,
+  t,
+} from "../utils/language";
 
 const VIEW_META = Object.freeze({
-  home: { page: "employeeHome", title: "Home", description: "Today’s field work at a glance." },
-  schedule: { page: "employeeSchedule", title: "Schedule", description: "Only Visits attached to your authorized Jobs." },
-  time: { page: "employeeTime", title: "Time", description: "Track your work time throughout the day." },
-  messages: { page: "employeeMessages", title: "Messages", description: "Internal communication for your assigned Jobs." },
-  profile: { page: "employeeProfile", title: "Profile", description: "Your Team access and account context." },
+  home: { page: "employeeHome", titleKey: "fieldNavHome", descriptionKey: "fieldHomeDescription" },
+  schedule: { page: "employeeSchedule", titleKey: "fieldNavSchedule", descriptionKey: "fieldScheduleDescription" },
+  time: { page: "employeeTime", titleKey: "fieldNavTime", descriptionKey: "fieldTimeDescription" },
+  messages: { page: "employeeMessages", titleKey: "fieldNavMessages", descriptionKey: "fieldMessagesDescription" },
+  profile: { page: "employeeProfile", titleKey: "fieldNavProfile", descriptionKey: "fieldProfileDescription" },
 });
 
-function readable(value, fallback = "Assigned") {
+const STATUS_KEYS = Object.freeze({
+  ASSIGNED: "fieldStatusAssigned",
+  ON_MY_WAY: "fieldStatusOnMyWay",
+  ARRIVED: "fieldStatusArrived",
+  WORKING: "fieldStatusWorking",
+  FIELD_WORK_COMPLETED: "fieldStatusCompleted",
+  ACTIVE: "fieldStatusActive",
+  INACTIVE: "fieldStatusInactive",
+  UNASSIGNED: "fieldStatusUnassigned",
+  EVALUATION: "fieldVisitEvaluation",
+  APPROVED_WORK: "fieldVisitApprovedWork",
+  FOLLOW_UP: "fieldVisitFollowUp",
+  SCHEDULED: "fieldVisitScheduled",
+  PROPOSED: "fieldVisitProposed",
+  AVAILABLE: "fieldVisitAvailable",
+  COMPLETED: "fieldVisitCompleted",
+  RESCHEDULED: "fieldVisitRescheduled",
+  CANCELLED: "fieldVisitCancelled",
+  LOCKED: "fieldVisitLocked",
+  JOB_WORK: "fieldTimeJobWork",
+  DRIVING: "fieldTimeDriving",
+  OFFICE: "fieldTimeOffice",
+  SUPPLIES: "fieldTimeSupplies",
+  BREAK: "fieldTimeBreak",
+  GENERAL: "fieldTimeGeneral",
+});
+
+function readable(value, language, fallback = "ASSIGNED") {
+  const key = STATUS_KEYS[String(value || fallback).toUpperCase()];
+  if (key) return t(key, language);
   const text = String(value || fallback).toLowerCase().replaceAll("_", " ");
   return text.replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 
-function when(value) {
+function when(value, language) {
   const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return "Time pending";
-  return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" }).format(date);
+  if (Number.isNaN(date.getTime())) return t("fieldTimePending", language);
+  return new Intl.DateTimeFormat(language, { dateStyle: "medium", timeStyle: "short" }).format(date);
 }
 
-function locationText(location) {
+function locationText(location, language) {
   const address = location?.address;
   if (address) return [address.line1, address.city, address.region, address.postalCode].filter(Boolean).join(", ");
-  return location?.serviceArea || "Service location pending";
+  return location?.serviceArea || t("fieldServiceLocationPending", language);
 }
 
 export default function EmployeePortal({ membership, setPage, view = "home" }) {
+  const language = useLanguage();
   const meta = VIEW_META[view] || VIEW_META.home;
   const businessId = membership?.businessId;
   const [workspace, setWorkspace] = useState({ jobs: [], schedule: [], operations: [], time: null });
@@ -68,11 +104,11 @@ export default function EmployeePortal({ membership, setPage, view = "home" }) {
       }));
       setWorkspace({ jobs, schedule: scheduleResult.schedule || [], operations, time: timeResult });
     } catch (loadError) {
-      setError(loadError.message || "Your field workspace is unavailable.");
+      setError(loadError.message || t("fieldWorkspaceUnavailable", language));
     } finally {
       setLoading(false);
     }
-  }, [businessId, setPage]);
+  }, [businessId, language, setPage]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, 0);
@@ -85,9 +121,9 @@ export default function EmployeePortal({ membership, setPage, view = "home" }) {
     .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime())[0] || null, [workspace.operations]);
 
   return (
-    <EmployeeShell membership={membership} currentPage={meta.page} setPage={setPage} title={meta.title} description={meta.description}>
+    <EmployeeShell membership={membership} currentPage={meta.page} setPage={setPage} title={t(meta.titleKey, language)} description={t(meta.descriptionKey, language)}>
       {error && <div role="alert" style={errorStyle}>{error}</div>}
-      {loading ? <section style={cardStyle} role="status">Loading your authorized field workspace…</section> : (
+      {loading ? <section style={cardStyle} role="status">{t("fieldWorkspaceLoading", language)}</section> : (
         <PortalView
           view={view}
           membership={membership}
@@ -95,14 +131,15 @@ export default function EmployeePortal({ membership, setPage, view = "home" }) {
           current={current}
           recentMessage={recentMessage}
           setPage={setPage}
+          language={language}
         />
       )}
     </EmployeeShell>
   );
 }
 
-function PortalView({ view, membership, workspace, current, recentMessage, setPage }) {
-  if (view === "schedule") return <ScheduleView schedule={workspace.schedule} />;
+function PortalView({ view, membership, workspace, current, recentMessage, setPage, language }) {
+  if (view === "schedule") return <ScheduleView schedule={workspace.schedule} language={language} />;
   if (view === "time") {
     return (
       <TimeEvidencePanel
@@ -114,11 +151,11 @@ function PortalView({ view, membership, workspace, current, recentMessage, setPa
       />
     );
   }
-  if (view === "messages") return <MessagesView operations={workspace.operations} setPage={setPage} membership={membership} />;
+  if (view === "messages") return <MessagesView operations={workspace.operations} setPage={setPage} membership={membership} language={language} />;
   if (view === "profile") {
-    return <ProfileView membership={membership} />;
+    return <ProfileView membership={membership} language={language} />;
   }
-  return <HomeView membership={membership} workspace={workspace} current={current} recentMessage={recentMessage} setPage={setPage} />;
+  return <HomeView membership={membership} workspace={workspace} current={current} recentMessage={recentMessage} setPage={setPage} language={language} />;
 }
 
 function HomeView({
@@ -127,6 +164,7 @@ function HomeView({
   current,
   recentMessage,
   setPage,
+  language,
 }) {
   const active = workspace.time?.activeSession;
 
@@ -143,26 +181,28 @@ function HomeView({
       <section className="employee-home__hero">
         <div className="employee-home__hero-copy">
           <p className="employee-home__eyebrow">
-            Current assignment
+            {t("fieldCurrentAssignment", language)}
           </p>
 
           <h2>
             {current?.job?.title ||
-              "No active assignment"}
+              t("fieldNoActiveAssignment", language)}
           </h2>
 
           <p>
             {current
               ? `${
                   current.job.customer?.displayName ||
-                  "Customer"
+                  t("fieldCustomer", language)
                 } · ${locationText(
-                  current.job.location
+                  current.job.location,
+                  language
                 )}`
-              : `When ${
-                  membership.businessName ||
-                  "your business"
-                } assigns work, it will appear here.`}
+              : t("fieldAssignmentAppears", language, {
+                  businessName:
+                    membership.businessName ||
+                    t("fieldYourBusiness", language),
+                })}
           </p>
 
           {current && (
@@ -179,7 +219,7 @@ function HomeView({
                 )
               }
             >
-              Open Job Detail
+              {t("fieldOpenJobDetail", language)}
             </button>
           )}
         </div>
@@ -188,7 +228,7 @@ function HomeView({
       <div className="employee-home__grid">
         <section className="employee-home__card">
           <p className="employee-home__eyebrow">
-            Today’s work
+            {t("fieldTodaysWork", language)}
           </p>
 
           <div
@@ -204,10 +244,14 @@ function HomeView({
 
           <h2>
             {today.length
-              ? `${today.length} scheduled Visit${
-                  today.length === 1 ? "" : "s"
-                }`
-              : "No scheduled Visits"}
+              ? t(
+                  today.length === 1
+                    ? "fieldScheduledVisit"
+                    : "fieldScheduledVisits",
+                  language,
+                  { count: today.length }
+                )
+              : t("fieldNoScheduledVisits", language)}
           </h2>
 
           {today.length > 0 && (
@@ -216,7 +260,7 @@ function HomeView({
                 <p key={item.visitId}>
                   <strong>{item.jobTitle}</strong>
                   <br />
-                  {when(item.startsAt)}
+                  {when(item.startsAt, language)}
                 </p>
               ))}
             </div>
@@ -233,13 +277,13 @@ function HomeView({
               )
             }
           >
-            View schedule
+            {t("fieldViewSchedule", language)}
           </button>
         </section>
 
         <section className="employee-home__card">
           <p className="employee-home__eyebrow">
-            Next field action
+            {t("fieldNextAction", language)}
           </p>
 
           <div
@@ -255,17 +299,21 @@ function HomeView({
 
           <h2>
             {current?.operations?.nextStatus
-              ? `Mark ${readable(
-                  current.operations.nextStatus
-                )}`
-              : "No action pending"}
+              ? t("fieldMarkStatus", language, {
+                  status: readable(
+                    current.operations.nextStatus,
+                    language
+                  ),
+                })
+              : t("fieldNoActionPending", language)}
           </h2>
 
           <p className="employee-home__card-copy">
-            Current status:{" "}
+            {t("fieldCurrentStatus", language)}:{" "}
             <strong>
               {readable(
-                current?.operations?.currentStatus
+                current?.operations?.currentStatus,
+                language
               )}
             </strong>
           </p>
@@ -284,14 +332,14 @@ function HomeView({
                 )
               }
             >
-              Continue in Job Detail
+              {t("fieldContinueJobDetail", language)}
             </button>
           )}
         </section>
 
         <section className="employee-home__card">
           <p className="employee-home__eyebrow">
-            Current timer
+            {t("fieldCurrentTimer", language)}
           </p>
 
           <div
@@ -307,14 +355,16 @@ function HomeView({
 
           <h2>
             {active
-              ? `${readable(active.category)} active`
-              : "Not clocked in"}
+              ? `${readable(active.category, language)} ${t("fieldSessionActive", language).toLowerCase()}`
+              : t("fieldNotClockedIn", language)}
           </h2>
 
           <p className="employee-home__card-copy">
             {active
-              ? `Started ${when(active.clockedInAt)}`
-              : "Clock In when you begin authorized work."}
+              ? t("fieldStartedAt", language, {
+                  time: when(active.clockedInAt, language),
+                })
+              : t("fieldClockInWhenStarting", language)}
           </p>
 
           <button
@@ -328,13 +378,13 @@ function HomeView({
               )
             }
           >
-            Open Time
+            {t("fieldOpenTime", language)}
           </button>
         </section>
 
         <section className="employee-home__card employee-home__card--recent">
           <p className="employee-home__eyebrow">
-            Recent internal update
+            {t("fieldRecentUpdate", language)}
           </p>
 
           <div
@@ -350,12 +400,12 @@ function HomeView({
 
           <h2>
             {recentMessage?.job?.title ||
-              "No Team updates yet"}
+              t("fieldNoTeamUpdates", language)}
           </h2>
 
           <p className="employee-home__card-copy">
             {recentMessage?.message ||
-              "Internal Job messages from your business will appear here."}
+              t("fieldInternalMessagesAppear", language)}
           </p>
 
           <button
@@ -369,7 +419,7 @@ function HomeView({
               )
             }
           >
-            Open Messages
+            {t("fieldOpenMessages", language)}
           </button>
         </section>
       </div>
@@ -377,18 +427,18 @@ function HomeView({
   );
 }
 
-function ScheduleView({ schedule }) {
-  return <section style={cardStyle}><p style={eyebrowStyle}>Assigned Visits</p><h2 style={headingStyle}>My Schedule</h2>{schedule.length ? schedule.map((item) => <article key={item.visitId} style={rowStyle}><div><strong>{item.jobTitle}</strong><p style={copyStyle}>{readable(item.purpose)} · {readable(item.state)}</p></div><div><strong>{when(item.startsAt)}</strong><p style={copyStyle}>{item.location?.remote ? "Remote" : locationText(item.location)}</p></div></article>) : <p style={copyStyle}>No active Visit is scheduled for your assigned Jobs.</p>}</section>;
+function ScheduleView({ schedule, language }) {
+  return <section style={cardStyle}><p style={eyebrowStyle}>{t("fieldAssignedVisits", language)}</p><h2 style={headingStyle}>{t("fieldMySchedule", language)}</h2>{schedule.length ? schedule.map((item) => <article key={item.visitId} style={rowStyle}><div><strong>{item.jobTitle}</strong><p style={copyStyle}>{readable(item.purpose, language)} · {readable(item.state, language)}</p></div><div><strong>{when(item.startsAt, language)}</strong><p style={copyStyle}>{item.location?.remote ? t("fieldRemote", language) : locationText(item.location, language)}</p></div></article>) : <p style={copyStyle}>{t("fieldNoActiveVisitScheduled", language)}</p>}</section>;
 }
 
-function MessagesView({ operations, setPage, membership }) {
+function MessagesView({ operations, setPage, membership, language }) {
   const messages = operations.flatMap((item) => (item.operations?.messages || []).map((message) => ({ ...message, job: item.job }))).sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
-  return <section style={cardStyle}><p style={eyebrowStyle}>Internal only</p><h2 style={headingStyle}>Field Messages</h2><p style={copyStyle}>These updates stay between you and your business Team. Customers do not receive them.</p>{messages.length ? messages.map((message) => <article key={message.id} style={rowStyle}><div><strong>{message.job.title}</strong><p style={copyStyle}>{message.message}</p><small>{message.senderName} · {when(message.createdAt)}</small></div><button type="button" style={textButton} onClick={() => setPage(`employeeJobs?businessId=${membership.businessId}&jobId=${encodeURIComponent(message.job.id)}`)}>Open Job</button></article>) : <p style={copyStyle}>No internal Job messages yet.</p>}</section>;
+  return <section style={cardStyle}><p style={eyebrowStyle}>{t("fieldInternalOnly", language)}</p><h2 style={headingStyle}>{t("fieldMessagesTitle", language)}</h2><p style={copyStyle}>{t("fieldMessagesPrivacy", language)}</p>{messages.length ? messages.map((message) => <article key={message.id} style={rowStyle}><div><strong>{message.job.title}</strong><p style={copyStyle}>{message.message}</p><small>{message.senderName} · {when(message.createdAt, language)}</small></div><button type="button" style={textButton} onClick={() => setPage(`employeeJobs?businessId=${membership.businessId}&jobId=${encodeURIComponent(message.job.id)}`)}>{t("fieldOpenJob", language)}</button></article>) : <p style={copyStyle}>{t("fieldNoInternalMessages", language)}</p>}</section>;
 }
 
-function ProfileView({ membership }) {
+function ProfileView({ membership, language }) {
   const businessName =
-    membership.businessName || "Your business";
+    membership.businessName || t("fieldYourBusiness", language);
 
   return (
     <div style={gridStyle}>
@@ -398,26 +448,26 @@ function ProfileView({ membership }) {
           gridColumn: "1 / -1",
         }}
       >
-        <p style={eyebrowStyle}>Team Access</p>
+        <p style={eyebrowStyle}>{t("fieldProfileTeamAccess", language)}</p>
         <h2 style={headingStyle}>{businessName}</h2>
 
         <dl style={definitionStyle}>
           <div>
-            <dt>Role</dt>
-            <dd>Field Employee</dd>
+            <dt>{t("fieldProfileRole", language)}</dt>
+            <dd>{t("fieldEmployeeRole", language)}</dd>
           </div>
           <div>
-            <dt>Access</dt>
-            <dd>Access managed by your business</dd>
+            <dt>{t("fieldProfileAccess", language)}</dt>
+            <dd>{t("fieldProfileAccessManaged", language)}</dd>
           </div>
           <div>
-            <dt>Status</dt>
-            <dd>{readable(membership.status, "Active")}</dd>
+            <dt>{t("fieldProfileStatus", language)}</dt>
+            <dd>{readable(membership.status, language, "ACTIVE")}</dd>
           </div>
         </dl>
 
         <div style={experienceSwitchCard}>
-          <p style={eyebrowStyle}>Using Meetro as</p>
+          <p style={eyebrowStyle}>{t("fieldUsingMeetroAs", language)}</p>
 
           <div style={experienceSwitchActions}>
             <button
@@ -429,7 +479,7 @@ function ProfileView({ membership }) {
               aria-pressed="true"
               disabled
             >
-              Work — {businessName}
+              {t("fieldWorkExperience", language, { businessName })}
             </button>
 
             <button
@@ -443,21 +493,50 @@ function ProfileView({ membership }) {
                 })
               }
             >
-              Personal
+              {t("fieldPersonalExperience", language)}
             </button>
           </div>
 
           <p style={copyStyle}>
-            Your Personal Meetro account and your Work access
-            use the same identity. Switching views does not
-            change your Team permissions.
+            {t("fieldExperienceIdentityCopy", language)}
           </p>
         </div>
 
+        <div style={languagePreferenceCard}>
+          <div>
+            <p style={eyebrowStyle}>{t("fieldLanguageTitle", language)}</p>
+            <h3 style={languageHeadingStyle}>{t("fieldLanguageDescription", language)}</h3>
+          </div>
+
+          <div style={languageOptionsStyle} role="radiogroup" aria-label={t("fieldLanguageTitle", language)}>
+            {SUPPORTED_LANGUAGES.map((option) => {
+              const selected = option.code === language;
+              return (
+                <button
+                  type="button"
+                  key={option.code}
+                  role="radio"
+                  aria-checked={selected}
+                  aria-label={
+                    selected
+                      ? t("fieldLanguageSelected", language, { language: option.label })
+                      : option.label
+                  }
+                  style={{
+                    ...languageOptionButton,
+                    ...(selected ? languageOptionButtonActive : {}),
+                  }}
+                  onClick={() => setLanguage(option.code)}
+                >
+                  {option.label}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+
         <p style={copyStyle}>
-          Subscription plans and Business billing are managed
-          by the Business Owner and are not part of your
-          employee profile.
+          {t("fieldBillingManaged", language)}
         </p>
       </section>
     </div>
@@ -498,6 +577,41 @@ const experienceModeButton = {
   cursor: "pointer",
 };
 const experienceModeButtonActive = {
+  background: "#173f28",
+  color: "#fff",
+  borderColor: "#173f28",
+};
+const languagePreferenceCard = {
+  margin: "20px 0",
+  padding: 16,
+  border: "1px solid #dbe7de",
+  borderRadius: 14,
+  background: "#f7faf7",
+  display: "grid",
+  gap: 14,
+};
+const languageHeadingStyle = {
+  margin: 0,
+  color: "#173f28",
+  fontSize: 17,
+  lineHeight: 1.4,
+};
+const languageOptionsStyle = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(120px, 1fr))",
+  gap: 9,
+};
+const languageOptionButton = {
+  minHeight: 42,
+  border: "1px solid #bfd2c4",
+  borderRadius: 10,
+  padding: "9px 13px",
+  background: "#fff",
+  color: "#173f28",
+  fontWeight: 800,
+  cursor: "pointer",
+};
+const languageOptionButtonActive = {
   background: "#173f28",
   color: "#fff",
   borderColor: "#173f28",

@@ -1445,7 +1445,7 @@ if (page === "employeeJobs") {
 
 if (["employeeHome", "employeeSchedule", "employeeTime", "employeeMessages", "employeeProfile"].includes(page)) {
   if (!fieldMembership) {
-    return withStartupChrome(<LoadingScreen text="Field Employee access is required." />, updateNotice);
+    return withStartupChrome(<LoadingScreen text={t("fieldAccessRequired", language)} />, updateNotice);
   }
   const view = {
     employeeHome: "home",
@@ -1462,15 +1462,15 @@ if (["employeeHome", "employeeSchedule", "employeeTime", "employeeMessages", "em
 
 if (page === "employeeAlerts") {
   if (!fieldMembership) {
-    return withStartupChrome(<LoadingScreen text="Field Employee access is required." />, updateNotice);
+    return withStartupChrome(<LoadingScreen text={t("fieldAccessRequired", language)} />, updateNotice);
   }
   return withStartupChrome(
     <EmployeeShell
       membership={fieldMembership}
       currentPage="employeeAlerts"
       setPage={setPage}
-      title="Alerts"
-      description="Alerts delivered to your exact account."
+      title={t("fieldNavAlerts", language)}
+      description={t("fieldAlertsDescription", language)}
     >
       {withSuspense(<Notifications setPage={setPage} employeeMode />)}
     </EmployeeShell>,
