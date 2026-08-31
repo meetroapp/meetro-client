@@ -105,9 +105,46 @@ const homeLayoutMediaStyles = `
   .home-brand-wrap,
   .home-message-focus-card,
   .home-message-focus-copy,
-  .home-message-open-text {
+  .home-message-open-text,
+  .home-spotlight-card,
+  .home-spotlight-content,
+  .home-spotlight-business-text {
     min-width: 0;
     box-sizing: border-box;
+  }
+
+  .home-spotlight-card,
+  .home-spotlight-card * {
+    box-sizing: border-box;
+  }
+
+  .home-spotlight-story-title {
+    text-wrap: balance;
+  }
+
+  .home-spotlight-button,
+  .spotlight-slide-control {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .home-spotlight-button:hover {
+    filter: brightness(0.96);
+    transform: translateY(-1px);
+  }
+
+  .home-spotlight-button:focus-visible,
+  .spotlight-slide-control:focus-visible {
+    outline: 3px solid rgba(251, 191, 36, 0.88);
+    outline-offset: 3px;
+  }
+
+  .spotlight-slide-control:hover {
+    background: rgba(15, 23, 42, 0.68) !important;
+    border-color: rgba(255,255,255,0.62) !important;
+  }
+
+  .spotlight-slide-control:active {
+    transform: translateY(-50%) scale(0.96) !important;
   }
 
   .home-brand-main,
@@ -169,6 +206,62 @@ const homeLayoutMediaStyles = `
       background: var(--meetro-surface-sage) !important;
       padding: 0 12px !important;
       text-align: center !important;
+    }
+
+    .home-spotlight-card {
+      width: min(84vw, 360px) !important;
+      border-radius: 22px !important;
+    }
+
+    .home-spotlight-hero {
+      height: clamp(238px, 64vw, 266px) !important;
+      min-height: 238px !important;
+    }
+
+    .home-spotlight-hero-copy {
+      left: 54px !important;
+      right: 54px !important;
+      bottom: 14px !important;
+      gap: 6px !important;
+    }
+
+    .home-spotlight-story-title {
+      font-size: clamp(1.38rem, 6.2vw, 1.65rem) !important;
+      line-height: 1.05 !important;
+    }
+
+    .home-spotlight-story-body {
+      font-size: 12px !important;
+      line-height: 1.36 !important;
+    }
+
+    .home-spotlight-content {
+      gap: 9px !important;
+      padding: 13px 14px 14px !important;
+    }
+
+    .home-spotlight-button {
+      width: 100% !important;
+      justify-self: stretch !important;
+    }
+
+    .spotlight-slide-control {
+      width: 44px !important;
+      height: 44px !important;
+      font-size: 23px !important;
+    }
+
+    .spotlight-slide-control-previous {
+      left: 7px !important;
+    }
+
+    .spotlight-slide-control-next {
+      right: 7px !important;
+    }
+
+    .spotlight-photo-badge,
+    .spotlight-counter-badge {
+      top: 8px !important;
     }
   }
 
@@ -1698,9 +1791,12 @@ function SpotlightCard({ business, language, onViewProfile }) {
       })
     : "";
   const logoUrl = identity.imageUrl || getSpotlightAvatarUrl(business);
+  const [failedLogoUrl, setFailedLogoUrl] = useState("");
+  const visibleLogoUrl = logoUrl && failedLogoUrl !== logoUrl ? logoUrl : "";
   const mediaUrls = featuredProjectMediaUrls.length
     ? featuredProjectMediaUrls
     : portfolioProof.mediaUrls;
+  const hasSpotlightMedia = mediaUrls.length > 0;
   const photoCountLabel =
     mediaUrls.length === 1
       ? t("homeOnePhoto", language)
@@ -1713,8 +1809,11 @@ function SpotlightCard({ business, language, onViewProfile }) {
         : t("homeSpotlightRelationshipHint", language);
 
   return (
-    <article style={spotlightCard}>
-      <div style={spotlightHero}>
+    <article className="home-spotlight-card" style={spotlightCard}>
+      <div
+        className={`home-spotlight-hero${hasSpotlightMedia ? "" : " is-placeholder"}`}
+        style={spotlightHero}
+      >
         <SpotlightSlideshow
           key={presentationId}
           presentationId={presentationId}
@@ -1725,23 +1824,59 @@ function SpotlightCard({ business, language, onViewProfile }) {
           previousLabel={t("homePreviousPhoto", language)}
           nextLabel={t("homeNextPhoto", language)}
         />
-        <div style={spotlightHeroOverlay} />
-        <div style={spotlightHeroCopy}>
-          <span style={spotlightStoryEyebrow}>{t("homeSpotlightStoryEyebrow", language)}</span>
-          <h3 style={spotlightStoryTitle}>{storyTitle}</h3>
-          <p style={spotlightStoryBody}>{storyBody}</p>
+        <div
+          style={hasSpotlightMedia ? spotlightHeroOverlay : spotlightHeroPlaceholderOverlay}
+        />
+        <div
+          className="home-spotlight-hero-copy"
+          style={{
+            ...spotlightHeroCopy,
+            ...(!hasSpotlightMedia ? spotlightHeroCopyPlaceholder : {}),
+          }}
+        >
+          <span
+            style={{
+              ...spotlightStoryEyebrow,
+              ...(!hasSpotlightMedia ? spotlightStoryEyebrowPlaceholder : {}),
+            }}
+          >
+            {t("homeSpotlightStoryEyebrow", language)}
+          </span>
+          <h3
+            className="home-spotlight-story-title"
+            style={{
+              ...spotlightStoryTitle,
+              ...(!hasSpotlightMedia ? spotlightStoryTitlePlaceholder : {}),
+            }}
+          >
+            {storyTitle}
+          </h3>
+          <p
+            className="home-spotlight-story-body"
+            style={{
+              ...spotlightStoryBody,
+              ...(!hasSpotlightMedia ? spotlightStoryBodyPlaceholder : {}),
+            }}
+          >
+            {storyBody}
+          </p>
         </div>
       </div>
 
-      <div style={spotlightContent}>
+      <div className="home-spotlight-content" style={spotlightContent}>
         <span style={spotlightBusinessIntro}>
           {t("homeSpotlightBusinessIntro", language)}
         </span>
 
         <div style={spotlightBusinessRow}>
-          <div style={spotlightLogoWrap}>
-            {logoUrl ? (
-              <img src={logoUrl} alt="" style={spotlightLogoImage} />
+          <div style={spotlightLogoWrap} aria-hidden="true">
+            {visibleLogoUrl ? (
+              <img
+                src={visibleLogoUrl}
+                alt=""
+                style={spotlightLogoImage}
+                onError={() => setFailedLogoUrl(visibleLogoUrl)}
+              />
             ) : (
               <span style={spotlightLogoFallback}>
                 {String(name || "M").charAt(0).toUpperCase()}
@@ -1749,9 +1884,9 @@ function SpotlightCard({ business, language, onViewProfile }) {
             )}
           </div>
 
-          <div style={spotlightBusinessText}>
-            <strong style={spotlightName}>{name}</strong>
-            <span style={spotlightCategory}>{category}</span>
+          <div className="home-spotlight-business-text" style={spotlightBusinessText}>
+            <strong style={spotlightName} title={name}>{name}</strong>
+            <span style={spotlightCategory} title={category}>{category}</span>
             {servingLine && (
               <span style={spotlightServingLine}>{servingLine}</span>
             )}
@@ -1763,7 +1898,12 @@ function SpotlightCard({ business, language, onViewProfile }) {
           {t("homeSpotlightProofLine", language)}
         </p>
 
-        <button type="button" style={spotlightButton} onClick={onViewProfile}>
+        <button
+          type="button"
+          className="home-spotlight-button"
+          style={spotlightButton}
+          onClick={onViewProfile}
+        >
           {t("homeViewProfile", language)}
         </button>
       </div>
@@ -2789,15 +2929,15 @@ const spotlightRow = {
   maxWidth: "100%",
   minWidth: 0,
   display: "flex",
-  alignItems: "flex-start",
-  gap: "14px",
+  alignItems: "stretch",
+  gap: "16px",
   overflowX: "auto",
   overflowY: "hidden",
   WebkitOverflowScrolling: "touch",
   overscrollBehaviorX: "contain",
   scrollbarWidth: "none",
   scrollSnapType: "x mandatory",
-  padding: "2px 2px 10px",
+  padding: "4px 2px 12px",
   boxSizing: "border-box",
 };
 
@@ -2892,25 +3032,27 @@ const spotlightSubtitle = {
 };
 
 const spotlightCard = {
-  width: "88vw",
-  maxWidth: "520px",
+  width: "min(84vw, 460px)",
+  maxWidth: "460px",
   flex: "0 0 auto",
   boxSizing: "border-box",
   scrollSnapAlign: "start",
-  borderRadius: "30px",
+  borderRadius: "24px",
   border: "1px solid var(--meetro-color-line)",
   background: "var(--meetro-surface-paper)",
-  boxShadow: "var(--meetro-shadow-lifted)",
+  boxShadow: "0 12px 32px rgba(31,77,52,0.11)",
   overflow: "hidden",
   color: "var(--meetro-color-ink)",
+  display: "flex",
+  flexDirection: "column",
 };
 
 const spotlightHero = {
   position: "relative",
-  height: "320px",
-  minHeight: "320px",
+  height: "clamp(250px, 56vw, 292px)",
+  minHeight: "250px",
   overflow: "hidden",
-  background: "#111827",
+  background: "var(--meetro-surface-sage)",
 };
 
 const spotlightHeroOverlay = {
@@ -2918,17 +3060,31 @@ const spotlightHeroOverlay = {
   inset: 0,
   pointerEvents: "none",
   background:
-    "linear-gradient(0deg, rgba(15,23,42,0.86), rgba(15,23,42,0.38) 58%, rgba(15,23,42,0.14)), linear-gradient(90deg, rgba(15,23,42,0.62), rgba(15,23,42,0.12))",
+    "linear-gradient(0deg, rgba(15,23,42,0.80), rgba(15,23,42,0.28) 58%, rgba(15,23,42,0.08))",
+};
+
+const spotlightHeroPlaceholderOverlay = {
+  position: "absolute",
+  inset: 0,
+  pointerEvents: "none",
+  background:
+    "linear-gradient(0deg, rgba(247,242,232,0.98), rgba(247,242,232,0.68) 58%, rgba(247,242,232,0.08))",
 };
 
 const spotlightHeroCopy = {
   position: "absolute",
-  left: "18px",
-  right: "18px",
-  bottom: "18px",
+  left: "54px",
+  right: "54px",
+  bottom: "16px",
   color: "#fff",
   display: "grid",
-  gap: "8px",
+  gap: "7px",
+  justifyItems: "center",
+  textAlign: "center",
+};
+
+const spotlightHeroCopyPlaceholder = {
+  color: "var(--meetro-color-forest)",
 };
 
 const spotlightStoryEyebrow = {
@@ -2939,66 +3095,86 @@ const spotlightStoryEyebrow = {
   backdropFilter: "blur(12px)",
   WebkitBackdropFilter: "blur(12px)",
   color: "#fde68a",
-  padding: "7px 10px",
-  fontSize: "11px",
+  padding: "5px 8px",
+  fontSize: "10px",
   lineHeight: 1,
   fontWeight: "950",
-  letterSpacing: "0.07em",
+  letterSpacing: "0.06em",
   textTransform: "uppercase",
+};
+
+const spotlightStoryEyebrowPlaceholder = {
+  border: "1px solid rgba(31,77,52,0.16)",
+  background: "rgba(255,255,255,0.56)",
+  color: "var(--meetro-color-wood)",
 };
 
 const spotlightStoryTitle = {
   margin: 0,
+  width: "100%",
+  maxWidth: "360px",
   color: "#fff",
-  fontSize: "clamp(1.75rem, 6vw, 2.7rem)",
-  lineHeight: 0.98,
+  fontSize: "clamp(1.6rem, 4.5vw, 2.05rem)",
+  lineHeight: 1.04,
   letterSpacing: 0,
   fontWeight: "950",
   textShadow: "0 16px 34px rgba(0,0,0,0.42)",
+  overflowWrap: "anywhere",
+};
+
+const spotlightStoryTitlePlaceholder = {
+  color: "var(--meetro-color-forest)",
+  textShadow: "none",
 };
 
 const spotlightStoryBody = {
   margin: 0,
-  maxWidth: "420px",
-  color: "rgba(255,255,255,0.90)",
-  fontSize: "14px",
-  lineHeight: 1.45,
-  fontWeight: "760",
+  maxWidth: "340px",
+  color: "rgba(255,255,255,0.88)",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: "650",
   textShadow: "0 10px 26px rgba(0,0,0,0.38)",
+};
+
+const spotlightStoryBodyPlaceholder = {
+  color: "var(--meetro-color-muted)",
+  textShadow: "none",
 };
 
 const spotlightContent = {
   display: "grid",
-  gap: "12px",
-  padding: "15px 16px 17px",
+  gap: "10px",
+  padding: "14px 16px 16px",
   minWidth: 0,
+  flex: 1,
 };
 
 const spotlightBusinessIntro = {
   color: "#b7791f",
-  fontSize: "12px",
+  fontSize: "10px",
   fontWeight: "950",
-  letterSpacing: "0.05em",
+  letterSpacing: "0.06em",
   textTransform: "uppercase",
 };
 
 const spotlightBusinessRow = {
   display: "flex",
   alignItems: "center",
-  gap: "13px",
+  gap: "11px",
   minWidth: 0,
 };
 
 const spotlightLogoWrap = {
-  width: "46px",
-  height: "46px",
+  width: "42px",
+  height: "42px",
   borderRadius: "50%",
   overflow: "hidden",
-  background: "#0f172a",
+  background: "var(--meetro-color-forest)",
   display: "grid",
   placeItems: "center",
   flexShrink: 0,
-  boxShadow: "0 10px 24px rgba(15,23,42,0.18)",
+  boxShadow: "0 7px 18px rgba(31,77,52,0.16)",
 };
 
 const spotlightLogoImage = {
@@ -3010,48 +3186,56 @@ const spotlightLogoImage = {
 
 const spotlightLogoFallback = {
   color: "#ffffff",
-  fontSize: "22px",
+  fontSize: "19px",
   fontWeight: "950",
 };
 
 const spotlightBusinessText = {
   display: "grid",
-  gap: "3px",
+  gap: "2px",
   minWidth: 0,
 };
 
 const spotlightName = {
   color: "var(--meetro-color-ink)",
-  fontSize: "19px",
+  fontSize: "17px",
+  lineHeight: 1.16,
   fontWeight: "950",
   overflow: "hidden",
   textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
+  overflowWrap: "anywhere",
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
 };
 
 const spotlightCategory = {
   color: "var(--meetro-color-muted)",
-  fontSize: "14px",
-  fontWeight: "850",
+  fontSize: "13px",
+  lineHeight: 1.3,
+  fontWeight: "750",
   overflow: "hidden",
   textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
   overflowWrap: "anywhere",
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
 };
 
 const spotlightServingLine = {
   color: "var(--meetro-color-muted)",
-  fontSize: "12px",
-  fontWeight: "850",
+  fontSize: "11px",
+  lineHeight: 1.32,
+  fontWeight: "750",
   overflowWrap: "anywhere",
 };
 
 const spotlightDescription = {
   margin: 0,
   color: "var(--meetro-color-muted)",
-  fontSize: "14px",
+  fontSize: "13px",
   lineHeight: 1.38,
-  fontWeight: "650",
+  fontWeight: "620",
   overflowWrap: "anywhere",
   display: "-webkit-box",
   WebkitLineClamp: 2,
@@ -3060,16 +3244,20 @@ const spotlightDescription = {
 };
 
 const spotlightButton = {
-  width: "100%",
-  minHeight: "46px",
+  width: "auto",
+  minHeight: "44px",
   border: "0",
-  borderRadius: "999px",
+  borderRadius: "14px",
   background: "var(--meetro-gradient-community-action)",
   color: "#ffffff",
-  fontSize: "15px",
-  fontWeight: "950",
+  padding: "0 20px",
+  fontSize: "14px",
+  fontWeight: "900",
   cursor: "pointer",
-  boxShadow: "0 12px 28px rgba(31,77,52,0.22)",
+  boxShadow: "0 8px 20px rgba(31,77,52,0.18)",
+  justifySelf: "start",
+  marginTop: "auto",
+  transition: "filter 160ms ease, transform 160ms ease",
 };
 
 const sectionEyebrow = {

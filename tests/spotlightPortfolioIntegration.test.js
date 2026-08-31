@@ -128,10 +128,10 @@ test("Spotlight cards and media state use exact canonical identities without sha
   );
   assert.match(homeSource, /key=\{presentationId\}/);
   assert.match(homeSource, /presentationId=\{presentationId\}/);
-  assert.match(homeSource, /alignItems:\s*"flex-start"/);
+  assert.match(homeSource, /alignItems:\s*"stretch"/);
   assert.match(
     homeSource,
-    /const spotlightHero = \{[\s\S]*height:\s*"320px"[\s\S]*minHeight:\s*"320px"/
+    /const spotlightHero = \{[\s\S]*height:\s*"clamp\(250px, 56vw, 292px\)"[\s\S]*minHeight:\s*"250px"/
   );
   assert.doesNotMatch(
     homeSource,
