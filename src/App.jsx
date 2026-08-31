@@ -1472,7 +1472,13 @@ if (page === "employeeAlerts") {
       title={t("fieldNavAlerts", language)}
       description={t("fieldAlertsDescription", language)}
     >
-      {withSuspense(<Notifications setPage={setPage} employeeMode />)}
+      {withSuspense(
+        <Notifications
+          setPage={setPage}
+          employeeMode
+          employeeBusinessId={fieldMembership.businessId}
+        />
+      )}
     </EmployeeShell>,
     updateNotice
   );

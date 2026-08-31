@@ -14,6 +14,10 @@ import {
   parseCanonicalConversationRoute,
 } from "../src/utils/canonicalConversationMessaging.js";
 import {
+  buildFieldCustomerAlertRoute,
+  resolveFieldCustomerAlertDestination,
+} from "../src/utils/fieldCustomerCommunicationApi.js";
+import {
   ALERT_CENTER_PAGE_SIZE,
   ALERT_CENTER_VIEWS,
   DEFAULT_ALERT_CENTER_VIEW,
@@ -270,7 +274,106 @@ test("canonical conversation destination produces the exact governed Alert retur
   assert.match(notificationsSource, /t\(destinationTarget\.labelKey, language\)/);
   assert.match(
     notificationsSource,
-    /onOpenDestination\(destinationTarget\.route\)/
+    /onOpenDestination\(alert, destinationTarget\.route\)/
+  );
+});
+
+test("Field communication Alert resolver produces only the exact customer Messages route", async () => {
+  const jobId = "072c8736-5d97-4253-ba3e-dd1bce281a20";
+  const calls = [];
+  const response = await resolveFieldCustomerAlertDestination(
+    "301",
+    { businessId: 7 },
+    async (path, options, setPage) => {
+      calls.push({ path, options, setPage });
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          code: "FIELD_CUSTOMER_ALERT_DESTINATION_RESOLVED",
+          destination: { businessId: 7, jobId, audience: "customer" },
+        },
+      };
+    }
+  );
+  assert.equal(
+    buildFieldCustomerAlertRoute(response.destination),
+    `employeeMessages?businessId=7&jobId=${jobId}&audience=customer`
+  );
+  assert.equal("assignmentId" in response.destination, false);
+  assert.deepEqual(calls, [{
+    path: "/employee/alerts/301/customer-conversation-destination?businessId=7",
+    options: { method: "GET", cache: "no-store" },
+    setPage: undefined,
+  }]);
+});
+
+test("Field communication Alert resolver rejects malformed authority without routing", async () => {
+  let unsafeSetPageCalls = 0;
+  await assert.rejects(
+    resolveFieldCustomerAlertDestination(
+      301,
+      { businessId: 7 },
+      async (_path, _options, setPage) => {
+        if (setPage) unsafeSetPageCalls += 1;
+        return {
+          response: { ok: true, status: 200 },
+          data: {
+            success: true,
+            code: "FIELD_CUSTOMER_ALERT_DESTINATION_RESOLVED",
+            destination: {
+              businessId: 7,
+              jobId: "072c8736-5d97-4253-ba3e-dd1bce281a20",
+              assignmentId: "a7c9a660-c087-4af1-b139-8d77f8d69b33",
+              audience: "customer",
+            },
+          },
+        };
+      }
+    ),
+    (error) => error.code === "FIELD_CUSTOMER_ALERT_DESTINATION_MALFORMED"
+  );
+  assert.equal(unsafeSetPageCalls, 0);
+  assert.equal(buildFieldCustomerAlertRoute(null), null);
+  assert.equal(buildFieldCustomerAlertRoute({
+    businessId: 7,
+    jobId: "not-a-job",
+    audience: "customer",
+  }), null);
+});
+
+test("Field resolver failure stays on Alerts while normal Alert routing is unchanged", async () => {
+  await assert.rejects(
+    resolveFieldCustomerAlertDestination(
+      301,
+      { businessId: 7 },
+      async (_path, _options, setPage) => {
+        assert.equal(setPage, undefined);
+        return {
+          response: { ok: false, status: 404 },
+          data: {
+            success: false,
+            code: "FIELD_CUSTOMER_ALERT_DESTINATION_UNAVAILABLE",
+            message: "Unavailable.",
+          },
+        };
+      }
+    ),
+    (error) => error.code === "FIELD_CUSTOMER_ALERT_DESTINATION_UNAVAILABLE"
+  );
+  assert.match(
+    notificationsSource,
+    /employeeMode && alert\.destination\?\.type === "conversation"/
+  );
+  assert.match(notificationsSource, /setPageRef\.current\(canonicalRoute\)/);
+  assert.match(notificationsSource, /alertCenterDestinationUnavailable/);
+  assert.doesNotMatch(
+    notificationsSource,
+    /catch[\s\S]{0,400}setPageRef\.current\((?:canonicalRoute|"employeeHome"|'employeeHome')\)/
+  );
+  assert.match(
+    appSource,
+    /employeeMode[\s\S]{0,120}employeeBusinessId=\{fieldMembership\.businessId\}/
   );
 });
 

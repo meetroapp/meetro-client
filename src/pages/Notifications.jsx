@@ -22,6 +22,10 @@ import {
 import { refreshAlertCounts } from "../utils/alertCountCoordinator";
 import { fetchCanonicalLiveJobProjection } from "../utils/canonicalLiveJobProjection.js";
 import {
+  buildFieldCustomerAlertRoute,
+  resolveFieldCustomerAlertDestination,
+} from "../utils/fieldCustomerCommunicationApi.js";
+import {
   ALERT_CENTER_VIEWS,
   canAttemptCanonicalAlertDismiss,
   canMarkCanonicalAlertRead,
@@ -42,6 +46,8 @@ function AlertCard({
   index,
   language,
   mutationErrorKey,
+  destinationErrorKey,
+  destinationPending,
   pendingOperation,
   onDismiss,
   onMarkRead,
@@ -109,9 +115,9 @@ function AlertCard({
         </p>
       )}
 
-      {mutationErrorKey && (
+      {(mutationErrorKey || destinationErrorKey) && (
         <p className="alert-center-inline-error" role="alert">
-          {t(mutationErrorKey, language)}
+          {t(mutationErrorKey || destinationErrorKey, language)}
         </p>
       )}
 
@@ -121,7 +127,8 @@ function AlertCard({
             <button
               type="button"
               className="alert-center-button alert-center-button--primary"
-              onClick={() => onOpenDestination(destinationTarget.route)}
+              disabled={destinationPending}
+              onClick={() => onOpenDestination(alert, destinationTarget.route)}
             >
               {t(destinationTarget.labelKey, language)}
             </button>
@@ -158,7 +165,11 @@ function AlertCard({
   );
 }
 
-function Notifications({ setPage, employeeMode = false }) {
+function Notifications({
+  setPage,
+  employeeMode = false,
+  employeeBusinessId = null,
+}) {
   const language = useLanguage();
   const setPageRef = useRef(setPage);
   setPageRef.current = setPage;
@@ -167,6 +178,8 @@ function Notifications({ setPage, employeeMode = false }) {
   );
   const [pendingMutations, setPendingMutations] = useState({});
   const [mutationErrors, setMutationErrors] = useState({});
+  const [destinationErrors, setDestinationErrors] = useState({});
+  const [pendingDestinations, setPendingDestinations] = useState({});
   const [readAllPending, setReadAllPending] = useState(false);
   const [readAllErrorKey, setReadAllErrorKey] = useState("");
   const [decisionAttentionState, setDecisionAttentionState] = useState({
@@ -178,6 +191,7 @@ function Notifications({ setPage, employeeMode = false }) {
   const mountedRef = useRef(true);
   const decisionAttentionGenerationRef = useRef(0);
   const mutationTokensRef = useRef(new Map());
+  const destinationTokensRef = useRef(new Map());
   const readAllTokenRef = useRef(null);
   const controllerRef = useRef(null);
   if (!controllerRef.current) {
@@ -227,6 +241,7 @@ function Notifications({ setPage, employeeMode = false }) {
     return () => {
       mountedRef.current = false;
       mutationTokens.clear();
+      destinationTokensRef.current.clear();
       readAllTokenRef.current = null;
       controller.deactivate();
     };
@@ -246,6 +261,9 @@ function Notifications({ setPage, employeeMode = false }) {
     readAllTokenRef.current = null;
     setPendingMutations({});
     setMutationErrors({});
+    destinationTokensRef.current.clear();
+    setDestinationErrors({});
+    setPendingDestinations({});
     setReadAllPending(false);
     setReadAllErrorKey("");
     void controller.selectView(viewId);
@@ -253,6 +271,56 @@ function Notifications({ setPage, employeeMode = false }) {
 
   const handleLoadMore = () => {
     void controller.loadMore();
+  };
+
+  const handleOpenDestination = async (alert, canonicalRoute) => {
+    if (!(employeeMode && alert.destination?.type === "conversation")) {
+      setPageRef.current(canonicalRoute);
+      return;
+    }
+    if (destinationTokensRef.current.has(alert.id)) return;
+    const token = Symbol("field-alert-destination");
+    destinationTokensRef.current.set(alert.id, token);
+    setPendingDestinations((current) => ({ ...current, [alert.id]: true }));
+    setDestinationErrors((current) => {
+      const next = { ...current };
+      delete next[alert.id];
+      return next;
+    });
+    try {
+      const response = await resolveFieldCustomerAlertDestination(alert.id, {
+        businessId: employeeBusinessId,
+      });
+      const route = buildFieldCustomerAlertRoute(response.destination);
+      if (!route) throw new Error("Field customer Alert destination is unavailable.");
+      if (
+        mountedRef.current &&
+        destinationTokensRef.current.get(alert.id) === token
+      ) {
+        setPageRef.current(route);
+      }
+    } catch {
+      if (
+        mountedRef.current &&
+        destinationTokensRef.current.get(alert.id) === token
+      ) {
+        setDestinationErrors((current) => ({
+          ...current,
+          [alert.id]: "alertCenterDestinationUnavailable",
+        }));
+      }
+    } finally {
+      if (destinationTokensRef.current.get(alert.id) === token) {
+        destinationTokensRef.current.delete(alert.id);
+        if (mountedRef.current) {
+          setPendingDestinations((current) => {
+            const next = { ...current };
+            delete next[alert.id];
+            return next;
+          });
+        }
+      }
+    }
   };
 
   const runAlertMutation = async (alert, operation) => {
@@ -515,11 +583,13 @@ function Notifications({ setPage, employeeMode = false }) {
                     index={index}
                     key={`${alert.id}:${index}`}
                     language={language}
+                    destinationErrorKey={destinationErrors[alert.id]}
+                    destinationPending={Boolean(pendingDestinations[alert.id])}
                     mutationErrorKey={mutationErrors[alert.id]}
                     pendingOperation={pendingMutations[alert.id]}
                     onDismiss={(item) => runAlertMutation(item, "dismiss")}
                     onMarkRead={(item) => runAlertMutation(item, "read")}
-                    onOpenDestination={(route) => setPage(route)}
+                    onOpenDestination={handleOpenDestination}
                   />
                 ))}
               </div>
