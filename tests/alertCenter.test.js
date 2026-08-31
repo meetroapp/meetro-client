@@ -18,6 +18,10 @@ import {
   resolveFieldCustomerAlertDestination,
 } from "../src/utils/fieldCustomerCommunicationApi.js";
 import {
+  buildFieldTeamAlertRoute,
+  resolveFieldTeamAlertDestination,
+} from "../src/utils/fieldOperationsApi.js";
+import {
   ALERT_CENTER_PAGE_SIZE,
   ALERT_CENTER_VIEWS,
   DEFAULT_ALERT_CENTER_VIEW,
@@ -340,6 +344,74 @@ test("Field communication Alert resolver rejects malformed authority without rou
     jobId: "not-a-job",
     audience: "customer",
   }), null);
+});
+
+test("Field Team Alert resolver produces only the exact private Team Messages route", async () => {
+  const jobId = "072c8736-5d97-4253-ba3e-dd1bce281a20";
+  const calls = [];
+  const response = await resolveFieldTeamAlertDestination(
+    801,
+    { businessId: 7 },
+    async (path, options, setPage) => {
+      calls.push({ path, options, setPage });
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          code: "FIELD_TEAM_ALERT_DESTINATION_RESOLVED",
+          destination: { businessId: 7, jobId, audience: "team" },
+        },
+      };
+    }
+  );
+  assert.equal(
+    buildFieldTeamAlertRoute(response.destination),
+    `employeeMessages?businessId=7&jobId=${jobId}&audience=team`
+  );
+  assert.equal("assignmentId" in response.destination, false);
+  assert.deepEqual(calls, [{
+    path: "/employee/alerts/801/team-message-destination?businessId=7",
+    options: { method: "GET", cache: "no-store" },
+    setPage: undefined,
+  }]);
+});
+
+test("Field Team Alert rejects stale or malformed authority without an unsafe route", async () => {
+  await assert.rejects(
+    resolveFieldTeamAlertDestination(
+      801,
+      { businessId: 7 },
+      async (_path, _options, setPage) => {
+        assert.equal(setPage, undefined);
+        return {
+          response: { ok: false, status: 404 },
+          data: {
+            success: false,
+            code: "FIELD_TEAM_ALERT_DESTINATION_UNAVAILABLE",
+            message: "Unavailable.",
+          },
+        };
+      }
+    ),
+    (error) => error.code === "FIELD_TEAM_ALERT_DESTINATION_UNAVAILABLE"
+  );
+  assert.equal(buildFieldTeamAlertRoute({
+    businessId: 7,
+    jobId: "072c8736-5d97-4253-ba3e-dd1bce281a20",
+    assignmentId: "a7c9a660-c087-4af1-b139-8d77f8d69b33",
+    audience: "team",
+  }), null);
+  assert.equal(buildFieldTeamAlertRoute({
+    businessId: 7,
+    jobId: "072c8736-5d97-4253-ba3e-dd1bce281a20",
+    audience: "customer",
+  }), null);
+  assert.match(notificationsSource, /alert\.titleKey === "alerts\.work\.fieldMessage\.title"/);
+  assert.match(notificationsSource, /buildFieldTeamAlertRoute\(response\.destination\)/);
+  assert.doesNotMatch(
+    notificationsSource,
+    /catch[\s\S]{0,400}setPageRef\.current\((?:canonicalRoute|"employeeHome"|'employeeHome')\)/
+  );
 });
 
 test("Field resolver failure stays on Alerts while normal Alert routing is unchanged", async () => {

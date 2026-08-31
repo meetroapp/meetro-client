@@ -62,6 +62,10 @@ import {
   shouldRenderCurrentVisitInline,
 } from "../utils/communicationSchedulePlacement";
 import {
+  fetchManagedFieldCommunications,
+  sendFieldMessage,
+} from "../utils/fieldOperationsApi";
+import {
   getWorkflowMessageProps,
   isWorkflowMessageType,
   isWorkflowType,
@@ -654,6 +658,121 @@ const MessageItem = memo(({ message }) => {
   );
 });
 
+function teamMessageCommandKey() {
+  if (globalThis.crypto?.randomUUID) {
+    return `business-team-message-${globalThis.crypto.randomUUID()}`;
+  }
+  return `business-team-message-${Date.now()}-${Math.random()
+    .toString(16)
+    .slice(2)}`;
+}
+
+function BusinessTeamCommunicationPane({
+  language,
+  communications,
+  selectedAssignmentId,
+  onSelectAssignment,
+  draft,
+  onDraftChange,
+  onSubmit,
+  sending,
+  error,
+}) {
+  const fieldEmployeeRole = ["FIELD", "EMPLOYEE"].join("_");
+  const selected = communications.find(
+    (item) => item.assignmentId === selectedAssignmentId
+  ) || communications[0] || null;
+  const messages = selected?.messages || [];
+
+  return (
+    <section
+      className="business-team-communication"
+      style={businessTeamPane}
+      aria-label={t("conversationTeamPrivate", language)}
+    >
+      <header style={businessTeamHeader}>
+        <div style={businessTeamHeaderCopy}>
+          <span style={businessTeamEyebrow}>
+            {t("conversationTeamPrivate", language)}
+          </span>
+          <strong>
+            {selected?.employee?.name
+              ? `${selected.employee.name} · ${t("conversationDelegatedFieldEmployeeRole", language)}`
+              : t("conversationTeamNoAssignment", language)}
+          </strong>
+          <p>{t("conversationTeamPrivateNotice", language)}</p>
+        </div>
+        {communications.length > 1 ? (
+          <label style={businessTeamSelector}>
+            <span>{t("conversationTeamAssignedEmployee", language)}</span>
+            <select
+              value={selectedAssignmentId}
+              onChange={(event) => onSelectAssignment(event.target.value)}
+            >
+              {communications.map((item) => (
+                <option key={item.assignmentId} value={item.assignmentId}>
+                  {item.employee?.name || t("conversationTeamMember", language)}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
+      </header>
+
+      <div
+        className="business-team-communication__messages"
+        style={businessTeamMessages}
+        data-team-storage="business_job_field_messages"
+      >
+        {!selected ? (
+          <div style={businessTeamEmpty} role="status">
+            {t("conversationTeamNoAssignment", language)}
+          </div>
+        ) : messages.length ? (
+          messages.map((message) => (
+            <article key={message.id} style={businessTeamMessage}>
+              <div style={businessTeamMessageMeta}>
+                <strong>
+                  {message.senderName || t("conversationTeamMember", language)}
+                  {message.senderRole === fieldEmployeeRole
+                    ? ` · ${t("conversationDelegatedFieldEmployeeRole", language)}`
+                    : ""}
+                </strong>
+                <span>{formatMessageTime(message.createdAt)}</span>
+              </div>
+              <p>{message.message}</p>
+            </article>
+          ))
+        ) : (
+          <div style={businessTeamEmpty} role="status">
+            {t("conversationTeamNoMessages", language)}
+          </div>
+        )}
+      </div>
+
+      <form style={businessTeamComposer} onSubmit={onSubmit}>
+        <textarea
+          value={draft}
+          maxLength={5000}
+          rows={2}
+          disabled={!selected || sending}
+          onChange={(event) => onDraftChange(event.target.value)}
+          placeholder={t("conversationTeamMessagePlaceholder", language)}
+        />
+        <button
+          type="submit"
+          disabled={!selected || sending || !draft.trim()}
+        >
+          {sending
+            ? t("fieldSending", language)
+            : t("conversationTeamSend", language)}
+        </button>
+      </form>
+      {error ? <div style={businessTeamError} role="alert">{error}</div> : null}
+    </section>
+  );
+}
+
 function resolveSupportedLegacyConversationRecord({
   conversationId,
   isCanonicalThread,
@@ -751,6 +870,17 @@ function ConversationThreadInner({
     authority: null,
   });
   const [canonicalSendPending, setCanonicalSendPending] = useState(false);
+  const [communicationAudience, setCommunicationAudience] = useState("customer");
+  const [managedTeamState, setManagedTeamState] = useState({
+    phase: "idle",
+    communications: [],
+    error: "",
+  });
+  const [selectedTeamAssignmentId, setSelectedTeamAssignmentId] = useState("");
+  const [teamDrafts, setTeamDrafts] = useState({});
+  const [teamCommandKeys, setTeamCommandKeys] = useState({});
+  const [teamSendPending, setTeamSendPending] = useState(false);
+  const managedTeamRequestRef = useRef(0);
   const [canonicalReloadKey, setCanonicalReloadKey] = useState(0);
   const [canonicalReadSnapshot, setCanonicalReadSnapshot] = useState(null);
   const [canonicalDispatchPending, setCanonicalDispatchPending] =
@@ -1246,6 +1376,195 @@ useEffect(() => {
   const canonicalJobId = String(
     canonicalConversationDetail?.relationship?.jobId || ""
   ).trim();
+  const canonicalBusinessId = Number(
+    canonicalConversationDetail?.participants?.business?.id
+  );
+  const managedTeamEligible = Boolean(
+    isCanonicalThread &&
+    !isCanonicalEmergencyThread &&
+    currentViewerRole === "business" &&
+    canonicalJobId &&
+    Number.isSafeInteger(canonicalBusinessId) &&
+    canonicalBusinessId > 0
+  );
+
+  const refreshManagedTeamCommunications = useCallback(
+    async ({ loading = true } = {}) => {
+      if (!managedTeamEligible) return;
+      const requestId = managedTeamRequestRef.current + 1;
+      managedTeamRequestRef.current = requestId;
+      if (loading) {
+        setManagedTeamState((current) => ({
+          ...current,
+          phase: current.communications.length ? "refreshing" : "loading",
+          error: "",
+        }));
+      }
+      try {
+        const result = await fetchManagedFieldCommunications(
+          canonicalJobId,
+          canonicalBusinessId,
+          setPage
+        );
+        if (managedTeamRequestRef.current !== requestId) return;
+        if (
+          Number(result.businessId) !== canonicalBusinessId ||
+          result.jobId !== canonicalJobId ||
+          !Array.isArray(result.communications)
+        ) {
+          throw new Error("Managed Team communication identity is invalid.");
+        }
+        const communications = result.communications.filter(
+          (item) =>
+            item?.jobId === canonicalJobId &&
+            typeof item.assignmentId === "string" &&
+            item.assignmentId &&
+            Array.isArray(item.messages)
+        );
+        setManagedTeamState({
+          phase: "ready",
+          communications,
+          error: "",
+        });
+        setSelectedTeamAssignmentId((current) =>
+          communications.some((item) => item.assignmentId === current)
+            ? current
+            : communications[0]?.assignmentId || ""
+        );
+      } catch {
+        if (managedTeamRequestRef.current !== requestId) return;
+        setManagedTeamState({
+          phase: "unavailable",
+          communications: [],
+          error: t("conversationTeamUnavailable", language),
+        });
+        setSelectedTeamAssignmentId("");
+        setCommunicationAudience("customer");
+      }
+    },
+    [
+      canonicalBusinessId,
+      canonicalJobId,
+      language,
+      managedTeamEligible,
+      setPage,
+    ]
+  );
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return;
+      setCommunicationAudience("customer");
+      setSelectedTeamAssignmentId("");
+      if (managedTeamEligible) {
+        void refreshManagedTeamCommunications();
+      } else {
+        setManagedTeamState({
+          phase: "idle",
+          communications: [],
+          error: "",
+        });
+      }
+    });
+    return () => {
+      active = false;
+      managedTeamRequestRef.current += 1;
+    };
+  }, [canonicalConversationId, managedTeamEligible, refreshManagedTeamCommunications]);
+
+  useEffect(() => {
+    if (communicationAudience !== "team" || !managedTeamEligible) {
+      return undefined;
+    }
+    const refreshVisibleTeam = () => {
+      void refreshManagedTeamCommunications({ loading: false });
+    };
+    const refreshTeamWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshVisibleTeam();
+    };
+    window.addEventListener("focus", refreshVisibleTeam);
+    document.addEventListener("visibilitychange", refreshTeamWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshVisibleTeam);
+      document.removeEventListener("visibilitychange", refreshTeamWhenVisible);
+    };
+  }, [
+    communicationAudience,
+    managedTeamEligible,
+    refreshManagedTeamCommunications,
+  ]);
+
+  const selectedTeamCommunication =
+    managedTeamState.communications.find(
+      (item) => item.assignmentId === selectedTeamAssignmentId
+    ) || managedTeamState.communications[0] || null;
+  const teamDraftKey = selectedTeamCommunication
+    ? `${canonicalJobId}:team:${selectedTeamCommunication.assignmentId}`
+    : "";
+  const teamDraft = teamDrafts[teamDraftKey] || "";
+
+  const updateManagedTeamDraft = (value) => {
+    if (!teamDraftKey) return;
+    setTeamDrafts((current) => ({ ...current, [teamDraftKey]: value }));
+    setTeamCommandKeys((current) => ({ ...current, [teamDraftKey]: "" }));
+    setManagedTeamState((current) => ({ ...current, error: "" }));
+  };
+
+  const sendManagedTeamMessage = async (event) => {
+    event.preventDefault();
+    const message = teamDraft.trim();
+    if (!selectedTeamCommunication || !teamDraftKey || !message || teamSendPending) {
+      return;
+    }
+    const idempotencyKey =
+      teamCommandKeys[teamDraftKey] || teamMessageCommandKey();
+    setTeamCommandKeys((current) => ({
+      ...current,
+      [teamDraftKey]: idempotencyKey,
+    }));
+    setTeamSendPending(true);
+    setManagedTeamState((current) => ({ ...current, error: "" }));
+    try {
+      await sendFieldMessage(
+        canonicalJobId,
+        {
+          businessId: canonicalBusinessId,
+          assignmentId: selectedTeamCommunication.assignmentId,
+          message,
+          idempotencyKey,
+        },
+        { managed: true, setPage }
+      );
+      setTeamDrafts((current) =>
+        current[teamDraftKey] === teamDraft
+          ? { ...current, [teamDraftKey]: "" }
+          : current
+      );
+      setTeamCommandKeys((current) => ({ ...current, [teamDraftKey]: "" }));
+      await refreshManagedTeamCommunications({ loading: false });
+    } catch {
+      setManagedTeamState((current) => ({
+        ...current,
+        error: t("conversationTeamSendFailed", language),
+      }));
+    } finally {
+      setTeamSendPending(false);
+    }
+  };
+
+  const selectCommunicationAudience = (audience) => {
+    if (!["customer", "team"].includes(audience)) return;
+    if (audience === "team" && managedTeamState.phase !== "ready") return;
+    setShowCallMenu(false);
+    setShowThreadMenu(false);
+    setShowAttachMenu(false);
+    setShowScheduleModal(false);
+    setCommunicationAudience(audience);
+    if (audience === "team") {
+      void refreshManagedTeamCommunications({ loading: false });
+    }
+  };
   const canonicalDeliveredQuoteIds = useMemo(
     () =>
       messages
@@ -5558,6 +5877,42 @@ const handleImageUpload = (event) => {
           </button>
         </div>
 
+        {managedTeamState.phase === "ready" ? (
+          <div
+            className="business-communication-audience"
+            style={businessCommunicationAudience}
+            role="group"
+            aria-label={t("conversationCommunicationAudience", language)}
+          >
+            <button
+              type="button"
+              style={{
+                ...businessCommunicationAudienceButton,
+                ...(communicationAudience === "customer"
+                  ? businessCommunicationAudienceButtonActive
+                  : {}),
+              }}
+              aria-pressed={communicationAudience === "customer"}
+              onClick={() => selectCommunicationAudience("customer")}
+            >
+              {t("conversationAudienceCustomer", language)}
+            </button>
+            <button
+              type="button"
+              style={{
+                ...businessCommunicationAudienceButton,
+                ...(communicationAudience === "team"
+                  ? businessCommunicationAudienceButtonActive
+                  : {}),
+              }}
+              aria-pressed={communicationAudience === "team"}
+              onClick={() => selectCommunicationAudience("team")}
+            >
+              {t("conversationAudienceTeamPrivate", language)}
+            </button>
+          </div>
+        ) : null}
+
         {appointmentReminderNotice && (
           <div style={appointmentReminderNoticeCard}>
             <div>
@@ -6497,6 +6852,23 @@ const handleImageUpload = (event) => {
             </div>
           )}
 
+          {communicationAudience === "team" && managedTeamState.phase === "ready" ? (
+            <BusinessTeamCommunicationPane
+              language={language}
+              communications={managedTeamState.communications}
+              selectedAssignmentId={selectedTeamCommunication?.assignmentId || ""}
+              onSelectAssignment={(assignmentId) => {
+                setSelectedTeamAssignmentId(assignmentId);
+                setManagedTeamState((current) => ({ ...current, error: "" }));
+              }}
+              draft={teamDraft}
+              onDraftChange={updateManagedTeamDraft}
+              onSubmit={sendManagedTeamMessage}
+              sending={teamSendPending}
+              error={managedTeamState.error}
+            />
+          ) : (
+          <>
           <div className="chat-messages conversation-messages" style={messagesScroll}>
             <div style={threadSearchRow}>
               <div style={threadSearchInputWrap}>
@@ -7485,8 +7857,11 @@ const handleImageUpload = (event) => {
           </div>
         )}
 
+          </>
+          )}
         </div>
 
+        {communicationAudience !== "team" ? (
         <div className="chat-bottom-stack" style={bottomStack}>
           {canUseMessageComposer &&
           !showAttachMenu &&
@@ -7936,6 +8311,7 @@ const handleImageUpload = (event) => {
           </>
           )}
         </div>
+        ) : null}
 
         {showClearConfirm && (
           <div style={confirmOverlay}>
@@ -10957,6 +11333,136 @@ const composer = {
   minWidth: 0,
   boxSizing: "border-box",
   overflowX: "hidden",
+};
+
+const businessCommunicationAudience = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "6px",
+  padding: "8px 12px",
+  borderBottom: "1px solid #e5e7eb",
+  background: "#ffffff",
+  minWidth: 0,
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+const businessCommunicationAudienceButton = {
+  minWidth: 0,
+  minHeight: "38px",
+  border: "1px solid #d8dee8",
+  borderRadius: "12px",
+  background: "#f8fafc",
+  color: "#475467",
+  fontWeight: 800,
+  cursor: "pointer",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
+const businessCommunicationAudienceButtonActive = {
+  background: "var(--meetro-color-forest, #1f4d34)",
+  borderColor: "var(--meetro-color-forest, #1f4d34)",
+  color: "#ffffff",
+};
+
+const businessTeamPane = {
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+  maxWidth: "100%",
+  overflow: "hidden",
+  display: "grid",
+  gridTemplateRows: "auto minmax(0, 1fr) auto auto",
+  background: "#f7faf8",
+};
+
+const businessTeamHeader = {
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "space-between",
+  gap: "12px",
+  padding: "14px",
+  borderBottom: "1px solid #dfe8e1",
+  minWidth: 0,
+  flexWrap: "wrap",
+};
+
+const businessTeamHeaderCopy = {
+  display: "grid",
+  gap: "4px",
+  minWidth: 0,
+  flex: "1 1 220px",
+};
+
+const businessTeamEyebrow = {
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "12px",
+  fontWeight: 900,
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+};
+
+const businessTeamSelector = {
+  display: "grid",
+  gap: "4px",
+  minWidth: 0,
+  flex: "1 1 180px",
+  fontSize: "12px",
+  fontWeight: 800,
+};
+
+const businessTeamMessages = {
+  minHeight: 0,
+  minWidth: 0,
+  overflowY: "auto",
+  overflowX: "hidden",
+  padding: "14px",
+  display: "grid",
+  alignContent: "start",
+  gap: "10px",
+};
+
+const businessTeamMessage = {
+  minWidth: 0,
+  padding: "12px",
+  borderRadius: "14px",
+  background: "#ffffff",
+  border: "1px solid #e2e8e4",
+  overflowWrap: "anywhere",
+};
+
+const businessTeamMessageMeta = {
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  gap: "10px",
+  fontSize: "12px",
+};
+
+const businessTeamEmpty = {
+  padding: "22px 14px",
+  color: "#667085",
+  textAlign: "center",
+};
+
+const businessTeamComposer = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  gap: "8px",
+  padding: "12px",
+  borderTop: "1px solid #dfe8e1",
+  background: "#ffffff",
+  minWidth: 0,
+};
+
+const businessTeamError = {
+  padding: "0 12px 12px",
+  background: "#ffffff",
+  color: "#b42318",
+  fontSize: "13px",
+  fontWeight: 700,
 };
 
 const circleBtn = {

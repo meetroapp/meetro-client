@@ -1473,9 +1473,7 @@ if (page === "employeeAlerts") {
       description={t("fieldAlertsDescription", language)}
     >
       {withSuspense(
-        <Notifications
-          setPage={setPage}
-          employeeMode
+        <Notifications setPage={setPage} employeeMode
           employeeBusinessId={fieldMembership.businessId}
         />
       )}

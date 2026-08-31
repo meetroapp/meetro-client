@@ -26,6 +26,10 @@ import {
   resolveFieldCustomerAlertDestination,
 } from "../utils/fieldCustomerCommunicationApi.js";
 import {
+  buildFieldTeamAlertRoute,
+  resolveFieldTeamAlertDestination,
+} from "../utils/fieldOperationsApi.js";
+import {
   ALERT_CENTER_VIEWS,
   canAttemptCanonicalAlertDismiss,
   canMarkCanonicalAlertRead,
@@ -274,7 +278,13 @@ function Notifications({
   };
 
   const handleOpenDestination = async (alert, canonicalRoute) => {
-    if (!(employeeMode && alert.destination?.type === "conversation")) {
+    const fieldCustomerAlert =
+      employeeMode && alert.destination?.type === "conversation";
+    const fieldTeamAlert =
+      employeeMode &&
+      alert.destination?.type === "job" &&
+      alert.titleKey === "alerts.work.fieldMessage.title";
+    if (!fieldCustomerAlert && !fieldTeamAlert) {
       setPageRef.current(canonicalRoute);
       return;
     }
@@ -288,11 +298,17 @@ function Notifications({
       return next;
     });
     try {
-      const response = await resolveFieldCustomerAlertDestination(alert.id, {
-        businessId: employeeBusinessId,
-      });
-      const route = buildFieldCustomerAlertRoute(response.destination);
-      if (!route) throw new Error("Field customer Alert destination is unavailable.");
+      const response = fieldTeamAlert
+        ? await resolveFieldTeamAlertDestination(alert.id, {
+            businessId: employeeBusinessId,
+          })
+        : await resolveFieldCustomerAlertDestination(alert.id, {
+            businessId: employeeBusinessId,
+          });
+      const route = fieldTeamAlert
+        ? buildFieldTeamAlertRoute(response.destination)
+        : buildFieldCustomerAlertRoute(response.destination);
+      if (!route) throw new Error("Field Alert destination is unavailable.");
       if (
         mountedRef.current &&
         destinationTokensRef.current.get(alert.id) === token
