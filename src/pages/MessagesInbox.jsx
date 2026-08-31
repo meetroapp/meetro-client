@@ -7042,9 +7042,9 @@ const messagesHubHeader = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: "14px",
-  marginBottom: "12px",
-  padding: "2px 2px 0",
+  gap: "20px",
+  marginBottom: "18px",
+  padding: "4px 2px 0",
   boxSizing: "border-box",
   overflow: "visible",
   position: "relative",
@@ -7053,11 +7053,11 @@ const messagesHubHeader = {
 
 const messagesHubTitle = {
   margin: 0,
-  color: "#0f172a",
-  fontSize: "clamp(26px, 8vw, 32px)",
-  lineHeight: 1.05,
-  fontWeight: "950",
-  letterSpacing: 0,
+  color: "#123e29",
+  fontSize: "clamp(32px, 4.2vw, 43px)",
+  lineHeight: 1.04,
+  fontWeight: "900",
+  letterSpacing: "-0.035em",
   minWidth: 0,
   maxWidth: "100%",
   overflowWrap: "normal",
@@ -7065,16 +7065,22 @@ const messagesHubTitle = {
 };
 
 const messageSectionNavigation = {
+  ...glassNavigationSurface,
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
   display: "grid",
   gridTemplateColumns: "auto minmax(0, 1fr)",
-  gap: "9px",
+  gap: "6px",
   alignItems: "center",
-  marginBottom: "12px",
+  marginBottom: "18px",
+  padding: "6px",
+  borderRadius: "17px",
   boxSizing: "border-box",
-  overflow: "hidden",
+  overflow: "visible",
+  background: "rgba(255, 255, 255, 0.84)",
+  border: "1px solid rgba(38, 87, 57, 0.10)",
+  boxShadow: "0 8px 24px rgba(19, 63, 40, 0.045)",
 };
 
 const messageSectionTabs = {
@@ -7099,37 +7105,52 @@ const messageSectionTabs = {
 const communicationSectionTabs = {
   ...messageSectionTabs,
   marginBottom: 0,
+  padding: 0,
+  gap: "6px",
+  border: "none",
+  borderRadius: "11px",
+  background: "transparent",
+  boxShadow: "none",
+  backdropFilter: "none",
+  WebkitBackdropFilter: "none",
 };
 
 const messageSectionTab = {
   ...glassPill,
-  flex: "0 0 auto",
-  minWidth: "108px",
-  minHeight: "36px",
-  borderRadius: "999px",
-  color: "#475569",
-  padding: "8px 11px",
+  flex: "1 1 0",
+  minWidth: "0",
+  minHeight: "40px",
+  borderRadius: "11px",
+  color: "#31533f",
+  padding: "9px 14px",
   display: "grid",
   gridTemplateColumns: "minmax(0, auto) auto",
   alignContent: "center",
   justifyContent: "center",
   alignItems: "center",
-  gap: "6px",
-  fontSize: "12px",
-  fontWeight: "900",
+  gap: "7px",
+  fontSize: "13px",
+  fontWeight: "850",
   cursor: "pointer",
   boxSizing: "border-box",
   overflow: "hidden",
+  border: "1px solid transparent",
+  background: "transparent",
+  boxShadow: "none",
 };
 
 const contactsDirectoryTab = {
-  minWidth: "104px",
+  minWidth: 0,
+  width: "100%",
   marginBottom: 0,
 };
 
 const activeMessageSectionTab = {
   ...glassPillActive,
   color: "#ffffff",
+  background: "linear-gradient(135deg, #185f3a, #0c4d2d)",
+  borderColor: "transparent",
+  boxShadow: "0 7px 17px rgba(15, 82, 47, 0.17)",
 };
 
 const messageSectionTabLabel = {
@@ -7232,10 +7253,14 @@ const relationshipAddButton = {
 
 const relationshipNewChatButton = {
   ...relationshipAddButton,
-  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
-  boxShadow: "var(--meetro-shadow-soft, 0 10px 24px rgba(15,23,42,0.08))",
+  minHeight: "44px",
+  maxWidth: "min(220px, calc(100vw - 170px))",
+  padding: "10px 16px",
+  borderRadius: "12px",
+  background: "linear-gradient(135deg, #185f3a, #0b4e2d)",
+  color: "#ffffff",
+  border: "1px solid rgba(12, 78, 45, 0.22)",
+  boxShadow: "0 9px 22px rgba(15, 82, 47, 0.16)",
 };
 
 const sectionActionIcon = {
