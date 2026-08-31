@@ -74,7 +74,7 @@ public class StoreKitSubscriptions: CAPPlugin, CAPBridgedPlugin {
                         call.resolve([
                             "state": "verified",
                             "productId": transaction.productID,
-                            "signedTransactionInfo": transaction.jwsRepresentation
+                            "signedTransactionInfo": verification.jwsRepresentation
                         ])
                     case .unverified:
                         call.reject("Apple could not verify this purchase.", "STOREKIT_UNVERIFIED")
@@ -102,7 +102,7 @@ public class StoreKitSubscriptions: CAPPlugin, CAPBridgedPlugin {
                        transaction.productType == .autoRenewable {
                         transactions.append([
                             "productId": transaction.productID,
-                            "signedTransactionInfo": transaction.jwsRepresentation
+                            "signedTransactionInfo": result.jwsRepresentation
                         ])
                     }
                 }
