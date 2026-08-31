@@ -966,6 +966,250 @@ function FieldOperationsPanel({
     }
   }
 
+  if (!managed) {
+    const currentStatus =
+      operations?.currentStatus || "ASSIGNED";
+    const nextStatus = operations?.nextStatus || null;
+
+    return (
+      <section
+        className="employee-field-ops"
+        aria-label="Field operations"
+      >
+        <div className="employee-field-ops-header">
+          <div>
+            <p className="employee-jobs-eyebrow">
+              Field operations
+            </p>
+
+            <h3>Status and internal Job communication</h3>
+
+            <p>
+              Record your field progress and communicate
+              directly with your business Team.
+            </p>
+          </div>
+
+          <span className="employee-field-ops-status">
+            <span aria-hidden="true" />
+            {readableStatus(currentStatus)}
+          </span>
+        </div>
+
+        {error && (
+          <div
+            role="alert"
+            className="employee-field-ops-error"
+          >
+            {error}
+          </div>
+        )}
+
+        {loading ? (
+          <div
+            role="status"
+            className="employee-field-ops-loading"
+          >
+            Loading field evidence…
+          </div>
+        ) : (
+          <>
+            <div className="employee-field-progress-card">
+              <span
+                className="employee-field-progress-icon"
+                aria-hidden="true"
+              >
+                <MeetroIcon
+                  name="activeWork"
+                  size={27}
+                  decorative
+                />
+              </span>
+
+              <div className="employee-field-progress-copy">
+                <span>Current field status</span>
+                <strong>
+                  {readableStatus(currentStatus)}
+                </strong>
+
+                {nextStatus && (
+                  <small>
+                    Next available action:{" "}
+                    {readableStatus(nextStatus)}
+                  </small>
+                )}
+              </div>
+            </div>
+
+            {nextStatus ? (
+              <div className="employee-field-next-action">
+                <div className="employee-field-action-heading">
+                  <div>
+                    <p className="employee-jobs-detail-label">
+                      Next field action
+                    </p>
+
+                    <h4>
+                      Mark {readableStatus(nextStatus)}
+                    </h4>
+                  </div>
+
+                  <MeetroIcon
+                    name="completion"
+                    size={24}
+                    decorative
+                  />
+                </div>
+
+                <label className="employee-field-note">
+                  <span>Optional update note</span>
+
+                  <input
+                    value={note}
+                    onChange={(event) =>
+                      setNote(event.target.value)
+                    }
+                    maxLength={1000}
+                    placeholder="Add a short operational note"
+                  />
+                </label>
+
+                <button
+                  type="button"
+                  className="employee-field-primary-action"
+                  disabled={working === "status"}
+                  onClick={advanceStatus}
+                >
+                  <MeetroIcon
+                    name="completion"
+                    size={19}
+                    decorative
+                  />
+
+                  {working === "status"
+                    ? "Recording…"
+                    : `Mark ${readableStatus(nextStatus)}`}
+                </button>
+              </div>
+            ) : (
+              <div
+                role="status"
+                className="employee-field-complete"
+              >
+                <MeetroIcon
+                  name="completion"
+                  size={22}
+                  decorative
+                />
+
+                <span>
+                  Field work has been reported complete.
+                  Business and customer completion remain separate.
+                </span>
+              </div>
+            )}
+
+            <section className="employee-field-comms">
+              <div className="employee-field-comms-heading">
+                <span
+                  className="employee-field-comms-icon"
+                  aria-hidden="true"
+                >
+                  <MeetroIcon
+                    name="messages"
+                    size={25}
+                    decorative
+                  />
+                </span>
+
+                <div>
+                  <p className="employee-jobs-detail-label">
+                    Internal Team communication
+                  </p>
+                  <h4>Message the business Team</h4>
+                  <span>
+                    Customers do not receive these messages.
+                  </span>
+                </div>
+              </div>
+
+              <div
+                className="employee-field-message-list"
+                aria-label="Internal Job messages"
+              >
+                {(operations?.messages || []).length ? (
+                  operations.messages.map((item) => (
+                    <article
+                      key={item.id}
+                      className="employee-field-message"
+                    >
+                      <div className="employee-field-message-header">
+                        <strong>{item.senderName}</strong>
+
+                        <span>
+                          {roleLabel(item.senderRole)} ·{" "}
+                          {formatSchedule(item.createdAt)}
+                        </span>
+                      </div>
+
+                      <p>{item.message}</p>
+                    </article>
+                  ))
+                ) : (
+                  <div className="employee-field-no-messages">
+                    <MeetroIcon
+                      name="messages"
+                      size={22}
+                      decorative
+                    />
+                    <span>No internal Job messages yet.</span>
+                  </div>
+                )}
+              </div>
+
+              <form
+                onSubmit={submitMessage}
+                className="employee-field-message-form"
+              >
+                <label>
+                  <span>Write an internal update</span>
+
+                  <textarea
+                    value={message}
+                    onChange={(event) =>
+                      setMessage(event.target.value)
+                    }
+                    maxLength={5000}
+                    rows={3}
+                    placeholder="Internal Job communication only — customers do not receive this message"
+                  />
+                </label>
+
+                <button
+                  type="submit"
+                  disabled={
+                    !message.trim() ||
+                    working === "message"
+                  }
+                >
+                  <MeetroIcon
+                    name="messages"
+                    size={18}
+                    decorative
+                  />
+
+                  {working === "message"
+                    ? "Sending…"
+                    : "Send internal message"}
+                </button>
+              </form>
+            </section>
+          </>
+        )}
+      </section>
+    );
+  }
+
   return (
     <div style={operationsStyle}>
       <div style={rowStyle}>
@@ -1495,54 +1739,176 @@ export function TimeEvidencePanel({
   }
 
   return (
-    <section style={timePanelStyle} aria-label="Clock In and Clock Out">
-      <div style={rowStyle}>
+    <section
+      className="employee-compact-time"
+      aria-label="Clock In and Clock Out"
+    >
+      <div className="employee-compact-time-header">
         <div>
-          <p style={eyebrowStyle}>Canonical time evidence</p>
-          <h3 style={detailTitleStyle}>Clock In / Clock Out</h3>
-          <p style={detailCopyStyle}>Server timestamps are authoritative. Field and business completion remain separate.</p>
+          <p className="employee-jobs-eyebrow">
+            Canonical time evidence
+          </p>
+
+          <h3>Current timer</h3>
+
+          <span className="employee-compact-time-authority">
+            Clock In / Clock Out
+          </span>
         </div>
-        {active && <span style={activeTimerStyle}>{formatDuration(sessionDuration(active, now))}</span>}
+
+        <button
+          type="button"
+          className="employee-compact-time-open"
+          onClick={() => setPage("employeeTime")}
+        >
+          Open full Time
+          <span aria-hidden="true">›</span>
+        </button>
       </div>
-      {error && <div role="alert" style={inlineErrorStyle}>{error}</div>}
-      {active ? (
-        <div style={timerActionStyle}>
-          <div>
-            <strong>{TIME_CATEGORY_LABELS[active.category] || active.category}</strong>
-            <p style={rowMetaStyle}>{active.jobTitle || "No Job required"} · started {formatSchedule(active.clockedInAt)}</p>
-          </div>
-          <button type="button" style={primaryButton} disabled={working} onClick={clockOut}>
-            {working ? "Recording…" : "Clock Out"}
-          </button>
-        </div>
-      ) : (
-        <div style={timerActionStyle}>
-          <label style={fieldLabelStyle}>
-            Time category
-            <select value={category} onChange={(event) => setCategory(event.target.value)} style={textInputStyle}>
-              {Object.entries(TIME_CATEGORY_LABELS).map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-            </select>
-          </label>
-          <button type="button" style={primaryButton} disabled={working || (category === "JOB_WORK" && !jobWorkAvailable)} onClick={clockIn}>
-            {working ? "Recording…" : "Clock In"}
-          </button>
+
+      {error && (
+        <div
+          role="alert"
+          className="employee-field-ops-error"
+        >
+          {error}
         </div>
       )}
-      {!active && category === "JOB_WORK" && !jobWorkAvailable && (
-        <p style={detailCopyStyle}>Select an actively assigned Job before recording Job Work.</p>
-      )}
-      <label style={locationOptionStyle}>
-        <input type="checkbox" checked={includeLocation} onChange={(event) => setIncludeLocation(event.target.checked)} />
-        Capture optional location at this Clock boundary
-      </label>
-      <details style={historyStyle}>
-        <summary>My time history</summary>
-        {(time?.sessions || []).length ? time.sessions.map((session) => (
-          <TimeRow key={session.id} session={session} now={now} />
-        )) : <p style={detailCopyStyle}>No time has been recorded yet.</p>}
-      </details>
+
+      <div className="employee-compact-time-main">
+        <span
+          className={
+            active
+              ? "employee-compact-clock-icon is-active"
+              : "employee-compact-clock-icon"
+          }
+          aria-hidden="true"
+        >
+          <MeetroIcon
+            name="jobHistory"
+            size={31}
+            decorative
+          />
+        </span>
+
+        <div className="employee-compact-time-state">
+          <span>
+            {active
+              ? TIME_CATEGORY_LABELS[active.category] ||
+                active.category
+              : "Not clocked in"}
+          </span>
+
+          <strong aria-live="polite">
+            {visibleDuration}
+          </strong>
+
+          <small>
+            {active
+              ? active.jobTitle ||
+                `Started ${formatSchedule(
+                  active.clockedInAt
+                )}`
+              : category === "JOB_WORK" &&
+                jobWorkAvailable
+              ? job?.title || "Assigned Job"
+              : `${TIME_CATEGORY_LABELS[category]} time`}
+          </small>
+        </div>
+
+        <button
+          type="button"
+          className={
+            active
+              ? "employee-compact-clock-action is-clocked-in"
+              : "employee-compact-clock-action"
+          }
+          disabled={
+            working ||
+            (!active &&
+              category === "JOB_WORK" &&
+              !jobWorkAvailable)
+          }
+          onClick={active ? clockOut : clockIn}
+        >
+          <MeetroIcon
+            name="jobHistory"
+            size={19}
+            decorative
+          />
+
+          {working
+            ? "Recording…"
+            : active
+            ? "Clock Out"
+            : "Clock In"}
+        </button>
+      </div>
+
+      <div className="employee-compact-time-footer">
+        <div className="employee-compact-time-category">
+          <span>Time category</span>
+
+          <strong>
+            {TIME_CATEGORY_LABELS[visibleCategory] ||
+              visibleCategory}
+          </strong>
+
+          {!active && (
+            <button
+              type="button"
+              onClick={() => setPage("employeeTime")}
+            >
+              Change in Time
+            </button>
+          )}
+        </div>
+
+        <label className="employee-compact-location">
+          <input
+            type="checkbox"
+            checked={includeLocation}
+            onChange={(event) =>
+              setIncludeLocation(event.target.checked)
+            }
+          />
+
+          <span
+            className="employee-compact-switch"
+            aria-hidden="true"
+          >
+            <span />
+          </span>
+
+          <span>
+            Capture optional location at this Clock boundary
+          </span>
+        </label>
+      </div>
+
+      {!active &&
+        category === "JOB_WORK" &&
+        !jobWorkAvailable && (
+          <p className="employee-time-job-warning">
+            Select an actively assigned Job before recording Job Work.
+          </p>
+        )}
+
+      <div className="employee-compact-time-note">
+        <MeetroIcon
+          name="complianceCenter"
+          size={18}
+          decorative
+        />
+
+        <span>
+          Server timestamps are authoritative.
+          My time history is available on the full Time page.
+        </span>
+      </div>
     </section>
   );
+
 }
 
 function TimeRow({ session, now }) {
