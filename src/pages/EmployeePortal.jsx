@@ -133,17 +133,6 @@ function HomeView({
   return (
     <div className="employee-home">
       <section className="employee-home__hero">
-        <div
-          className="employee-home__hero-icon"
-          aria-hidden="true"
-        >
-          <MeetroIcon
-            name="businessTools"
-            size={39}
-            decorative
-          />
-        </div>
-
         <div className="employee-home__hero-copy">
           <p className="employee-home__eyebrow">
             Current assignment
