@@ -138,13 +138,46 @@ const homeLayoutMediaStyles = `
     outline-offset: 3px;
   }
 
+  .home-spotlight-button:focus:not(:focus-visible),
+  .spotlight-slide-control:focus:not(:focus-visible) {
+    outline: none;
+  }
+
   .spotlight-slide-control:hover {
-    background: rgba(15, 23, 42, 0.68) !important;
-    border-color: rgba(255,255,255,0.62) !important;
+    background: rgba(18, 35, 27, 0.68) !important;
+    border-color: rgba(255,255,255,0.58) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.56),
+      inset 0 -1px 0 rgba(255,255,255,0.10),
+      0 9px 24px rgba(9,24,16,0.24) !important;
   }
 
   .spotlight-slide-control:active {
     transform: translateY(-50%) scale(0.96) !important;
+    background: rgba(13, 29, 21, 0.76) !important;
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .spotlight-slide-control {
+      background: rgba(17, 34, 25, 0.84) !important;
+    }
+
+    .spotlight-photo-badge,
+    .spotlight-counter-badge,
+    .home-spotlight-story-eyebrow:not(.is-placeholder) {
+      background: rgba(17, 34, 25, 0.78) !important;
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .spotlight-slide-control,
+    .spotlight-photo-badge,
+    .spotlight-counter-badge,
+    .home-spotlight-story-eyebrow:not(.is-placeholder) {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: rgba(17, 34, 25, 0.90) !important;
+    }
   }
 
   .home-brand-main,
@@ -1835,6 +1868,7 @@ function SpotlightCard({ business, language, onViewProfile }) {
           }}
         >
           <span
+            className={`home-spotlight-story-eyebrow${hasSpotlightMedia ? "" : " is-placeholder"}`}
             style={{
               ...spotlightStoryEyebrow,
               ...(!hasSpotlightMedia ? spotlightStoryEyebrowPlaceholder : {}),
@@ -3060,7 +3094,7 @@ const spotlightHeroOverlay = {
   inset: 0,
   pointerEvents: "none",
   background:
-    "linear-gradient(0deg, rgba(15,23,42,0.80), rgba(15,23,42,0.28) 58%, rgba(15,23,42,0.08))",
+    "radial-gradient(ellipse 82% 70% at 50% 73%, rgba(8,25,16,0.68) 0%, rgba(8,25,16,0.50) 42%, rgba(8,25,16,0.14) 69%, transparent 84%), linear-gradient(0deg, rgba(7,19,12,0.58) 0%, rgba(7,19,12,0.18) 48%, transparent 76%)",
 };
 
 const spotlightHeroPlaceholderOverlay = {
@@ -3090,23 +3124,28 @@ const spotlightHeroCopyPlaceholder = {
 const spotlightStoryEyebrow = {
   justifySelf: "start",
   borderRadius: "999px",
-  border: "1px solid rgba(255,255,255,0.20)",
-  background: "rgba(255,255,255,0.16)",
-  backdropFilter: "blur(12px)",
-  WebkitBackdropFilter: "blur(12px)",
-  color: "#fde68a",
+  border: "1px solid rgba(255,255,255,0.28)",
+  background: "rgba(18,35,27,0.46)",
+  backdropFilter: "blur(10px) saturate(125%)",
+  WebkitBackdropFilter: "blur(10px) saturate(125%)",
+  color: "rgba(255,255,255,0.92)",
   padding: "5px 8px",
   fontSize: "10px",
   lineHeight: 1,
   fontWeight: "950",
   letterSpacing: "0.06em",
   textTransform: "uppercase",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.24), 0 5px 14px rgba(7,19,12,0.15)",
 };
 
 const spotlightStoryEyebrowPlaceholder = {
   border: "1px solid rgba(31,77,52,0.16)",
-  background: "rgba(255,255,255,0.56)",
+  background: "rgba(255,255,255,0.82)",
   color: "var(--meetro-color-wood)",
+  backdropFilter: "none",
+  WebkitBackdropFilter: "none",
+  boxShadow: "none",
 };
 
 const spotlightStoryTitle = {
@@ -3254,7 +3293,8 @@ const spotlightButton = {
   fontSize: "14px",
   fontWeight: "900",
   cursor: "pointer",
-  boxShadow: "0 8px 20px rgba(31,77,52,0.18)",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.18), 0 8px 20px rgba(31,77,52,0.18)",
   justifySelf: "start",
   marginTop: "auto",
   transition: "filter 160ms ease, transform 160ms ease",

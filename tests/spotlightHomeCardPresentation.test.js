@@ -8,6 +8,15 @@ const slideshowSource = readFileSync(
   "utf8"
 );
 
+function sourceBetween(source, start, end) {
+  const startIndex = source.indexOf(start);
+  const endIndex = source.indexOf(end, startIndex + start.length);
+
+  assert.notEqual(startIndex, -1, `Missing source marker: ${start}`);
+  assert.notEqual(endIndex, -1, `Missing source marker: ${end}`);
+  return source.slice(startIndex, endIndex);
+}
+
 test("Spotlight keeps canonical identity, media, count, and profile routing", () => {
   assert.match(homeSource, /getBusinessIdentityProjection\(business/);
   assert.match(homeSource, /getBusinessPortfolioProofProjection\(business/);
@@ -56,6 +65,7 @@ test("Spotlight presentation separates story copy from accessible controls", () 
   assert.match(slideshowSource, /aria-label=\{previousLabel\}/);
   assert.match(slideshowSource, /aria-label=\{nextLabel\}/);
   assert.match(homeSource, /\.spotlight-slide-control:focus-visible/);
+  assert.match(homeSource, /\.spotlight-slide-control:focus:not\(:focus-visible\)/);
 });
 
 test("Spotlight badges and missing-media placeholder stay canonical and legible", () => {
@@ -71,4 +81,55 @@ test("Spotlight avatar preserves canonical URL with a safe initials fallback", (
   assert.match(homeSource, /const logoUrl = identity\.imageUrl \|\| getSpotlightAvatarUrl\(business\)/);
   assert.match(homeSource, /onError=\{\(\) => setFailedLogoUrl\(visibleLogoUrl\)\}/);
   assert.match(homeSource, /String\(name \|\| "M"\)\.charAt\(0\)\.toUpperCase\(\)/);
+});
+
+test("Spotlight hero uses a feathered central scrim without glassing the headline", () => {
+  const overlay = sourceBetween(
+    homeSource,
+    "const spotlightHeroOverlay = {",
+    "const spotlightHeroPlaceholderOverlay = {"
+  );
+  const title = sourceBetween(
+    homeSource,
+    "const spotlightStoryTitle = {",
+    "const spotlightStoryTitlePlaceholder = {"
+  );
+
+  assert.match(overlay, /radial-gradient\(ellipse 82% 70% at 50% 73%/);
+  assert.match(overlay, /linear-gradient\(0deg/);
+  assert.doesNotMatch(title, /backdropFilter|WebkitBackdropFilter|background:/);
+});
+
+test("Spotlight glass treatment stays on functional overlays with opaque fallbacks", () => {
+  const card = sourceBetween(
+    homeSource,
+    "const spotlightCard = {",
+    "const spotlightHero = {"
+  );
+  const content = sourceBetween(
+    homeSource,
+    "const spotlightContent = {",
+    "const spotlightBusinessIntro = {"
+  );
+  const controls = sourceBetween(
+    slideshowSource,
+    "const counterBadge = {",
+    "const placeholder = {"
+  );
+
+  assert.match(controls, /blur\(14px\) saturate\(145%\)/);
+  assert.match(controls, /inset 0 1px 0 rgba\(255,255,255,0\.48\)/);
+  assert.match(controls, /background: "rgba\(17,34,25,0\.58\)"/);
+  assert.doesNotMatch(card, /backdropFilter|WebkitBackdropFilter/);
+  assert.doesNotMatch(content, /backdropFilter|WebkitBackdropFilter/);
+  assert.match(homeSource, /@supports not \(\(backdrop-filter: blur\(1px\)\)/);
+  assert.match(homeSource, /@media \(prefers-reduced-transparency: reduce\)/);
+});
+
+test("Spotlight story label shares the restrained capsule family", () => {
+  assert.match(homeSource, /className=\{`home-spotlight-story-eyebrow\$\{hasSpotlightMedia/);
+  assert.match(homeSource, /blur\(10px\) saturate\(125%\)/);
+  assert.match(homeSource, /inset 0 1px 0 rgba\(255,255,255,0\.24\)/);
+  assert.match(homeSource, /\.home-spotlight-story-eyebrow:not\(\.is-placeholder\)/);
+  assert.match(homeSource, /const spotlightStoryEyebrowPlaceholder = \{[\s\S]*backdropFilter: "none"/);
 });
