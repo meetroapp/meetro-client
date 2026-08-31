@@ -2297,3 +2297,251 @@ input:focus-visible +
     gap: 3px;
   }
 }
+
+
+/* =========================================================
+   COMPACT FULL TIME PAGE — DENSITY TUNING
+   ========================================================= */
+
+.employee-time-page {
+  gap: 14px;
+}
+
+/* Current Timer */
+.employee-time-page .employee-time-hero {
+  min-height: 300px;
+  padding: 21px 30px 23px;
+}
+
+.employee-time-page .employee-time-clock-icon {
+  width: 56px;
+  height: 56px;
+  margin: 11px 0 9px;
+}
+
+.employee-time-page .employee-time-hero h2 {
+  font-size: 19px;
+}
+
+.employee-time-page .employee-time-clock {
+  margin: 4px 0 6px;
+  font-size: clamp(44px, 5vw, 58px);
+}
+
+.employee-time-page .employee-time-hero-copy {
+  font-size: 13px;
+  line-height: 1.35;
+}
+
+.employee-time-page .employee-time-clock-button {
+  width: min(470px, 70%);
+  min-height: 48px;
+  margin-top: 16px;
+  padding: 9px 19px;
+  font-size: 16px;
+}
+
+/* Time Categories */
+.employee-time-page .employee-time-categories {
+  padding: 20px 21px 18px;
+}
+
+.employee-time-page .employee-time-categories h2,
+.employee-time-page .employee-time-location h2 {
+  margin: 6px 0 4px;
+  font-size: 19px;
+}
+
+.employee-time-page .employee-time-section-copy {
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.employee-time-page .employee-time-category-grid {
+  margin-top: 13px;
+  gap: 9px;
+}
+
+.employee-time-page .employee-time-category {
+  min-height: 130px;
+  padding: 12px 10px;
+  gap: 6px;
+}
+
+.employee-time-page .employee-time-category-icon {
+  width: 48px;
+  height: 48px;
+}
+
+.employee-time-page .employee-time-category strong {
+  font-size: 14px;
+}
+
+.employee-time-page .employee-time-category small {
+  min-height: 27px;
+  font-size: 10px;
+  line-height: 1.3;
+}
+
+.employee-time-page .employee-time-category-check {
+  top: 7px;
+  right: 7px;
+  width: 25px;
+  height: 25px;
+}
+
+/* Location Evidence */
+.employee-time-page .employee-time-location {
+  min-height: 96px;
+  padding: 15px 20px;
+  gap: 18px;
+}
+
+.employee-time-page .employee-time-location-main {
+  gap: 13px;
+}
+
+.employee-time-page .employee-time-location-icon,
+.employee-time-page .employee-time-authority-icon {
+  width: 45px;
+  height: 45px;
+}
+
+.employee-time-page .employee-time-location-toggle {
+  min-width: 140px;
+  gap: 5px;
+}
+
+.employee-time-page .employee-time-switch {
+  width: 54px;
+  height: 30px;
+}
+
+.employee-time-page .employee-time-switch > span {
+  width: 24px;
+  height: 24px;
+}
+
+.employee-time-page
+.employee-time-location-toggle
+input:checked +
+.employee-time-switch >
+span {
+  transform: translateX(24px);
+}
+
+/* Time History */
+.employee-time-page .employee-time-history summary {
+  min-height: 62px;
+  padding: 11px 18px;
+  gap: 11px;
+}
+
+.employee-time-page .employee-time-history-icon {
+  width: 36px;
+  height: 36px;
+}
+
+.employee-time-page .employee-time-history-copy strong {
+  font-size: 11px;
+}
+
+.employee-time-page .employee-time-history-copy small {
+  font-size: 11px;
+}
+
+.employee-time-page .employee-time-history-arrow {
+  font-size: 25px;
+}
+
+.employee-time-page .employee-time-history-list {
+  padding: 0 18px 14px;
+}
+
+/* Authority note */
+.employee-time-page .employee-time-authority {
+  min-height: 60px;
+  padding: 10px 17px;
+  gap: 11px;
+}
+
+.employee-time-page .employee-time-authority strong,
+.employee-time-page .employee-time-authority span {
+  font-size: 11px;
+}
+
+/* iPhone / narrow-screen density */
+@media (max-width: 760px) {
+  .employee-time-page {
+    gap: 11px;
+  }
+
+  .employee-time-page .employee-time-hero {
+    min-height: 270px;
+    padding: 18px 14px 19px;
+  }
+
+  .employee-time-page .employee-time-clock-icon {
+    width: 51px;
+    height: 51px;
+    margin: 9px 0 7px;
+  }
+
+  .employee-time-page .employee-time-clock {
+    font-size: clamp(40px, 12vw, 52px);
+  }
+
+  .employee-time-page .employee-time-clock-button {
+    width: 100%;
+    min-height: 46px;
+    margin-top: 14px;
+  }
+
+  .employee-time-page .employee-time-categories {
+    padding: 17px 12px 14px;
+  }
+
+  .employee-time-page .employee-time-category-grid {
+    gap: 8px;
+  }
+
+  .employee-time-page .employee-time-category {
+    min-height: 116px;
+    padding: 10px 7px;
+  }
+
+  .employee-time-page .employee-time-category-icon {
+    width: 43px;
+    height: 43px;
+  }
+
+  .employee-time-page .employee-time-category strong {
+    font-size: 13px;
+  }
+
+  .employee-time-page .employee-time-category small {
+    min-height: 24px;
+    font-size: 9px;
+  }
+
+  .employee-time-page .employee-time-location {
+    min-height: 0;
+    padding: 14px;
+    gap: 12px;
+  }
+
+  .employee-time-page .employee-time-location-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .employee-time-page .employee-time-history summary {
+    min-height: 58px;
+    padding: 10px 14px;
+  }
+
+  .employee-time-page .employee-time-authority {
+    min-height: 56px;
+    padding: 10px 14px;
+  }
+}
