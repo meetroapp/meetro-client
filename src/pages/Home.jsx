@@ -123,38 +123,61 @@ const homeLayoutMediaStyles = `
   }
 
   .home-spotlight-button,
-  .spotlight-slide-control {
+  .spotlight-slide-control,
+  .home-help-action-card {
     -webkit-tap-highlight-color: transparent;
   }
 
   .home-spotlight-button:hover {
-    filter: brightness(0.96);
+    filter: brightness(1.05);
     transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.24),
+      0 8px 18px rgba(20,66,43,0.18) !important;
   }
 
   .home-spotlight-button:focus-visible,
-  .spotlight-slide-control:focus-visible {
+  .spotlight-slide-control:focus-visible,
+  .home-help-action-card:focus-visible {
     outline: 3px solid rgba(251, 191, 36, 0.88);
     outline-offset: 3px;
   }
 
   .home-spotlight-button:focus:not(:focus-visible),
-  .spotlight-slide-control:focus:not(:focus-visible) {
+  .spotlight-slide-control:focus:not(:focus-visible),
+  .home-help-action-card:focus:not(:focus-visible) {
     outline: none;
   }
 
+  .home-spotlight-button:active {
+    transform: translateY(1px);
+    filter: brightness(0.94);
+  }
+
+  .home-help-action-card:hover {
+    border-color: rgba(31,77,52,0.22) !important;
+    background: #fffdf8 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(31,77,52,0.10) !important;
+  }
+
+  .home-help-action-card:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 12px rgba(31,77,52,0.08) !important;
+  }
+
   .spotlight-slide-control:hover {
-    background: rgba(18, 35, 27, 0.68) !important;
-    border-color: rgba(255,255,255,0.58) !important;
+    background: rgba(255,255,255,0.30) !important;
+    border-color: rgba(255,255,255,0.72) !important;
     box-shadow:
-      inset 0 1px 0 rgba(255,255,255,0.56),
+      inset 0 1px 0 rgba(255,255,255,0.72),
       inset 0 -1px 0 rgba(255,255,255,0.10),
-      0 9px 24px rgba(9,24,16,0.24) !important;
+      0 8px 20px rgba(9,24,16,0.22) !important;
   }
 
   .spotlight-slide-control:active {
     transform: translateY(-50%) scale(0.96) !important;
-    background: rgba(13, 29, 21, 0.76) !important;
+    background: rgba(255,255,255,0.20) !important;
   }
 
   @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -242,7 +265,7 @@ const homeLayoutMediaStyles = `
     }
 
     .home-spotlight-card {
-      width: min(84vw, 360px) !important;
+      width: min(88vw, 374px) !important;
       border-radius: 22px !important;
     }
 
@@ -259,8 +282,8 @@ const homeLayoutMediaStyles = `
     }
 
     .home-spotlight-story-title {
-      font-size: clamp(1.38rem, 6.2vw, 1.65rem) !important;
-      line-height: 1.05 !important;
+      font-size: clamp(1.5rem, 6.4vw, 1.76rem) !important;
+      line-height: 1.04 !important;
     }
 
     .home-spotlight-story-body {
@@ -269,8 +292,8 @@ const homeLayoutMediaStyles = `
     }
 
     .home-spotlight-content {
-      gap: 9px !important;
-      padding: 13px 14px 14px !important;
+      gap: 10px !important;
+      padding: 14px !important;
     }
 
     .home-spotlight-button {
@@ -295,6 +318,18 @@ const homeLayoutMediaStyles = `
     .spotlight-photo-badge,
     .spotlight-counter-badge {
       top: 8px !important;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .home-help-action-grid {
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .home-help-action-card {
+      min-height: 64px !important;
+      padding: 10px 12px !important;
     }
   }
 
@@ -1226,7 +1261,7 @@ function Home({ setPage }) {
       </section>
 
       <section style={spotlightSection}>
-        <div style={sectionHeader}>
+        <div className="home-spotlight-section-header" style={spotlightSectionHeader}>
           <div>
             <p style={sectionEyebrow}>
               {t("homeLocalServicesEyebrow", language)}
@@ -1293,7 +1328,7 @@ function Home({ setPage }) {
       </section>
 
       <section style={quickHelpSection}>
-        <div style={sectionHeader}>
+        <div className="home-help-section-header" style={helpSectionHeader}>
           <div>
             <p style={sectionEyebrow}>{t("homeownerWorkflowHome")}</p>
             <h2 style={sectionTitle}>{t("homeHelpToday")}</h2>
@@ -1301,15 +1336,22 @@ function Home({ setPage }) {
           </div>
         </div>
 
-        <div style={helpActionGrid}>
-          <button style={helpActionCard} onClick={() => setPage("upload")}>
-            <span style={helpActionIcon}>
+        <div className="home-help-action-grid" style={helpActionGrid}>
+          <button
+            type="button"
+            className="home-help-action-card"
+            style={helpActionCard}
+            onClick={() => setPage("upload")}
+          >
+            <span className="home-help-action-icon" style={helpActionIcon}>
               <MeetroIcon name="request" size={24} decorative />
             </span>
             <strong>{t("requestService")}</strong>
           </button>
 
           <button
+            type="button"
+            className="home-help-action-card"
             style={helpActionCard}
             onClick={() => {
               if (activeEmergencyInfo) {
@@ -1319,7 +1361,10 @@ function Home({ setPage }) {
               setPage("emergency");
             }}
           >
-            <span style={{ ...helpActionIcon, ...helpEmergencyIcon }}>
+            <span
+              className="home-help-action-icon"
+              style={{ ...helpActionIcon, ...helpEmergencyIcon }}
+            >
               <MeetroIcon name="emergency" size={24} decorative />
             </span>
             <strong>
@@ -1330,10 +1375,12 @@ function Home({ setPage }) {
           </button>
 
           <button
+            type="button"
+            className="home-help-action-card"
             style={helpActionCard}
             onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}
           >
-            <span style={helpActionIcon}>
+            <span className="home-help-action-icon" style={helpActionIcon}>
               <MeetroIcon name="aiHelp" size={24} decorative />
             </span>
             <strong>{t("assistantCompanionAskMeetro", language)}</strong>
@@ -1902,7 +1949,7 @@ function SpotlightCard({ business, language, onViewProfile }) {
           {t("homeSpotlightBusinessIntro", language)}
         </span>
 
-        <div style={spotlightBusinessRow}>
+        <div className="home-spotlight-business-row" style={spotlightBusinessRow}>
           <div style={spotlightLogoWrap} aria-hidden="true">
             {visibleLogoUrl ? (
               <img
@@ -1924,8 +1971,12 @@ function SpotlightCard({ business, language, onViewProfile }) {
             {servingLine && (
               <span style={spotlightServingLine}>{servingLine}</span>
             )}
-            <span style={spotlightServingLine}>{relationshipLine}</span>
           </div>
+        </div>
+
+        <div className="home-spotlight-trust-line" style={spotlightTrustLine}>
+          <MeetroIcon name="reviews" size={14} decorative />
+          <span>{relationshipLine}</span>
         </div>
 
         <p style={spotlightDescription}>
@@ -1938,7 +1989,9 @@ function SpotlightCard({ business, language, onViewProfile }) {
           style={spotlightButton}
           onClick={onViewProfile}
         >
-          {t("homeViewProfile", language)}
+          <span aria-hidden="true" />
+          <span>{t("homeViewProfile", language)}</span>
+          <span style={spotlightButtonArrow} aria-hidden="true">→</span>
         </button>
       </div>
     </article>
@@ -2894,39 +2947,51 @@ const compactEmptyCard = {
 
 const quickHelpSection = {
   marginBottom: "20px",
-  padding: "16px",
-  borderRadius: "24px",
+  padding: "clamp(18px, 3vw, 26px)",
+  borderRadius: "28px",
   background: "var(--meetro-surface-paper)",
   border: "1px solid var(--meetro-color-line)",
-  boxShadow: "var(--meetro-shadow-soft)",
+  boxShadow: "0 12px 32px rgba(31,77,52,0.08)",
+};
+
+const helpSectionHeader = {
+  ...sectionHeader,
+  justifyContent: "center",
+  textAlign: "center",
+  marginBottom: "18px",
 };
 
 const helpActionGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  gap: "10px",
+  gap: "14px",
 };
 
 const helpActionCard = {
-  minHeight: "92px",
+  width: "100%",
+  minHeight: "82px",
   border: "1px solid var(--meetro-color-line)",
-  background: "var(--meetro-surface-paper)",
-  borderRadius: "18px",
-  padding: "13px 8px",
+  background: "var(--meetro-surface-warm)",
+  borderRadius: "20px",
+  padding: "14px 16px",
   display: "grid",
-  placeItems: "center",
-  gap: "8px",
+  gridTemplateColumns: "46px minmax(0, 1fr)",
+  alignItems: "center",
+  gap: "12px",
   color: "var(--meetro-color-ink)",
-  fontSize: "13px",
+  fontSize: "14px",
   fontWeight: "950",
   cursor: "pointer",
-  textAlign: "center",
+  textAlign: "left",
+  boxShadow: "0 6px 18px rgba(31,77,52,0.06)",
+  transition:
+    "background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease",
 };
 
 const helpActionIcon = {
-  width: "42px",
-  height: "42px",
-  borderRadius: "16px",
+  width: "46px",
+  height: "46px",
+  borderRadius: "17px",
   background: "var(--meetro-surface-sage)",
   color: "var(--meetro-color-forest)",
   display: "grid",
@@ -2958,20 +3023,25 @@ const spotlightSection = {
   overflow: "visible",
 };
 
+const spotlightSectionHeader = {
+  ...sectionHeader,
+  marginBottom: "16px",
+};
+
 const spotlightRow = {
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
   display: "flex",
   alignItems: "stretch",
-  gap: "16px",
+  gap: "18px",
   overflowX: "auto",
   overflowY: "hidden",
   WebkitOverflowScrolling: "touch",
   overscrollBehaviorX: "contain",
   scrollbarWidth: "none",
   scrollSnapType: "x mandatory",
-  padding: "4px 2px 12px",
+  padding: "4px 2px 14px",
   boxSizing: "border-box",
 };
 
@@ -3058,11 +3128,12 @@ const communityEntryAction = {
 };
 
 const spotlightSubtitle = {
-  margin: "2px 0 20px",
+  margin: "2px 0 0",
   color: "var(--meetro-color-muted)",
-  fontSize: "16px",
-  lineHeight: 1.35,
-  fontWeight: "650",
+  fontSize: "15px",
+  lineHeight: 1.45,
+  fontWeight: "620",
+  maxWidth: "620px",
 };
 
 const spotlightCard = {
@@ -3094,7 +3165,7 @@ const spotlightHeroOverlay = {
   inset: 0,
   pointerEvents: "none",
   background:
-    "radial-gradient(ellipse 82% 70% at 50% 73%, rgba(8,25,16,0.68) 0%, rgba(8,25,16,0.50) 42%, rgba(8,25,16,0.14) 69%, transparent 84%), linear-gradient(0deg, rgba(7,19,12,0.58) 0%, rgba(7,19,12,0.18) 48%, transparent 76%)",
+    "radial-gradient(ellipse 78% 64% at 50% 67%, rgba(7,22,14,0.76) 0%, rgba(7,22,14,0.58) 39%, rgba(7,22,14,0.22) 67%, transparent 84%), linear-gradient(90deg, rgba(7,19,12,0.10) 0%, rgba(7,19,12,0.28) 31%, rgba(7,19,12,0.30) 69%, rgba(7,19,12,0.10) 100%), linear-gradient(0deg, rgba(7,19,12,0.64) 0%, rgba(7,19,12,0.20) 54%, transparent 78%)",
 };
 
 const spotlightHeroPlaceholderOverlay = {
@@ -3109,10 +3180,10 @@ const spotlightHeroCopy = {
   position: "absolute",
   left: "54px",
   right: "54px",
-  bottom: "16px",
+  bottom: "18px",
   color: "#fff",
   display: "grid",
-  gap: "7px",
+  gap: "8px",
   justifyItems: "center",
   textAlign: "center",
 };
@@ -3124,11 +3195,11 @@ const spotlightHeroCopyPlaceholder = {
 const spotlightStoryEyebrow = {
   justifySelf: "start",
   borderRadius: "999px",
-  border: "1px solid rgba(255,255,255,0.28)",
-  background: "rgba(18,35,27,0.46)",
-  backdropFilter: "blur(10px) saturate(125%)",
-  WebkitBackdropFilter: "blur(10px) saturate(125%)",
-  color: "rgba(255,255,255,0.92)",
+  border: "1px solid rgba(255,255,255,0.50)",
+  background: "rgba(255,255,255,0.20)",
+  backdropFilter: "blur(12px) saturate(140%)",
+  WebkitBackdropFilter: "blur(12px) saturate(140%)",
+  color: "#fff4cf",
   padding: "5px 8px",
   fontSize: "10px",
   lineHeight: 1,
@@ -3136,7 +3207,8 @@ const spotlightStoryEyebrow = {
   letterSpacing: "0.06em",
   textTransform: "uppercase",
   boxShadow:
-    "inset 0 1px 0 rgba(255,255,255,0.24), 0 5px 14px rgba(7,19,12,0.15)",
+    "inset 0 1px 0 rgba(255,255,255,0.52), 0 4px 12px rgba(7,19,12,0.14)",
+  textShadow: "0 1px 7px rgba(7,19,12,0.70)",
 };
 
 const spotlightStoryEyebrowPlaceholder = {
@@ -3146,18 +3218,19 @@ const spotlightStoryEyebrowPlaceholder = {
   backdropFilter: "none",
   WebkitBackdropFilter: "none",
   boxShadow: "none",
+  textShadow: "none",
 };
 
 const spotlightStoryTitle = {
   margin: 0,
   width: "100%",
-  maxWidth: "360px",
+  maxWidth: "370px",
   color: "#fff",
-  fontSize: "clamp(1.6rem, 4.5vw, 2.05rem)",
-  lineHeight: 1.04,
+  fontSize: "clamp(1.7rem, 4.5vw, 2.15rem)",
+  lineHeight: 1.03,
   letterSpacing: 0,
   fontWeight: "950",
-  textShadow: "0 16px 34px rgba(0,0,0,0.42)",
+  textShadow: "0 3px 18px rgba(0,0,0,0.62), 0 14px 34px rgba(0,0,0,0.36)",
   overflowWrap: "anywhere",
 };
 
@@ -3169,11 +3242,11 @@ const spotlightStoryTitlePlaceholder = {
 const spotlightStoryBody = {
   margin: 0,
   maxWidth: "340px",
-  color: "rgba(255,255,255,0.88)",
+  color: "rgba(255,255,255,0.92)",
   fontSize: "13px",
   lineHeight: 1.4,
-  fontWeight: "650",
-  textShadow: "0 10px 26px rgba(0,0,0,0.38)",
+  fontWeight: "620",
+  textShadow: "0 2px 12px rgba(0,0,0,0.58)",
 };
 
 const spotlightStoryBodyPlaceholder = {
@@ -3184,12 +3257,15 @@ const spotlightStoryBodyPlaceholder = {
 const spotlightContent = {
   display: "grid",
   gap: "10px",
-  padding: "14px 16px 16px",
+  gridTemplateRows: "auto auto auto minmax(0, 1fr) auto",
+  padding: "16px 18px 18px",
   minWidth: 0,
   flex: 1,
 };
 
 const spotlightBusinessIntro = {
+  display: "block",
+  textAlign: "center",
   color: "#b7791f",
   fontSize: "10px",
   fontWeight: "950",
@@ -3199,14 +3275,14 @@ const spotlightBusinessIntro = {
 
 const spotlightBusinessRow = {
   display: "flex",
-  alignItems: "center",
-  gap: "11px",
+  alignItems: "flex-start",
+  gap: "12px",
   minWidth: 0,
 };
 
 const spotlightLogoWrap = {
-  width: "42px",
-  height: "42px",
+  width: "48px",
+  height: "48px",
   borderRadius: "50%",
   overflow: "hidden",
   background: "var(--meetro-color-forest)",
@@ -3236,8 +3312,8 @@ const spotlightBusinessText = {
 };
 
 const spotlightName = {
-  color: "var(--meetro-color-ink)",
-  fontSize: "17px",
+  color: "var(--meetro-color-forest)",
+  fontSize: "18px",
   lineHeight: 1.16,
   fontWeight: "950",
   overflow: "hidden",
@@ -3249,7 +3325,7 @@ const spotlightName = {
 };
 
 const spotlightCategory = {
-  color: "var(--meetro-color-muted)",
+  color: "#55715e",
   fontSize: "13px",
   lineHeight: 1.3,
   fontWeight: "750",
@@ -3269,6 +3345,17 @@ const spotlightServingLine = {
   overflowWrap: "anywhere",
 };
 
+const spotlightTrustLine = {
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  color: "#667268",
+  fontSize: "12px",
+  lineHeight: 1.35,
+  fontWeight: "700",
+  overflowWrap: "anywhere",
+};
+
 const spotlightDescription = {
   margin: 0,
   color: "var(--meetro-color-muted)",
@@ -3283,21 +3370,33 @@ const spotlightDescription = {
 };
 
 const spotlightButton = {
-  width: "auto",
-  minHeight: "44px",
+  width: "100%",
+  minHeight: "50px",
   border: "0",
-  borderRadius: "14px",
-  background: "var(--meetro-gradient-community-action)",
+  borderRadius: "15px",
+  background:
+    "linear-gradient(135deg, var(--meetro-color-forest) 0%, #236642 100%)",
   color: "#ffffff",
-  padding: "0 20px",
-  fontSize: "14px",
+  padding: "0 14px",
+  fontSize: "15px",
   fontWeight: "900",
   cursor: "pointer",
   boxShadow:
-    "inset 0 1px 0 rgba(255,255,255,0.18), 0 8px 20px rgba(31,77,52,0.18)",
-  justifySelf: "start",
+    "inset 0 1px 0 rgba(255,255,255,0.20), 0 6px 16px rgba(31,77,52,0.14)",
+  display: "grid",
+  gridTemplateColumns: "24px minmax(0, 1fr) 24px",
+  alignItems: "center",
+  justifyItems: "center",
+  justifySelf: "stretch",
   marginTop: "auto",
-  transition: "filter 160ms ease, transform 160ms ease",
+  transition: "filter 160ms ease, transform 160ms ease, box-shadow 160ms ease",
+};
+
+const spotlightButtonArrow = {
+  justifySelf: "end",
+  fontSize: "19px",
+  lineHeight: 1,
+  fontWeight: "700",
 };
 
 const sectionEyebrow = {
