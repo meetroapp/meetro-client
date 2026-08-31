@@ -292,7 +292,7 @@ function EmployeeJobs({ setPage, roleMembership = null }) {
         currentPage="employeeJobs"
         setPage={setPage}
         title="My Jobs"
-        description="Only work assigned to your active Team membership appears here."
+        description="Assigned work, status, scope, and internal coordination."
       >
         {workspaceContent}
       </EmployeeShell>
@@ -390,89 +390,474 @@ function ManagerWorkspace({ jobs, members, drafts, workingJobId, onToggle, onSav
   );
 }
 
-function FieldWorkspace({ jobs, schedule, selectedJob, onSelect, businessId, setPage }) {
+function FieldWorkspace({
+  jobs,
+  schedule,
+  selectedJob,
+  onSelect,
+  businessId,
+  setPage,
+}) {
+  const [currentStatus, setCurrentStatus] = useState(null);
+
+  useEffect(() => {
+    setCurrentStatus(null);
+  }, [selectedJob?.id]);
+
   if (!jobs.length) {
-    return <section style={cardStyle}><h2 style={headingStyle}>No assigned Jobs</h2><p style={copyStyle}>When an Owner or Manager assigns work to you, it will appear here.</p></section>;
+    return (
+      <section className="employee-jobs-empty">
+        <span
+          className="employee-jobs-empty-icon"
+          aria-hidden="true"
+        >
+          <MeetroIcon
+            name="businessTools"
+            size={36}
+            decorative
+          />
+        </span>
+
+        <h2>No assigned Jobs</h2>
+
+        <p>
+          When an Owner or Manager assigns work to you,
+          the Job and its authorized details will appear here.
+        </p>
+      </section>
+    );
   }
+
+  const assignments = selectedJob?.assignments || [];
+  const activeAssignment =
+    assignments.find((item) => item.state === "ACTIVE") ||
+    assignments[0] ||
+    null;
+
   return (
-    <>
-      <section style={cardStyle}>
-        <p style={eyebrowStyle}>Assigned work</p>
-        <div style={jobTabGrid}>
-          {jobs.map((job) => (
-            <button
-              type="button"
-              key={job.id}
-              style={job.id === selectedJob?.id ? selectedJobButton : jobButton}
-              onClick={() => onSelect(job.id)}
-            >
-              <strong>{job.title}</strong>
-              <span>{job.customer?.displayName}</span>
-            </button>
-          ))}
-        </div>
+    <div className="employee-jobs-workspace">
+      <section
+        className="employee-jobs-summary-grid"
+        aria-label="Assigned Job summary"
+      >
+        <article className="employee-jobs-summary-card">
+          <span
+            className="employee-jobs-summary-icon"
+            aria-hidden="true"
+          >
+            <MeetroIcon
+              name="businessTools"
+              size={27}
+              decorative
+            />
+          </span>
+
+          <div>
+            <p>Assigned Jobs</p>
+            <strong>{jobs.length}</strong>
+          </div>
+        </article>
+
+        <article className="employee-jobs-summary-card">
+          <span
+            className="employee-jobs-summary-icon"
+            aria-hidden="true"
+          >
+            <MeetroIcon
+              name="schedule"
+              size={27}
+              decorative
+            />
+          </span>
+
+          <div>
+            <p>Scheduled Visits</p>
+            <strong>{schedule.length}</strong>
+          </div>
+        </article>
+
+        <article className="employee-jobs-summary-card">
+          <span
+            className="employee-jobs-summary-icon"
+            aria-hidden="true"
+          >
+            <MeetroIcon
+              name="profile"
+              size={27}
+              decorative
+            />
+          </span>
+
+          <div>
+            <p>Current Status</p>
+            <strong>
+              {selectedJob
+                ? currentStatus
+                  ? readableStatus(currentStatus)
+                  : "Loading…"
+                : "No Job selected"}
+            </strong>
+          </div>
+        </article>
       </section>
 
-      {selectedJob && (
-        <section style={cardStyle}>
-          <p style={eyebrowStyle}>Assigned Job</p>
-          <h2 style={headingStyle}>{selectedJob.title}</h2>
-          <div style={factsGrid}>
-            <Fact label="Customer" value={selectedJob.customer?.displayName} />
-            <Fact label="Service location" value={locationText(selectedJob.location)} />
+      {jobs.length > 1 && (
+        <section className="employee-jobs-selector">
+          <div>
+            <p className="employee-jobs-eyebrow">
+              Assigned work
+            </p>
+            <h2>Select a Job</h2>
           </div>
-          <DetailSection title="Instructions">
-            <p style={detailCopyStyle}>{selectedJob.instructions || "No additional Job instructions were recorded."}</p>
-          </DetailSection>
-          <DetailSection title="Approved work scope">
-            {selectedJob.approvedScope?.length ? (
-              <ol style={scopeListStyle}>
-                {selectedJob.approvedScope.map((item) => (
-                  <li key={item.id}><strong>{item.description}</strong><span>Quantity {item.quantity}</span></li>
-                ))}
-              </ol>
-            ) : <p style={detailCopyStyle}>No customer-approved scope is currently attached.</p>}
-          </DetailSection>
-          <DetailSection title="Job photos">
-            {selectedJob.photos?.length ? (
-              <div style={photoGridStyle}>
-                {selectedJob.photos.map((photo) => (
-                  <img key={photo.publicId || photo.url} src={photo.url} alt="Job evidence" style={photoStyle} />
-                ))}
-              </div>
-            ) : <p style={detailCopyStyle}>No Job photos are currently attached.</p>}
-          </DetailSection>
-          <DetailSection title="Documents">
-            {selectedJob.documents?.length ? selectedJob.documents.map((document) => (
-              <div key={document.id} style={documentRowStyle}>
-                <strong>Approved Quote</strong>
-                <span>Version {document.version} · {document.status}</span>
-              </div>
-            )) : <p style={detailCopyStyle}>No approved Job document is currently available.</p>}
-          </DetailSection>
-          {selectedJob.assignments?.[0] && (
-            <FieldOperationsPanel
-              businessId={businessId}
-              job={selectedJob}
-              assignment={selectedJob.assignments[0]}
-              managed={false}
-              setPage={setPage}
-            />
-          )}
+
+          <div className="employee-jobs-selector-grid">
+            {jobs.map((job) => (
+              <button
+                type="button"
+                key={job.id}
+                className={
+                  job.id === selectedJob?.id
+                    ? "employee-jobs-selector-button is-selected"
+                    : "employee-jobs-selector-button"
+                }
+                onClick={() => onSelect(job.id)}
+              >
+                <strong>{job.title}</strong>
+                <span>
+                  {job.customer?.displayName ||
+                    "Customer unavailable"}
+                </span>
+              </button>
+            ))}
+          </div>
         </section>
       )}
 
-      <section style={cardStyle}>
-        <p style={eyebrowStyle}>Employee Schedule</p>
-        <h2 style={headingStyle}>Assigned visits</h2>
-        {schedule.length ? schedule.map((item) => (
-          <article key={item.visitId} style={scheduleRowStyle}>
-            <div><strong>{item.jobTitle}</strong><p style={rowMetaStyle}>{item.purpose.replaceAll("_", " ")} · {item.state}</p></div>
-            <div style={scheduleTimeStyle}><strong>{formatSchedule(item.startsAt)}</strong><span>{item.location?.remote ? "Remote" : locationText(item.location)}</span></div>
-          </article>
-        )) : <p style={copyStyle}>No active Visit is scheduled for your assigned Jobs.</p>}
+      {selectedJob && (
+        <div className="employee-jobs-primary-grid">
+          <section className="employee-jobs-assignment-card">
+            <div className="employee-jobs-assignment-header">
+              <div>
+                <p className="employee-jobs-eyebrow">
+                  Active assignment
+                </p>
+
+                <div className="employee-jobs-customer-row">
+                  <span
+                    className="employee-jobs-round-icon"
+                    aria-hidden="true"
+                  >
+                    <MeetroIcon
+                      name="profile"
+                      size={24}
+                      decorative
+                    />
+                  </span>
+
+                  <div>
+                    <h2>
+                      {selectedJob.customer?.displayName ||
+                        "Customer unavailable"}
+                    </h2>
+
+                    <p>
+                      <MeetroIcon
+                        name="location"
+                        size={14}
+                        decorative
+                      />
+                      {locationText(selectedJob.location)}
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <span className="employee-jobs-status-pill">
+                {currentStatus
+                  ? readableStatus(currentStatus)
+                  : "Loading status"}
+              </span>
+            </div>
+
+            <div className="employee-jobs-detail-block">
+              <span
+                className="employee-jobs-round-icon"
+                aria-hidden="true"
+              >
+                <MeetroIcon
+                  name="activeWork"
+                  size={25}
+                  decorative
+                />
+              </span>
+
+              <div>
+                <p className="employee-jobs-detail-label">
+                  Job title
+                </p>
+                <h3>{selectedJob.title}</h3>
+              </div>
+            </div>
+
+            <div className="employee-jobs-detail-block">
+              <span
+                className="employee-jobs-round-icon"
+                aria-hidden="true"
+              >
+                <MeetroIcon
+                  name="messages"
+                  size={24}
+                  decorative
+                />
+              </span>
+
+              <div>
+                <p className="employee-jobs-detail-label">
+                  Instructions
+                </p>
+
+                <p className="employee-jobs-detail-copy">
+                  {selectedJob.instructions ||
+                    "No additional Job instructions were recorded."}
+                </p>
+              </div>
+            </div>
+
+            <div className="employee-jobs-scope">
+              <p className="employee-jobs-detail-label">
+                Approved work scope
+              </p>
+
+              {selectedJob.approvedScope?.length ? (
+                <ul>
+                  {selectedJob.approvedScope.map((item) => (
+                    <li key={item.id}>
+                      <span
+                        className="employee-jobs-scope-check"
+                        aria-hidden="true"
+                      >
+                        <MeetroIcon
+                          name="completion"
+                          size={16}
+                          decorative
+                        />
+                      </span>
+
+                      <span>
+                        <strong>{item.description}</strong>
+                        {item.quantity != null && (
+                          <small>
+                            Quantity {item.quantity}
+                          </small>
+                        )}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="employee-jobs-detail-copy">
+                  No customer-approved scope is currently attached.
+                </p>
+              )}
+            </div>
+
+            <details className="employee-jobs-evidence">
+              <summary>
+                Job photos and Documents
+              </summary>
+
+              <div className="employee-jobs-evidence-section">
+                <p className="employee-jobs-detail-label">
+                  Job photos
+                </p>
+
+                {selectedJob.photos?.length ? (
+                  <div className="employee-jobs-photo-grid">
+                    {selectedJob.photos.map((photo) => (
+                      <img
+                        key={photo.publicId || photo.url}
+                        src={photo.url}
+                        alt="Job evidence"
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <p className="employee-jobs-detail-copy">
+                    No Job photos are currently attached.
+                  </p>
+                )}
+              </div>
+
+              <div className="employee-jobs-evidence-section">
+                <p className="employee-jobs-detail-label">
+                  Documents
+                </p>
+
+                {selectedJob.documents?.length ? (
+                  selectedJob.documents.map((document) => (
+                    <div
+                      key={document.id}
+                      className="employee-jobs-document-row"
+                    >
+                      <strong>Approved Quote</strong>
+                      <span>
+                        Version {document.version} ·{" "}
+                        {document.status}
+                      </span>
+                    </div>
+                  ))
+                ) : (
+                  <p className="employee-jobs-detail-copy">
+                    No approved Job document is currently available.
+                  </p>
+                )}
+              </div>
+            </details>
+
+            {activeAssignment && (
+              <FieldOperationsPanel
+                businessId={businessId}
+                job={selectedJob}
+                assignment={activeAssignment}
+                managed={false}
+                setPage={setPage}
+                onStatusChange={setCurrentStatus}
+              />
+            )}
+          </section>
+
+          <aside className="employee-jobs-history-card">
+            <p className="employee-jobs-eyebrow">
+              Assignment history
+            </p>
+
+            <h2>Job assignment record</h2>
+
+            {assignments.length ? (
+              <div className="employee-jobs-history-list">
+                {assignments.map((item, index) => (
+                  <article
+                    key={item.id}
+                    className="employee-jobs-history-item"
+                  >
+                    <span
+                      className={
+                        item.state === "ACTIVE"
+                          ? "employee-jobs-history-dot is-active"
+                          : "employee-jobs-history-dot"
+                      }
+                      aria-hidden="true"
+                    >
+                      {item.state === "ACTIVE" && (
+                        <MeetroIcon
+                          name="completion"
+                          size={15}
+                          decorative
+                        />
+                      )}
+                    </span>
+
+                    <div>
+                      <strong>
+                        {item.state === "ACTIVE"
+                          ? "Current assignment"
+                          : readableStatus(item.state)}
+                      </strong>
+
+                      <span>
+                        {item.memberName ||
+                          item.memberEmail ||
+                          "Team member"}
+                      </span>
+
+                      <small>
+                        Assignment version{" "}
+                        {item.version ?? index + 1}
+                      </small>
+                    </div>
+                  </article>
+                ))}
+              </div>
+            ) : (
+              <p className="employee-jobs-detail-copy">
+                No assignment history is available.
+              </p>
+            )}
+
+            <div className="employee-jobs-history-note">
+              <MeetroIcon
+                name="jobHistory"
+                size={20}
+                decorative
+              />
+
+              <span>
+                Field status history and business completion remain
+                separate from the assignment record.
+              </span>
+            </div>
+          </aside>
+        </div>
+      )}
+
+      <section className="employee-jobs-schedule-card">
+        <div className="employee-jobs-section-heading">
+          <span
+            className="employee-jobs-round-icon"
+            aria-hidden="true"
+          >
+            <MeetroIcon
+              name="schedule"
+              size={24}
+              decorative
+            />
+          </span>
+
+          <div>
+            <p className="employee-jobs-eyebrow">
+              Employee Schedule
+            </p>
+            <h2>Assigned visits</h2>
+          </div>
+        </div>
+
+        {schedule.length ? (
+          <div className="employee-jobs-schedule-list">
+            {schedule.map((item) => (
+              <article
+                key={item.visitId}
+                className="employee-jobs-schedule-row"
+              >
+                <div>
+                  <strong>{item.jobTitle}</strong>
+
+                  <p>
+                    {item.purpose.replaceAll("_", " ")} ·{" "}
+                    {item.state}
+                  </p>
+                </div>
+
+                <div className="employee-jobs-schedule-time">
+                  <strong>
+                    {formatSchedule(item.startsAt)}
+                  </strong>
+
+                  <span>
+                    {item.location?.remote
+                      ? "Remote"
+                      : locationText(item.location)}
+                  </span>
+                </div>
+              </article>
+            ))}
+          </div>
+        ) : (
+          <p className="employee-jobs-detail-copy">
+            No active Visit is scheduled for your assigned Jobs.
+          </p>
+        )}
       </section>
-    </>
+    </div>
   );
 }
 
@@ -489,7 +874,14 @@ function operationKey(prefix) {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2)}`;
 }
 
-function FieldOperationsPanel({ businessId, job, assignment, managed, setPage }) {
+function FieldOperationsPanel({
+  businessId,
+  job,
+  assignment,
+  managed,
+  setPage,
+  onStatusChange = null,
+}) {
   const [operations, setOperations] = useState(null);
   const [message, setMessage] = useState("");
   const [note, setNote] = useState("");
@@ -507,12 +899,22 @@ function FieldOperationsPanel({ businessId, job, assignment, managed, setPage })
         setPage
       );
       setOperations(result.operations);
+      onStatusChange?.(
+        result.operations?.currentStatus || "ASSIGNED"
+      );
     } catch (loadError) {
       setError(loadError.message || "Field updates are unavailable.");
     } finally {
       setLoading(false);
     }
-  }, [assignment.id, businessId, job.id, managed, setPage]);
+  }, [
+    assignment.id,
+    businessId,
+    job.id,
+    managed,
+    onStatusChange,
+    setPage,
+  ]);
 
   useEffect(() => {
     const timer = window.setTimeout(load, 0);
@@ -532,6 +934,9 @@ function FieldOperationsPanel({ businessId, job, assignment, managed, setPage })
         idempotencyKey: operationKey("field-status"),
       }, setPage);
       setOperations(result.operations);
+      onStatusChange?.(
+        result.operations?.currentStatus || "ASSIGNED"
+      );
       setNote("");
     } catch (statusError) {
       setError(statusError.message || "Field status could not be updated.");

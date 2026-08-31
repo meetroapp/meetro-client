@@ -1166,3 +1166,507 @@ input:focus-visible +
     min-height: 142px;
   }
 }
+
+
+/* =========================================================
+   APPROVED MEETRO FIELD MY JOBS RENDER
+   ========================================================= */
+
+.employee-jobs-workspace {
+  display: grid;
+  gap: 22px;
+}
+
+.employee-jobs-empty,
+.employee-jobs-summary-card,
+.employee-jobs-selector,
+.employee-jobs-assignment-card,
+.employee-jobs-history-card,
+.employee-jobs-schedule-card {
+  box-sizing: border-box;
+  border: 1px solid #dce6df;
+  border-radius: 19px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    0 12px 30px rgba(17, 66, 42, 0.055);
+}
+
+.employee-jobs-empty {
+  min-height: 230px;
+  padding: 36px 28px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.employee-jobs-empty-icon,
+.employee-jobs-summary-icon,
+.employee-jobs-round-icon {
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: #eaf5ec;
+  color: #145f37;
+}
+
+.employee-jobs-empty-icon {
+  width: 74px;
+  height: 74px;
+  margin-bottom: 18px;
+}
+
+.employee-jobs-empty h2 {
+  margin: 0;
+  color: #123e29;
+  font-size: 23px;
+}
+
+.employee-jobs-empty p {
+  max-width: 520px;
+  margin: 9px 0 0;
+  color: #687970;
+  line-height: 1.55;
+}
+
+.employee-jobs-summary-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.employee-jobs-summary-card {
+  min-height: 142px;
+  padding: 23px 25px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.employee-jobs-summary-icon {
+  width: 58px;
+  height: 58px;
+}
+
+.employee-jobs-summary-card div {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.employee-jobs-summary-card p,
+.employee-jobs-eyebrow,
+.employee-jobs-detail-label {
+  margin: 0;
+  color: #28603f;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 850;
+  letter-spacing: 0.13em;
+  text-transform: uppercase;
+}
+
+.employee-jobs-summary-card strong {
+  color: #0e4228;
+  font-size: 27px;
+  line-height: 1.1;
+}
+
+.employee-jobs-selector {
+  padding: 23px 25px;
+}
+
+.employee-jobs-selector h2,
+.employee-jobs-history-card h2,
+.employee-jobs-schedule-card h2 {
+  margin: 7px 0 0;
+  color: #123e29;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.employee-jobs-selector-grid {
+  margin-top: 17px;
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(210px, 1fr));
+  gap: 11px;
+}
+
+.employee-jobs-selector-button {
+  min-height: 88px;
+  padding: 14px 16px;
+  border: 1px solid #dce5de;
+  border-radius: 13px;
+  display: grid;
+  gap: 5px;
+  background: #fff;
+  color: #17432b;
+  text-align: left;
+  cursor: pointer;
+}
+
+.employee-jobs-selector-button span {
+  color: #6b7a72;
+  font-size: 13px;
+}
+
+.employee-jobs-selector-button.is-selected {
+  border-color: #2f8952;
+  background: #edf7ef;
+}
+
+.employee-jobs-primary-grid {
+  display: grid;
+  grid-template-columns:
+    minmax(0, 1.65fr)
+    minmax(280px, 0.82fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.employee-jobs-assignment-card,
+.employee-jobs-history-card {
+  padding: 27px 27px 25px;
+}
+
+.employee-jobs-assignment-header {
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e0e8e2;
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 18px;
+}
+
+.employee-jobs-customer-row {
+  margin-top: 15px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+}
+
+.employee-jobs-round-icon {
+  width: 50px;
+  height: 50px;
+}
+
+.employee-jobs-customer-row h2 {
+  margin: 0;
+  color: #123e29;
+  font-size: 20px;
+  line-height: 1.25;
+}
+
+.employee-jobs-customer-row p {
+  margin: 5px 0 0;
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  color: #63756a;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.employee-jobs-status-pill {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #e8f4e9;
+  color: #176339;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.employee-jobs-detail-block {
+  padding: 20px 0;
+  border-bottom: 1px solid #e1e9e3;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 15px;
+  align-items: flex-start;
+}
+
+.employee-jobs-detail-block h3 {
+  margin: 7px 0 0;
+  color: #103e28;
+  font-size: 20px;
+  line-height: 1.35;
+}
+
+.employee-jobs-detail-copy {
+  margin: 7px 0 0;
+  color: #66776d;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.employee-jobs-scope {
+  padding: 21px 0;
+  border-bottom: 1px solid #e1e9e3;
+}
+
+.employee-jobs-scope ul {
+  margin: 15px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 11px;
+  list-style: none;
+}
+
+.employee-jobs-scope li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #294b36;
+}
+
+.employee-jobs-scope li > span:last-child {
+  display: grid;
+  gap: 3px;
+}
+
+.employee-jobs-scope li small {
+  color: #718078;
+  font-size: 11px;
+}
+
+.employee-jobs-scope-check {
+  width: 21px;
+  height: 21px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: #168044;
+  color: #fff;
+}
+
+.employee-jobs-evidence {
+  margin-top: 19px;
+  border: 1px solid #e1e9e3;
+  border-radius: 13px;
+  overflow: hidden;
+}
+
+.employee-jobs-evidence summary {
+  padding: 15px 17px;
+  color: #1a5735;
+  font-size: 13px;
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.employee-jobs-evidence[open] summary {
+  border-bottom: 1px solid #e1e9e3;
+}
+
+.employee-jobs-evidence-section {
+  padding: 17px;
+}
+
+.employee-jobs-evidence-section +
+.employee-jobs-evidence-section {
+  border-top: 1px solid #e1e9e3;
+}
+
+.employee-jobs-photo-grid {
+  margin-top: 12px;
+  display: grid;
+  grid-template-columns:
+    repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.employee-jobs-photo-grid img {
+  width: 100%;
+  aspect-ratio: 4 / 3;
+  border: 1px solid #dbe7de;
+  border-radius: 12px;
+  object-fit: cover;
+}
+
+.employee-jobs-document-row {
+  margin-top: 10px;
+  padding: 13px 14px;
+  border-radius: 11px;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  background: #f4f8f5;
+  color: #294c37;
+  font-size: 13px;
+}
+
+.employee-jobs-history-card {
+  min-height: 420px;
+}
+
+.employee-jobs-history-list {
+  margin-top: 24px;
+  display: grid;
+  gap: 0;
+}
+
+.employee-jobs-history-item {
+  position: relative;
+  min-height: 96px;
+  padding: 0 0 22px 44px;
+}
+
+.employee-jobs-history-item:not(:last-child)::before {
+  content: "";
+  position: absolute;
+  top: 25px;
+  bottom: -1px;
+  left: 14px;
+  width: 1px;
+  background: #d8e4dc;
+}
+
+.employee-jobs-history-dot {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 29px;
+  height: 29px;
+  box-sizing: border-box;
+  border: 2px solid #b9c9bf;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #fff;
+  color: #fff;
+}
+
+.employee-jobs-history-dot.is-active {
+  border-color: #168044;
+  background: #168044;
+}
+
+.employee-jobs-history-item div {
+  display: grid;
+  gap: 5px;
+}
+
+.employee-jobs-history-item strong {
+  color: #17432b;
+  font-size: 14px;
+}
+
+.employee-jobs-history-item span,
+.employee-jobs-history-item small {
+  color: #66766d;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.employee-jobs-history-note {
+  margin-top: 11px;
+  padding: 13px;
+  border-radius: 11px;
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  background: #f5f8f6;
+  color: #60736a;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.employee-jobs-schedule-card {
+  padding: 25px 27px;
+}
+
+.employee-jobs-section-heading {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.employee-jobs-schedule-list {
+  margin-top: 18px;
+}
+
+.employee-jobs-schedule-row {
+  padding: 15px 0;
+  border-top: 1px solid #e1e9e3;
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+  color: #294c37;
+}
+
+.employee-jobs-schedule-row > div:first-child {
+  min-width: 0;
+}
+
+.employee-jobs-schedule-row p {
+  margin: 5px 0 0;
+  color: #687970;
+  font-size: 12px;
+  text-transform: capitalize;
+}
+
+.employee-jobs-schedule-time {
+  min-width: 190px;
+  display: grid;
+  gap: 5px;
+  color: #64766c;
+  font-size: 12px;
+  text-align: right;
+}
+
+.employee-jobs-schedule-time strong {
+  color: #214d32;
+}
+
+@media (max-width: 1040px) {
+  .employee-jobs-primary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .employee-jobs-summary-grid {
+    grid-template-columns:
+      repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .employee-jobs-summary-grid {
+    grid-template-columns: 1fr;
+    gap: 11px;
+  }
+
+  .employee-jobs-summary-card {
+    min-height: 100px;
+    padding: 17px 18px;
+  }
+
+  .employee-jobs-assignment-card,
+  .employee-jobs-history-card,
+  .employee-jobs-schedule-card {
+    padding: 21px 16px;
+  }
+
+  .employee-jobs-assignment-header {
+    flex-direction: column;
+  }
+
+  .employee-jobs-status-pill {
+    align-self: flex-start;
+  }
+
+  .employee-jobs-document-row,
+  .employee-jobs-schedule-row {
+    flex-direction: column;
+  }
+
+  .employee-jobs-schedule-time {
+    min-width: 0;
+    text-align: left;
+  }
+}
