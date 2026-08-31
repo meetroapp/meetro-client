@@ -5497,30 +5497,36 @@ function MessagesInbox({ setPage, currentPage }) {
             </div>
           </div>
 
-          <div style={searchWrap}>
-            <label style={searchLabel} htmlFor="messages-search">
-              <MeetroIcon name="discover" size={18} decorative />
-              <input
-                id="messages-search"
-                className="messages-contact-search-input"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder={getMessageSearchPlaceholder()}
-                style={searchInput}
-              />
-            </label>
+          {!(
+            messageSection === "conversations" &&
+            isSplitPane &&
+            !savedHistoryVisible
+          ) && (
+            <div style={searchWrap}>
+              <label style={searchLabel} htmlFor="messages-search">
+                <MeetroIcon name="discover" size={18} decorative />
+                <input
+                  id="messages-search"
+                  className="messages-contact-search-input"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={getMessageSearchPlaceholder()}
+                  style={searchInput}
+                />
+              </label>
 
-            {searchQuery && (
-              <button
-                type="button"
-                style={searchClearButton}
-                onClick={() => setSearchQuery("")}
-                aria-label={t("messagesSearchClear")}
-              >
-                ×
-              </button>
-            )}
-          </div>
+              {searchQuery && (
+                <button
+                  type="button"
+                  style={searchClearButton}
+                  onClick={() => setSearchQuery("")}
+                  aria-label={t("messagesSearchClear")}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          )}
 
           {messageSection === "contacts" && activeAccountMode === "business" && (
             <div
@@ -5550,7 +5556,7 @@ function MessagesInbox({ setPage, currentPage }) {
             </div>
           )}
 
-          {messageSection === "conversations" && !savedHistoryVisible && (
+          {messageSection === "conversations" && !savedHistoryVisible && !isSplitPane && (
             <div
               data-conversation-history-navigation="true"
               style={conversationHistoryNavigation}
@@ -6453,6 +6459,99 @@ function MessagesInbox({ setPage, currentPage }) {
         }
       >
         <div style={isSplitPane ? splitListPane : undefined}>
+          {messageSection === "conversations" && isSplitPane && (
+            <div style={splitInboxTools}>
+              <div style={splitInboxSearchWrap}>
+                <label
+                  style={splitInboxSearchLabel}
+                  htmlFor="messages-search-split"
+                >
+                  <MeetroIcon
+                    name="discover"
+                    size={17}
+                    decorative
+                  />
+
+                  <input
+                    id="messages-search-split"
+                    className="messages-contact-search-input"
+                    value={searchQuery}
+                    onChange={(event) =>
+                      setSearchQuery(event.target.value)
+                    }
+                    placeholder={getMessageSearchPlaceholder()}
+                    style={searchInput}
+                  />
+                </label>
+
+                {searchQuery && (
+                  <button
+                    type="button"
+                    style={splitInboxSearchClearButton}
+                    onClick={() => setSearchQuery("")}
+                    aria-label={t("messagesSearchClear")}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              <div
+                data-conversation-history-navigation="true"
+                style={splitInboxHistoryNavigation}
+                aria-label={t(
+                  "messagesSecondaryActionsAria",
+                  language
+                )}
+              >
+                <button
+                  type="button"
+                  style={splitInboxHistoryButton}
+                  className="meetro-visual-surface"
+                  onClick={() =>
+                    openRelationshipAction(
+                      SAVED_HISTORY_ACTION[0],
+                      t(
+                        SAVED_HISTORY_ACTION[1],
+                        language
+                      )
+                    )
+                  }
+                >
+                  <span style={savedHistorySecondaryTitle}>
+                    {t(
+                      "messagesSavedHistoryTitle",
+                      language
+                    )}
+                  </span>
+
+                  <span style={savedHistorySecondaryMeta}>
+                    {savedHistoryQuotes.length > 0
+                      ? t(
+                          "messagesSavedCount",
+                          language,
+                          {
+                            count:
+                              savedHistoryQuotes.length,
+                          }
+                        )
+                      : t(
+                          "messagesSavedManually",
+                          language
+                        )}
+                  </span>
+
+                  <span
+                    aria-hidden="true"
+                    style={splitInboxHistoryArrow}
+                  >
+                    ›
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+
           {messageSection === "contacts" && businessContactsLoading && (
             <div role="status" aria-live="polite" style={relationshipNoticeCard}>
               Loading saved business Contacts…
@@ -7739,6 +7838,83 @@ const searchWrap = {
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
+};
+
+const splitInboxTools = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "grid",
+  gap: "8px",
+  marginBottom: "12px",
+  boxSizing: "border-box",
+};
+
+const splitInboxSearchWrap = {
+  position: "relative",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+};
+
+const splitInboxSearchLabel = {
+  ...glassField,
+  width: "100%",
+  minHeight: "43px",
+  display: "flex",
+  alignItems: "center",
+  gap: "9px",
+  borderRadius: "13px",
+  padding: "0 40px 0 12px",
+  boxSizing: "border-box",
+  color: "#66776d",
+  background: "rgba(255,255,255,0.86)",
+  border: "1px solid rgba(38,87,57,0.12)",
+  boxShadow: "none",
+};
+
+const splitInboxSearchClearButton = {
+  position: "absolute",
+  top: "50%",
+  right: "8px",
+  transform: "translateY(-50%)",
+  width: "28px",
+  height: "28px",
+  border: "none",
+  borderRadius: "999px",
+  background: "#eef4ef",
+  color: "#31533f",
+  fontSize: "18px",
+  fontWeight: "900",
+  lineHeight: 1,
+  cursor: "pointer",
+};
+
+const splitInboxHistoryNavigation = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "grid",
+  boxSizing: "border-box",
+};
+
+const splitInboxHistoryButton = {
+  ...savedHistorySecondaryButton,
+  minHeight: "43px",
+  borderRadius: "13px",
+  padding: "9px 11px",
+  gap: "8px",
+  background: "rgba(255,255,255,0.78)",
+  border: "1px solid rgba(38,87,57,0.10)",
+  boxShadow: "none",
+};
+
+const splitInboxHistoryArrow = {
+  flex: "0 0 auto",
+  color: "#17623a",
+  fontSize: "22px",
+  lineHeight: 1,
+  fontWeight: "800",
 };
 
 const searchLabel = {
