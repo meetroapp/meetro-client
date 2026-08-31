@@ -12,7 +12,7 @@ import {
 const VIEW_META = Object.freeze({
   home: { page: "employeeHome", title: "Home", description: "Today’s field work at a glance." },
   schedule: { page: "employeeSchedule", title: "Schedule", description: "Only Visits attached to your authorized Jobs." },
-  time: { page: "employeeTime", title: "Time", description: "Your canonical Clock In and Clock Out evidence." },
+  time: { page: "employeeTime", title: "Time", description: "Clock in and out to track your time on the job." },
   messages: { page: "employeeMessages", title: "Messages", description: "Internal communication for your assigned Jobs." },
   profile: { page: "employeeProfile", title: "Profile", description: "Your Team access and account context." },
 });
@@ -104,7 +104,15 @@ export default function EmployeePortal({ membership, setPage, view = "home" }) {
 function PortalView({ view, membership, workspace, current, recentMessage, setPage }) {
   if (view === "schedule") return <ScheduleView schedule={workspace.schedule} />;
   if (view === "time") {
-    return <TimeEvidencePanel businessId={membership.businessId} job={current?.job || null} assignment={current?.assignment || null} setPage={setPage} />;
+    return (
+      <TimeEvidencePanel
+        businessId={membership.businessId}
+        job={current?.job || null}
+        assignment={current?.assignment || null}
+        setPage={setPage}
+        variant="full"
+      />
+    );
   }
   if (view === "messages") return <MessagesView operations={workspace.operations} setPage={setPage} membership={membership} />;
   if (view === "profile") {

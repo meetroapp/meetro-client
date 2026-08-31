@@ -679,3 +679,490 @@
     padding-inline: 12px;
   }
 }
+
+
+/* =========================================================
+   APPROVED MEETRO FIELD TIME RENDER
+   ========================================================= */
+
+.employee-time-page {
+  display: grid;
+  gap: 20px;
+}
+
+.employee-time-hero,
+.employee-time-categories,
+.employee-time-location,
+.employee-time-history,
+.employee-time-authority {
+  box-sizing: border-box;
+  border: 1px solid #dce6df;
+  border-radius: 19px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow:
+    0 12px 30px rgba(17, 66, 42, 0.055);
+}
+
+.employee-time-label {
+  margin: 0;
+  color: #285f3f;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 850;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.employee-time-hero {
+  min-height: 410px;
+  padding: 29px 36px 31px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.employee-time-clock-icon {
+  width: 76px;
+  height: 76px;
+  margin: 19px 0 17px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background:
+    linear-gradient(145deg, #edf7ef, #e2f0e5);
+  color: #145f37;
+}
+
+.employee-time-hero h2 {
+  margin: 0;
+  color: #103d28;
+  font-size: 23px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+.employee-time-clock {
+  margin: 7px 0 9px;
+  color: #07482a;
+  font-size: clamp(54px, 6.4vw, 76px);
+  line-height: 1;
+  font-weight: 760;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.045em;
+}
+
+.employee-time-hero-copy {
+  margin: 0;
+  color: #67776e;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.employee-time-clock-button {
+  width: min(520px, 78%);
+  min-height: 58px;
+  margin-top: 25px;
+  border: 0;
+  border-radius: 13px;
+  padding: 12px 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  background:
+    linear-gradient(135deg, #0f5d35, #08713e);
+  color: #fff;
+  font-size: 18px;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow:
+    0 11px 24px rgba(12, 91, 51, 0.17);
+}
+
+.employee-time-clock-button--out {
+  background:
+    linear-gradient(135deg, #1c5738, #174a32);
+}
+
+.employee-time-clock-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.52;
+  box-shadow: none;
+}
+
+.employee-time-clock-button:focus-visible {
+  outline: 3px solid rgba(114, 184, 135, 0.62);
+  outline-offset: 3px;
+}
+
+.employee-time-categories {
+  padding: 28px 24px 24px;
+}
+
+.employee-time-categories h2,
+.employee-time-location h2 {
+  margin: 10px 0 5px;
+  color: #123e29;
+  font-size: 21px;
+  line-height: 1.25;
+  font-weight: 650;
+  letter-spacing: -0.018em;
+}
+
+.employee-time-section-copy {
+  margin: 0;
+  color: #687970;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.employee-time-category-grid {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.employee-time-category {
+  position: relative;
+  min-height: 184px;
+  border: 1px solid #dce5de;
+  border-radius: 14px;
+  padding: 19px 14px 17px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  background: #fff;
+  color: #153f29;
+  text-align: center;
+  cursor: pointer;
+  transition:
+    border-color 150ms ease,
+    background 150ms ease,
+    box-shadow 150ms ease,
+    transform 150ms ease;
+}
+
+.employee-time-category:hover:not(:disabled) {
+  border-color: #9cc2a6;
+  transform: translateY(-1px);
+}
+
+.employee-time-category.is-selected {
+  border: 2px solid #14713f;
+  background:
+    linear-gradient(145deg, #fff, #f7fbf8);
+  box-shadow:
+    inset 0 0 0 1px rgba(20, 113, 63, 0.04);
+}
+
+.employee-time-category.is-unavailable {
+  opacity: 0.46;
+}
+
+.employee-time-category:disabled {
+  cursor: not-allowed;
+}
+
+.employee-time-category:focus-visible {
+  outline: 3px solid rgba(114, 184, 135, 0.55);
+  outline-offset: 2px;
+}
+
+.employee-time-category-check {
+  position: absolute;
+  top: 9px;
+  right: 9px;
+  width: 29px;
+  height: 29px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #168044;
+  color: #fff;
+}
+
+.employee-time-category-icon {
+  width: 69px;
+  height: 69px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: #eaf5ec;
+  color: #145f37;
+}
+
+.employee-time-category strong {
+  font-size: 17px;
+  line-height: 1.2;
+}
+
+.employee-time-category small {
+  max-width: 150px;
+  min-height: 35px;
+  color: #718079;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.employee-time-job-warning {
+  margin: 14px 0 0;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: #fff8e8;
+  color: #785d1f;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.employee-time-location {
+  min-height: 132px;
+  padding: 24px 27px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.employee-time-location-main {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+
+.employee-time-location-icon,
+.employee-time-authority-icon {
+  width: 58px;
+  height: 58px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  background: #eaf5ec;
+  color: #145f37;
+}
+
+.employee-time-location-toggle {
+  min-width: 155px;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.employee-time-location-toggle input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.employee-time-switch {
+  width: 63px;
+  height: 34px;
+  box-sizing: border-box;
+  padding: 3px;
+  border-radius: 999px;
+  display: block;
+  background: #d5dfd8;
+  transition: background 150ms ease;
+}
+
+.employee-time-switch > span {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: block;
+  background: #fff;
+  box-shadow:
+    0 2px 7px rgba(16, 63, 39, 0.18);
+  transition: transform 150ms ease;
+}
+
+.employee-time-location-toggle
+input:checked +
+.employee-time-switch {
+  background: #08733e;
+}
+
+.employee-time-location-toggle
+input:checked +
+.employee-time-switch >
+span {
+  transform: translateX(29px);
+}
+
+.employee-time-location-toggle
+input:focus-visible +
+.employee-time-switch {
+  outline: 3px solid rgba(114, 184, 135, 0.58);
+  outline-offset: 3px;
+}
+
+.employee-time-location-toggle small {
+  max-width: 135px;
+  color: #1d683d;
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 750;
+  text-align: center;
+}
+
+.employee-time-error {
+  padding: 12px 14px;
+  border: 1px solid #e4beb8;
+  border-radius: 12px;
+  background: #fff4f2;
+  color: #8b2e2e;
+}
+
+.employee-time-history {
+  overflow: hidden;
+}
+
+.employee-time-history summary {
+  min-height: 86px;
+  box-sizing: border-box;
+  padding: 18px 25px;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 15px;
+  list-style: none;
+  cursor: pointer;
+}
+
+.employee-time-history summary::-webkit-details-marker {
+  display: none;
+}
+
+.employee-time-history-icon {
+  width: 45px;
+  height: 45px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: #17633a;
+}
+
+.employee-time-history-copy {
+  display: grid;
+  gap: 3px;
+}
+
+.employee-time-history-copy strong {
+  color: #185233;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.employee-time-history-copy small {
+  color: #6c7b72;
+  font-size: 13px;
+}
+
+.employee-time-history-arrow {
+  color: #145f37;
+  font-size: 31px;
+}
+
+.employee-time-history[open] summary {
+  border-bottom: 1px solid #e2e9e3;
+}
+
+.employee-time-history-list {
+  padding: 0 24px 18px;
+}
+
+.employee-time-authority {
+  min-height: 88px;
+  padding: 17px 23px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: none;
+}
+
+.employee-time-authority div {
+  display: grid;
+  gap: 4px;
+}
+
+.employee-time-authority strong {
+  color: #1d4d31;
+  font-size: 13px;
+}
+
+.employee-time-authority span {
+  color: #65766c;
+  font-size: 13px;
+}
+
+@media (max-width: 760px) {
+  .employee-time-hero {
+    min-height: 350px;
+    padding: 24px 16px 25px;
+  }
+
+  .employee-time-clock {
+    font-size: clamp(48px, 15vw, 64px);
+  }
+
+  .employee-time-clock-button {
+    width: 100%;
+  }
+
+  .employee-time-categories {
+    padding: 22px 14px 16px;
+  }
+
+  .employee-time-category-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .employee-time-category {
+    min-height: 150px;
+    padding-inline: 9px;
+  }
+
+  .employee-time-category-icon {
+    width: 58px;
+    height: 58px;
+  }
+
+  .employee-time-location {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .employee-time-location-toggle {
+    width: 100%;
+    grid-template-columns: auto 1fr;
+    align-items: center;
+    justify-items: start;
+  }
+
+  .employee-time-location-toggle small {
+    max-width: none;
+    text-align: left;
+  }
+}
+
+@media (max-width: 390px) {
+  .employee-time-category-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .employee-time-category {
+    min-height: 142px;
+  }
+}

@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
 import EmployeeShell from "../components/EmployeeShell";
+import MeetroIcon from "../components/MeetroIcon";
 import {
   fetchEmployeeJobs,
   fetchEmployeeSchedule,
@@ -632,6 +633,33 @@ const TIME_CATEGORY_LABELS = Object.freeze({
   GENERAL: "General",
 });
 
+const TIME_CATEGORY_META = Object.freeze({
+  JOB_WORK: {
+    icon: "activeWork",
+    description: "Work at a job site",
+  },
+  DRIVING: {
+    icon: "onTheWay",
+    description: "Travel to / from job sites",
+  },
+  OFFICE: {
+    icon: "businessDashboard",
+    description: "Office or admin time",
+  },
+  SUPPLIES: {
+    icon: "materials",
+    description: "Purchasing or picking up items",
+  },
+  BREAK: {
+    icon: "jobHistory",
+    description: "Meal or rest break",
+  },
+  GENERAL: {
+    icon: "settings",
+    description: "Other work related time",
+  },
+});
+
 function formatDuration(seconds) {
   const total = Math.max(0, Math.floor(Number(seconds) || 0));
   const hours = Math.floor(total / 3600);
@@ -644,6 +672,17 @@ function sessionDuration(session, now = Date.now()) {
   if (session?.durationSeconds != null) return Number(session.durationSeconds);
   const started = new Date(session?.clockedInAt).getTime();
   return Number.isFinite(started) ? Math.max(0, Math.floor((now - started) / 1000)) : 0;
+}
+
+function formatTimerClock(seconds) {
+  const total = Math.max(0, Math.floor(Number(seconds) || 0));
+  const hours = Math.floor(total / 3600);
+  const minutes = Math.floor((total % 3600) / 60);
+  const remainder = total % 60;
+
+  return [hours, minutes, remainder]
+    .map((value) => String(value).padStart(2, "0"))
+    .join(":");
 }
 
 function boundaryLocation(requested) {
@@ -662,7 +701,13 @@ function boundaryLocation(requested) {
   });
 }
 
-export function TimeEvidencePanel({ businessId, job, assignment, setPage }) {
+export function TimeEvidencePanel({
+  businessId,
+  job,
+  assignment,
+  setPage,
+  variant = "compact",
+}) {
   const [time, setTime] = useState(null);
   const [category, setCategory] = useState(() => job && assignment ? "JOB_WORK" : "GENERAL");
   const [includeLocation, setIncludeLocation] = useState(false);
@@ -737,6 +782,313 @@ export function TimeEvidencePanel({ businessId, job, assignment, setPage }) {
 
   const active = time?.activeSession;
   const jobWorkAvailable = Boolean(job?.id && assignment?.id);
+  const visibleCategory = active?.category || category;
+  const visibleDuration = active
+    ? formatTimerClock(sessionDuration(active, now))
+    : "00:00:00";
+
+  if (variant === "full") {
+    return (
+      <div className="employee-time-page">
+        <section
+          className="employee-time-hero"
+          aria-label="Current timer"
+        >
+          <p className="employee-time-label">
+            Current timer
+          </p>
+
+          <span
+            className="employee-time-clock-icon"
+            aria-hidden="true"
+          >
+            <MeetroIcon
+              name="jobHistory"
+              size={37}
+              decorative
+            />
+          </span>
+
+          <h2>
+            {active
+              ? TIME_CATEGORY_LABELS[active.category] ||
+                active.category
+              : "Not clocked in"}
+          </h2>
+
+          <div
+            className="employee-time-clock"
+            aria-live="polite"
+          >
+            {visibleDuration}
+          </div>
+
+          <p className="employee-time-hero-copy">
+            {active
+              ? active.jobTitle ||
+                `Started ${formatSchedule(active.clockedInAt)}`
+              : "Select a category and clock in to get started."}
+          </p>
+
+          <button
+            type="button"
+            className={
+              active
+                ? "employee-time-clock-button employee-time-clock-button--out"
+                : "employee-time-clock-button"
+            }
+            disabled={
+              working ||
+              (!active &&
+                category === "JOB_WORK" &&
+                !jobWorkAvailable)
+            }
+            onClick={active ? clockOut : clockIn}
+          >
+            <MeetroIcon
+              name="jobHistory"
+              size={22}
+              decorative
+            />
+            {working
+              ? "Recording…"
+              : active
+              ? "Clock Out"
+              : "Clock In"}
+          </button>
+        </section>
+
+        <section className="employee-time-categories">
+          <p className="employee-time-label">
+            Time category
+          </p>
+
+          <h2>Choose how to record this time</h2>
+
+          <p className="employee-time-section-copy">
+            Select the category that best describes your activity.
+          </p>
+
+          <div
+            className="employee-time-category-grid"
+            role="radiogroup"
+            aria-label="Time category"
+          >
+            {Object.entries(TIME_CATEGORY_LABELS).map(
+              ([value, label]) => {
+                const selected =
+                  visibleCategory === value;
+
+                const unavailable =
+                  value === "JOB_WORK" &&
+                  !jobWorkAvailable;
+
+                const meta =
+                  TIME_CATEGORY_META[value];
+
+                return (
+                  <button
+                    key={value}
+                    type="button"
+                    role="radio"
+                    aria-checked={selected}
+                    disabled={
+                      Boolean(active) ||
+                      unavailable
+                    }
+                    className={[
+                      "employee-time-category",
+                      selected
+                        ? "is-selected"
+                        : "",
+                      unavailable
+                        ? "is-unavailable"
+                        : "",
+                    ]
+                      .filter(Boolean)
+                      .join(" ")}
+                    onClick={() =>
+                      setCategory(value)
+                    }
+                  >
+                    {selected && (
+                      <span
+                        className="employee-time-category-check"
+                        aria-hidden="true"
+                      >
+                        <MeetroIcon
+                          name="completion"
+                          size={18}
+                          decorative
+                        />
+                      </span>
+                    )}
+
+                    <span
+                      className="employee-time-category-icon"
+                      aria-hidden="true"
+                    >
+                      <MeetroIcon
+                        name={meta.icon}
+                        size={31}
+                        decorative
+                      />
+                    </span>
+
+                    <strong>{label}</strong>
+
+                    <small>
+                      {unavailable
+                        ? "Assigned Job required"
+                        : meta.description}
+                    </small>
+                  </button>
+                );
+              }
+            )}
+          </div>
+
+          {!active &&
+            category === "JOB_WORK" &&
+            !jobWorkAvailable && (
+              <p className="employee-time-job-warning">
+                Select an actively assigned Job before recording Job Work.
+              </p>
+            )}
+        </section>
+
+        <section className="employee-time-location">
+          <div className="employee-time-location-main">
+            <span
+              className="employee-time-location-icon"
+              aria-hidden="true"
+            >
+              <MeetroIcon
+                name="location"
+                size={29}
+                decorative
+              />
+            </span>
+
+            <div>
+              <p className="employee-time-label">
+                Location evidence
+              </p>
+
+              <h2>Capture optional location</h2>
+
+              <p className="employee-time-section-copy">
+                You control whether Meetro requests location
+                evidence at your next clock boundary.
+              </p>
+            </div>
+          </div>
+
+          <label className="employee-time-location-toggle">
+            <input
+              type="checkbox"
+              checked={includeLocation}
+              onChange={(event) =>
+                setIncludeLocation(
+                  event.target.checked
+                )
+              }
+            />
+
+            <span
+              className="employee-time-switch"
+              aria-hidden="true"
+            >
+              <span />
+            </span>
+
+            <small>
+              {includeLocation
+                ? "Enabled for next clock boundary"
+                : "Location not requested"}
+            </small>
+          </label>
+        </section>
+
+        {error && (
+          <div
+            role="alert"
+            className="employee-time-error"
+          >
+            {error}
+          </div>
+        )}
+
+        <details className="employee-time-history">
+          <summary>
+            <span
+              className="employee-time-history-icon"
+              aria-hidden="true"
+            >
+              <MeetroIcon
+                name="jobHistory"
+                size={27}
+                decorative
+              />
+            </span>
+
+            <span className="employee-time-history-copy">
+              <strong>My time history</strong>
+              <small>
+                View your recent time sessions and history
+              </small>
+            </span>
+
+            <span
+              className="employee-time-history-arrow"
+              aria-hidden="true"
+            >
+              ›
+            </span>
+          </summary>
+
+          <div className="employee-time-history-list">
+            {(time?.sessions || []).length ? (
+              time.sessions.map((session) => (
+                <TimeRow
+                  key={session.id}
+                  session={session}
+                  now={now}
+                />
+              ))
+            ) : (
+              <p style={detailCopyStyle}>
+                No time has been recorded yet.
+              </p>
+            )}
+          </div>
+        </details>
+
+        <div className="employee-time-authority">
+          <span
+            className="employee-time-authority-icon"
+            aria-hidden="true"
+          >
+            <MeetroIcon
+              name="complianceCenter"
+              size={26}
+              decorative
+            />
+          </span>
+
+          <div>
+            <strong>
+              Server timestamps are authoritative.
+            </strong>
+            <span>
+              Field and business completion remain separate.
+            </span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <section style={timePanelStyle} aria-label="Clock In and Clock Out">
       <div style={rowStyle}>
