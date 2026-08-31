@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import EmployeeShell from "../components/EmployeeShell";
+import MeetroIcon from "../components/MeetroIcon";
 import { TimeEvidencePanel } from "./EmployeeJobs";
 import { fetchEmployeeJobs, fetchEmployeeSchedule } from "../utils/jobAssignmentApi";
 import { fetchFieldOperations } from "../utils/fieldOperationsApi";
@@ -112,42 +113,269 @@ function PortalView({ view, membership, workspace, current, recentMessage, setPa
   return <HomeView membership={membership} workspace={workspace} current={current} recentMessage={recentMessage} setPage={setPage} />;
 }
 
-function HomeView({ membership, workspace, current, recentMessage, setPage }) {
+function HomeView({
+  membership,
+  workspace,
+  current,
+  recentMessage,
+  setPage,
+}) {
   const active = workspace.time?.activeSession;
+
   const todayKey = new Date().toDateString();
-  const today = workspace.schedule.filter((item) => new Date(item.startsAt).toDateString() === todayKey);
+
+  const today = workspace.schedule.filter(
+    (item) =>
+      new Date(item.startsAt).toDateString() ===
+      todayKey
+  );
+
   return (
-    <div style={gridStyle}>
-      <section style={{ ...cardStyle, gridColumn: "1 / -1", background: "linear-gradient(135deg,#153f28,#267244)", color: "#fff" }}>
-        <p style={{ ...eyebrowStyle, color: "#c9e6d0" }}>Current assignment</p>
-        <h2 style={{ ...headingStyle, color: "#fff" }}>{current?.job?.title || "No active assignment"}</h2>
-        <p style={{ ...copyStyle, color: "#e3f1e7" }}>{current ? `${current.job.customer?.displayName || "Customer"} · ${locationText(current.job.location)}` : `When ${membership.businessName || "your business"} assigns work, it will appear here.`}</p>
-        {current && <button type="button" style={lightButton} onClick={() => setPage(`employeeJobs?businessId=${membership.businessId}&jobId=${encodeURIComponent(current.job.id)}`)}>Open Job Detail</button>}
+    <div className="employee-home">
+      <section className="employee-home__hero">
+        <div
+          className="employee-home__hero-icon"
+          aria-hidden="true"
+        >
+          <MeetroIcon
+            name="businessTools"
+            size={39}
+            decorative
+          />
+        </div>
+
+        <div className="employee-home__hero-copy">
+          <p className="employee-home__eyebrow">
+            Current assignment
+          </p>
+
+          <h2>
+            {current?.job?.title ||
+              "No active assignment"}
+          </h2>
+
+          <p>
+            {current
+              ? `${
+                  current.job.customer?.displayName ||
+                  "Customer"
+                } · ${locationText(
+                  current.job.location
+                )}`
+              : `When ${
+                  membership.businessName ||
+                  "your business"
+                } assigns work, it will appear here.`}
+          </p>
+
+          {current && (
+            <button
+              type="button"
+              className="employee-home__hero-action"
+              onClick={() =>
+                setPage(
+                  `employeeJobs?businessId=${
+                    membership.businessId
+                  }&jobId=${encodeURIComponent(
+                    current.job.id
+                  )}`
+                )
+              }
+            >
+              Open Job Detail
+            </button>
+          )}
+        </div>
       </section>
-      <section style={cardStyle}>
-        <p style={eyebrowStyle}>Today’s work</p>
-        <h2 style={headingStyle}>{today.length ? `${today.length} scheduled Visit${today.length === 1 ? "" : "s"}` : "No scheduled Visits"}</h2>
-        {today.slice(0, 2).map((item) => <p key={item.visitId} style={copyStyle}><strong>{item.jobTitle}</strong><br />{when(item.startsAt)}</p>)}
-        <button type="button" style={textButton} onClick={() => setPage(`employeeSchedule?businessId=${membership.businessId}`)}>View schedule</button>
-      </section>
-      <section style={cardStyle}>
-        <p style={eyebrowStyle}>Next field action</p>
-        <h2 style={headingStyle}>{current?.operations?.nextStatus ? `Mark ${readable(current.operations.nextStatus)}` : "No action pending"}</h2>
-        <p style={copyStyle}>Current status: {readable(current?.operations?.currentStatus)}</p>
-        {current && <button type="button" style={textButton} onClick={() => setPage(`employeeJobs?businessId=${membership.businessId}&jobId=${encodeURIComponent(current.job.id)}`)}>Continue in Job Detail</button>}
-      </section>
-      <section style={cardStyle}>
-        <p style={eyebrowStyle}>Current timer</p>
-        <h2 style={headingStyle}>{active ? `${readable(active.category)} active` : "Not clocked in"}</h2>
-        <p style={copyStyle}>{active ? `Started ${when(active.clockedInAt)}` : "Clock In when you begin authorized work."}</p>
-        <button type="button" style={textButton} onClick={() => setPage(`employeeTime?businessId=${membership.businessId}`)}>Open Time</button>
-      </section>
-      <section style={cardStyle}>
-        <p style={eyebrowStyle}>Recent internal update</p>
-        <h2 style={headingStyle}>{recentMessage?.job?.title || "No Team updates yet"}</h2>
-        <p style={copyStyle}>{recentMessage?.message || "Internal Job messages from your business will appear here."}</p>
-        <button type="button" style={textButton} onClick={() => setPage(`employeeMessages?businessId=${membership.businessId}`)}>Open Messages</button>
-      </section>
+
+      <div className="employee-home__grid">
+        <section className="employee-home__card">
+          <p className="employee-home__eyebrow">
+            Today’s work
+          </p>
+
+          <div
+            className="employee-home__card-icon"
+            aria-hidden="true"
+          >
+            <MeetroIcon
+              name="schedule"
+              size={30}
+              decorative
+            />
+          </div>
+
+          <h2>
+            {today.length
+              ? `${today.length} scheduled Visit${
+                  today.length === 1 ? "" : "s"
+                }`
+              : "No scheduled Visits"}
+          </h2>
+
+          {today.length > 0 && (
+            <div className="employee-home__mini-list">
+              {today.slice(0, 2).map((item) => (
+                <p key={item.visitId}>
+                  <strong>{item.jobTitle}</strong>
+                  <br />
+                  {when(item.startsAt)}
+                </p>
+              ))}
+            </div>
+          )}
+
+          <button
+            type="button"
+            className="employee-home__link"
+            onClick={() =>
+              setPage(
+                `employeeSchedule?businessId=${
+                  membership.businessId
+                }`
+              )
+            }
+          >
+            View schedule
+          </button>
+        </section>
+
+        <section className="employee-home__card">
+          <p className="employee-home__eyebrow">
+            Next field action
+          </p>
+
+          <div
+            className="employee-home__card-icon"
+            aria-hidden="true"
+          >
+            <MeetroIcon
+              name="completion"
+              size={30}
+              decorative
+            />
+          </div>
+
+          <h2>
+            {current?.operations?.nextStatus
+              ? `Mark ${readable(
+                  current.operations.nextStatus
+                )}`
+              : "No action pending"}
+          </h2>
+
+          <p className="employee-home__card-copy">
+            Current status:{" "}
+            <strong>
+              {readable(
+                current?.operations?.currentStatus
+              )}
+            </strong>
+          </p>
+
+          {current && (
+            <button
+              type="button"
+              className="employee-home__link"
+              onClick={() =>
+                setPage(
+                  `employeeJobs?businessId=${
+                    membership.businessId
+                  }&jobId=${encodeURIComponent(
+                    current.job.id
+                  )}`
+                )
+              }
+            >
+              Continue in Job Detail
+            </button>
+          )}
+        </section>
+
+        <section className="employee-home__card">
+          <p className="employee-home__eyebrow">
+            Current timer
+          </p>
+
+          <div
+            className="employee-home__card-icon"
+            aria-hidden="true"
+          >
+            <MeetroIcon
+              name="jobHistory"
+              size={30}
+              decorative
+            />
+          </div>
+
+          <h2>
+            {active
+              ? `${readable(active.category)} active`
+              : "Not clocked in"}
+          </h2>
+
+          <p className="employee-home__card-copy">
+            {active
+              ? `Started ${when(active.clockedInAt)}`
+              : "Clock In when you begin authorized work."}
+          </p>
+
+          <button
+            type="button"
+            className="employee-home__link"
+            onClick={() =>
+              setPage(
+                `employeeTime?businessId=${
+                  membership.businessId
+                }`
+              )
+            }
+          >
+            Open Time
+          </button>
+        </section>
+
+        <section className="employee-home__card employee-home__card--recent">
+          <p className="employee-home__eyebrow">
+            Recent internal update
+          </p>
+
+          <div
+            className="employee-home__card-icon"
+            aria-hidden="true"
+          >
+            <MeetroIcon
+              name="messages"
+              size={30}
+              decorative
+            />
+          </div>
+
+          <h2>
+            {recentMessage?.job?.title ||
+              "No Team updates yet"}
+          </h2>
+
+          <p className="employee-home__card-copy">
+            {recentMessage?.message ||
+              "Internal Job messages from your business will appear here."}
+          </p>
+
+          <button
+            type="button"
+            className="employee-home__link"
+            onClick={() =>
+              setPage(
+                `employeeMessages?businessId=${
+                  membership.businessId
+                }`
+              )
+            }
+          >
+            Open Messages
+          </button>
+        </section>
+      </div>
     </div>
   );
 }

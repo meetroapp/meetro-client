@@ -1331,6 +1331,13 @@ const invitationActions = {
   flexWrap: "wrap",
 };
 
+const noticeStyle = {
+  ...cardStyle,
+  background: "#edf8ef",
+  color: "#1a5d31",
+  borderColor: "#b9d9c0",
+};
+
 const invitationMismatchBox = {
   ...noticeStyle,
   margin: "0 0 16px",
@@ -1364,12 +1371,6 @@ const linkInput = {
 const copyFallbackText = {
   ...copyStyle,
   margin: 0,
-};
-const noticeStyle = {
-  ...cardStyle,
-  background: "#edf8ef",
-  color: "#1a5d31",
-  borderColor: "#b9d9c0",
 };
 const errorStyle = {
   ...cardStyle,
