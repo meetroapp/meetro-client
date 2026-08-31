@@ -292,7 +292,7 @@ function EmployeeJobs({ setPage, roleMembership = null }) {
         currentPage="employeeJobs"
         setPage={setPage}
         title="My Jobs"
-        description="Assigned work, status, scope, and internal coordination."
+        description="View assigned work, update progress, and message your team."
       >
         {workspaceContent}
       </EmployeeShell>
@@ -422,7 +422,7 @@ function FieldWorkspace({
 
         <p>
           When an Owner or Manager assigns work to you,
-          the Job and its authorized details will appear here.
+          the Job details will appear here.
         </p>
       </section>
     );
@@ -539,7 +539,7 @@ function FieldWorkspace({
             <div className="employee-jobs-assignment-header">
               <div>
                 <p className="employee-jobs-eyebrow">
-                  Active assignment
+                  Current assignment
                 </p>
 
                 <div className="employee-jobs-customer-row">
@@ -593,7 +593,7 @@ function FieldWorkspace({
 
               <div>
                 <p className="employee-jobs-detail-label">
-                  Job title
+                  Job
                 </p>
                 <h3>{selectedJob.title}</h3>
               </div>
@@ -625,7 +625,7 @@ function FieldWorkspace({
 
             <div className="employee-jobs-scope">
               <p className="employee-jobs-detail-label">
-                Approved work scope
+                Approved work
               </p>
 
               {selectedJob.approvedScope?.length ? (
@@ -656,14 +656,14 @@ function FieldWorkspace({
                 </ul>
               ) : (
                 <p className="employee-jobs-detail-copy">
-                  No customer-approved scope is currently attached.
+                  No approved work has been added yet.
                 </p>
               )}
             </div>
 
             <details className="employee-jobs-evidence">
               <summary>
-                Job photos and Documents
+                Photos and documents
               </summary>
 
               <div className="employee-jobs-evidence-section">
@@ -731,7 +731,7 @@ function FieldWorkspace({
               Assignment history
             </p>
 
-            <h2>Job assignment record</h2>
+            <h2>Assignment details</h2>
 
             {assignments.length ? (
               <div className="employee-jobs-history-list">
@@ -771,8 +771,14 @@ function FieldWorkspace({
                       </span>
 
                       <small>
-                        Assignment version{" "}
-                        {item.version ?? index + 1}
+                        {item.state === "ACTIVE"
+                          ? `Assigned ${formatSchedule(
+                              item.assignedAt
+                            )}`
+                          : `Updated ${formatSchedule(
+                              item.changedAt ||
+                                item.assignedAt
+                            )}`}
                       </small>
                     </div>
                   </article>
@@ -792,8 +798,8 @@ function FieldWorkspace({
               />
 
               <span>
-                Field status history and business completion remain
-                separate from the assignment record.
+                Job progress is tracked separately from
+                assignment history.
               </span>
             </div>
           </aside>
@@ -815,9 +821,9 @@ function FieldWorkspace({
 
           <div>
             <p className="employee-jobs-eyebrow">
-              Employee Schedule
+              Schedule
             </p>
-            <h2>Assigned visits</h2>
+            <h2>Upcoming visits</h2>
           </div>
         </div>
 
@@ -853,7 +859,7 @@ function FieldWorkspace({
           </div>
         ) : (
           <p className="employee-jobs-detail-copy">
-            No active Visit is scheduled for your assigned Jobs.
+            No visits are scheduled yet.
           </p>
         )}
       </section>
@@ -979,14 +985,13 @@ function FieldOperationsPanel({
         <div className="employee-field-ops-header">
           <div>
             <p className="employee-jobs-eyebrow">
-              Field operations
+              Job progress
             </p>
 
-            <h3>Status and internal Job communication</h3>
+            <h3>Update progress and message your team</h3>
 
             <p>
-              Record your field progress and communicate
-              directly with your business Team.
+              Keep your status current and your team informed.
             </p>
           </div>
 
@@ -1027,14 +1032,14 @@ function FieldOperationsPanel({
               </span>
 
               <div className="employee-field-progress-copy">
-                <span>Current field status</span>
+                <span>Current status</span>
                 <strong>
                   {readableStatus(currentStatus)}
                 </strong>
 
                 {nextStatus && (
                   <small>
-                    Next available action:{" "}
+                    Next:{" "}
                     {readableStatus(nextStatus)}
                   </small>
                 )}
@@ -1046,7 +1051,7 @@ function FieldOperationsPanel({
                 <div className="employee-field-action-heading">
                   <div>
                     <p className="employee-jobs-detail-label">
-                      Next field action
+                      Next step
                     </p>
 
                     <h4>
@@ -1062,7 +1067,7 @@ function FieldOperationsPanel({
                 </div>
 
                 <label className="employee-field-note">
-                  <span>Optional update note</span>
+                  <span>Add a note (optional)</span>
 
                   <input
                     value={note}
@@ -1070,7 +1075,7 @@ function FieldOperationsPanel({
                       setNote(event.target.value)
                     }
                     maxLength={1000}
-                    placeholder="Add a short operational note"
+                    placeholder="Add a quick note for your team"
                   />
                 </label>
 
@@ -1103,8 +1108,8 @@ function FieldOperationsPanel({
                 />
 
                 <span>
-                  Field work has been reported complete.
-                  Business and customer completion remain separate.
+                  Your field work is marked complete.
+                  The Job stays open until the business completes it.
                 </span>
               </div>
             )}
@@ -1124,9 +1129,9 @@ function FieldOperationsPanel({
 
                 <div>
                   <p className="employee-jobs-detail-label">
-                    Internal Team communication
+                    Team messages
                   </p>
-                  <h4>Message the business Team</h4>
+                  <h4>Message your team</h4>
                   <span>
                     Customers do not receive these messages.
                   </span>
@@ -1162,7 +1167,7 @@ function FieldOperationsPanel({
                       size={22}
                       decorative
                     />
-                    <span>No internal Job messages yet.</span>
+                    <span>No team messages yet.</span>
                   </div>
                 )}
               </div>
@@ -1172,7 +1177,7 @@ function FieldOperationsPanel({
                 className="employee-field-message-form"
               >
                 <label>
-                  <span>Write an internal update</span>
+                  <span>Write a message</span>
 
                   <textarea
                     value={message}
@@ -1181,7 +1186,7 @@ function FieldOperationsPanel({
                     }
                     maxLength={5000}
                     rows={3}
-                    placeholder="Internal Job communication only — customers do not receive this message"
+                    placeholder="Write a message to your team"
                   />
                 </label>
 
@@ -1200,7 +1205,7 @@ function FieldOperationsPanel({
 
                   {working === "message"
                     ? "Sending…"
-                    : "Send internal message"}
+                    : "Send message"}
                 </button>
               </form>
             </section>
@@ -1285,19 +1290,19 @@ const TIME_CATEGORY_LABELS = Object.freeze({
 const TIME_CATEGORY_META = Object.freeze({
   JOB_WORK: {
     icon: "activeWork",
-    description: "Work at a job site",
+    description: "Working on an assigned Job",
   },
   DRIVING: {
     icon: "onTheWay",
-    description: "Travel to / from job sites",
+    description: "Driving for work",
   },
   OFFICE: {
     icon: "businessDashboard",
-    description: "Office or admin time",
+    description: "Office or admin work",
   },
   SUPPLIES: {
     icon: "materials",
-    description: "Purchasing or picking up items",
+    description: "Picking up or purchasing supplies",
   },
   BREAK: {
     icon: "jobHistory",
@@ -1305,7 +1310,7 @@ const TIME_CATEGORY_META = Object.freeze({
   },
   GENERAL: {
     icon: "settings",
-    description: "Other work related time",
+    description: "Other work activity",
   },
 });
 
@@ -1369,7 +1374,7 @@ export function TimeEvidencePanel({
       setError("");
       setTime(await fetchOwnTime(businessId, setPage));
     } catch (loadError) {
-      setError(loadError.message || "Time evidence is unavailable.");
+      setError(loadError.message || "Time tracking is unavailable right now.");
     }
   }, [businessId, setPage]);
 
@@ -1476,7 +1481,7 @@ export function TimeEvidencePanel({
             {active
               ? active.jobTitle ||
                 `Started ${formatSchedule(active.clockedInAt)}`
-              : "Select a category and clock in to get started."}
+              : "Choose what you're doing, then clock in."}
           </p>
 
           <button
@@ -1512,10 +1517,10 @@ export function TimeEvidencePanel({
             Time category
           </p>
 
-          <h2>Choose how to record this time</h2>
+          <h2>Choose your work activity</h2>
 
           <p className="employee-time-section-copy">
-            Select the category that best describes your activity.
+            Select the option that best matches what you're doing.
           </p>
 
           <div
@@ -1588,7 +1593,7 @@ export function TimeEvidencePanel({
 
                     <small>
                       {unavailable
-                        ? "Assigned Job required"
+                        ? "Assigned Job needed"
                         : meta.description}
                     </small>
                   </button>
@@ -1621,14 +1626,14 @@ export function TimeEvidencePanel({
 
             <div>
               <p className="employee-time-label">
-                Location evidence
+                Location (optional)
               </p>
 
-              <h2>Capture optional location</h2>
+              <h2>Add your location</h2>
 
               <p className="employee-time-section-copy">
-                You control whether Meetro requests location
-                evidence at your next clock boundary.
+                Turn this on to add your location when you
+                clock in or out.
               </p>
             </div>
           </div>
@@ -1653,8 +1658,8 @@ export function TimeEvidencePanel({
 
             <small>
               {includeLocation
-                ? "Enabled for next clock boundary"
-                : "Location not requested"}
+                ? "Location on"
+                : "Location off"}
             </small>
           </label>
         </section>
@@ -1682,9 +1687,9 @@ export function TimeEvidencePanel({
             </span>
 
             <span className="employee-time-history-copy">
-              <strong>My time history</strong>
+              <strong>Time history</strong>
               <small>
-                View your recent time sessions and history
+                Review your recent clock-ins and clock-outs
               </small>
             </span>
 
@@ -1727,10 +1732,10 @@ export function TimeEvidencePanel({
 
           <div>
             <strong>
-              Server timestamps are authoritative.
+              Meetro records the official time when you clock in or out.
             </strong>
             <span>
-              Field and business completion remain separate.
+              Clocking out does not mark the Job complete.
             </span>
           </div>
         </div>
@@ -1746,13 +1751,13 @@ export function TimeEvidencePanel({
       <div className="employee-compact-time-header">
         <div>
           <p className="employee-jobs-eyebrow">
-            Canonical time evidence
+            Time tracking
           </p>
 
           <h3>Current timer</h3>
 
           <span className="employee-compact-time-authority">
-            Clock In / Clock Out
+            Track time for this Job
           </span>
         </div>
 
@@ -1761,7 +1766,7 @@ export function TimeEvidencePanel({
           className="employee-compact-time-open"
           onClick={() => setPage("employeeTime")}
         >
-          Open full Time
+          Open Time
           <span aria-hidden="true">›</span>
         </button>
       </div>
@@ -1859,7 +1864,7 @@ export function TimeEvidencePanel({
               type="button"
               onClick={() => setPage("employeeTime")}
             >
-              Change in Time
+              Change category
             </button>
           )}
         </div>
@@ -1881,7 +1886,7 @@ export function TimeEvidencePanel({
           </span>
 
           <span>
-            Capture optional location at this Clock boundary
+            Add location when I clock in or out
           </span>
         </label>
       </div>
@@ -1902,8 +1907,8 @@ export function TimeEvidencePanel({
         />
 
         <span>
-          Server timestamps are authoritative.
-          My time history is available on the full Time page.
+          Meetro records the official clock-in and clock-out time.
+          View your history on the Time page.
         </span>
       </div>
     </section>

@@ -12,7 +12,7 @@ import {
 const VIEW_META = Object.freeze({
   home: { page: "employeeHome", title: "Home", description: "Today’s field work at a glance." },
   schedule: { page: "employeeSchedule", title: "Schedule", description: "Only Visits attached to your authorized Jobs." },
-  time: { page: "employeeTime", title: "Time", description: "Clock in and out to track your time on the job." },
+  time: { page: "employeeTime", title: "Time", description: "Track your work time throughout the day." },
   messages: { page: "employeeMessages", title: "Messages", description: "Internal communication for your assigned Jobs." },
   profile: { page: "employeeProfile", title: "Profile", description: "Your Team access and account context." },
 });
