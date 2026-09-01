@@ -39,6 +39,10 @@ import { shouldUseCommunicationCenterConversationRoute } from "./utils/communica
 import { parseCanonicalConversationRoute } from "./utils/canonicalConversationMessaging";
 import { resolveLegacyEmergencyRoute } from "./utils/emergencyRoutes";
 import { fetchProfessionalSubscription } from "./utils/subscriptionApi";
+import {
+  hasCanonicalBusinessAccess,
+  shouldBlockProfessionalAccess,
+} from "./utils/subscriptionAccess";
 import { fetchMyTeamAuthority } from "./utils/teamApi";
 import {
   getRoleAwareRoute,
@@ -578,7 +582,10 @@ function App() {
       ? "sessionRestoring"
       : getInitialPage()
   );
-  const [subscriptionGate, setSubscriptionGate] = useState({ status: "idle", entitled: false });
+  const [subscriptionGate, setSubscriptionGate] = useState({
+    status: "idle",
+    businessAccessActive: false,
+  });
   const [authenticatedIdentity, setAuthenticatedIdentity] = useState(
     getAuthenticatedIdentitySnapshot
   );
@@ -590,7 +597,7 @@ function App() {
   const updateSubscriptionGate = useCallback((result = {}) => {
     setSubscriptionGate({
       status: "ready",
-      entitled: result.entitled === true,
+      businessAccessActive: hasCanonicalBusinessAccess(result),
     });
   }, []);
   const isStartupReady =
@@ -724,16 +731,16 @@ function App() {
         authenticatedIdentity.status !== "authenticated" ||
         !isProfessionalSession()
       ) {
-        if (active) setSubscriptionGate({ status: "not_applicable", entitled: true });
+        if (active) setSubscriptionGate({ status: "not_applicable", businessAccessActive: true });
         return;
       }
-      if (active) setSubscriptionGate({ status: "loading", entitled: false });
+      if (active) setSubscriptionGate({ status: "loading", businessAccessActive: false });
       fetchProfessionalSubscription(setPageState)
         .then((result) => {
           if (active) updateSubscriptionGate(result);
         })
         .catch(() => {
-          if (active) setSubscriptionGate({ status: "unavailable", entitled: false });
+          if (active) setSubscriptionGate({ status: "unavailable", businessAccessActive: false });
         });
       });
     return () => { active = false; };
@@ -742,14 +749,14 @@ function App() {
   useEffect(() => {
     if (
       subscriptionGate.status !== "ready" ||
-      subscriptionGate.entitled === true ||
+      subscriptionGate.businessAccessActive === true ||
       page === "professionalSubscription" ||
       !isProfessionalSession() ||
       !isProfessionalOnlyPage(page)
     ) return;
     window.location.hash = "professionalSubscription";
     setPageState("professionalSubscription");
-  }, [page, subscriptionGate.entitled, subscriptionGate.status]);
+  }, [page, subscriptionGate.businessAccessActive, subscriptionGate.status]);
 
   useEffect(() => {
     if (sessionHydration.status !== SESSION_HYDRATION.restoring) return undefined;
@@ -1206,7 +1213,7 @@ if (
   isProfessionalOnlyPage(page) &&
   isProfessionalSession() &&
   subscriptionGate.status !== "idle" &&
-  subscriptionGate.entitled !== true
+  shouldBlockProfessionalAccess(subscriptionGate)
 ) {
   return withStartupChrome(
     <ProfessionalSubscription

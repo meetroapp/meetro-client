@@ -21,6 +21,7 @@ import {
   completeStoreKitPurchase,
   completeStoreKitRestore,
 } from "../utils/subscriptionPurchaseFlow";
+import { isNonBlockingAcceptanceState } from "../utils/subscriptionAccess";
 
 function dateLabel(value) {
   if (!value) return "";
@@ -172,6 +173,9 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
   const subscription = state?.subscription;
   const businessTrial = state?.businessTrial;
   const businessTrialActive = businessTrial?.status === "ACTIVE";
+  const nonBlockingAcceptanceActive =
+    state?.businessAccessActive === true &&
+    isNonBlockingAcceptanceState(state);
   const currentPlan = (state?.catalog || []).find((plan) => plan.code === subscription?.plan);
   return (
     <div className="app-page subscription-page" style={pageStyle}>
@@ -185,7 +189,7 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
       {error && <div role="alert" style={errorStyle}>{error}</div>}
       {message && <div role="status" style={messageStyle}>{message}</div>}
 
-      {businessTrial && !subscription && !state?.qaAccess && (
+      {businessTrial && !subscription && (businessTrialActive || !nonBlockingAcceptanceActive) && (
         <section style={trialStatusStyle} aria-label="Meetro Business Trial">
           <div><span style={labelStyle}>Status</span><strong>{businessTrialActive ? "Meetro Business Trial" : "Trial ended"}</strong></div>
           <div><span style={labelStyle}>Professional access</span><strong>{businessTrialActive ? "Full access" : "Choose a paid plan to continue"}</strong></div>
@@ -194,7 +198,7 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
         </section>
       )}
 
-      {state?.qaAccess && !subscription && (
+      {nonBlockingAcceptanceActive && !subscription && !businessTrialActive && (
         <section style={qaStyle} aria-label="Business access">
           <p style={eyebrowStyle}>BUSINESS PLAN</p>
           <h2 style={qaTitleStyle}>Business access</h2>
@@ -220,8 +224,9 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
           const displayPrice = storeProduct?.displayPrice || `$${(plan.amountMinor / 100).toFixed(2)}`;
           const channel = getSubscriptionPurchaseChannel({ nativeIos, plan, storeProduct });
           const action = getSubscriptionPlanAction({
-            qaAccess: state?.qaAccess,
             entitled: state?.entitled,
+            businessAccessActive: state?.businessAccessActive,
+            subscriptionEnforcementMode: state?.subscriptionEnforcementMode,
             subscription,
             planCode: plan.code,
             providerReady: channel.providerReady,
@@ -267,7 +272,7 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
         </ul>
       </section>
 
-      {(subscription || (nativeIos && !state?.qaAccess)) && (
+      {(subscription || (nativeIos && !nonBlockingAcceptanceActive)) && (
         <section style={actionsStyle}>
           {nativeIos && subscription?.provider !== "STRIPE" && <button type="button" style={secondaryStyle} disabled={Boolean(busy)} onClick={restore}>Restore Purchases</button>}
           {subscription && <button type="button" style={secondaryStyle} disabled={Boolean(busy)} onClick={manage}>Manage Subscription</button>}

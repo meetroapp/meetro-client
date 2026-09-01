@@ -1,3 +1,8 @@
+import {
+  hasCanonicalBusinessAccess,
+  isNonBlockingAcceptanceState,
+} from "./subscriptionAccess.js";
+
 const STATUS_LABELS = Object.freeze({
   TRIAL: "Trial",
   ACTIVE: "Active",
@@ -39,7 +44,7 @@ function resolveUsedSeats(state = {}, subscription = {}) {
 
   // Until Employee/Team authority exists, the authenticated business owner is
   // the single professional seat represented by this subscription account.
-  return supplied || (state.entitled === true ? 1 : null);
+  return supplied || (hasCanonicalBusinessAccess(state) ? 1 : null);
 }
 
 export function getBusinessPlanPresentation(state = {}) {
@@ -60,9 +65,13 @@ export function getBusinessPlanPresentation(state = {}) {
     });
   }
 
-  if (state?.qaAccess && !subscription) {
+  if (
+    !subscription &&
+    hasCanonicalBusinessAccess(state) &&
+    isNonBlockingAcceptanceState(state)
+  ) {
     return Object.freeze({
-      kind: "qa",
+      kind: "access",
       eyebrow: "Business Plan",
       planName: "Business access",
       statusLabel: "Active",

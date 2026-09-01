@@ -90,12 +90,16 @@ test("plan status and management remain server-owned and use the existing route"
   assert.doesNotMatch(cardSource, /APPLE_APP_STORE|STRIPE|localStorage|setTimeout|setInterval/);
 });
 
-test("internal QA entitlement is presented with provider-neutral user copy", () => {
-  const qa = getBusinessPlanPresentation({ qaAccess: true, entitled: true });
-  assert.equal(qa.planName, "Business access");
-  assert.equal(qa.statusLabel, "Active");
-  assert.equal(qa.billingLabel, "Choose a business plan when you are ready.");
-  assert.equal(qa.seatLabel, "Professional access is available.");
+test("server-governed acceptance access is presented with provider-neutral user copy", () => {
+  const access = getBusinessPlanPresentation({
+    subscriptionEnforcementMode: "NON_BLOCKING_ACCEPTANCE",
+    businessAccessActive: true,
+  });
+  assert.equal(access.kind, "access");
+  assert.equal(access.planName, "Business access");
+  assert.equal(access.statusLabel, "Active");
+  assert.equal(access.billingLabel, "Choose a business plan when you are ready.");
+  assert.equal(access.seatLabel, "Professional access is available.");
 });
 
 test("the server-owned Meetro Business Trial is plan-neutral and uses server dates", () => {
@@ -116,10 +120,10 @@ test("the server-owned Meetro Business Trial is plan-neutral and uses server dat
   assert.doesNotMatch(JSON.stringify(trial), /Apple|Stripe|Starter|Growth|Professional/);
 });
 
-test("QA entitlement keeps internal behavior but uses neutral plan actions", () => {
+test("acceptance access remains optional and uses neutral plan actions", () => {
   const action = getSubscriptionPlanAction({
-    qaAccess: true,
-    entitled: true,
+    subscriptionEnforcementMode: "NON_BLOCKING_ACCEPTANCE",
+    businessAccessActive: true,
     planCode: "STARTER",
     providerReady: false,
   });
@@ -128,7 +132,7 @@ test("QA entitlement keeps internal behavior but uses neutral plan actions", () 
     label: "View plan options",
     enabled: false,
   });
-  assert.match(subscriptionPageSource, /state\?\.qaAccess && !subscription/);
+  assert.match(subscriptionPageSource, /nonBlockingAcceptanceActive && !subscription && !businessTrialActive/);
   assert.match(subscriptionPageSource, /aria-label="Business access"/);
   assert.doesNotMatch(subscriptionPageSource, /Current access already active/);
   assert.match(subscriptionPageSource, /\{subscription && <button[^>]+>Manage Subscription<\/button>\}/);
@@ -180,19 +184,19 @@ test("web uses Stripe presentation and native iOS continues to use Apple", () =>
   assert.doesNotMatch(subscriptionPageSource, /Trial eligibility checked by Apple|Trial eligibility determined by|Web subscription checkout is unavailable/);
 });
 
-test("real Apple and Stripe subscriptions win over QA bypass and remain provider-managed", () => {
+test("real Apple and Stripe subscriptions win over acceptance presentation and remain provider-managed", () => {
   for (const provider of ["APPLE_APP_STORE", "STRIPE"]) {
     const subscription = { provider, plan: "GROWTH", status: "ACTIVE", seatLimit: 5 };
     const current = getSubscriptionPlanAction({
-      qaAccess: true,
-      entitled: true,
+      subscriptionEnforcementMode: "NON_BLOCKING_ACCEPTANCE",
+      businessAccessActive: true,
       subscription,
       planCode: "GROWTH",
     });
     assert.equal(current.label, "Current plan");
     assert.equal(getBusinessPlanPresentation({
-      qaAccess: true,
-      entitled: true,
+      subscriptionEnforcementMode: "NON_BLOCKING_ACCEPTANCE",
+      businessAccessActive: true,
       catalog,
       subscription,
     }).planName, "Growth");
@@ -222,9 +226,9 @@ test("a normal no-entitlement professional retains provider-appropriate purchase
   assert.equal(trialConversion.enabled, true);
 });
 
-test("Business Dashboard suppresses only the loaded staging QA status card", () => {
-  assert.match(dashboardSource, /<BusinessPlanStatusCard[\s\S]*hideQa/);
-  assert.match(cardSource, /hideQa && \(loading \|\| presentation\.kind === "qa"\)/);
+test("Business Dashboard exposes the canonical Business access status card", () => {
+  assert.match(dashboardSource, /<BusinessPlanStatusCard/);
+  assert.doesNotMatch(dashboardSource + cardSource, /hideQa|presentation\.kind === "qa"/);
 });
 
 test("Homeowner Profile stays free and Business activation enters the trial-backed business flow", () => {
@@ -237,7 +241,7 @@ test("Homeowner Profile stays free and Business activation enters the trial-back
   assert.ok(personalBranchStart >= 0 && businessBranchStart > personalBranchStart);
   assert.doesNotMatch(personalBranch, /BusinessPlanStatusCard|professionalSubscription/);
   assert.match(profileSource, /!hasBusinessAccess[\s\S]*Set Up Business Account[\s\S]*setPage\("contractorProfile"\)/);
-  assert.match(appSource, /isProfessionalOnlyPage\(page\)[\s\S]*subscriptionGate\.entitled !== true/);
+  assert.match(appSource, /isProfessionalOnlyPage\(page\)[\s\S]*shouldBlockProfessionalAccess\(subscriptionGate\)/);
   assert.doesNotMatch(loginSource, /if \(isFirstLogin\)[\s\S]{0,260}professionalSubscription/);
 });
 

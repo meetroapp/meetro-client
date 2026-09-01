@@ -101,14 +101,14 @@ test("provider redirect never sets entitlement and paid status remains provider 
 });
 
 test("one provider entitlement prevents a second platform purchase while an active Meetro trial permits paid conversion", () => {
-  assert.match(planPresentation, /if \(subscription \|\| \(entitled && !businessTrialActive\)\)/);
+  assert.match(planPresentation, /if \(subscription \|\| \(canonicalAccessActive && !businessTrialActive\)\)/);
   assert.match(page, /subscription\?\.provider !== "STRIPE"/);
   assert.doesNotMatch(page, /Current access already active/);
   assert.match(planPresentation, /subscription\?\.plan === planCode \? "Current plan" : "Plan comparison"/);
 });
 
 test("Apple-on-web and Stripe-on-iPhone use the same platform-neutral entitlement gate", () => {
-  assert.match(app, /entitled: result\.entitled === true/);
+  assert.match(app, /businessAccessActive: hasCanonicalBusinessAccess\(result\)/);
   assert.doesNotMatch(app, /provider === ["']APPLE_APP_STORE["']|provider === ["']STRIPE["']/);
   assert.match(page, /state\?\.entitled/);
   assert.match(page, /subscription\?\.provider !== "STRIPE"/);
@@ -134,7 +134,7 @@ test("StoreKit bridge uses appAccountToken, verified JWS, restore, and Apple man
 test("central professional gate excludes the subscription surface and homeowners", () => {
   assert.match(app, /isProfessionalOnlyPage\(page\)[\s\S]*isProfessionalSession\(\)[\s\S]*subscriptionGate/);
   assert.match(app, /page !== "professionalSubscription"/);
-  assert.match(app, /setSubscriptionGate\(\{ status: "not_applicable", entitled: true \}\)/);
+  assert.match(app, /setSubscriptionGate\(\{ status: "not_applicable", businessAccessActive: true \}\)/);
 });
 
 test("normal no-entitlement access routes cleanly to plans without treating it as an operation error", () => {
@@ -175,10 +175,10 @@ test("the centralized entitlement gate refreshes on authenticated identity and v
 });
 
 test("server-entitled staging professionals retain normal Job, Quote, Invoice, and Alert routes", () => {
-  const gate = app.indexOf('subscriptionGate.entitled !== true');
+  const gate = app.indexOf('shouldBlockProfessionalAccess(subscriptionGate)');
   assert.ok(gate >= 0);
   assert.match(app, /fetchProfessionalSubscription\(setPageState\)[\s\S]*updateSubscriptionGate\(result\)/);
-  assert.match(app, /entitled: result\.entitled === true/);
+  assert.match(app, /businessAccessActive: hasCanonicalBusinessAccess\(result\)/);
   for (const route of [
     'page === "businessDashboard"',
     'page === "quoteBuilder"',

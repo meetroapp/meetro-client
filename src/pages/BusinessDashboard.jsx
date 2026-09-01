@@ -1354,7 +1354,6 @@ function BusinessDashboard({ setPage }) {
           <BusinessPlanStatusCard
             setPage={setPage}
             className="business-dashboard-plan-card"
-            hideQa
           />
         </div>
       </div>

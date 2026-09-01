@@ -1,3 +1,5 @@
+import { isNonBlockingAcceptanceState } from "./subscriptionAccess.js";
+
 export function getSubscriptionPurchaseChannel({ nativeIos = false, plan = {}, storeProduct = null }) {
   const providerName = nativeIos ? "Apple" : "Stripe";
   const providerCode = nativeIos ? "APPLE_APP_STORE" : "STRIPE";
@@ -15,15 +17,21 @@ export function getSubscriptionPurchaseChannel({ nativeIos = false, plan = {}, s
 }
 
 export function getSubscriptionPlanAction({
-  qaAccess = false,
   entitled = false,
+  businessAccessActive,
+  subscriptionEnforcementMode,
   subscription = null,
   planCode = "",
   providerReady = false,
   nativeIos = false,
   businessTrialActive = false,
 }) {
-  if (qaAccess && !subscription) {
+  const accessState = {
+    entitled,
+    businessAccessActive,
+    subscriptionEnforcementMode,
+  };
+  if (isNonBlockingAcceptanceState(accessState) && !subscription) {
     return Object.freeze({
       kind: "informational",
       label: "View plan options",
@@ -31,7 +39,10 @@ export function getSubscriptionPlanAction({
     });
   }
 
-  if (subscription || (entitled && !businessTrialActive)) {
+  const canonicalAccessActive =
+    businessAccessActive === true ||
+    (businessAccessActive == null && entitled === true);
+  if (subscription || (canonicalAccessActive && !businessTrialActive)) {
     return Object.freeze({
       kind: "informational",
       label: subscription?.plan === planCode ? "Current plan" : "Plan comparison",

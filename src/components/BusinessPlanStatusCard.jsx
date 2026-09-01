@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { fetchProfessionalSubscription } from "../utils/subscriptionApi";
 import { getBusinessPlanPresentation } from "../utils/subscriptionPresentation";
 
-export default function BusinessPlanStatusCard({ setPage, className = "", hideQa = false }) {
+export default function BusinessPlanStatusCard({ setPage, className = "" }) {
   const [subscriptionState, setSubscriptionState] = useState(null);
   const [loadFailed, setLoadFailed] = useState(false);
 
@@ -34,8 +34,6 @@ export default function BusinessPlanStatusCard({ setPage, className = "", hideQa
         manageLabel: "Plan & Subscription",
       }
     : getBusinessPlanPresentation(loadFailed ? {} : subscriptionState);
-
-  if (hideQa && (loading || presentation.kind === "qa")) return null;
 
   return (
     <section
