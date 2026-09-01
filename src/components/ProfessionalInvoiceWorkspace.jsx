@@ -279,7 +279,11 @@ export default function ProfessionalInvoiceWorkspace({
 
   return (
     <section className="work-center-workspace" style={styles.workspace} data-invoice-workspace-phase={phase}>
-      {onBack && <WorkCenterBackButton label={copy.back} onClick={onBack} />}
+      {onBack && (
+        <div className="work-center-invoice-safe-header" style={styles.safeHeader}>
+          <WorkCenterBackButton label={copy.back} onClick={onBack} />
+        </div>
+      )}
       <WorkCenterPageHeader
         eyebrow={workspaceCopy.financeEyebrow}
         title={copy.title}
@@ -423,7 +427,14 @@ function InvoiceAssistantResult({ proposal, language, canApply, money, onApply, 
 }
 
 const styles = {
-  workspace: { minWidth: 0 },
+  workspace: { width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" },
+  safeHeader: {
+    width: "100%",
+    maxWidth: "100%",
+    minWidth: 0,
+    paddingTop: "env(safe-area-inset-top, 0px)",
+    boxSizing: "border-box",
+  },
   notice: { margin: 0, padding: 12, borderLeft: "4px solid #0f766e", background: "#eff8f7" },
   band: { display: "grid", gap: 10, minWidth: 0, paddingTop: 4 },
   subheading: { margin: 0, fontSize: 18, letterSpacing: 0 },

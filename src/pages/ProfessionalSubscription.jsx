@@ -28,7 +28,7 @@ function dateLabel(value) {
 
 function statusCopy(subscription) {
   const labels = {
-    TRIAL: "Provider verification required",
+    TRIAL: "Trial",
     ACTIVE: "Active",
     GRACE: "Payment issue — access remains available",
     CANCELED_AT_PERIOD_END: "Canceled",
@@ -187,12 +187,11 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
       )}
 
       {state?.qaAccess && !subscription && (
-        <section style={qaStyle} aria-label="Staging QA Access">
-          <p style={eyebrowStyle}>STAGING ONLY</p>
-          <h2 style={qaTitleStyle}>Staging QA Access</h2>
-          <p style={qaCopyStyle}>Full professional access for testing.</p>
-          <p style={qaCopyStyle}>No Apple or Stripe subscription is active.</p>
-          <p style={qaCopyStyle}>This staging-only access cannot activate in production.</p>
+        <section style={qaStyle} aria-label="Business access">
+          <p style={eyebrowStyle}>BUSINESS PLAN</p>
+          <h2 style={qaTitleStyle}>Business access</h2>
+          <p style={qaCopyStyle}>Professional access is available.</p>
+          <p style={qaCopyStyle}>Choose a business plan when you are ready.</p>
         </section>
       )}
 
@@ -230,7 +229,7 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
               <p style={seatStyle}>Up to {plan.seatLimit} professional users</p>
               <p style={paidPlanStyle}>{channel.eligibilityLabel}</p>
               <p style={priceStyle}>{displayPrice}<span style={monthStyle}> / month</span></p>
-              <p style={trialCopyStyle}>{`${displayPrice}/month. ${channel.providerName} becomes billing authority only after the paid subscription is verified.`}</p>
+              <p style={trialCopyStyle}>{`${displayPrice}/month. Subscribe when you are ready.`}</p>
               <p style={copyStyle}>Owner counts as one included professional user.</p>
               {action.kind === "purchase" ? (
                 <button
@@ -266,7 +265,7 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
           {subscription && <button type="button" style={secondaryStyle} disabled={Boolean(busy)} onClick={manage}>Manage Subscription</button>}
         </section>
       )}
-      <p style={footnoteStyle}>Meetro governs the one-time 14-day Business Trial. {nativeIos ? "Apple" : "Stripe"} governs paid subscription status for this channel. One verified Meetro business entitlement works on web and iPhone; a second subscription is not required.</p>
+      <p style={footnoteStyle}>Meetro governs the one-time 14-day Business Trial. Paid subscription status is confirmed securely. One active Meetro business entitlement works on web and iPhone; a second subscription is not required.</p>
       <BottomNav setPage={setPage} currentPage="professionalSubscription" />
     </div>
   );

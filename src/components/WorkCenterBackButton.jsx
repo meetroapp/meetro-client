@@ -13,6 +13,7 @@ function WorkCenterBackButton({ label, onClick }) {
 }
 
 const backButton = {
+  minWidth: "44px",
   minHeight: "44px",
   maxWidth: "100%",
   display: "inline-flex",

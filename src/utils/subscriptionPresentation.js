@@ -1,5 +1,5 @@
 const STATUS_LABELS = Object.freeze({
-  TRIAL: "Provider verification required",
+  TRIAL: "Trial",
   ACTIVE: "Active",
   GRACE: "Payment issue",
   CANCELED_AT_PERIOD_END: "Active until period end",
@@ -64,11 +64,11 @@ export function getBusinessPlanPresentation(state = {}) {
     return Object.freeze({
       kind: "qa",
       eyebrow: "Business Plan",
-      planName: "Staging QA Access",
-      statusLabel: "Testing access",
-      seatLabel: "This staging-only access cannot activate in production.",
-      billingLabel: "No Apple or Stripe subscription is active.",
-      manageLabel: "Plan details",
+      planName: "Business access",
+      statusLabel: "Active",
+      seatLabel: "Professional access is available.",
+      billingLabel: "Choose a business plan when you are ready.",
+      manageLabel: "View Plans",
     });
   }
 

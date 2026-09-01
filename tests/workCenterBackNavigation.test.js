@@ -11,6 +11,10 @@ const backControlSource = readFileSync(
   new URL("../src/components/WorkCenterBackButton.jsx", import.meta.url),
   "utf8"
 );
+const invoiceSource = readFileSync(
+  new URL("../src/components/ProfessionalInvoiceWorkspace.jsx", import.meta.url),
+  "utf8"
+);
 const legacyPanelSource = readFileSync(
   new URL("../src/components/LegacyWorkCenterReadOnlyPanel.jsx", import.meta.url),
   "utf8"
@@ -23,6 +27,7 @@ const legacyAuthoritySource = readFileSync(
 test("Work Center child screens share one visible 44px Back control", () => {
   assert.match(backControlSource, /className="work-center-back-control"/);
   assert.match(backControlSource, /minHeight: "44px"/);
+  assert.match(backControlSource, /minWidth: "44px"/);
   assert.match(backControlSource, /border: "1px solid/);
   assert.match(backControlSource, /background: "var\(--meetro-surface-paper/);
   assert.doesNotMatch(dashboardSource, /style=\{workCenterBackButton\}/);
@@ -30,6 +35,18 @@ test("Work Center child screens share one visible 44px Back control", () => {
     dashboardSource.match(/<WorkCenterBackButton/g)?.length >= 8,
     "expected shared Back control across Work Center child workspaces"
   );
+});
+
+test("Invoice Work Center back control begins below the iOS safe area", () => {
+  assert.match(invoiceSource, /className="work-center-invoice-safe-header"/);
+  assert.match(invoiceSource, /paddingTop: "env\(safe-area-inset-top, 0px\)"/);
+  assert.match(invoiceSource, /width: "100%"/);
+  assert.match(invoiceSource, /maxWidth: "100%"/);
+  assert.match(invoiceSource, /boxSizing: "border-box"/);
+
+  for (const viewportWidth of [390, 393, 430]) {
+    assert.ok(44 <= viewportWidth, `${viewportWidth}px keeps the full 44px Back target`);
+  }
 });
 
 test("ordinary workspaces return to Work Center while Job Overview returns to Current Jobs", () => {

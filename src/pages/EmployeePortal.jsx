@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import EmployeeShell from "../components/EmployeeShell";
 import MeetroIcon from "../components/MeetroIcon";
 import useLanguage from "../hooks/useLanguage";
@@ -31,6 +31,12 @@ import {
   isFieldCustomerNavigationLocked,
   startFieldCustomerSendCountdown,
 } from "../utils/fieldCustomerPendingSend";
+import {
+  createFieldMessageComposerState,
+  getFieldMessageDraftKey,
+  getFieldMessageSendAuthority,
+  reduceFieldMessageComposerState,
+} from "../utils/fieldMessageComposerState";
 import {
   buildFieldScheduleWeek,
   fieldScheduleDateKey,
@@ -790,13 +796,15 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
   const routedAudience = ["team", "customer"].includes(requestedAudience)
     ? requestedAudience
     : "team";
-  const [selectedJobId, setSelectedJobId] = useState(
-    () => routedJob?.job.id || eligibleJobs[0]?.job.id || ""
+  const [composerState, dispatchComposer] = useReducer(
+    reduceFieldMessageComposerState,
+    {
+      selectedJobId: routedJob?.job.id || eligibleJobs[0]?.job.id || "",
+      audience: routedJob ? routedAudience : "team",
+    },
+    createFieldMessageComposerState
   );
-  const [audience, setAudience] = useState(
-    () => (routedJob ? routedAudience : "team")
-  );
-  const [drafts, setDrafts] = useState({});
+  const { selectedJobId, audience, drafts } = composerState;
   const [customerCommandKeys, setCustomerCommandKeys] = useState({});
   const [teamOperations, setTeamOperations] = useState({});
   const [customerThreads, setCustomerThreads] = useState({});
@@ -815,8 +823,9 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
     ? teamOperations[selectedJobId] || selected.operations
     : null;
   const customerThread = customerThreads[selectedJobId] || {};
-  const draftKey = selectedJobId ? `${selectedJobId}:${audience}` : "";
+  const draftKey = getFieldMessageDraftKey(selectedJobId, audience);
   const draft = drafts[draftKey] || "";
+  const sendAuthority = getFieldMessageSendAuthority(audience);
   const teamMessages = selectedOperations?.messages || [];
   const customerMessages = customerThread.conversation?.messages || [];
   const attention = getCommunicationAttention(alertSnapshot, identity);
@@ -830,10 +839,17 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
 
   useEffect(() => {
     if (pendingCustomerSend) return;
-    if (eligibleJobs.some((item) => item.job.id === selectedJobId)) return;
-    setSelectedJobId(eligibleJobs[0]?.job.id || "");
-    setAudience("team");
+    dispatchComposer({
+      type: "reconcile_jobs",
+      jobIds: eligibleJobs.map((item) => item.job.id),
+    });
   }, [eligibleJobs, pendingCustomerSend, selectedJobId]);
+
+  useEffect(() => {
+    if (!routedJob || !["team", "customer"].includes(requestedAudience)) return;
+    dispatchComposer({ type: "select_job", jobId: routedJob.job.id });
+    dispatchComposer({ type: "select_audience", audience: requestedAudience });
+  }, [requestedAudience, routedJob?.job.id]);
 
   useEffect(() => () => {
     pendingCustomerController.current?.cancel();
@@ -977,7 +993,7 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
     if (pendingCustomerSend) return;
     if (!eligibleJobs.some((item) => item.job.id === jobId)) return;
     setCustomerNotice("");
-    setSelectedJobId(jobId);
+    dispatchComposer({ type: "select_job", jobId });
     updateRoute(jobId, audience);
   }
 
@@ -985,13 +1001,18 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
     if (pendingCustomerSend) return;
     if (!selected || !["team", "customer"].includes(nextAudience)) return;
     setCustomerNotice("");
-    setAudience(nextAudience);
+    dispatchComposer({ type: "select_audience", audience: nextAudience });
     updateRoute(selected.job.id, nextAudience);
   }
 
   function updateDraft(value) {
     if (!draftKey) return;
-    setDrafts((current) => ({ ...current, [draftKey]: value }));
+    dispatchComposer({
+      type: "update_draft",
+      jobId: selectedJobId,
+      audience,
+      value,
+    });
     if (audience === "customer") {
       setCustomerNotice("");
       setCustomerCommandKeys((current) => ({
@@ -1010,7 +1031,7 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
 
   async function submitTeamMessage(event) {
     event.preventDefault();
-    if (!selected || !selectedOperations || !draft.trim()) return;
+    if (sendAuthority !== "team" || !selected || !selectedOperations || !draft.trim()) return;
     setWorking("team");
     try {
       await sendFieldMessage(selected.job.id, {
@@ -1086,10 +1107,12 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
       }));
       await refreshAlertCounts();
     } catch {
-      setDrafts((current) => ({
-        ...current,
-        [`${captured.jobId}:customer`]: captured.message,
-      }));
+      dispatchComposer({
+        type: "update_draft",
+        jobId: captured.jobId,
+        audience: "customer",
+        value: captured.message,
+      });
       setCustomerCommandKeys((current) => ({
         ...current,
         [captured.jobId]: captured.idempotencyKey,
@@ -1111,7 +1134,7 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
 
   function submitCustomerMessage(event) {
     event.preventDefault();
-    if (pendingCustomerSend || !selected || !customerThread.conversation || !draft.trim()) return;
+    if (sendAuthority !== "customer" || pendingCustomerSend || !selected || !customerThread.conversation || !draft.trim()) return;
     const idempotencyKey =
       customerCommandKeys[selectedJobId] ||
       messageCommandKey("field-customer-message");
@@ -1128,10 +1151,12 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
       ...current,
       [command.jobId]: command.idempotencyKey,
     }));
-    setDrafts((current) => ({
-      ...current,
-      [`${command.jobId}:customer`]: "",
-    }));
+    dispatchComposer({
+      type: "update_draft",
+      jobId: command.jobId,
+      audience: "customer",
+      value: "",
+    });
     setCustomerNotice("");
     setCustomerThreads((current) => ({
       ...current,
@@ -1161,10 +1186,12 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
     if (!pending || pending.phase !== "countdown") return;
     if (!pendingCustomerController.current?.cancel()) return;
     pendingCustomerController.current = null;
-    setDrafts((current) => ({
-      ...current,
-      [`${pending.command.jobId}:customer`]: pending.command.message,
-    }));
+    dispatchComposer({
+      type: "update_draft",
+      jobId: pending.command.jobId,
+      audience: "customer",
+      value: pending.command.message,
+    });
     setCustomerCommandKeys((current) => ({
       ...current,
       [pending.command.jobId]: pending.command.idempotencyKey,
@@ -1382,7 +1409,7 @@ function MessagesView({ operations, setPage, membership, language, onNavigationL
 
             <form
               className="field-messages-composer"
-              onSubmit={audience === "team" ? submitTeamMessage : submitCustomerMessage}
+              onSubmit={sendAuthority === "team" ? submitTeamMessage : submitCustomerMessage}
             >
               <label>
                 <span>

@@ -90,12 +90,12 @@ test("plan status and management remain server-owned and use the existing route"
   assert.doesNotMatch(cardSource, /APPLE_APP_STORE|STRIPE|localStorage|setTimeout|setInterval/);
 });
 
-test("staging QA access is presented accurately without fake provider billing", () => {
+test("internal QA entitlement is presented with provider-neutral user copy", () => {
   const qa = getBusinessPlanPresentation({ qaAccess: true, entitled: true });
-  assert.equal(qa.planName, "Staging QA Access");
-  assert.equal(qa.statusLabel, "Testing access");
-  assert.equal(qa.billingLabel, "No Apple or Stripe subscription is active.");
-  assert.match(qa.seatLabel, /cannot activate in production/);
+  assert.equal(qa.planName, "Business access");
+  assert.equal(qa.statusLabel, "Active");
+  assert.equal(qa.billingLabel, "Choose a business plan when you are ready.");
+  assert.equal(qa.seatLabel, "Professional access is available.");
 });
 
 test("the server-owned Meetro Business Trial is plan-neutral and uses server dates", () => {
@@ -116,7 +116,7 @@ test("the server-owned Meetro Business Trial is plan-neutral and uses server dat
   assert.doesNotMatch(JSON.stringify(trial), /Apple|Stripe|Starter|Growth|Professional/);
 });
 
-test("QA bypass produces one separate status and informational commercial plans", () => {
+test("QA entitlement keeps internal behavior but uses neutral plan actions", () => {
   const action = getSubscriptionPlanAction({
     qaAccess: true,
     entitled: true,
@@ -125,13 +125,40 @@ test("QA bypass produces one separate status and informational commercial plans"
   });
   assert.deepEqual(action, {
     kind: "informational",
-    label: "Plan available for subscription testing",
+    label: "View plan options",
     enabled: false,
   });
   assert.match(subscriptionPageSource, /state\?\.qaAccess && !subscription/);
-  assert.match(subscriptionPageSource, /aria-label="Staging QA Access"/);
+  assert.match(subscriptionPageSource, /aria-label="Business access"/);
   assert.doesNotMatch(subscriptionPageSource, /Current access already active/);
   assert.match(subscriptionPageSource, /\{subscription && <button[^>]+>Manage Subscription<\/button>\}/);
+});
+
+test("normal subscription and Profile surfaces expose no QA or provider diagnostics", () => {
+  const userFacingSources = [
+    profileSource,
+    dashboardSource,
+    cardSource,
+    subscriptionPageSource,
+    readFileSync(new URL("../src/utils/subscriptionPresentation.js", import.meta.url), "utf8"),
+    readFileSync(new URL("../src/utils/subscriptionPlanPresentation.js", import.meta.url), "utf8"),
+  ].join("\n");
+  for (const prohibited of [
+    "QA · no accidental provider trial",
+    "No Apple or Stripe subscription active",
+    "No Apple or Stripe subscription is active",
+    "Apple status confirmed",
+    "Stripe status confirmed",
+    "Staging QA Access",
+    "Testing access",
+    "Provider verification required",
+    "Apple product configuration is required",
+    "Stripe TEST checkout is not configured in staging",
+    "becomes billing authority",
+    "governs paid billing status after server verification",
+  ]) {
+    assert.equal(userFacingSources.includes(prohibited), false, prohibited);
+  }
 });
 
 test("web uses Stripe presentation and native iOS continues to use Apple", () => {
@@ -141,7 +168,7 @@ test("web uses Stripe presentation and native iOS continues to use Apple", () =>
   });
   assert.equal(web.providerName, "Stripe");
   assert.equal(web.eligibilityLabel, "Paid monthly plan");
-  assert.equal(web.unavailableLabel, "Stripe TEST checkout is not configured in staging.");
+  assert.equal(web.unavailableLabel, "Subscription purchasing is currently unavailable.");
 
   const ios = getSubscriptionPurchaseChannel({
     nativeIos: true,

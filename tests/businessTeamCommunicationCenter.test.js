@@ -135,8 +135,8 @@ test("Team pane is intrinsically bounded for phone and preserves protected split
 test("Customer employee attribution and employee Team workspace remain separate and intact", () => {
   assert.match(conversationSource, /msg\.delegatedAuthor\.displayName/);
   assert.match(conversationSource, /conversationEmployeeTag/);
-  assert.match(portalSource, /\["team", "fieldAudienceTeam"\]/);
-  assert.match(portalSource, /\["customer", "fieldAudienceCustomer"\]/);
+  assert.match(portalSource, /\["team", "fieldAudienceTeam", selectedAttention\.teamUnread\]/);
+  assert.match(portalSource, /\["customer", "fieldAudienceCustomer", selectedAttention\.customerUnread\]/);
   assert.match(portalSource, /const teamMessages = selectedOperations\?\.messages \|\| \[\]/);
   assert.match(portalSource, /const customerMessages = customerThread\.conversation\?\.messages \|\| \[\]/);
 });

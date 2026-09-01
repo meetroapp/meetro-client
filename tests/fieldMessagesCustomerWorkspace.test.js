@@ -145,7 +145,7 @@ test("Field Messages keeps Team and Customer as separate assignment-scoped autho
   assert.match(portalSource, /fetchFieldCustomerConversation\(/);
   assert.match(portalSource, /const teamMessages = selectedOperations\?\.messages \|\| \[\]/);
   assert.match(portalSource, /const customerMessages = customerThread\.conversation\?\.messages \|\| \[\]/);
-  assert.match(portalSource, /`\$\{selectedJobId\}:\$\{audience\}`/);
+  assert.match(portalSource, /getFieldMessageDraftKey\(selectedJobId, audience\)/);
   assert.doesNotMatch(portalSource, /\/conversations\//);
   assert.match(fieldApiSource, /\/field-messages/);
   assert.doesNotMatch(fieldApiSource, /customer-conversation/);
@@ -249,7 +249,7 @@ test("Customer send schedules one captured command while Team send remains immed
     portalSource.indexOf("function submitCustomerMessage"),
     portalSource.indexOf("function undoPendingCustomerMessage")
   );
-  assert.match(scheduleBlock, /if \(pendingCustomerSend/);
+  assert.match(scheduleBlock, /sendAuthority !== "customer" \|\| pendingCustomerSend/);
   assert.match(scheduleBlock, /captureFieldCustomerSend/);
   assert.match(scheduleBlock, /startFieldCustomerSendCountdown/);
   assert.doesNotMatch(scheduleBlock, /sendFieldCustomerMessage/);

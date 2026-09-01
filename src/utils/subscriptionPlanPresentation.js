@@ -9,10 +9,8 @@ export function getSubscriptionPurchaseChannel({ nativeIos = false, plan = {}, s
     providerCode,
     providerReady,
     eligibilityLabel: "Paid monthly plan",
-    unavailableLabel: nativeIos
-      ? "Apple product configuration is required."
-      : "Stripe TEST checkout is not configured in staging.",
-    governanceLabel: `${providerName} governs paid billing status after server verification. Meetro governs the initial Business Trial.`,
+    unavailableLabel: "Subscription purchasing is currently unavailable.",
+    governanceLabel: "Paid subscription status is managed securely after purchase.",
   });
 }
 
@@ -28,7 +26,7 @@ export function getSubscriptionPlanAction({
   if (qaAccess && !subscription) {
     return Object.freeze({
       kind: "informational",
-      label: "Plan available for subscription testing",
+      label: "View plan options",
       enabled: false,
     });
   }
