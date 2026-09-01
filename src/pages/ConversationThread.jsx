@@ -1,6 +1,7 @@
 import { Component, memo, useEffect, useId, useMemo, useCallback, useRef, useState } from "react";
 import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
 import useLanguage from "../hooks/useLanguage";
+import MeetroIcon from "../components/MeetroIcon";
 import { getLanguage, t } from "../utils/language";
 import {
   formatDateTimeDisplay,
@@ -721,7 +722,9 @@ function BusinessTeamCommunicationPane({
           aria-label={disclosureLabel}
           onClick={() => setTeamContextExpanded((current) => !current)}
         >
-          <span style={businessTeamDisclosureIcon} aria-hidden="true">🔒</span>
+          <span style={businessTeamDisclosureIcon} aria-hidden="true">
+            <MeetroIcon name="lock" size={16} decorative />
+          </span>
           <span style={businessTeamDisclosureText}>
             <strong>{t("conversationTeamContextCompact", language)}</strong>
             <span aria-hidden="true"> · </span>

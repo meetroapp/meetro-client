@@ -17,6 +17,10 @@ import {
   getSubscriptionPlanAction,
   getSubscriptionPurchaseChannel,
 } from "../utils/subscriptionPlanPresentation";
+import {
+  completeStoreKitPurchase,
+  completeStoreKitRestore,
+} from "../utils/subscriptionPurchaseFlow";
 
 function dateLabel(value) {
   if (!value) return "";
@@ -112,12 +116,17 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
         window.location.assign(checkout.url);
         return;
       }
-      const result = await purchaseStoreKitSubscription({ productId: plan.providerProductId, appAccountToken: state.appAccountToken });
-      if (result?.state === "cancelled") setMessage("Purchase canceled. No charge was made.");
-      else if (result?.state === "pending") setMessage("Purchase pending. Access will update after Apple confirms it.");
-      else if (result?.state === "verified") {
-        await verifyProfessionalSubscription(result, setPage);
-        await refresh();
+      const result = await completeStoreKitPurchase({
+        purchase: () => purchaseStoreKitSubscription({
+          productId: plan.providerProductId,
+          appAccountToken: state.appAccountToken,
+        }),
+        verify: (evidence) => verifyProfessionalSubscription(evidence, setPage),
+        refresh,
+      });
+      if (result.state === "cancelled") setMessage("Purchase canceled. No charge was made.");
+      else if (result.state === "pending") setMessage("Purchase pending. Access will update after Apple confirms it.");
+      else if (result.state === "verified") {
         setMessage("Your verified Meetro plan is active.");
       }
     } catch (cause) {
@@ -147,13 +156,12 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
     setError("");
     setMessage("");
     try {
-      const restored = await restoreStoreKitSubscriptions();
-      const transactions = Array.isArray(restored?.transactions) ? restored.transactions : [];
-      for (const transaction of transactions) {
-        await verifyProfessionalSubscription(transaction, setPage, { restore: true });
-      }
-      await refresh();
-      setMessage(transactions.length ? "Purchases restored." : "No current Apple subscription was found.");
+      const result = await completeStoreKitRestore({
+        restore: restoreStoreKitSubscriptions,
+        verify: (evidence) => verifyProfessionalSubscription(evidence, setPage, { restore: true }),
+        refresh,
+      });
+      setMessage(result.count ? "Purchases restored." : "No current Apple subscription was found.");
     } catch (cause) {
       setError(cause.message || "Purchases could not be restored.");
     } finally {

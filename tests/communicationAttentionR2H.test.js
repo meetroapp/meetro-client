@@ -99,7 +99,9 @@ test("business Team polish preserves protected Communication Center architecture
   assert.match(thread, /height:\s*46px/);
   assert.match(thread, /gridTemplateColumns:\s*"minmax\(0, 1fr\) auto"/);
   assert.match(thread, /maxWidth:\s*"100%"/);
-  assert.match(thread, /@media \(max-width: 430px\)/);
+  assert.match(thread, /COMPACT_MESSAGE_COMPOSER/);
+  assert.match(thread, /sendMinWidthPx/);
+  assert.match(thread, /sendMaxWidthPx/);
   assert.match(thread, /conversationAudienceTeamPrivate/);
   assert.match(inbox, /data-communication-columns/);
   assert.match(inbox, /onCanonicalWorkContextChange/);

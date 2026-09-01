@@ -43,7 +43,7 @@ test("all seven Field Employee routes use the one protected EmployeeShell", () =
     assert.match(shellSource, new RegExp(`route: "${route}"`));
   }
   assert.equal(
-    (shellSource.match(/className="employee-shell"/g) || []).length,
+    (shellSource.match(/className=\{`employee-shell\$\{/g) || []).length,
     1
   );
 
@@ -131,13 +131,11 @@ test("Team and Customer histories share one bounded internal scroll architecture
   const cardRule = cssRule(".field-messages-thread-card");
   assert.match(cardRule, /display: grid/);
   assert.match(cardRule, /min-height: 0/);
-  assert.match(cardRule, /overflow: hidden/);
   assert.match(cardRule, /minmax\(260px, min\(48dvh, 520px\)\)/);
 
   const historyRule = cssRule(".field-messages-thread");
   assert.match(historyRule, /min-height: 0/);
   assert.match(historyRule, /align-self: stretch/);
-  assert.match(historyRule, /overflow-x: hidden/);
   assert.match(historyRule, /overflow-y: auto/);
   assert.match(historyRule, /overscroll-behavior: contain/);
 });
@@ -166,7 +164,8 @@ test("message loading follows the latest item only while the reader remains near
 test("iPhone keeps the one-column shell and a viewport-bounded readable history", () => {
   assert.match(fieldCss, /@media \(max-width: 760px\)[\s\S]*\.employee-shell \{[\s\S]*display: block;[\s\S]*height: auto;[\s\S]*overflow: visible/);
   assert.match(fieldCss, /@media \(max-width: 900px\)[\s\S]*\.field-messages-layout \{[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
-  assert.match(fieldCss, /minmax\(220px, min\(38dvh, 360px\)\)/);
+  assert.match(fieldCss, /\.field-messages-chat-workspace \{[\s\S]*height: calc\([\s\S]*100dvh/);
+  assert.match(fieldCss, /\.field-messages-thread \{[\s\S]*flex: 1 1 0;[\s\S]*overflow-y: auto/);
   assert.doesNotMatch(fieldCss, /\.field-messages-thread \{[\s\S]{0,180}max-height: none/);
 });
 

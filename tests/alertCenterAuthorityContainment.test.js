@@ -33,7 +33,7 @@ test("Alert Center has no legacy notification or direct transport authority", ()
   assert.match(presentationSource, /normalizeCanonicalAlertDestination/);
 });
 
-test("Alert Center creates no browser persistence, polling, or coordinator ownership", () => {
+test("Alert Center creates no browser persistence or polling and only observes shared counts", () => {
   for (const forbidden of [
     /localStorage/,
     /sessionStorage/,
@@ -44,13 +44,14 @@ test("Alert Center creates no browser persistence, polling, or coordinator owner
     /addEventListener/,
     /visibilitychange/,
     /storage event/i,
-    /subscribeAlertCounts/,
     /setAlertCountIdentity/,
     /resetAlertCounts/,
   ]) {
     assert.doesNotMatch(combinedSource, forbidden);
   }
   assert.match(notificationsSource, /refreshAlertCounts/);
+  assert.match(notificationsSource, /return subscribeAlertCounts/);
+  assert.match(notificationsSource, /if \(!employeeMode\) return undefined/);
 });
 
 test("alert read, dismiss, and read-all never mutate conversation read state", () => {
@@ -65,8 +66,11 @@ test("only governed canonical Alert destinations may navigate", () => {
   assert.doesNotMatch(notificationsSource, /window\.location|location\.hash|history\.|navigate\(/);
   assert.doesNotMatch(notificationsSource, /requestId|emergencyRequestId|relationshipId|sourceEntityId|evaluationId|businessProfileId|reviewId/);
   assert.match(notificationsSource, /getAlertDestinationActionTarget/);
-  assert.match(notificationsSource, /onOpenDestination\(destinationTarget\.route\)/);
-  assert.match(notificationsSource, /onOpenDestination=\{\(route\) => setPage\(route\)\}/);
+  assert.match(notificationsSource, /onOpenDestination\(alert, destinationTarget\.route\)/);
+  assert.match(notificationsSource, /onOpenDestination=\{handleOpenDestination\}/);
+  assert.match(notificationsSource, /setPageRef\.current\(canonicalRoute\)/);
+  assert.match(notificationsSource, /resolveFieldCustomerAlertDestination/);
+  assert.match(notificationsSource, /resolveFieldTeamAlertDestination/);
   assert.doesNotMatch(notificationsSource, /setPage\("conversationThread"\)|conversationThread\?conversationId=/);
   assert.match(notificationsSource, /destinationKey/);
   assert.match(presentationSource, /alertCenterDestinationLater/);

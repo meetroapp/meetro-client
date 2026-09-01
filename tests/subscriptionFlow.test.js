@@ -1,6 +1,8 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
+import { getBusinessPlanPresentation } from "../src/utils/subscriptionPresentation.js";
+import { getSubscriptionPurchaseChannel } from "../src/utils/subscriptionPlanPresentation.js";
 
 const page = fs.readFileSync(new URL("../src/pages/ProfessionalSubscription.jsx", import.meta.url), "utf8");
 const app = fs.readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
@@ -11,6 +13,7 @@ const api = fs.readFileSync(new URL("../src/utils/subscriptionApi.js", import.me
 const login = fs.readFileSync(new URL("../src/pages/Login.jsx", import.meta.url), "utf8");
 const contractorProfile = fs.readFileSync(new URL("../src/pages/ContractorProfile.jsx", import.meta.url), "utf8");
 const planPresentation = fs.readFileSync(new URL("../src/utils/subscriptionPlanPresentation.js", import.meta.url), "utf8");
+const purchaseFlow = fs.readFileSync(new URL("../src/utils/subscriptionPurchaseFlow.js", import.meta.url), "utf8");
 
 test("professional subscription screen exposes the three approved paid plans", () => {
   assert.match(page, /Starter/);
@@ -42,16 +45,28 @@ test("all paid plans share the complete Meetro Business platform", () => {
 
 test("the initial trial is presented as Meetro-owned rather than provider-owned", () => {
   assert.match(page, /Meetro governs the one-time 14-day Business Trial/);
-  assert.match(planPresentation, /Meetro governs the initial Business Trial/);
+  const trial = getBusinessPlanPresentation({
+    applicable: true,
+    entitled: true,
+    businessTrial: {
+      source: "MEETRO_SERVER",
+      status: "ACTIVE",
+      daysRemaining: 14,
+      endsAt: "2026-09-15T12:00:00.000Z",
+    },
+  });
+  assert.equal(trial.kind, "trial");
+  assert.equal(trial.planName, "Meetro Business Trial");
+  assert.equal(trial.statusLabel, "14 days remaining");
   assert.doesNotMatch(page + planPresentation, /Trial eligibility determined by|Start 14-Day Free Trial|introductoryOffer|trialEligible/);
 });
 
 test("purchase only unlocks after server verification", () => {
-  const purchase = page.indexOf("purchaseStoreKitSubscription");
-  const verify = page.indexOf("verifyProfessionalSubscription(result");
-  const refresh = page.indexOf("await refresh()", verify);
-  assert.ok(purchase >= 0 && verify > purchase && refresh > verify);
-  assert.doesNotMatch(page, /localStorage.*subscri|setState\([^)]*entitled:\s*true/i);
+  assert.match(page, /completeStoreKitPurchase/);
+  const verify = purchaseFlow.indexOf("await verify(evidence)");
+  const refresh = purchaseFlow.indexOf("await refresh()", verify);
+  assert.ok(verify >= 0 && refresh > verify);
+  assert.doesNotMatch(page + purchaseFlow, /localStorage.*subscri|setState\([^)]*entitled:\s*true/i);
 });
 
 test("cancel, pending, failure, restore, and manage states are simple and safe", () => {
@@ -74,7 +89,14 @@ test("web purchase uses server-created Stripe Checkout while iOS uses StoreKit",
 
 test("provider redirect never sets entitlement and paid status remains provider governed", () => {
   assert.match(page, /window\.location\.assign\(checkout\.url\)/);
-  assert.match(planPresentation, /governs paid billing status after server verification/);
+  const channel = getSubscriptionPurchaseChannel({
+    nativeIos: false,
+    plan: { providers: { STRIPE: { configured: true } } },
+  });
+  assert.equal(channel.providerReady, true);
+  assert.match(channel.governanceLabel, /managed securely after purchase/);
+  assert.match(api, /"\/subscriptions\/stripe\/checkout"/);
+  assert.match(api, /"\/subscriptions\/apple\/verify"/);
   assert.doesNotMatch(page + api, /setState\([^)]*entitled:\s*true|localStorage.*subscri/i);
 });
 
@@ -101,7 +123,9 @@ test("management routing is server-owned and provider specific", () => {
 test("StoreKit bridge uses appAccountToken, verified JWS, restore, and Apple management", () => {
   assert.match(native, /\.appAccountToken\(token\)/);
   assert.match(native, /case \.verified\(let transaction\)/);
-  assert.match(native, /transaction\.jwsRepresentation/);
+  assert.match(native, /"signedTransactionInfo": verification\.jwsRepresentation/);
+  assert.match(native, /"signedTransactionInfo": result\.jwsRepresentation/);
+  assert.match(native, /case \.unverified:[\s\S]*call\.reject/);
   assert.match(native, /AppStore\.sync\(\)/);
   assert.match(native, /Transaction\.currentEntitlements/);
   assert.match(native, /apps\.apple\.com\/account\/subscriptions/);
