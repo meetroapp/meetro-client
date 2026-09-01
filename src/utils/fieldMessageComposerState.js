@@ -17,40 +17,60 @@ export function getFieldMessageDraftKey(jobId, audience) {
     : "";
 }
 
-export function createFieldMessageComposerState({ selectedJobId = "", audience = "" } = {}) {
+export function resolveFieldMessageRoute(hash = "", eligibleJobIds = []) {
+  const normalizedJobIds = Array.isArray(eligibleJobIds)
+    ? eligibleJobIds.map((jobId) => String(jobId || "").trim()).filter(Boolean)
+    : [];
+  let requestedJobId = "";
+  let requestedAudience = "";
+
+  try {
+    const query = String(hash || "").split("?")[1] || "";
+    const params = new URLSearchParams(query);
+    requestedJobId = String(params.get("jobId") || "").trim();
+    requestedAudience = normalizeFieldMessageAudience(params.get("audience"), "");
+  } catch {
+    // Invalid route input falls through to the private Team default.
+  }
+
+  const requestedJobIsEligible = normalizedJobIds.includes(requestedJobId);
+  const selectedJobId = requestedJobIsEligible
+    ? requestedJobId
+    : normalizedJobIds[0] || "";
+  const hasExplicitDestination = Boolean(
+    requestedJobIsEligible && requestedAudience
+  );
+
   return Object.freeze({
-    selectedJobId: String(selectedJobId || "").trim(),
-    audience: normalizeFieldMessageAudience(audience),
+    requestedJobId,
+    requestedAudience,
+    selectedJobId,
+    audience: hasExplicitDestination
+      ? requestedAudience
+      : FIELD_MESSAGE_AUDIENCE.TEAM,
+    hasExplicitDestination,
+  });
+}
+
+export function isExplicitFieldMessageAudienceActivation({
+  targetAudience,
+  pointerAudience = "",
+  clickDetail = 0,
+} = {}) {
+  const target = normalizeFieldMessageAudience(targetAudience, "");
+  if (!target) return false;
+  if (Number(clickDetail) === 0) return true;
+  return normalizeFieldMessageAudience(pointerAudience, "") === target;
+}
+
+export function createFieldMessageComposerState() {
+  return Object.freeze({
     drafts: {},
   });
 }
 
 export function reduceFieldMessageComposerState(current, action = {}) {
   const state = current || createFieldMessageComposerState();
-
-  if (action.type === "select_audience") {
-    const audience = normalizeFieldMessageAudience(action.audience, "");
-    return audience && state.selectedJobId
-      ? { ...state, audience }
-      : state;
-  }
-
-  if (action.type === "select_job") {
-    const selectedJobId = String(action.jobId || "").trim();
-    return selectedJobId ? { ...state, selectedJobId } : state;
-  }
-
-  if (action.type === "reconcile_jobs") {
-    const jobIds = Array.isArray(action.jobIds)
-      ? action.jobIds.map((jobId) => String(jobId || "").trim()).filter(Boolean)
-      : [];
-    if (jobIds.includes(state.selectedJobId)) return state;
-    return {
-      ...state,
-      selectedJobId: jobIds[0] || "",
-      audience: FIELD_MESSAGE_AUDIENCE.TEAM,
-    };
-  }
 
   if (action.type === "update_draft") {
     const key = getFieldMessageDraftKey(action.jobId, action.audience);

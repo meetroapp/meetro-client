@@ -82,6 +82,41 @@ test("Team history and composer make private exact-assignment authority explicit
   assert.match(conversationSource, /business_job_field_messages/);
 });
 
+test("private Team context is a default-collapsed accessible disclosure", () => {
+  const pane = conversationSource.slice(
+    conversationSource.indexOf("function BusinessTeamCommunicationPane"),
+    conversationSource.indexOf("function resolveSupportedLegacyConversationRecord")
+  );
+
+  assert.match(pane, /const \[teamContextExpanded, setTeamContextExpanded\] = useState\(false\)/);
+  assert.match(pane, /const teamContextDetailsId = useId\(\)/);
+  assert.match(pane, /type="button"[\s\S]*business-team-communication__context-disclosure/);
+  assert.match(pane, /aria-expanded=\{teamContextExpanded\}/);
+  assert.match(pane, /aria-controls=\{teamContextDetailsId\}/);
+  assert.match(pane, /aria-label=\{disclosureLabel\}/);
+  assert.match(pane, /onClick=\{\(\) => setTeamContextExpanded\(\(current\) => !current\)\}/);
+  assert.match(pane, /conversationTeamContextCompact[\s\S]*selectedEmployeeName[\s\S]*teamContextExpanded \? "▴" : "▾"/);
+  assert.match(pane, /teamContextExpanded \? \([\s\S]*conversationTeamPrivate[\s\S]*conversationDelegatedFieldEmployeeRole[\s\S]*conversationTeamPrivateNotice/);
+  assert.match(pane, /conversationTeamDetailsHide[\s\S]*conversationTeamDetailsShow/);
+});
+
+test("collapsed private Team disclosure is compact and intrinsically phone-safe", () => {
+  const styles = conversationSource.slice(
+    conversationSource.indexOf("const businessTeamContext ="),
+    conversationSource.indexOf("const businessTeamSelector =")
+  );
+
+  assert.match(styles, /const businessTeamContext = \{[\s\S]*padding: "4px 10px"/);
+  assert.match(styles, /const businessTeamDisclosure = \{[\s\S]*width: "100%"[\s\S]*maxWidth: "100%"[\s\S]*minHeight: "48px"[\s\S]*boxSizing: "border-box"/);
+  assert.match(styles, /gridTemplateColumns: "20px minmax\(0, 1fr\) 18px"/);
+  assert.match(styles, /const businessTeamDisclosureText = \{[\s\S]*minWidth: 0[\s\S]*overflow: "hidden"[\s\S]*textOverflow: "ellipsis"[\s\S]*whiteSpace: "nowrap"/);
+
+  for (const viewportWidth of [390, 393, 430, 440]) {
+    const availableTextWidth = viewportWidth - 20 - 18 - (8 * 2) - (10 * 2) - (12 * 2);
+    assert.ok(availableTextWidth > 280, `${viewportWidth}px preserves compact context text`);
+  }
+});
+
 test("Customer and Team drafts cannot cross audiences or assigned recipients", () => {
   assert.match(conversationSource, /const \[teamDrafts, setTeamDrafts\] = useState\(\{\}\)/);
   assert.match(conversationSource, /`\$\{canonicalJobId\}:team:\$\{selectedTeamCommunication\.assignmentId\}`/);
@@ -106,7 +141,7 @@ test("Team authority is server projected and Bookkeeper receives no role-string 
 });
 
 test("visible Team workspace refreshes on entry Job change focus and visibility without polling", () => {
-  assert.match(conversationSource, /\[canonicalConversationId, managedTeamEligible, refreshManagedTeamCommunications\]/);
+  assert.match(conversationSource, /canonicalBusinessId,[\s\S]{0,120}canonicalConversationId,[\s\S]{0,120}canonicalJobId,[\s\S]{0,120}managedTeamEligible/);
   assert.match(conversationSource, /if \(communicationAudience !== "team" \|\| !managedTeamEligible\)/);
   assert.match(conversationSource, /window\.addEventListener\("focus", refreshVisibleTeam\)/);
   assert.match(conversationSource, /document\.addEventListener\("visibilitychange", refreshTeamWhenVisible\)/);
@@ -118,6 +153,60 @@ test("visible Team workspace refreshes on entry Job change focus and visibility 
     ),
     /setInterval|WebSocket/
   );
+});
+
+test("keyboard-driven parent callback identity changes cannot rerun Business audience initialization", () => {
+  const reconciliationBlock = conversationSource.slice(
+    conversationSource.indexOf("refreshManagedTeamCommunicationsRef.current ="),
+    conversationSource.indexOf("const selectedTeamCommunication")
+  );
+  const initializationEffect = reconciliationBlock.slice(
+    reconciliationBlock.indexOf("useEffect(() =>"),
+    reconciliationBlock.indexOf("useEffect(() =>", reconciliationBlock.indexOf("useEffect(() =>") + 1)
+  );
+
+  assert.match(initializationEffect, /setCommunicationAudience\("customer"\)/);
+  assert.match(initializationEffect, /setSelectedTeamAssignmentId\(""\)/);
+  assert.match(initializationEffect, /refreshManagedTeamCommunicationsRef\.current\?\.\(\)/);
+  assert.match(initializationEffect, /canonicalBusinessId,[\s\S]*canonicalConversationId,[\s\S]*canonicalJobId,[\s\S]*managedTeamEligible/);
+  assert.doesNotMatch(initializationEffect, /setPage|refreshManagedTeamCommunications,/);
+  assert.doesNotMatch(initializationEffect, /setTeamDrafts/);
+  assert.match(
+    conversationSource,
+    /setSelectedTeamAssignmentId\(\(current\) =>[\s\S]{0,220}communications\.some\(\(item\) => item\.assignmentId === current\)[\s\S]{0,120}\? current/
+  );
+  assert.match(
+    conversationSource,
+    /catch \{[\s\S]{0,420}setSelectedTeamAssignmentId\(""\);[\s\S]{0,100}setCommunicationAudience\("customer"\)/
+  );
+
+  const before = {
+    conversationId: 342,
+    jobId: JOB_ID,
+    businessId: 7,
+    eligible: true,
+    audience: "team",
+    selectedAssignmentId: "assignment-liam",
+    drafts: { [`${JOB_ID}:team:assignment-liam`]: "Private Team draft" },
+  };
+  const afterKeyboardParentRerender = {
+    ...before,
+    setPage: () => {},
+    viewportHeight: 611,
+  };
+  assert.deepEqual(
+    {
+      conversationId: afterKeyboardParentRerender.conversationId,
+      jobId: afterKeyboardParentRerender.jobId,
+      businessId: afterKeyboardParentRerender.businessId,
+      eligible: afterKeyboardParentRerender.eligible,
+      audience: afterKeyboardParentRerender.audience,
+      selectedAssignmentId: afterKeyboardParentRerender.selectedAssignmentId,
+      drafts: afterKeyboardParentRerender.drafts,
+    },
+    before
+  );
+  assert.doesNotMatch(conversationSource, /TEMP IOS BUSINESS MESSAGE TRACE/);
 });
 
 test("Team pane is intrinsically bounded for phone and preserves protected split and context architecture", () => {
@@ -146,6 +235,9 @@ test("Customer and private Team labels are available in EN ES FR and PT-BR", () 
     assert.notEqual(t("conversationAudienceCustomer", language), "conversationAudienceCustomer");
     assert.notEqual(t("conversationAudienceTeamPrivate", language), "conversationAudienceTeamPrivate");
     assert.notEqual(t("conversationTeamPrivateNotice", language), "conversationTeamPrivateNotice");
+    assert.notEqual(t("conversationTeamContextCompact", language), "conversationTeamContextCompact");
+    assert.notEqual(t("conversationTeamDetailsShow", language), "conversationTeamDetailsShow");
+    assert.notEqual(t("conversationTeamDetailsHide", language), "conversationTeamDetailsHide");
     assert.notEqual(t("conversationTeamSend", language), "conversationTeamSend");
   }
 });

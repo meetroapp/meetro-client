@@ -121,3 +121,29 @@ test("employee shell has explicit narrow-phone protections covering 375, 390, an
   assert.match(shellCss, /minmax\(0, 1fr\)/);
   assert.match(shellCss, /safe-area-inset-bottom/);
 });
+
+test("standard Employee header keeps compact Team access inside physical iPhone widths", () => {
+  const mobileCss = shellCss.slice(
+    shellCss.indexOf("@media (max-width: 760px)"),
+    shellCss.indexOf("@media (max-width: 390px)")
+  );
+
+  assert.match(shellSource, /const resolvedAccessLabel = accessLabel \|\| t\("fieldTeamAccess", language\)/);
+  assert.match(shellSource, /className="employee-shell__access"[\s\S]*aria-label=\{resolvedAccessLabel\}/);
+  assert.match(shellSource, /employee-shell__access-label--compact[\s\S]*fieldAudienceTeam/);
+  assert.match(mobileCss, /\.employee-shell__header \{[\s\S]*safe-area-inset-right[\s\S]*safe-area-inset-left[\s\S]*gap: 10px/);
+  assert.match(mobileCss, /\.employee-shell__header-copy \{[\s\S]*flex: 1 1 0/);
+  assert.match(mobileCss, /\.employee-shell__header-actions \{[\s\S]*flex: 0 1 120px[\s\S]*max-width: 36%/);
+  assert.match(mobileCss, /\.employee-shell__access \{[\s\S]*min-width: 44px[\s\S]*min-height: 44px/);
+  assert.match(mobileCss, /\.employee-shell__access-label--full \{[\s\S]*display: none/);
+  assert.match(mobileCss, /\.employee-shell__access-label--compact \{[\s\S]*display: inline/);
+
+  for (const viewportWidth of [390, 393, 430, 440]) {
+    const contentWidth = viewportWidth - (12 * 2);
+    const actionWidth = Math.min(120, contentWidth * 0.36);
+    const titleWidth = contentWidth - 10 - actionWidth;
+    assert.ok(titleWidth >= 230, `${viewportWidth}px preserves header title room`);
+    assert.ok(actionWidth >= 44, `${viewportWidth}px preserves Team touch width`);
+    assert.ok(titleWidth + 10 + actionWidth <= contentWidth, `${viewportWidth}px fits header`);
+  }
+});

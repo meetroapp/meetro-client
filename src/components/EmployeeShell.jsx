@@ -44,6 +44,8 @@ export default function EmployeeShell({
   roleLabel,
   brandLabel,
   accessLabel,
+  headerMode = "standard",
+  showMobileNavigation = true,
   navigationLocked = false,
   navigationLockReason = "",
 }) {
@@ -69,11 +71,18 @@ export default function EmployeeShell({
     employeeMessages: attention.unread,
     employeeAlerts: alertUnread,
   };
+  const showHeader = headerMode !== "suppressed";
+  const resolvedAccessLabel = accessLabel || t("fieldTeamAccess", language);
 
   return (
     <div
-      className="employee-shell"
+      className={`employee-shell${
+        showHeader ? "" : " employee-shell--header-suppressed"
+      }${
+        showMobileNavigation ? "" : " employee-shell--mobile-nav-suppressed"
+      }`}
       data-team-role={membership?.role || "FIELD_EMPLOYEE"}
+      data-header-mode={headerMode}
     >
       <aside
         className="employee-shell__rail"
@@ -114,56 +123,71 @@ export default function EmployeeShell({
         className="employee-shell__main"
         data-scroll-region="employee-workspace"
       >
-        <header className="employee-shell__header">
-          <div className="employee-shell__header-copy">
-            <p>{roleLabel || t("fieldEmployeeRole", language)}</p>
-            <h1>{title}</h1>
-            {description && <span>{description}</span>}
-          </div>
+        {showHeader ? (
+          <header className="employee-shell__header">
+            <div className="employee-shell__header-copy">
+              <p>{roleLabel || t("fieldEmployeeRole", language)}</p>
+              <h1>{title}</h1>
+              {description && <span>{description}</span>}
+            </div>
 
-          <div className="employee-shell__header-actions">
-            <span className="employee-shell__access">
-              <MeetroIcon
-                name="customerRelationships"
-                size={17}
-                decorative
-              />
-              {accessLabel || t("fieldTeamAccess", language)}
-            </span>
-            {navigationLocked ? (
+            <div className="employee-shell__header-actions">
               <span
-                id="employee-navigation-lock-reason"
-                className="employee-shell__navigation-lock"
-                role="status"
+                className="employee-shell__access"
+                aria-label={resolvedAccessLabel}
               >
-                {navigationLockReason}
+                <MeetroIcon
+                  name="customerRelationships"
+                  size={17}
+                  decorative
+                />
+                <span className="employee-shell__access-label employee-shell__access-label--full">
+                  {resolvedAccessLabel}
+                </span>
+                <span
+                  className="employee-shell__access-label employee-shell__access-label--compact"
+                  aria-hidden="true"
+                >
+                  {t("fieldAudienceTeam", language)}
+                </span>
               </span>
-            ) : null}
-          </div>
-        </header>
+              {navigationLocked ? (
+                <span
+                  id="employee-navigation-lock-reason"
+                  className="employee-shell__navigation-lock"
+                  role="status"
+                >
+                  {navigationLockReason}
+                </span>
+              ) : null}
+            </div>
+          </header>
+        ) : null}
 
         <main className="employee-shell__content">
           {children}
         </main>
       </div>
 
-      <nav
-        className="employee-shell__mobile-nav"
-        aria-label={employeeNavigationLabel}
-        aria-describedby={navigationLocked ? "employee-navigation-lock-reason" : undefined}
-      >
-        <EmployeeNav
-          navigation={navigation}
-          membership={membership}
-          currentPage={currentPage}
-          setPage={setPage}
-          language={language}
-          mobile
-          navigationLocked={navigationLocked}
-          navigationLockReason={navigationLockReason}
-          unreadByRoute={unreadByRoute}
-        />
-      </nav>
+      {showMobileNavigation ? (
+        <nav
+          className="employee-shell__mobile-nav"
+          aria-label={employeeNavigationLabel}
+          aria-describedby={navigationLocked ? "employee-navigation-lock-reason" : undefined}
+        >
+          <EmployeeNav
+            navigation={navigation}
+            membership={membership}
+            currentPage={currentPage}
+            setPage={setPage}
+            language={language}
+            mobile
+            navigationLocked={navigationLocked}
+            navigationLockReason={navigationLockReason}
+            unreadByRoute={unreadByRoute}
+          />
+        </nav>
+      ) : null}
     </div>
   );
 }

@@ -1,4 +1,4 @@
-import { Component, memo, useEffect, useMemo, useCallback, useRef, useState } from "react";
+import { Component, memo, useEffect, useId, useMemo, useCallback, useRef, useState } from "react";
 import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
 import useLanguage from "../hooks/useLanguage";
 import { getLanguage, t } from "../utils/language";
@@ -76,6 +76,7 @@ import {
   getConversationCustomerAttention,
   getJobCommunicationAttention,
 } from "../utils/communicationAttention";
+import { COMPACT_MESSAGE_COMPOSER } from "../utils/messageComposerLayout";
 import {
   getWorkflowMessageProps,
   isWorkflowMessageType,
@@ -690,10 +691,19 @@ function BusinessTeamCommunicationPane({
   error,
 }) {
   const fieldEmployeeRole = ["FIELD", "EMPLOYEE"].join("_");
+  const [teamContextExpanded, setTeamContextExpanded] = useState(false);
+  const teamContextDetailsId = useId();
   const selected = communications.find(
     (item) => item.assignmentId === selectedAssignmentId
   ) || communications[0] || null;
   const messages = selected?.messages || [];
+  const selectedEmployeeName = selected?.employee?.name || t("conversationTeamNoAssignment", language);
+  const disclosureLabel = t(
+    teamContextExpanded
+      ? "conversationTeamDetailsHide"
+      : "conversationTeamDetailsShow",
+    language
+  );
 
   return (
     <section
@@ -701,32 +711,54 @@ function BusinessTeamCommunicationPane({
       style={businessTeamPane}
       aria-label={t("conversationTeamPrivate", language)}
     >
-      <header style={businessTeamHeader}>
-        <div style={businessTeamHeaderCopy}>
-          <span style={businessTeamEyebrow}>
-            {t("conversationTeamPrivate", language)}
+      <header style={businessTeamContext}>
+        <button
+          type="button"
+          className="business-team-communication__context-disclosure"
+          style={businessTeamDisclosure}
+          aria-expanded={teamContextExpanded}
+          aria-controls={teamContextDetailsId}
+          aria-label={disclosureLabel}
+          onClick={() => setTeamContextExpanded((current) => !current)}
+        >
+          <span style={businessTeamDisclosureIcon} aria-hidden="true">🔒</span>
+          <span style={businessTeamDisclosureText}>
+            <strong>{t("conversationTeamContextCompact", language)}</strong>
+            <span aria-hidden="true"> · </span>
+            <span>{selectedEmployeeName}</span>
           </span>
-          <strong>
-            {selected?.employee?.name
-              ? `${selected.employee.name} · ${t("conversationDelegatedFieldEmployeeRole", language)}`
-              : t("conversationTeamNoAssignment", language)}
-          </strong>
-          <p>{t("conversationTeamPrivateNotice", language)}</p>
-        </div>
-        {communications.length > 1 ? (
-          <label style={businessTeamSelector}>
-            <span>{t("conversationTeamAssignedEmployee", language)}</span>
-            <select
-              value={selectedAssignmentId}
-              onChange={(event) => onSelectAssignment(event.target.value)}
-            >
-              {communications.map((item) => (
-                <option key={item.assignmentId} value={item.assignmentId}>
-                  {item.employee?.name || t("conversationTeamMember", language)}
-                </option>
-              ))}
-            </select>
-          </label>
+          <span style={businessTeamDisclosureChevron} aria-hidden="true">
+            {teamContextExpanded ? "▴" : "▾"}
+          </span>
+        </button>
+
+        {teamContextExpanded ? (
+          <div id={teamContextDetailsId} style={businessTeamDetails}>
+            <span style={businessTeamEyebrow}>
+              {t("conversationTeamPrivate", language)}
+            </span>
+            <strong>
+              {selected?.employee?.name
+                ? `${selected.employee.name} · ${t("conversationDelegatedFieldEmployeeRole", language)}`
+                : t("conversationTeamNoAssignment", language)}
+            </strong>
+            <p>{t("conversationTeamPrivateNotice", language)}</p>
+            {communications.length > 1 ? (
+              <label style={businessTeamSelector}>
+                <span>{t("conversationTeamAssignedEmployee", language)}</span>
+                <select
+                  value={selectedAssignmentId}
+                  onChange={(event) => onSelectAssignment(event.target.value)}
+                >
+                  {communications.map((item) => (
+                    <option key={item.assignmentId} value={item.assignmentId}>
+                      {item.employee?.name || t("conversationTeamMember", language)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
         ) : null}
       </header>
 
@@ -774,11 +806,12 @@ function BusinessTeamCommunicationPane({
         <button
           className="business-team-communication__composer-send"
           type="submit"
+          aria-label={t("conversationTeamSend", language)}
           disabled={!selected || sending || !draft.trim()}
         >
           {sending
             ? t("fieldSending", language)
-            : t("conversationTeamSend", language)}
+            : t("send", language)}
         </button>
       </form>
       <style>{`
@@ -786,16 +819,21 @@ function BusinessTeamCommunicationPane({
           box-sizing: border-box; width: 100%; min-width: 0; min-height: 46px;
           max-height: 132px; resize: vertical; border: 1px solid #a9c3b0;
           border-radius: 10px; background: #ffffff; color: #153d29;
-          padding: 11px 14px; font: inherit; line-height: 1.4;
+          padding: 11px 14px; font-family: inherit; font-size: 16px;
+          font-weight: 500; line-height: 1.4;
         }
         .business-team-communication__composer-input:focus-visible {
           outline: 3px solid rgba(39, 112, 67, 0.22); outline-offset: 1px;
           border-color: #277043;
         }
         .business-team-communication__composer-send {
-          box-sizing: border-box; min-width: 82px; height: 46px; align-self: end;
+          box-sizing: border-box; width: ${COMPACT_MESSAGE_COMPOSER.sendWidthPx}px;
+          min-width: ${COMPACT_MESSAGE_COMPOSER.sendMinWidthPx}px;
+          max-width: ${COMPACT_MESSAGE_COMPOSER.sendMaxWidthPx}px;
+          min-height: ${COMPACT_MESSAGE_COMPOSER.minTouchHeightPx}px;
+          height: 46px; align-self: end; flex: 0 0 auto;
           border: 1px solid #174c2f; border-radius: 10px; background: #174c2f;
-          color: #ffffff; padding: 0 18px; font: inherit; font-weight: 850;
+          color: #ffffff; padding: 0 12px; font: inherit; font-weight: 850;
           cursor: pointer;
         }
         .business-team-communication__composer-send:focus-visible {
@@ -804,9 +842,6 @@ function BusinessTeamCommunicationPane({
         .business-team-communication__composer-input:disabled,
         .business-team-communication__composer-send:disabled {
           cursor: not-allowed; opacity: 0.56;
-        }
-        @media (max-width: 430px) {
-          .business-team-communication__composer-send { min-width: 72px; padding-inline: 13px; }
         }
       `}</style>
       {error ? <div style={businessTeamError} role="alert">{error}</div> : null}
@@ -951,6 +986,7 @@ function ConversationThreadInner({
   const canonicalReadRouteGenerationRef = useRef(0);
   const canonicalReadHydrationGenerationRef = useRef(0);
   const canonicalReadCoordinatorRef = useRef(null);
+  const refreshManagedTeamCommunicationsRef = useRef(null);
 
   useEffect(() => subscribeAlertCounts(setAlertCountSnapshot), []);
 
@@ -1497,6 +1533,9 @@ useEffect(() => {
     ]
   );
 
+  refreshManagedTeamCommunicationsRef.current =
+    refreshManagedTeamCommunications;
+
   useEffect(() => {
     let active = true;
     Promise.resolve().then(() => {
@@ -1504,7 +1543,7 @@ useEffect(() => {
       setCommunicationAudience("customer");
       setSelectedTeamAssignmentId("");
       if (managedTeamEligible) {
-        void refreshManagedTeamCommunications();
+        void refreshManagedTeamCommunicationsRef.current?.();
       } else {
         setManagedTeamState({
           phase: "idle",
@@ -1517,7 +1556,12 @@ useEffect(() => {
       active = false;
       managedTeamRequestRef.current += 1;
     };
-  }, [canonicalConversationId, managedTeamEligible, refreshManagedTeamCommunications]);
+  }, [
+    canonicalBusinessId,
+    canonicalConversationId,
+    canonicalJobId,
+    managedTeamEligible,
+  ]);
 
   useEffect(() => {
     if (communicationAudience !== "team" || !managedTeamEligible) {
@@ -11507,22 +11551,65 @@ const businessTeamPane = {
   background: "#f7faf8",
 };
 
-const businessTeamHeader = {
-  display: "flex",
-  alignItems: "flex-start",
-  justifyContent: "space-between",
-  gap: "12px",
-  padding: "14px",
-  borderBottom: "1px solid #dfe8e1",
+const businessTeamContext = {
   minWidth: 0,
-  flexWrap: "wrap",
+  padding: "4px 10px",
+  borderBottom: "1px solid #dfe8e1",
+  background: "#f7faf8",
 };
 
-const businessTeamHeaderCopy = {
+const businessTeamDisclosure = {
+  width: "100%",
+  maxWidth: "100%",
+  minHeight: "48px",
+  boxSizing: "border-box",
+  border: "1px solid #d4e2d8",
+  borderRadius: "12px",
+  padding: "8px 10px",
+  display: "grid",
+  gridTemplateColumns: "20px minmax(0, 1fr) 18px",
+  alignItems: "center",
+  gap: "8px",
+  background: "#ffffff",
+  color: "#1f4d34",
+  font: "inherit",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const businessTeamDisclosureIcon = {
+  width: "20px",
+  minWidth: "20px",
+  display: "inline-grid",
+  placeItems: "center",
+  fontSize: "15px",
+};
+
+const businessTeamDisclosureText = {
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  fontSize: "13px",
+  lineHeight: 1.25,
+};
+
+const businessTeamDisclosureChevron = {
+  width: "18px",
+  minWidth: "18px",
+  textAlign: "center",
+  fontSize: "14px",
+  fontWeight: 900,
+};
+
+const businessTeamDetails = {
   display: "grid",
   gap: "4px",
   minWidth: 0,
-  flex: "1 1 220px",
+  padding: "8px 10px 6px",
+  color: "#243a2d",
+  fontSize: "13px",
+  lineHeight: 1.35,
 };
 
 const businessTeamEyebrow = {
@@ -11577,14 +11664,16 @@ const businessTeamEmpty = {
 };
 
 const businessTeamComposer = {
+  width: "100%",
   display: "grid",
-  gridTemplateColumns: "minmax(0, 1fr) auto",
-  gap: "8px",
+  gridTemplateColumns: `minmax(0, 1fr) ${COMPACT_MESSAGE_COMPOSER.sendWidthPx}px`,
+  gap: `${COMPACT_MESSAGE_COMPOSER.gapPx}px`,
   padding: "12px",
   borderTop: "1px solid #dfe8e1",
   background: "#ffffff",
   minWidth: 0,
   maxWidth: "100%",
+  boxSizing: "border-box",
 };
 
 const businessTeamError = {

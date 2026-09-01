@@ -137,8 +137,8 @@ test("Field Messages keeps Team and Customer as separate assignment-scoped autho
   assert.match(portalSource, /\["team", "fieldAudienceTeam", selectedAttention\.teamUnread\]/);
   assert.match(portalSource, /\["customer", "fieldAudienceCustomer", selectedAttention\.customerUnread\]/);
   assert.match(portalSource, /operations\.filter\(hasActiveMessageAssignment\)/);
-  assert.match(portalSource, /routedJob \? routedAudience : "team"/);
-  assert.match(portalSource, /eligibleJobs\.find\(\(item\) => item\.job\.id === requestedJobId\)/);
+  assert.match(portalSource, /resolveFieldMessageRoute\(routeSnapshot, eligibleJobIds\)/);
+  assert.match(portalSource, /eligibleJobs\.find\(\(item\) => item\.job\.id === selectedJobId\)/);
   assert.match(portalSource, /selected\.assignment\.id/);
   assert.match(portalSource, /sendFieldMessage\(selected\.job\.id/);
   assert.match(portalSource, /sendFieldCustomerMessage\(/);
@@ -350,8 +350,9 @@ test("all new Field Messages copy has EN, ES, FR, and PT-BR parity", () => {
 
 test("Field Messages is responsive without coupling to Business Communication Center layout", () => {
   assert.match(fieldCss, /\.field-messages-layout[\s\S]*grid-template-columns: minmax\(230px, 0\.32fr\) minmax\(0, 0\.68fr\)/);
-  assert.match(fieldCss, /@media \(max-width: 760px\)[\s\S]*\.field-messages-composer[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(fieldCss, /@media \(max-width: 760px\)[\s\S]*\.field-messages-composer[\s\S]*minmax\(0, 1fr\)[\s\S]*--field-message-send-width/);
   assert.match(fieldCss, /\.field-messages-composer textarea[\s\S]*max-width: 100%[\s\S]*min-width: 0/);
+  assert.match(fieldCss, /\.field-messages-composer textarea[\s\S]*font-size: 16px/);
   assert.doesNotMatch(portalSource, /MessagesInbox|ConversationThread|splitShell|wideWorkspaceShell/);
   assert.match(messagesInboxSource, /data-communication-layout/);
   assert.match(conversationThreadSource, /conversation/);

@@ -214,6 +214,9 @@
 }
 
 .employee-shell__header {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   min-height: 154px;
   box-sizing: border-box;
   padding:
@@ -228,6 +231,11 @@
   justify-content: space-between;
   gap: 28px;
   align-items: center;
+}
+
+.employee-shell__header-copy {
+  min-width: 0;
+  flex: 1 1 auto;
 }
 
 .employee-shell__header-copy p {
@@ -257,6 +265,8 @@
 }
 
 .employee-shell__access {
+  min-width: 44px;
+  max-width: 100%;
   min-height: 44px;
   box-sizing: border-box;
   padding: 10px 16px;
@@ -274,8 +284,14 @@
     inset 0 0 0 1px rgba(30, 97, 54, 0.035);
 }
 
+.employee-shell__access-label--compact {
+  display: none;
+}
+
 .employee-shell__header-actions {
   min-width: 0;
+  max-width: 100%;
+  flex: 0 1 auto;
   display: grid;
   justify-items: end;
   gap: 8px;
@@ -309,6 +325,10 @@
     28px
     clamp(22px, 3vw, 38px)
     104px;
+}
+
+.employee-shell--header-suppressed .employee-shell__content {
+  max-width: 100%;
 }
 
 .employee-shell__mobile-nav {
@@ -582,9 +602,15 @@
     min-height: auto;
     padding:
       max(17px, env(safe-area-inset-top))
-      16px
-      15px;
+      max(12px, env(safe-area-inset-right))
+      15px
+      max(12px, env(safe-area-inset-left));
+    gap: 10px;
     align-items: flex-start;
+  }
+
+  .employee-shell__header-copy {
+    flex: 1 1 0;
   }
 
   .employee-shell__header-copy p {
@@ -600,14 +626,26 @@
   }
 
   .employee-shell__access {
-    min-height: 36px;
-    padding: 7px 10px;
+    min-width: 44px;
+    min-height: 44px;
+    padding: 8px 10px;
     margin-top: 2px;
-    font-size: 10px;
+    gap: 6px;
+    font-size: 11px;
   }
 
   .employee-shell__header-actions {
+    flex: 0 1 120px;
+    max-width: 36%;
     justify-items: end;
+  }
+
+  .employee-shell__access-label--full {
+    display: none;
+  }
+
+  .employee-shell__access-label--compact {
+    display: inline;
   }
 
   .employee-shell__navigation-lock {
@@ -1085,7 +1123,6 @@
   gap: 16px;
 }
 
-.field-messages-header,
 .field-messages-jobs,
 .field-messages-thread-card,
 .field-messages-unavailable {
@@ -1097,23 +1134,67 @@
 }
 
 .field-messages-header {
-  padding: 22px 24px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  align-self: start;
+  padding: 0;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  gap: 20px;
+  gap: 12px;
 }
 
-.field-messages-header h2,
-.field-messages-jobs h3,
-.field-messages-thread-heading h3,
+.field-messages-titlebar {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+
+.field-messages-titlebar h2 {
+  min-width: 0;
+  margin: 0;
+  color: var(--employee-text);
+  font-size: 21px;
+  line-height: 1.15;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.field-messages-back {
+  min-width: 44px;
+  min-height: 44px;
+  max-width: 100%;
+  border: 1px solid #c9d9cd;
+  border-radius: 11px;
+  padding: 0 12px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: #f5f9f6;
+  color: var(--employee-green);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 850;
+  white-space: normal;
+  cursor: pointer;
+}
+
+.field-messages-back:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .field-messages-unavailable h3 {
   margin: 4px 0 6px;
   color: var(--employee-text);
 }
 
-.field-messages-header p:last-child,
-.field-messages-thread-heading span,
 .field-messages-unavailable p {
   margin: 0;
   color: var(--employee-muted);
@@ -1130,17 +1211,23 @@
 }
 
 .field-messages-audience {
+  width: min(100%, 320px);
+  height: auto;
+  max-width: 100%;
+  min-width: 0;
+  min-height: 0;
   flex: 0 0 auto;
   padding: 4px;
   border: 1px solid #cfddd2;
   border-radius: 13px;
   display: grid;
-  grid-template-columns: repeat(2, minmax(92px, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   background: #f3f8f4;
 }
 
 .field-messages-audience button {
-  min-height: 42px;
+  min-width: 0;
+  min-height: 48px;
   border: 0;
   border-radius: 10px;
   padding: 9px 15px;
@@ -1153,6 +1240,7 @@
   align-items: center;
   justify-content: center;
   gap: 7px;
+  overflow-wrap: anywhere;
 }
 
 .field-messages-audience-count {
@@ -1182,6 +1270,8 @@
 }
 
 .field-messages-layout {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   display: grid;
   grid-template-columns: minmax(230px, 0.32fr) minmax(0, 0.68fr);
@@ -1190,11 +1280,13 @@
 }
 
 .field-messages-jobs {
+  width: 100%;
+  max-width: 100%;
   padding: 19px;
 }
 
 .field-messages-job-list {
-  margin-top: 14px;
+  margin-top: 11px;
   display: grid;
   gap: 9px;
 }
@@ -1240,6 +1332,8 @@
 }
 
 .field-messages-thread-card {
+  width: 100%;
+  max-width: 100%;
   min-height: 0;
   padding: 20px;
   display: grid;
@@ -1250,40 +1344,40 @@
     minmax(260px, min(48dvh, 520px));
   grid-auto-rows: max-content;
   align-self: start;
-  overflow: hidden;
 }
 
 .field-messages-thread-heading {
   min-width: 0;
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 14px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
 }
 
-.field-messages-thread-heading > div {
+.field-messages-thread-heading .field-messages-eyebrow {
   min-width: 0;
-}
-
-.field-messages-thread-heading h3,
-.field-messages-thread-heading span {
   overflow-wrap: anywhere;
 }
 
 .field-messages-open-job {
-  flex: 0 0 auto;
+  min-width: 72px;
+  min-height: 44px;
+  max-width: min(44%, 140px);
   border: 0;
-  padding: 7px 0;
+  padding: 8px 4px;
   background: transparent;
   color: var(--employee-green);
   font: inherit;
   font-size: 12px;
   font-weight: 850;
+  line-height: 1.2;
+  text-align: right;
+  overflow-wrap: anywhere;
   cursor: pointer;
 }
 
 .field-messages-visibility {
-  margin-top: 16px;
+  margin-top: 8px;
   padding: 11px 13px;
   border-radius: 12px;
   display: flex;
@@ -1313,7 +1407,6 @@
   display: flex;
   flex-direction: column;
   gap: 10px;
-  overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-gutter: stable;
@@ -1418,6 +1511,7 @@
 }
 
 .field-messages-quick-updates button {
+  max-width: 100%;
   min-height: 34px;
   border: 1px solid #c6d9ca;
   border-radius: 999px;
@@ -1425,6 +1519,8 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: normal;
+  overflow-wrap: anywhere;
   background: #fff;
   color: #245638;
   font: inherit;
@@ -1439,6 +1535,7 @@
 }
 
 .field-messages-pending-send {
+  min-width: 0;
   margin-top: 11px;
   padding: 11px 13px;
   border: 1px solid #bcd4c1;
@@ -1447,11 +1544,13 @@
   align-items: center;
   justify-content: space-between;
   gap: 12px;
+  flex-wrap: wrap;
   background: #e9f4eb;
   color: #1f4d34;
 }
 
 .field-messages-pending-send > div {
+  min-width: 0;
   display: grid;
   gap: 2px;
 }
@@ -1494,12 +1593,16 @@
   min-width: 0;
   margin-top: 14px;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns:
+    minmax(0, 1fr)
+    var(--field-message-send-width, 92px);
   align-items: end;
-  gap: 11px;
+  gap: var(--field-message-composer-gap, 8px);
 }
 
 .field-messages-composer label {
+  width: 100%;
+  max-width: 100%;
   min-width: 0;
   display: grid;
   gap: 7px;
@@ -1519,15 +1622,21 @@
   resize: vertical;
   background: #fff;
   color: #183c27;
-  font: inherit;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .field-messages-composer button {
-  min-height: 48px;
-  max-width: 100%;
+  width: var(--field-message-send-width, 92px);
+  min-width: var(--field-message-send-min-width, 88px);
+  max-width: var(--field-message-send-max-width, 100px);
+  min-height: 44px;
+  height: 48px;
   border: 1px solid var(--employee-green);
   border-radius: 11px;
-  padding: 10px 16px;
+  padding: 8px;
   display: inline-flex;
   justify-content: center;
   align-items: center;
@@ -1536,6 +1645,7 @@
   color: #fff;
   font: inherit;
   font-weight: 850;
+  white-space: nowrap;
   cursor: pointer;
 }
 
@@ -1562,32 +1672,55 @@
 }
 
 @media (max-width: 760px) {
+  .employee-shell--header-suppressed .employee-shell__content,
+  .employee-shell--mobile-nav-suppressed .employee-shell__content {
+    width: 100%;
+    max-width: 100%;
+    padding-top: max(10px, env(safe-area-inset-top));
+    padding-bottom: max(12px, env(safe-area-inset-bottom));
+  }
+
   .field-messages-workspace {
     gap: 11px;
   }
 
   .field-messages-header {
-    padding: 17px 14px;
+    padding: 0;
     align-items: stretch;
     flex-direction: column;
+    gap: 8px;
+  }
+
+  .field-messages-titlebar {
+    width: 100%;
+    max-width: 100%;
   }
 
   .field-messages-audience {
     width: 100%;
+    max-width: 100%;
+    min-height: 0;
+    flex: 0 0 auto;
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .field-messages-jobs,
   .field-messages-thread-card {
-    padding: 14px;
+    padding: 12px;
     border-radius: 16px;
   }
 
-  .field-messages-thread-card {
-    grid-template-rows:
-      auto
-      auto
-      minmax(220px, min(38dvh, 360px));
+  .field-messages-chat-workspace {
+    height: calc(
+      100dvh -
+      max(10px, env(safe-area-inset-top)) -
+      12px
+    );
+    min-height: 0;
+    max-height: none;
+    display: flex;
+    flex-direction: column;
+    align-self: start;
   }
 
   .field-messages-job-list {
@@ -1595,11 +1728,27 @@
   }
 
   .field-messages-thread-heading {
+    flex: 0 0 auto;
     align-items: flex-start;
   }
 
+  .field-messages-visibility,
+  .field-messages-pending-send,
+  .field-messages-notice {
+    flex: 0 0 auto;
+  }
+
   .field-messages-thread {
+    flex: 1 1 0;
     min-height: 0;
+    overflow-y: auto;
+  }
+
+  .field-messages-quick-updates {
+    min-height: 0;
+    flex: 0 1 auto;
+    overflow-y: auto;
+    overscroll-behavior: contain;
   }
 
   .field-messages-message {
@@ -1616,11 +1765,19 @@
   }
 
   .field-messages-composer {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .field-messages-composer button {
     width: 100%;
+    max-width: 100%;
+    min-height: 0;
+    flex: 0 0 auto;
+    position: sticky;
+    bottom: 0;
+    z-index: 3;
+    margin-top: 8px;
+    padding-top: 8px;
+    background: var(--employee-surface);
+    grid-template-columns:
+      minmax(0, 1fr)
+      var(--field-message-send-width, 92px);
   }
 }
 
@@ -1630,8 +1787,8 @@
   }
 
   .employee-shell__access {
-    font-size: 9px;
-    padding: 6px 8px;
+    font-size: 11px;
+    padding: 8px 10px;
   }
 
   .employee-shell__content {
