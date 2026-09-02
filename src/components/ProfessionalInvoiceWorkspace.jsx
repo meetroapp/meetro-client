@@ -59,7 +59,8 @@ export default function ProfessionalInvoiceWorkspace({
   });
   const workspaceCopy = getWorkCenterWorkspaceCopy(language);
   const [workspace, setWorkspace] = useState(null);
-  const [phase, setPhase] = useState("loading");
+  const [workspacePhase, setWorkspacePhase] = useState("idle");
+  const [invoicePhase, setInvoicePhase] = useState("idle");
   const [selected, setSelected] = useState(null);
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
@@ -73,40 +74,52 @@ export default function ProfessionalInvoiceWorkspace({
   const loadWorkspace = useCallback(async () => {
     const value = await fetchProfessionalInvoiceWorkspace({ limit: 50, setPage });
     setWorkspace(value);
-    setPhase("ready");
+    setWorkspacePhase("ready");
     return value;
   }, [setPage]);
 
   useEffect(() => {
+    if (initialInvoiceId) {
+      setWorkspacePhase("idle");
+      return undefined;
+    }
     let active = true;
     queueMicrotask(() => {
       if (!active) return;
-      setPhase("loading");
-      void loadWorkspace().catch(() => active && setPhase("error"));
+      setWorkspacePhase("loading");
+      void loadWorkspace().catch(() => active && setWorkspacePhase("error"));
     });
     return () => { active = false; };
-  }, [loadWorkspace]);
+  }, [initialInvoiceId, loadWorkspace]);
 
   useEffect(() => {
-    if (!initialInvoiceId) return undefined;
+    if (!initialInvoiceId) {
+      setInvoicePhase("idle");
+      return undefined;
+    }
     let active = true;
     queueMicrotask(() => {
       if (!active) return;
-      setBusy(`read:${initialInvoiceId}`);
+      setInvoicePhase("loading");
       setNotice("");
       void fetchProfessionalInvoice({ invoiceId: initialInvoiceId, setPage })
         .then((invoice) => {
           if (!active) return;
           if (expectedJobId && invoice.jobId !== expectedJobId) {
             setNotice("This exact Invoice does not belong to the requested Job.");
+            setInvoicePhase("error");
             return;
           }
           setSelected(invoice);
+          setInvoicePhase("ready");
           setConfirmIssue(false);
           setShowPayment(false);
         })
-        .catch(() => active && setNotice(copy.unavailable))
-        .finally(() => active && setBusy(""));
+        .catch(() => {
+          if (!active) return;
+          setInvoicePhase("error");
+          setNotice(copy.unavailable);
+        })
     });
     return () => { active = false; };
   }, [copy.unavailable, expectedJobId, initialInvoiceId, setPage]);
@@ -116,16 +129,16 @@ export default function ProfessionalInvoiceWorkspace({
   [language, workspace]);
 
   async function openInvoice(invoiceId) {
-    setBusy(`read:${invoiceId}`);
+    setInvoicePhase("loading");
     setNotice("");
     try {
       setSelected(await fetchProfessionalInvoice({ invoiceId, setPage }));
+      setInvoicePhase("ready");
       setConfirmIssue(false);
       setShowPayment(false);
     } catch {
+      setInvoicePhase("error");
       setNotice(copy.unavailable);
-    } finally {
-      setBusy("");
     }
   }
 
@@ -276,6 +289,9 @@ export default function ProfessionalInvoiceWorkspace({
       {selected.actions.canShareExternal && <span style={styles.shareNote}>{copy.noPublicLink}</span>}
     </div>
   ) : null;
+  const phase = initialInvoiceId ? invoicePhase : workspacePhase;
+  const isLoading = phase === "loading" || invoicePhase === "loading";
+  const hasError = phase === "error" || invoicePhase === "error";
 
   return (
     <section className="work-center-workspace" style={styles.workspace} data-invoice-workspace-phase={phase}>
@@ -290,8 +306,8 @@ export default function ProfessionalInvoiceWorkspace({
         description={workspaceCopy.financeDescription}
       />
 
-      {phase === "loading" && <p role="status">{copy.loading}</p>}
-      {phase === "error" && <p role="alert">{copy.unavailable}</p>}
+      {isLoading && <p role="status">{copy.loading}</p>}
+      {!isLoading && hasError && <p role="alert">{copy.unavailable}</p>}
       {notice && <p role="status" style={styles.notice}>{notice}</p>}
 
       {summary && (
@@ -398,7 +414,6 @@ export default function ProfessionalInvoiceWorkspace({
           )}
         </section>
       )}
-      {busy.startsWith("read:") && <p role="status">{copy.loading}</p>}
     </section>
   );
 }

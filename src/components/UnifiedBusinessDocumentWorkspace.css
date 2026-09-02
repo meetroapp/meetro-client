@@ -18,6 +18,13 @@
 .business-document-workspace input,
 .business-document-workspace textarea { font: inherit; }
 
+/* Keep editable Quote/Invoice controls at iOS's no-auto-zoom text size. */
+.business-document-workspace input,
+.business-document-workspace textarea,
+.business-document-workspace select {
+  font-size: 16px;
+}
+
 .business-document-workspace button { min-height: 44px; cursor: pointer; }
 
 .business-document-header {
@@ -615,7 +622,7 @@
 .business-document-notice { margin: 10px 0 0; padding: 10px; border-radius: 10px; color: #634d20; background: #fff8e7; font-size: 11px; text-align: center; }
 
 .business-document-manual-backdrop { position: fixed; z-index: 10030; inset: 0; width: 100%; height: 100%; border: 0; background: rgba(15,26,20,.28); }
-.business-document-manual { position: fixed; z-index: 10031; inset: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); width: min(760px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 16px; overflow: auto; border: 1px solid #dce4dc; border-radius: 18px; background: #fffdfa; box-shadow: 0 22px 60px rgba(20,39,29,.22); }
+.business-document-manual { position: fixed; z-index: 10031; inset: max(12px, env(safe-area-inset-top)) max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); width: min(760px, calc(100vw - 24px)); max-width: 100%; min-width: 0; max-height: calc(100dvh - 24px); margin: auto; padding: 16px; overflow: auto; border: 1px solid #dce4dc; border-radius: 18px; background: #fffdfa; box-shadow: 0 22px 60px rgba(20,39,29,.22); }
 .business-document-manual > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
 .business-document-manual header span { color: #0c6b3d; font-size: 10px; font-weight: 950; text-transform: uppercase; }
 .business-document-manual h2 { margin: 3px 0 0; font-size: 16px; }
@@ -681,7 +688,7 @@
 .business-document-agreement-presets { display: flex; gap: 7px; flex-wrap: wrap; }
 .business-document-agreement-presets button { min-height: 44px; border: 1px solid #bed4c3; border-radius: 10px; color: #145b38; background: #edf6ee; padding: 8px 10px; font-size: 10px; font-weight: 850; }
 
-.business-document-confirm { position: fixed; z-index: 10035; inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); width: min(620px, calc(100vw - 24px)); max-height: calc(100dvh - 24px); margin: auto; padding: 18px; overflow: auto; border: 1px solid #d9e3db; border-radius: 18px; color: #24374a; background: #fffdfa; box-shadow: 0 22px 60px rgba(20,39,29,.24); }
+.business-document-confirm { position: fixed; z-index: 10035; inset: auto max(12px, env(safe-area-inset-right)) max(12px, env(safe-area-inset-bottom)) max(12px, env(safe-area-inset-left)); width: min(620px, calc(100vw - 24px)); max-width: 100%; min-width: 0; max-height: calc(100dvh - 24px); margin: auto; padding: 18px; overflow: auto; border: 1px solid #d9e3db; border-radius: 18px; color: #24374a; background: #fffdfa; box-shadow: 0 22px 60px rgba(20,39,29,.24); }
 .business-document-confirm h2 { margin: 0; color: #153628; font-size: 19px; }
 .business-document-confirm > p { margin: 9px 0 0; color: #5b6d80; font-size: 12px; line-height: 1.5; }
 .business-document-confirm > footer { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; margin-top: 17px; padding-top: 13px; border-top: 1px solid #e3e9e4; }
@@ -990,7 +997,7 @@
   .business-document-tabs button { font-size: 11px; gap: 5px; }
   .business-document-actions { padding-bottom: 4px; }
   .business-saved-drawer { width: 100vw; }
-  .business-document-manual { inset: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom)); width: calc(100vw - 16px); max-height: calc(100dvh - 16px); padding: 13px; }
+  .business-document-manual { inset: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); width: auto; max-width: 100%; max-height: calc(100dvh - 16px); padding: 13px; }
   .business-document-invoice-manual { inset: auto; width: 100%; max-height: none; }
   .business-document-invoice-manual .business-document-manual-rows { grid-template-columns: minmax(0, 1fr) minmax(76px, .38fr); }
   .business-document-invoice-manual .business-document-manual-rows button { grid-column: 1 / -1; justify-self: start; }

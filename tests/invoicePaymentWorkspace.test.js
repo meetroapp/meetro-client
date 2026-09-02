@@ -33,6 +33,23 @@ test("canonical Invoice workspace routes completed Jobs to the builder and final
   assert.doesNotMatch(source, /No canonical Invoice records yet/);
 });
 
+test("exact Invoice review hydrates one canonical detail read with one visible loading owner", () => {
+  const source = read("../src/components/ProfessionalInvoiceWorkspace.jsx");
+  const workspaceEffectStart = source.indexOf("useEffect(() => {", source.indexOf("const loadWorkspace"));
+  const workspaceEffectEnd = source.indexOf("useEffect(() => {", workspaceEffectStart + 1);
+  const exactInvoiceEffect = source.slice(workspaceEffectEnd, source.indexOf("const money", workspaceEffectEnd));
+
+  assert.match(source, /if \(initialInvoiceId\) \{[\s\S]*setWorkspacePhase\("idle"\)/);
+  assert.doesNotMatch(exactInvoiceEffect, /fetchProfessionalInvoiceWorkspace/);
+  assert.match(exactInvoiceEffect, /fetchProfessionalInvoice\(\{ invoiceId: initialInvoiceId/);
+  assert.match(source, /const isLoading = phase === "loading" \|\| invoicePhase === "loading"/);
+  assert.equal(
+    (source.match(/\{isLoading && <p role="status">\{copy\.loading\}<\/p>\}/g) || []).length,
+    1
+  );
+  assert.doesNotMatch(source, /busy\.startsWith\("read:"\)/);
+});
+
 test("Project Journey and Conversation route read canonical customer Invoice truth", () => {
   assert.match(read("../src/pages/ProjectDetails.jsx"), /CustomerInvoicePanel/);
   assert.match(read("../src/components/CustomerInvoicePanel.jsx"), /fetchCustomerJobInvoice/);

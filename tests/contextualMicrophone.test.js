@@ -111,6 +111,7 @@ test("shared microphone remains transcript-only across all four workflows", () =
   const evaluation = read("src/components/CanonicalJobEvaluation.jsx");
   const quote = read("src/pages/QuoteBuilder.jsx");
   const invoice = read("src/components/ProfessionalInvoiceWorkspace.jsx");
+  const documentWorkspace = read("src/components/UnifiedBusinessDocumentWorkspace.jsx");
 
   assert.match(control, /onTranscript\?\.\(result\.transcript\)/);
   assert.doesNotMatch(control, /onRequest|handleConversationSubmit|evaluation\.complete|quote\.issue|invoice\.issue/);
@@ -119,6 +120,9 @@ test("shared microphone remains transcript-only across all four workflows", () =
   assert.match(evaluation, /contextLabel="evaluation"/);
   assert.match(quote, /voiceContextLabel="estimate"/);
   assert.match(invoice, /contextLabel="invoice"/);
+  assert.match(documentWorkspace, /contextLabel=\{activeDocument === "quote" \? "estimate" : "invoice"\}/);
+  assert.doesNotMatch(documentWorkspace, /contextLabel=\{`business-\$\{activeDocument\}`\}/);
+  assert.match(documentWorkspace, /onTranscript=\{\(transcript\) => setMessage\(\(current\) => \[current, transcript\]/);
   assert.match(control, /visibilitychange/);
   assert.match(control, /minHeight: 44/);
   assert.match(upload, /data-ask-meetro-context="job-request"/);

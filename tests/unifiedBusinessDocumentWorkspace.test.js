@@ -898,6 +898,13 @@ test("Speak, Type, Add Photos, and the live document remain reachable without su
   assert.doesNotMatch(workspace, /Use Suggestion|Edit & Use|Needs Verification|Dismiss Suggestion/);
 });
 
+test("Quote and Invoice form controls avoid iOS focus zoom and stay width-contained", () => {
+  assert.match(styles, /\.business-document-workspace input,[\s\S]*\.business-document-workspace select\s*\{\s*font-size:\s*16px;/);
+  assert.match(styles, /\.business-document-manual\s*\{[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0/);
+  assert.match(styles, /\.business-document-confirm\s*\{[\s\S]*max-width:\s*100%;[\s\S]*min-width:\s*0/);
+  assert.match(styles, /@media \(max-width:\s*767px\)[\s\S]*\.business-document-manual\s*\{[\s\S]*env\(safe-area-inset-right\)[\s\S]*env\(safe-area-inset-left\)[\s\S]*width:\s*auto/);
+});
+
 test("Live Preview keeps customer Observation separate and shows truthful Invoice review money", () => {
   assert.match(workspace, /<h3>Observation<\/h3>/);
   assert.match(workspace, /quote\.recommendedSolution && quote\.projectDescription/);
