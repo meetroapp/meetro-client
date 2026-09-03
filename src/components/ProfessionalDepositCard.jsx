@@ -7,6 +7,10 @@ import {
   majorAmountToMinor,
   normalizeExternalPaymentMethod,
 } from "../utils/preWorkDepositApi.js";
+import {
+  createPaymentReminderKey,
+  sendDepositPaymentReminder,
+} from "../utils/paymentReminderApi.js";
 
 const COMMON_METHODS = Object.freeze([
   ["CASH", "Cash"],
@@ -84,9 +88,17 @@ export default function ProfessionalDepositCard({
   const [form, setForm] = useState(initialForm(null));
   const [submitting, setSubmitting] = useState(false);
   const [formError, setFormError] = useState("");
+
+  const [reminderOpen, setReminderOpen] = useState(false);
+  const [reminderDraft, setReminderDraft] = useState("");
+  const [reminderSubmitting, setReminderSubmitting] = useState(false);
+  const [reminderError, setReminderError] = useState("");
+
   const [notice, setNotice] = useState("");
   const [lastPayment, setLastPayment] = useState(null);
+
   const attemptRef = useRef({ signature: "", key: "" });
+  const reminderAttemptRef = useRef({ signature: "", key: "" });
 
   useEffect(() => {
     let active = true;
@@ -120,6 +132,16 @@ export default function ProfessionalDepositCard({
       ["DUE", "PARTIALLY_SATISFIED"].includes(deposit.state) &&
       deposit.schedulingLocked === true
   );
+
+  const canSendReminder = Boolean(
+    deposit &&
+      ["DUE", "PARTIALLY_SATISFIED"].includes(deposit.state) &&
+      Number.isSafeInteger(deposit.remainingMinor) &&
+      deposit.remainingMinor > 0 &&
+      Number.isSafeInteger(deposit.latestVersion) &&
+      deposit.latestVersion > 0
+  );
+
   const schedulingCopy = useMemo(() => {
     if (!visitAuthority) return "Approved Work scheduling status unavailable";
     if (visitAuthority.state === "LOCKED") return "Approved Work scheduling: Locked";
@@ -139,6 +161,11 @@ export default function ProfessionalDepositCard({
   }
 
   function openForm() {
+    setReminderOpen(false);
+    setReminderDraft("");
+    setReminderError("");
+    reminderAttemptRef.current = { signature: "", key: "" };
+
     setForm(initialForm(deposit));
     setFormError("");
     setNotice("");
@@ -152,6 +179,128 @@ export default function ProfessionalDepositCard({
     setFormOpen(false);
     setFormError("");
     attemptRef.current = { signature: "", key: "" };
+  }
+
+  function openReminder() {
+    if (!canSendReminder) return;
+
+    setFormOpen(false);
+    setFormError("");
+    attemptRef.current = { signature: "", key: "" };
+
+    setReminderDraft("");
+    setReminderError("");
+    setNotice("");
+    setLastPayment(null);
+    reminderAttemptRef.current = { signature: "", key: "" };
+    setReminderOpen(true);
+  }
+
+  function closeReminder() {
+    if (reminderSubmitting) return;
+
+    setReminderOpen(false);
+    setReminderDraft("");
+    setReminderError("");
+    reminderAttemptRef.current = { signature: "", key: "" };
+  }
+
+  async function submitReminder(event) {
+    event.preventDefault();
+
+    if (!deposit || !canSendReminder) return;
+
+    const messageText =
+      reminderDraft.trim() || null;
+
+    const command = {
+      jobId,
+      expectedVersion:
+        deposit.latestVersion,
+      messageText,
+    };
+
+    const signature =
+      JSON.stringify(command);
+
+    const idempotencyKey =
+      reminderAttemptRef.current.signature === signature
+        ? reminderAttemptRef.current.key
+        : createPaymentReminderKey("DEPOSIT");
+
+    reminderAttemptRef.current = {
+      signature,
+      key: idempotencyKey,
+    };
+
+    setReminderSubmitting(true);
+    setReminderError("");
+    setNotice("");
+
+    try {
+      await sendDepositPaymentReminder({
+        ...command,
+        idempotencyKey,
+        setPage,
+      });
+
+      setReminderOpen(false);
+      setReminderDraft("");
+      reminderAttemptRef.current = {
+        signature: "",
+        key: "",
+      };
+
+      setNotice(
+        "Deposit reminder sent. No payment was recorded and Approved Work scheduling was not changed."
+      );
+    } catch (error) {
+      if (
+        error?.code ===
+          "STALE_PAYMENT_REMINDER_SOURCE"
+      ) {
+        try {
+          const read =
+            await fetchProfessionalPreWorkDeposit({
+              jobId,
+              quoteId,
+              setPage,
+            });
+
+          setReadState({
+            status: "ready",
+            read,
+            error: "",
+          });
+
+          setReminderOpen(false);
+          setReminderDraft("");
+          reminderAttemptRef.current = {
+            signature: "",
+            key: "",
+          };
+
+          setNotice(
+            "The Deposit changed. Review the current remaining balance before sending another reminder."
+          );
+
+          return;
+        } catch {
+          setReminderError(
+            "The Deposit changed and could not be refreshed."
+          );
+
+          return;
+        }
+      }
+
+      setReminderError(
+        error?.message ||
+          "The Deposit reminder could not be sent."
+      );
+    } finally {
+      setReminderSubmitting(false);
+    }
   }
 
   async function submitPayment(event) {
@@ -290,6 +439,17 @@ export default function ProfessionalDepositCard({
         </button>
       )}
 
+      {canSendReminder && !reminderOpen && (
+        <button
+          type="button"
+          style={styles.secondaryButton}
+          onClick={openReminder}
+          data-action="send-deposit-payment-reminder"
+        >
+          Send Reminder
+        </button>
+      )}
+
       {canConfirmPayment && (
         <button type="button" style={styles.primaryButton} onClick={openForm}>
           Confirm Deposit Received
@@ -318,6 +478,110 @@ export default function ProfessionalDepositCard({
               </li>
             ))}
           </ul>
+        </div>
+      )}
+
+      {reminderOpen && canSendReminder && (
+        <div style={styles.overlay}>
+          <form
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby={`deposit-reminder-title-${quoteId}`}
+            style={styles.dialog}
+            onSubmit={submitReminder}
+            data-payment-reminder-form="deposit"
+          >
+            <div>
+              <span style={styles.eyebrow}>
+                Customer payment follow-up
+              </span>
+
+              <h4
+                id={`deposit-reminder-title-${quoteId}`}
+                style={styles.dialogTitle}
+              >
+                Send Deposit Reminder
+              </h4>
+
+              <p style={styles.guidance}>
+                This reminder uses the current remaining Deposit balance of{" "}
+                <strong>
+                  {formatDepositMoney(
+                    deposit.remainingMinor,
+                    deposit.currency
+                  )}
+                </strong>.
+              </p>
+
+              <p
+                style={{
+                  ...styles.guidance,
+                  fontWeight: 800,
+                }}
+              >
+                Reminder only — this does not record a payment or unlock Approved Work scheduling.
+              </p>
+            </div>
+
+            <label style={styles.field}>
+              <span>
+                Reminder message{" "}
+                <small style={styles.optional}>
+                  Optional
+                </small>
+              </span>
+
+              <textarea
+                value={reminderDraft}
+                maxLength={5000}
+                placeholder="Leave blank to use Meetro's current remaining-deposit wording."
+                onChange={(event) => {
+                  setReminderDraft(
+                    event.target.value
+                  );
+
+                  setReminderError("");
+
+                  reminderAttemptRef.current = {
+                    signature: "",
+                    key: "",
+                  };
+                }}
+                style={{
+                  ...styles.input,
+                  minHeight: 96,
+                  resize: "vertical",
+                }}
+              />
+            </label>
+
+            {reminderError && (
+              <p role="alert" style={styles.error}>
+                {reminderError}
+              </p>
+            )}
+
+            <div style={styles.actions}>
+              <button
+                type="button"
+                style={styles.secondaryButton}
+                disabled={reminderSubmitting}
+                onClick={closeReminder}
+              >
+                Cancel
+              </button>
+
+              <button
+                type="submit"
+                style={styles.primaryButton}
+                disabled={reminderSubmitting}
+              >
+                {reminderSubmitting
+                  ? "Sending…"
+                  : "Send Reminder"}
+              </button>
+            </div>
+          </form>
         </div>
       )}
 

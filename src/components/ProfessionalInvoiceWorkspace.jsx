@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import CanonicalInvoiceDetail from "./CanonicalInvoiceDetail.jsx";
 import ContextualAskMeetro from "./ContextualAskMeetro.jsx";
@@ -15,6 +15,10 @@ import {
   fetchProfessionalInvoiceWorkspace,
   recordCanonicalPayment,
 } from "../utils/invoicePaymentApi.js";
+import {
+  createPaymentReminderKey,
+  sendInvoicePaymentReminder,
+} from "../utils/paymentReminderApi.js";
 import {
   buildCanonicalConversationRoute,
   CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
@@ -66,9 +70,12 @@ export default function ProfessionalInvoiceWorkspace({
   const [notice, setNotice] = useState("");
   const [confirmIssue, setConfirmIssue] = useState(false);
   const [showPayment, setShowPayment] = useState(false);
+  const [showReminder, setShowReminder] = useState(false);
+  const [reminderDraft, setReminderDraft] = useState("");
   const [paymentDraft, setPaymentDraft] = useState({
     amount: "", method: "CHECK", receivedDate: today(), reference: "",
   });
+  const reminderAttemptRef = useRef({ signature: "", key: "" });
   const [assistant, setAssistant] = useState({ busy: false, error: "", notice: "", result: null });
 
   const loadWorkspace = useCallback(async () => {
@@ -114,6 +121,9 @@ export default function ProfessionalInvoiceWorkspace({
           setInvoicePhase("ready");
           setConfirmIssue(false);
           setShowPayment(false);
+          setShowReminder(false);
+          setReminderDraft("");
+          reminderAttemptRef.current = { signature: "", key: "" };
         })
         .catch(() => {
           if (!active) return;
@@ -136,6 +146,9 @@ export default function ProfessionalInvoiceWorkspace({
       setInvoicePhase("ready");
       setConfirmIssue(false);
       setShowPayment(false);
+      setShowReminder(false);
+      setReminderDraft("");
+      reminderAttemptRef.current = { signature: "", key: "" };
     } catch {
       setInvoicePhase("error");
       setNotice(copy.unavailable);
@@ -149,6 +162,87 @@ export default function ProfessionalInvoiceWorkspace({
       shell: CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
       invoiceId: selected.invoiceId,
     }));
+  }
+
+  const canSendInvoiceReminder = Boolean(
+    selected &&
+      ["SENT", "PARTIALLY_PAID"].includes(selected.status) &&
+      Number.isSafeInteger(selected.balanceMinor) &&
+      selected.balanceMinor > 0 &&
+      Number.isSafeInteger(selected.currentVersion) &&
+      selected.currentVersion > 0 &&
+      selected.conversationId
+  );
+
+  function openReminder() {
+    if (!canSendInvoiceReminder) return;
+    setReminderDraft("");
+    setNotice("");
+    setShowPayment(false);
+    setShowReminder(true);
+    reminderAttemptRef.current = { signature: "", key: "" };
+  }
+
+  function closeReminder() {
+    if (busy === "reminder") return;
+    setShowReminder(false);
+    setReminderDraft("");
+    reminderAttemptRef.current = { signature: "", key: "" };
+  }
+
+  async function handleReminder(event) {
+    event.preventDefault();
+
+    if (!selected || !canSendInvoiceReminder) return;
+
+    const messageText = reminderDraft.trim() || null;
+    const command = {
+      invoiceId: selected.invoiceId,
+      expectedVersion: selected.currentVersion,
+      messageText,
+    };
+    const signature = JSON.stringify(command);
+
+    const idempotencyKey =
+      reminderAttemptRef.current.signature === signature
+        ? reminderAttemptRef.current.key
+        : createPaymentReminderKey("INVOICE");
+
+    reminderAttemptRef.current = {
+      signature,
+      key: idempotencyKey,
+    };
+
+    setBusy("reminder");
+    setNotice("");
+
+    try {
+      await sendInvoicePaymentReminder({
+        ...command,
+        idempotencyKey,
+        setPage,
+      });
+
+      setShowReminder(false);
+      setReminderDraft("");
+      reminderAttemptRef.current = { signature: "", key: "" };
+      setNotice(copy.reminderSent);
+    } catch (error) {
+      if (
+        error?.code === "STALE_PAYMENT_REMINDER_SOURCE" &&
+        selected?.invoiceId
+      ) {
+        const invoiceId = selected.invoiceId;
+        setShowReminder(false);
+        setReminderDraft("");
+        reminderAttemptRef.current = { signature: "", key: "" };
+        await openInvoice(invoiceId);
+      }
+
+      setNotice(error?.message || copy.unavailable);
+    } finally {
+      setBusy("");
+    }
   }
 
   async function handlePayment(event) {
@@ -274,8 +368,27 @@ export default function ProfessionalInvoiceWorkspace({
           </button>
         </div>
       )}
+      {canSendInvoiceReminder && !showReminder && (
+        <button
+          type="button"
+          style={styles.secondaryButton}
+          onClick={openReminder}
+          data-action="send-payment-reminder"
+        >
+          {copy.sendReminder}
+        </button>
+      )}
       {selected.actions.canRecordPayment && !showPayment && (
-        <button type="button" style={styles.primaryButton} onClick={() => setShowPayment(true)}>
+        <button
+          type="button"
+          style={styles.primaryButton}
+          onClick={() => {
+            setShowReminder(false);
+            setReminderDraft("");
+            reminderAttemptRef.current = { signature: "", key: "" };
+            setShowPayment(true);
+          }}
+        >
           {copy.recordPayment}
         </button>
       )}
@@ -402,6 +515,60 @@ export default function ProfessionalInvoiceWorkspace({
       {selected && (
         <section style={styles.detailBand}>
           <CanonicalInvoiceDetail invoice={selected} language={language} actions={selectedActions} />
+
+          {showReminder && canSendInvoiceReminder && (
+            <form
+              style={styles.form}
+              onSubmit={handleReminder}
+              data-payment-reminder-form="invoice"
+            >
+              <h3 style={styles.subheading}>{copy.reminderTitle}</h3>
+
+              <p style={styles.reminderDescription}>
+                {copy.reminderDescription}
+              </p>
+
+              <p style={styles.reminderGuard}>
+                {copy.reminderOnly}
+              </p>
+
+              <label style={styles.field}>
+                {copy.reminderMessage}
+                <textarea
+                  maxLength={5000}
+                  value={reminderDraft}
+                  onChange={(event) => {
+                    setReminderDraft(event.target.value);
+                    reminderAttemptRef.current = { signature: "", key: "" };
+                  }}
+                  placeholder={copy.reminderPlaceholder}
+                  style={styles.textarea}
+                />
+              </label>
+
+              <div style={styles.confirmRow}>
+                <button
+                  type="submit"
+                  disabled={busy === "reminder"}
+                  style={styles.primaryButton}
+                >
+                  {busy === "reminder"
+                    ? copy.sendingReminder
+                    : copy.confirmReminder}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={busy === "reminder"}
+                  style={styles.secondaryButton}
+                  onClick={closeReminder}
+                >
+                  {copy.cancel}
+                </button>
+              </div>
+            </form>
+          )}
+
           {showPayment && selected.actions.canRecordPayment && (
             <form style={styles.form} onSubmit={handlePayment}>
               <h3 style={styles.subheading}>{copy.recordPayment}</h3>
@@ -470,6 +637,8 @@ const styles = {
   field: { display: "grid", gap: 6, minWidth: 0, fontWeight: 700 },
   input: { width: "100%", minWidth: 0, minHeight: 44, padding: "8px 10px", border: "1px solid #9aa89d", borderRadius: 6, background: "#fff", font: "inherit" },
   textarea: { width: "100%", minWidth: 0, minHeight: 88, padding: 10, border: "1px solid #9aa89d", borderRadius: 6, background: "#fff", font: "inherit", resize: "vertical" },
+  reminderDescription: { margin: 0, lineHeight: 1.5, color: "#475449" },
+  reminderGuard: { margin: 0, padding: 10, borderLeft: "4px solid #1f5132", background: "#eef6f0", color: "#173d25", fontWeight: 800, lineHeight: 1.45 },
   assistantResult: { display: "grid", gap: 10, minWidth: 0 },
   financialTruth: { display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8, padding: 10, border: "1px solid #cbd5e1", borderRadius: 6, background: "#fff" },
   assistantText: { margin: 0, lineHeight: 1.5, overflowWrap: "anywhere" },

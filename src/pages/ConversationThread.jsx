@@ -49,6 +49,7 @@ import ConversationQuoteCard from "../components/ConversationQuoteCard";
 import ConversationQuoteDecisionEvent from "../components/ConversationQuoteDecisionEvent";
 import ConversationInvoiceCard from "../components/ConversationInvoiceCard";
 import ConversationPaymentLifecycleCard from "../components/ConversationPaymentLifecycleCard";
+import ConversationPaymentReminderCard from "../components/ConversationPaymentReminderCard";
 import CanonicalConversationVisitCard from "../components/CanonicalConversationVisitCard";
 import { buildCustomerQuoteReviewRoute } from "../utils/customerQuoteReviewRoute";
 import { buildProfessionalWorkCenterRoute } from "../utils/professionalWorkCenterRoute";
@@ -7260,6 +7261,26 @@ const handleImageUpload = (event) => {
                   style={{ ...operationalRow, justifyContent: mine ? "flex-end" : "flex-start" }}
                 >
                   <ConversationPaymentLifecycleCard payment={msg.paymentLifecycle} language={language} />
+                </div>
+              );
+            }
+
+            if (msg.type === "payment_reminder" && msg.paymentReminder) {
+              return (
+                <div
+                  key={msg.id}
+                  className="meetro-message-enter canonical-payment-reminder-message-row"
+                  data-conversation-timeline-item="payment-reminder"
+                  style={{
+                    ...operationalRow,
+                    justifyContent: mine ? "flex-end" : "flex-start",
+                  }}
+                >
+                  <ConversationPaymentReminderCard
+                    reminder={msg.paymentReminder}
+                    messageText={msg.text}
+                    language={language}
+                  />
                 </div>
               );
             }
