@@ -143,6 +143,10 @@ import {
   buildCanonicalConversationRoute,
   CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
 } from "../utils/canonicalConversationMessaging.js";
+import {
+  createMobileDocumentSelectorScrollState,
+  updateMobileDocumentSelectorVisibility,
+} from "../utils/mobileDocumentSelector.js";
 import "./UnifiedBusinessDocumentWorkspace.css";
 
 const NUMBERING_SETUP_PENDING = Symbol("BUSINESS_DOCUMENT_NUMBERING_SETUP_PENDING");
@@ -180,6 +184,21 @@ function displayDocumentNumber(document = {}) {
 
 function todayLocalIsoDate(now = new Date()) {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+}
+
+function isCompactDocumentViewport() {
+  if (typeof window === "undefined") return false;
+  const layout = document.getElementById("root")?.dataset?.appLayout;
+  return ["mobile", "tablet"].includes(layout) || Boolean(
+    window.matchMedia?.("(max-width: 767px), (max-width: 900px) and (orientation: portrait)")?.matches
+  );
+}
+
+function isEditableElement(target) {
+  return target instanceof HTMLElement && (
+    target.matches("input, textarea, select") ||
+    target.isContentEditable
+  );
 }
 
 function analysisTurnMessage(turn) {
@@ -265,17 +284,123 @@ function invoiceTotal(invoice) {
   return override ? Number(override) || 0 : invoiceRows(invoice).reduce((sum, item) => sum + item.amount, 0);
 }
 
-function DocumentTabs({ activeDocument, onDocumentChange, onSavedFiles, onDepositRequest }) {
+function DocumentTabs({
+  activeDocument,
+  onDocumentChange,
+  onSavedFiles,
+  onDepositRequest,
+  collapsed = false,
+  onFocus,
+}) {
   return (
-    <nav className="business-document-tabs" aria-label="Business documents">
+    <nav className={`business-document-tabs${collapsed ? " is-collapsed" : ""}`} aria-label="Quote, Invoice, and Deposit Request documents" data-selector-collapsed={collapsed ? "true" : "false"} onFocusCapture={onFocus}>
       {[["quote", "Quote", "quickQuote"], ["invoice", "Invoice", "quickInvoice"]].map(([id, label, icon]) => (
         <button key={id} type="button" className={activeDocument === id ? "active" : ""} aria-current={activeDocument === id ? "page" : undefined} onClick={() => onDocumentChange(id)}>
           <MeetroIcon name={icon} size={17} decorative />{label}
         </button>
       ))}
-      <button type="button" disabled={!onDepositRequest} onClick={onDepositRequest}><MeetroIcon name="payment" size={17} decorative />Deposit Request</button>
-      <button type="button" onClick={onSavedFiles} aria-haspopup="dialog"><MeetroIcon name="history" size={17} decorative />Saved Files</button>
+      <button
+        type="button"
+        disabled={!onDepositRequest}
+        onClick={onDepositRequest}
+      >
+        <MeetroIcon name="payment" size={17} decorative />
+        Deposit Request
+      </button>
+      <button type="button" className="business-document-tabs-saved-files" onClick={onSavedFiles} aria-haspopup="dialog"><MeetroIcon name="history" size={17} decorative />Saved Files</button>
     </nav>
+  );
+}
+
+function DocumentActionMenu({
+  activeDocument,
+  triggerRef,
+  startNewBusy = false,
+  onStartNew,
+  onSavedFiles,
+  onPrefill,
+  onManual,
+  onHowItWorks,
+  onChooseCustomer,
+  onSaveCustomer,
+}) {
+  const [open, setOpen] = useState(false);
+  const menuRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return undefined;
+    const frame = requestAnimationFrame(() => {
+      menuRef.current?.querySelector('[role="menuitem"]:not(:disabled)')?.focus();
+    });
+    function closeFromOutside(event) {
+      if (!menuRef.current?.contains(event.target)) setOpen(false);
+    }
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setOpen(false);
+        requestAnimationFrame(() => triggerRef?.current?.focus());
+        return;
+      }
+      if (!["ArrowDown", "ArrowUp", "Home", "End"].includes(event.key)) return;
+      const items = Array.from(menuRef.current?.querySelectorAll('[role="menuitem"]:not(:disabled)') || []);
+      if (!items.length) return;
+      event.preventDefault();
+      const currentIndex = items.indexOf(document.activeElement);
+      const nextIndex = event.key === "Home"
+        ? 0
+        : event.key === "End"
+          ? items.length - 1
+          : (currentIndex + (event.key === "ArrowUp" ? -1 : 1) + items.length) % items.length;
+      items[nextIndex]?.focus();
+    }
+    document.addEventListener("pointerdown", closeFromOutside);
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      cancelAnimationFrame(frame);
+      document.removeEventListener("pointerdown", closeFromOutside);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [open, triggerRef]);
+
+  function choose(action) {
+    setOpen(false);
+    action?.();
+  }
+
+  const label = activeDocument === "quote" ? "Quote" : "Invoice";
+  return (
+    <div ref={menuRef} className="business-document-action-menu">
+      <button
+        ref={triggerRef}
+        type="button"
+        className="business-document-action-menu-trigger"
+        aria-label="Document and workspace actions"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        <span aria-hidden="true">⋯</span>
+      </button>
+      {open ? <div className="business-document-action-menu-panel" role="menu" aria-label="Document and workspace actions">
+        <div className="business-document-action-menu-group" role="group" aria-label="Document actions">
+          <span className="business-document-action-menu-heading">Document</span>
+          <button type="button" role="menuitem" disabled={startNewBusy} onClick={() => choose(onStartNew)}><MeetroIcon name="addProject" size={17} decorative />Start New {label}</button>
+          <button type="button" role="menuitem" onClick={() => choose(onSavedFiles)}><MeetroIcon name="history" size={17} decorative />Saved Files</button>
+          <button type="button" role="menuitem" onClick={() => choose(onPrefill)}><MeetroIcon name="assistant" size={17} decorative />Let Meetro prefill</button>
+          <button type="button" role="menuitem" onClick={() => choose(onManual)}><MeetroIcon name="editPortfolio" size={17} decorative />Fill form manually</button>
+        </div>
+        <div className="business-document-action-menu-group" role="group" aria-label="Help">
+          <span className="business-document-action-menu-heading">Help</span>
+          <button type="button" role="menuitem" onClick={() => choose(onHowItWorks)}><MeetroIcon name="help" size={17} decorative />How it works</button>
+        </div>
+        {(onChooseCustomer || onSaveCustomer) ? <div className="business-document-action-menu-group" role="group" aria-label="Customer">
+          <span className="business-document-action-menu-heading">Customer</span>
+          {onChooseCustomer ? <button type="button" role="menuitem" onClick={() => choose(onChooseCustomer)}><MeetroIcon name="people" size={17} decorative />Choose saved customer</button> : null}
+          {onSaveCustomer ? <button type="button" role="menuitem" onClick={() => choose(onSaveCustomer)}><MeetroIcon name="addProject" size={17} decorative />Save as customer</button> : null}
+        </div> : null}
+      </div> : null}
+    </div>
   );
 }
 
@@ -1396,6 +1521,9 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const [savedFilesOpen, setSavedFilesOpen] = useState(false);
   const [manualState, setManualState] = useState(null);
   const [howItWorksOpen, setHowItWorksOpen] = useState(false);
+  const [documentSelectorCollapsed, setDocumentSelectorCollapsed] = useState(false);
+  const [composerTrayOpen, setComposerTrayOpen] = useState(false);
+  const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [message, setMessage] = useState("");
   const [notice, setNotice] = useState("");
   const [photoAssignments, setPhotoAssignments] = useState({});
@@ -1410,8 +1538,12 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const turnIdRef = useRef(0);
   const messageRef = useRef(null);
   const howItWorksTriggerRef = useRef(null);
+  const mobileDocumentActionTriggerRef = useRef(null);
   const previewRef = useRef(null);
   const turnsRef = useRef(null);
+  const documentSelectorScrollRef = useRef(createMobileDocumentSelectorScrollState());
+  const keyboardStateRef = useRef({ open: false, editableFocused: false, baselineHeight: 0 });
+  const composerRef = useRef(null);
   const nearNewestRef = useRef(true);
   const seenPhotoIdsRef = useRef(new Set());
   const saveAttemptKeysRef = useRef({ quote: "", invoice: "" });
@@ -1723,6 +1855,75 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     window.addEventListener("beforeunload", protectUnload);
     return () => window.removeEventListener("beforeunload", protectUnload);
   }, [dirty.invoice, dirty.quote]);
+
+  useEffect(() => {
+    keyboardStateRef.current.baselineHeight = window.innerHeight;
+    const viewport = window.visualViewport;
+    function updateKeyboardState() {
+      const viewportHeight = viewport?.height || window.innerHeight;
+      const baselineHeight = Math.max(
+        keyboardStateRef.current.baselineHeight || window.innerHeight,
+        viewportHeight
+      );
+      keyboardStateRef.current.baselineHeight = baselineHeight;
+      const open = baselineHeight - viewportHeight > 120;
+      keyboardStateRef.current.open = open;
+      setKeyboardOpen(open);
+    }
+    function handleFocusIn(event) {
+      keyboardStateRef.current.editableFocused = isEditableElement(event.target);
+    }
+    function handleFocusOut(event) {
+      if (isEditableElement(event.target)) keyboardStateRef.current.editableFocused = false;
+    }
+    updateKeyboardState();
+    viewport?.addEventListener("resize", updateKeyboardState);
+    window.addEventListener("resize", updateKeyboardState);
+    document.addEventListener("focusin", handleFocusIn);
+    document.addEventListener("focusout", handleFocusOut);
+    return () => {
+      viewport?.removeEventListener("resize", updateKeyboardState);
+      window.removeEventListener("resize", updateKeyboardState);
+      document.removeEventListener("focusin", handleFocusIn);
+      document.removeEventListener("focusout", handleFocusOut);
+    };
+  }, []);
+
+  useEffect(() => {
+    const element = messageRef.current;
+
+    if (!element) {
+      return;
+    }
+
+    element.style.height = "44px";
+
+    const measuredHeight = Math.max(element.scrollHeight, 44);
+    const nextHeight = Math.min(measuredHeight, 112);
+
+    element.style.height = `${nextHeight}px`;
+    element.style.overflowY =
+      measuredHeight > 112 ? "auto" : "hidden";
+  }, [message]);
+
+  useEffect(() => {
+    if (!composerTrayOpen) return undefined;
+    function closeFromOutside(event) {
+      if (!composerRef.current?.contains(event.target)) setComposerTrayOpen(false);
+    }
+    function closeFromEscape(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        setComposerTrayOpen(false);
+      }
+    }
+    document.addEventListener("pointerdown", closeFromOutside);
+    document.addEventListener("keydown", closeFromEscape);
+    return () => {
+      document.removeEventListener("pointerdown", closeFromOutside);
+      document.removeEventListener("keydown", closeFromEscape);
+    };
+  }, [composerTrayOpen]);
 
   useEffect(() => {
     const identityKey = getAuthenticatedIdentitySnapshot().userId;
@@ -2430,6 +2631,11 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         error: error?.message || t("businessDocumentCustomerLoadFailed", language),
       });
     }
+  }
+
+  function openCustomerControlFromMenu(mode) {
+    setMobilePane("preview");
+    void openCustomerControl(mode);
   }
 
   async function hydrateLinkedCustomer(documentType, customerParty) {
@@ -3451,6 +3657,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     restoreTentativeManualInvoice();
     setActiveDocument(normalizeBusinessDocumentTab(documentType));
     setManualState(null);
+    setComposerTrayOpen(false);
     setCustomerControl(emptyCustomerControl());
     setNotice("");
     nearNewestRef.current = true;
@@ -4132,6 +4339,40 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     }));
   }
 
+  function revealDocumentSelector() {
+    setDocumentSelectorCollapsed(false);
+    documentSelectorScrollRef.current = createMobileDocumentSelectorScrollState(
+      turnsRef.current?.scrollTop || documentSelectorScrollRef.current.lastTop
+    );
+  }
+
+  function handleDocumentAreaScroll(event) {
+    const element = event.currentTarget;
+    nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72;
+    if (nearNewestRef.current) setNewContentAvailable(false);
+    if (!isCompactDocumentViewport()) {
+      documentSelectorScrollRef.current = createMobileDocumentSelectorScrollState(element.scrollTop);
+      if (documentSelectorCollapsed) setDocumentSelectorCollapsed(false);
+      return;
+    }
+    const result = updateMobileDocumentSelectorVisibility(
+      documentSelectorScrollRef.current,
+      element.scrollTop,
+      {
+        collapsed: documentSelectorCollapsed,
+        keyboardOpen: keyboardStateRef.current.open,
+        editableFocused: keyboardStateRef.current.editableFocused,
+      }
+    );
+    documentSelectorScrollRef.current = result.state;
+    if (result.collapsed !== documentSelectorCollapsed) setDocumentSelectorCollapsed(result.collapsed);
+  }
+
+  function runComposerAction(action) {
+    setComposerTrayOpen(false);
+    action?.();
+  }
+
   function scrollToNewest() {
     const container = turnsRef.current;
     if (!container) return;
@@ -4143,7 +4384,15 @@ function QuoteInvoiceBusinessDocumentWorkspace({
 
   function closeHowItWorks() {
     setHowItWorksOpen(false);
-    requestAnimationFrame(() => howItWorksTriggerRef.current?.focus());
+    requestAnimationFrame(() => {
+      const candidates = [
+        mobileDocumentActionTriggerRef.current,
+        howItWorksTriggerRef.current,
+      ];
+      const target = candidates.find((element) => element && element.getClientRects().length);
+      if (target) target.focus();
+      else howItWorksTriggerRef.current?.focus();
+    });
   }
 
   const guardedSetPage = (page) => requestExit(() => setPage(page));
@@ -4217,18 +4466,40 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     pendingStartNewRef.current && startNewState.error
   );
 
+
   return (
-    <div className="app-page meetro-wide-page business-document-workspace">
+    <div
+      className={`app-page meetro-wide-page business-document-workspace${
+        keyboardOpen ? " is-keyboard-open" : ""
+      }${composerTrayOpen ? " is-composer-tray-open" : ""}`}
+    >
       <header className="business-document-header">
         <button type="button" className="business-document-back" onClick={() => requestExit(onBack)} aria-label="Leave Quote and Invoice workspace">←</button>
         <div>
           <div className="business-document-title-row"><h1>{activeContent.projectTitle || activeJobContext.title || "Quote & Invoice"}</h1><span>{recovered ? "Recovered · Not saved" : documentJobIds[activeDocument] ? "Job linked" : "Working draft"}</span></div>
           <p>{jobLinkedCustomerName || activeContent.customerName || activeJobContext.customerName ? `Customer: ${jobLinkedCustomerName || activeContent.customerName || activeJobContext.customerName}` : "Customer not selected"}{activeContent.customerLocation || activeJobContext.location ? ` · ${activeContent.customerLocation || activeJobContext.location}` : ""}</p>
         </div>
+        <div className="business-document-header-menu">
+          <DocumentActionMenu
+            activeDocument={activeDocument}
+            triggerRef={mobileDocumentActionTriggerRef}
+            startNewBusy={startNewState.busy}
+            onStartNew={() => void startNewDocument(activeDocument)}
+            onSavedFiles={() => setSavedFilesOpen(true)}
+            onPrefill={usePrefill}
+            onManual={() => openManualEditor("first")}
+            onHowItWorks={() => setHowItWorksOpen(true)}
+            onChooseCustomer={!((activeDocument === "quote" && job.customerLinkedFromJob) || invoicePreparation)
+              ? () => openCustomerControlFromMenu("choose")
+              : null}
+            onSaveCustomer={!activeLinkedCustomer ? () => openCustomerControlFromMenu("save") : null}
+          />
+        </div>
         <div className="business-document-header-actions">
           <button type="button" className="business-document-start-new" disabled={startNewState.busy} aria-busy={startNewState.busy && startNewState.documentType === activeDocument} onClick={() => void startNewDocument(activeDocument)}>{startNewLabel}</button>
           <div className="business-document-save-status" aria-live="polite">{activeSavePresentation.savedAt ? `Saved · ${new Date(activeSavePresentation.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : activeDirty && !(job.customerLinkedFromJob && !activeSaved) ? "Unsaved changes" : "Not saved"}</div>
           {startNewState.error && startNewState.documentType === activeDocument ? <p className="business-document-start-new-error" role="alert">{startNewState.error}</p> : null}
+          {howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}
         </div>
       </header>
       <DocumentTabs
@@ -4238,21 +4509,217 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         onDepositRequest={job.id
           ? () => setPage(`depositRequestBuilder?jobId=${encodeURIComponent(job.id)}`)
           : null}
+        collapsed={documentSelectorCollapsed}
+        onFocus={revealDocumentSelector}
       />
       <div className="business-document-mobile-switch" role="tablist" aria-label="Workspace view"><button type="button" role="tab" aria-selected={mobilePane === "conversation"} onClick={() => setMobilePane("conversation")}>Conversation</button><button type="button" role="tab" aria-selected={mobilePane === "preview"} onClick={() => setMobilePane("preview")}>Preview</button></div>
       <main className={`business-document-main ${documentPhotos.length ? "has-evidence" : ""}`}>
         <section className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`} aria-labelledby="business-document-conversation-title">
           <h2 id="business-document-conversation-title" className="business-document-visually-hidden">{activeDocument === "quote" ? "Quote conversation" : "Invoice conversation"}</h2>
           <div className="business-document-conversation-context" data-document-chat-region="context">
-            <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} data-assisted-active={invoicePreparation && activeDocument === "invoice" && !manualState ? "true" : undefined} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} aria-expanded={invoicePreparation && activeDocument === "invoice" ? manualState?.mode === "manual" : undefined} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><button ref={howItWorksTriggerRef} type="button" aria-expanded={howItWorksOpen} aria-controls="business-document-workflow-guide" onClick={() => setHowItWorksOpen((open) => !open)}><span aria-hidden="true">ⓘ</span><span>How it works</span></button>{howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}</div>
+            <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} data-assisted-active={invoicePreparation && activeDocument === "invoice" && !manualState ? "true" : undefined} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} aria-expanded={invoicePreparation && activeDocument === "invoice" ? manualState?.mode === "manual" : undefined} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><button ref={howItWorksTriggerRef} type="button" aria-expanded={howItWorksOpen} aria-controls="business-document-workflow-guide" onClick={() => setHowItWorksOpen((open) => !open)}><span aria-hidden="true">ⓘ</span><span>How it works</span></button></div>
             {activeDocument === "quote" ? <JobLinkedQuoteContext job={job} /> : null}
             {activeDocument === "invoice" && invoicePreparation ? <CompletedInvoiceReviewIntro /> : null}
             {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} invoicePreparation={invoicePreparation} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} lockedCustomerName={activeDocument === "quote" || invoicePreparation ? jobLinkedCustomerName : ""} onModeChange={changeEditorMode} onPreview={setInvoice} onApply={applyManualDraft} onCancel={cancelManualEditing} /> : null}
           </div>
           <div className="business-document-chat-shell">
-            <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={(event) => { const element = event.currentTarget; nearNewestRef.current = element.scrollHeight - element.scrollTop - element.clientHeight < 72; if (nearNewestRef.current) setNewContentAvailable(false); }}><article className="meetro"><span>M</span><p>{activeDocument === "invoice" && invoicePreparation ? "Tell me what you want to add or change on this invoice. I’ll propose the change for you to review before anything is applied." : "Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document."}</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} showResponse={!entry.analysisRouted} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingQuoteProposal && activeDocument === "quote" ? <QuoteProposalReview key={pendingQuoteProposal.id} proposal={pendingQuoteProposal} onApply={applyQuoteProposal} onDismiss={dismissQuoteProposal} /> : null}{pendingInvoiceProposal && activeDocument === "invoice" ? <InvoiceProposalReview key={pendingInvoiceProposal.id} proposal={pendingInvoiceProposal} onApply={applyInvoiceProposal} onDismiss={dismissInvoiceProposal} /> : null}{pendingAnalysisMessageVisible ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}{privateReminders.length ? <aside className="business-private-reminders"><strong>Private reminders</strong>{privateReminders.map((item) => <p key={item.id}>{item.text}</p>)}<small>Only you can see this. It never appears on customer documents.</small></aside> : null}{currentAnalysisRequest.error ? <p className="business-document-notice" role="alert">{currentAnalysisRequest.error}</p> : null}{invoiceCreateState.error && mobilePane === "conversation" ? <p className="business-document-notice" role="alert">{invoiceCreateState.error}</p> : null}{notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}</div>
+            <div ref={turnsRef} className="business-document-turns" aria-live="polite" onScroll={handleDocumentAreaScroll}><article className="meetro business-document-intro"><span>M</span><p>{activeDocument === "invoice" && invoicePreparation ? <><span className="business-document-intro-long">Tell me what you want to add or change on this invoice. I’ll propose the change for you to review before anything is applied.</span><span className="business-document-intro-compact">Ask Meetro to update this invoice.</span></> : <><span className="business-document-intro-long">Ask me about the job, photos, findings, or recommendations—or tell me exactly what you want changed on the working document.</span><span className="business-document-intro-compact">Ask Meetro to update this {activeDocument}.</span></>}</p></article>{documentPhotos.length ? <PhotoConversationEvidence photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} /> : null}{currentConversationEntries.map((entry) => entry.kind === "DOCUMENT" ? <InstructionTurn key={entry.id} turn={entry.turn} showResponse={!entry.analysisRouted} onEdit={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: true } : { ...item, editing: false }))} onCancel={() => setTurns((current) => current.map((item) => item.id === entry.turn.id ? { ...item, editing: false } : item))} onSave={(value) => void submitInstruction(value, entry.turn.id)} /> : <AnalysisConversationTurn key={entry.id} turn={entry.turn} />)}{pendingQuoteProposal && activeDocument === "quote" ? <QuoteProposalReview key={pendingQuoteProposal.id} proposal={pendingQuoteProposal} onApply={applyQuoteProposal} onDismiss={dismissQuoteProposal} /> : null}{pendingInvoiceProposal && activeDocument === "invoice" ? <InvoiceProposalReview key={pendingInvoiceProposal.id} proposal={pendingInvoiceProposal} onApply={applyInvoiceProposal} onDismiss={dismissInvoiceProposal} /> : null}{pendingAnalysisMessageVisible ? <article className="you"><span>You</span><p>{pendingAnalysisMessage}</p></article> : null}{currentAnalysisRequest.busy ? <article className="meetro"><span>M</span><p>Analyzing the job…</p></article> : null}{privateReminders.length ? <aside className="business-private-reminders"><strong>Private reminders</strong>{privateReminders.map((item) => <p key={item.id}>{item.text}</p>)}<small>Only you can see this. It never appears on customer documents.</small></aside> : null}{currentAnalysisRequest.error ? <p className="business-document-notice" role="alert">{currentAnalysisRequest.error}</p> : null}{invoiceCreateState.error && mobilePane === "conversation" ? <p className="business-document-notice" role="alert">{invoiceCreateState.error}</p> : null}{notice && mobilePane === "conversation" ? <p className="business-document-notice" role="status">{notice}</p> : null}</div>
             {newContentAvailable ? <button type="button" className="business-document-new-message" onClick={scrollToNewest}>New message ↓</button> : null}
-            <div className="business-document-composer"><textarea ref={messageRef} id="business-document-message" value={message} rows={3} placeholder={activeDocument === "invoice" && invoicePreparation ? "Ask Meetro about this invoice…" : `Ask Meetro about the job or tell me what to change on the ${activeDocument}…`} onChange={(event) => setMessage(event.target.value)} /><div><WorkflowMicrophoneInput language={language} contextLabel={activeDocument === "quote" ? "estimate" : "invoice"} idleLabel="Speak" setPage={guardedSetPage} disabled={currentAnalysisRequest.busy} onTranscript={(transcript) => setMessage((current) => [current, transcript].filter(Boolean).join(" "))} /><button type="button" onClick={() => onAddPhotos(activeDocument)} disabled={!canAddPhotos || photoBusy || currentAnalysisRequest.busy}><MeetroIcon name="photoCount" size={17} decorative />{photoBusy ? "Adding…" : "Add Photos"}</button><button type="button" className="business-document-send-message" onClick={() => void submitInstruction(message)} disabled={!message.trim() || currentAnalysisRequest.busy}>{currentAnalysisRequest.busy ? "Thinking…" : "Send"}</button></div></div>
+            <div ref={composerRef} className="business-document-composer">
+              <div className="business-document-composer-row">
+                <button
+                  type="button"
+                  className="business-document-composer-plus"
+                  aria-label={composerTrayOpen ? "Close composer actions" : "Open composer actions"}
+                  aria-expanded={composerTrayOpen}
+                  aria-controls="business-document-composer-tray"
+                  onClick={() => {
+                    if (composerTrayOpen) {
+                      setComposerTrayOpen(false);
+                      return;
+                    }
+
+                    messageRef.current?.blur();
+                    setComposerTrayOpen(true);
+                  }}
+                >
+                  <span
+                    className="business-document-composer-plus-symbol"
+                    aria-hidden="true"
+                  >
+                    +
+                  </span>
+                </button>
+
+                <div className="business-document-composer-input-shell">
+                  <textarea
+                    ref={messageRef}
+                    id="business-document-message"
+                    value={message}
+                    rows={1}
+                    placeholder={
+                      activeDocument === "invoice"
+                        ? "Ask Meetro about this invoice…"
+                        : "Ask Meetro about this quote…"
+                    }
+                    onFocus={() => setComposerTrayOpen(false)}
+                    onChange={(event) => setMessage(event.target.value)}
+                  />
+
+                  <button
+                    type="button"
+                    className="business-document-composer-photos"
+                    aria-label={photoBusy ? "Adding Photos" : "Add Photos"}
+                    title={photoBusy ? "Adding Photos" : "Add Photos"}
+                    onClick={() => onAddPhotos(activeDocument)}
+                    disabled={
+                      !canAddPhotos ||
+                      photoBusy ||
+                      currentAnalysisRequest.busy
+                    }
+                  >
+                    <MeetroIcon
+                      name="photoCount"
+                      size={21}
+                      decorative
+                    />
+                  </button>
+                </div>
+
+                {message.trim() ? (
+                  <button
+                    type="button"
+                    className="business-document-send-message"
+                    aria-label={
+                      currentAnalysisRequest.busy
+                        ? "Thinking…"
+                        : "Send message"
+                    }
+                    title={
+                      currentAnalysisRequest.busy
+                        ? "Thinking…"
+                        : "Send message"
+                    }
+                    disabled={currentAnalysisRequest.busy}
+                    onClick={() => void submitInstruction(message)}
+                  >
+                    <span className="business-document-visually-hidden">
+                      {currentAnalysisRequest.busy ? "Thinking…" : "Send"}
+                    </span>
+                    <span
+                      className="business-document-send-symbol"
+                      aria-hidden="true"
+                    >
+                      ↑
+                    </span>
+                  </button>
+                ) : (
+                  <div className="business-document-composer-microphone">
+                    <WorkflowMicrophoneInput
+                      compact
+                      language={language}
+                      contextLabel={
+                        activeDocument === "quote"
+                          ? "estimate"
+                          : "invoice"
+                      }
+                      idleLabel="Speak"
+                      setPage={guardedSetPage}
+                      disabled={currentAnalysisRequest.busy}
+                      onTranscript={(transcript) =>
+                        setMessage((current) =>
+                          [current, transcript]
+                            .filter(Boolean)
+                            .join(" ")
+                        )
+                      }
+                    />
+                  </div>
+                )}
+              </div>
+
+              {composerTrayOpen ? (
+                <div
+                  id="business-document-composer-tray"
+                  className="business-document-composer-tray"
+                  role="menu"
+                  aria-label={`${
+                    activeDocument === "quote" ? "Quote" : "Invoice"
+                  } quick actions`}
+                >
+                  <div className="business-document-composer-tray-grid">
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="business-document-composer-action business-document-composer-action--note"
+                      onClick={() =>
+                        runComposerAction(() => focusComposer("Note: "))
+                      }
+                    >
+                      <span className="business-document-composer-action-icon">
+                        <MeetroIcon
+                          name="noteText"
+                          size={22}
+                          decorative
+                        />
+                      </span>
+                      <span className="business-document-composer-action-label">
+                        {activeDocument === "quote"
+                          ? "Quote Note"
+                          : "Invoice Note"}
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="business-document-composer-action business-document-composer-action--reminder"
+                      onClick={() =>
+                        runComposerAction(() =>
+                          focusComposer("Keep this private: ")
+                        )
+                      }
+                    >
+                      <span className="business-document-composer-action-icon">
+                        <MeetroIcon
+                          name="notifications"
+                          size={22}
+                          decorative
+                        />
+                      </span>
+                      <span className="business-document-composer-action-label">
+                        Reminder
+                      </span>
+                    </button>
+
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="business-document-composer-action business-document-composer-action--amount"
+                      onClick={() =>
+                        runComposerAction(() =>
+                          openManualEditor("amount")
+                        )
+                      }
+                    >
+                      <span className="business-document-composer-action-icon">
+                        <MeetroIcon
+                          name="revenue"
+                          size={22}
+                          decorative
+                        />
+                      </span>
+                      <span className="business-document-composer-action-label">
+                        {activeDocument === "invoice" &&
+                        invoicePreparation
+                          ? "Add Extra Work"
+                          : "Change Amount"}
+                      </span>
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+            </div>
           </div>
           <div className="business-document-conversation-footer" data-document-chat-region="actions">
             <div className="business-document-conversation-shortcuts"><button type="button" onClick={() => focusComposer("Note: ")}>Add to {activeDocument === "quote" ? "Quote" : "Invoice"} Notes</button><button type="button" onClick={() => focusComposer("Keep this private: ")}>Private Reminder</button><button type="button" onClick={() => openManualEditor("amount")}>{activeDocument === "invoice" && invoicePreparation ? "Add Extra Work" : "Change Amount"}</button></div>

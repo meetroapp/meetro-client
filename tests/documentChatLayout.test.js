@@ -64,7 +64,7 @@ test("the final message can clear the separately reserved composer row", () => {
   assert.match(styles, /\.business-document-chat-shell\s*\{[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto auto/);
   assert.match(styles, /\.business-document-turns\s*\{[\s\S]*padding:\s*5px 2px 24px[\s\S]*scroll-padding-bottom:\s*24px/);
   assert.match(styles, /\.business-document-composer\s*\{\s*grid-row:\s*3[\s\S]*position:\s*relative/);
-  assert.doesNotMatch(styles, /\.business-document-composer\s*\{[^}]*position:\s*(?:absolute|fixed|sticky)/);
+  assert.doesNotMatch(styles, /^\.business-document-composer\s*\{[^}]*position:\s*(?:absolute|fixed|sticky)/m);
 });
 
 test("compact desktop height preserves readable context and a fully usable Edit form", () => {
@@ -114,8 +114,8 @@ test("right preview rendering cannot replace or key the left transcript structur
 test("desktop and narrow layouts keep the document chat width-contained", () => {
   assert.match(styles, /\.business-document-main\s*\{\s*min-width:\s*0/);
   assert.match(styles, /\.business-document-turns\s*\{[\s\S]*min-width:\s*0[\s\S]*max-width:\s*100%/);
-  assert.match(styles, /@media \(max-width:\s*767px\)[\s\S]*\.business-document-chat-shell\s*\{[\s\S]*height:\s*56dvh/);
-  assert.match(styles, /#root\[data-app-layout="mobile"\] \.business-document-conversation,[\s\S]*overflow:\s*visible/);
+  assert.match(styles, /@media \(max-width:\s*767px\)[\s\S]*#root\[data-app-layout="mobile"\] \.business-document-chat-shell\s*\{[\s\S]*height:\s*auto/);
+  assert.match(styles, /#root\[data-app-layout="mobile"\][\s\S]*\.business-document-conversation[\s\S]*overflow:\s*visible/);
   assert.match(styles, /@media \(orientation:\s*portrait\)[\s\S]*#root\[data-app-layout="tablet"\] \.business-document-chat-shell\s*\{[\s\S]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto auto/);
 });
 

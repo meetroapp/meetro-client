@@ -52,7 +52,8 @@
 .business-document-header p { margin: 5px 0 0; color: #607086; font-size: 12px; font-weight: 700; overflow-wrap: anywhere; }
 .business-document-title-row { display: flex; align-items: center; gap: 9px; flex-wrap: wrap; }
 .business-document-title-row span { border-radius: 999px; padding: 4px 8px; color: #14613b; background: #e7f3e9; font-size: 10px; font-weight: 900; }
-.business-document-header-actions { display: grid; flex: 0 1 210px; justify-items: end; gap: 5px; min-width: 0; }
+.business-document-header-menu { display: none; position: relative; flex: 0 0 auto; }
+.business-document-header-actions { position: relative; display: grid; flex: 0 1 210px; justify-items: end; gap: 5px; min-width: 0; }
 .business-document-start-new { min-width: 0; border: 1px solid #9dbba7; border-radius: 10px; padding: 8px 11px; color: #125a36; background: #fff; font-size: 11px; font-weight: 900; white-space: nowrap; }
 .business-document-start-new:hover:not(:disabled),
 .business-document-start-new:focus-visible { border-color: #12653c; background: #edf7ef; }
@@ -63,6 +64,8 @@
 .business-document-tabs {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
+  min-width: 0;
+  overflow: hidden;
   border-bottom: 1px solid rgba(41, 63, 53, .12);
   background: rgba(255,255,255,.78);
 }
@@ -92,6 +95,64 @@
 }
 .business-document-mobile-switch button { border: 0; border-radius: 10px; color: #4b5c6f; background: transparent; font-weight: 900; }
 .business-document-mobile-switch button[aria-selected="true"] { color: #0f5d38; background: #fff; box-shadow: 0 4px 12px rgba(28,49,37,.08); }
+
+.business-document-action-menu { position: relative; z-index: 50; }
+.business-document-action-menu-trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid #cbd9cd;
+  border-radius: 12px;
+  color: #155b39;
+  background: #fff;
+  font-size: 25px;
+  line-height: 1;
+}
+.business-document-action-menu-trigger:focus-visible { outline: 3px solid #77a98a; outline-offset: 2px; }
+.business-document-action-menu-panel {
+  position: absolute;
+  z-index: 60;
+  top: calc(100% + 7px);
+  right: 0;
+  display: grid;
+  gap: 9px;
+  right: max(0px, env(safe-area-inset-right));
+  width: min(300px, calc(100vw - env(safe-area-inset-left) - env(safe-area-inset-right) - 24px));
+  max-height: min(70dvh, 560px);
+  overflow-y: auto;
+  padding: 9px;
+  border: 1px solid #d5e0d7;
+  border-radius: 14px;
+  background: #fffdfa;
+  box-shadow: 0 16px 40px rgba(20,39,29,.18);
+}
+.business-document-action-menu-group { display: grid; gap: 3px; }
+.business-document-action-menu-group + .business-document-action-menu-group { padding-top: 8px; border-top: 1px solid #e5ebe6; }
+.business-document-action-menu-heading { padding: 2px 9px 3px; color: #61766a; font-size: 9px; font-weight: 950; letter-spacing: .06em; text-transform: uppercase; }
+.business-document-action-menu-panel button[role="menuitem"] { display: flex; align-items: center; gap: 9px; width: 100%; min-height: 44px; padding: 8px 9px; border: 0; border-radius: 9px; color: #234435; background: transparent; font-size: 11px; font-weight: 800; text-align: left; }
+.business-document-action-menu-panel button[role="menuitem"]:hover,
+.business-document-action-menu-panel button[role="menuitem"]:focus-visible { outline: none; color: #0d5c37; background: #eef7ef; }
+.business-document-action-menu-panel button[role="menuitem"]:disabled { cursor: wait; opacity: .55; }
+#root[data-app-layout="mobile"] .business-document-header-menu { display: block; }
+#root[data-app-layout="mobile"] .business-document-start-new,
+#root[data-app-layout="mobile"] .business-document-control-toolbar,
+#root[data-app-layout="mobile"] .business-document-conversation-footer { display: none; }
+#root[data-app-layout="mobile"] .business-document-tabs {
+  max-height: 48px;
+  opacity: 1;
+  transform: translateY(0);
+  transition: max-height 180ms ease, opacity 140ms ease, transform 180ms ease, border-color 180ms ease;
+}
+#root[data-app-layout="mobile"] .business-document-tabs.is-collapsed {
+  max-height: 0;
+  border-bottom-color: transparent;
+  opacity: 0;
+  transform: translateY(-8px);
+}
+#root[data-app-layout="mobile"] .business-document-tabs-saved-files { display: none !important; }
 
 .business-document-main { min-width: 0; }
 .business-document-conversation,
@@ -337,6 +398,7 @@
 .business-document-turns > article.meetro p,
 .business-document-turns > article.you p { margin: 0; padding: 10px 12px; border: 1px solid #e0e6e1; border-radius: 4px 14px 14px 14px; color: #314257; background: #fff; font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
 .business-document-turns > article.you p { background: #f7f8f6; }
+.business-document-intro-compact { display: none; }
 .business-document-turn-body { min-width: 0; }
 .business-document-turn-body > div { display: flex; align-items: center; gap: 8px; margin-top: 4px; }
 .business-document-turn-body button,
@@ -555,12 +617,285 @@
 .business-document-photo-cards span { display: block; margin: 6px 0; color: #496156; font-size: 9px; font-weight: 850; overflow-wrap: anywhere; }
 .business-document-new-message { grid-row: 2; align-self: center; justify-self: center; position: relative; z-index: 1; bottom: auto; display: block; width: max-content; max-width: calc(100% - 16px); min-width: 0; margin: 0 auto 8px; overflow: hidden; border: 1px solid #cddbd1; border-radius: 999px; color: #165b3a; background: #fff; padding: 7px 13px; box-shadow: 0 6px 18px rgba(29,55,40,.14); font-size: 10px; font-weight: 900; text-overflow: ellipsis; white-space: nowrap; }
 
-.business-document-composer { grid-row: 3; position: relative; z-index: 1; flex: 0 0 auto; min-width: 0; max-width: 100%; padding: 8px; border: 1px solid #d9e1da; border-radius: 13px; background: #fff; }
-.business-document-composer textarea { display: block; width: 100%; min-height: 74px; resize: vertical; border: 0; outline: none; color: #26384c; background: transparent; line-height: 1.4; }
-.business-document-composer > div { display: flex; align-items: center; gap: 7px; flex-wrap: wrap; border-top: 1px solid #edf0ec; padding-top: 8px; }
-.business-document-composer button { display: inline-flex; align-items: center; justify-content: center; gap: 6px; border: 1px solid #dfe7e0; border-radius: 10px; color: #165b3a; background: #fff; padding: 8px 11px; font-size: 11px; font-weight: 900; }
-.business-document-composer .business-document-send-message { margin-left: auto; min-width: 78px; color: #fff; border-color: #0d6238; background: #0d6238; }
-.business-document-composer .business-document-send-message:disabled { opacity: .45; cursor: default; }
+.business-document-composer {
+  grid-row: 3;
+  position: relative;
+  z-index: 1;
+  flex: 0 0 auto;
+  min-width: 0;
+  max-width: 100%;
+}
+
+.business-document-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 7px;
+  min-width: 0;
+  padding-top: 8px;
+  border-top: 1px solid #edf0ec;
+}
+
+.business-document-composer-plus {
+  display: grid;
+  place-items: center;
+  flex: 0 0 44px;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid #dfe7e0;
+  border-radius: 11px;
+  color: #165b3a;
+  background: #fff;
+}
+
+.business-document-composer-plus-symbol {
+  display: block;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 29px;
+  font-weight: 300;
+  line-height: 1;
+}
+
+.business-document-composer-input-shell {
+  position: relative;
+  display: flex;
+  flex: 1 1 auto;
+  align-items: flex-end;
+  min-width: 0;
+}
+
+.business-document-composer-row textarea {
+  display: block;
+  width: 100%;
+  min-width: 0;
+  min-height: 74px;
+  padding: 10px 50px 10px 12px;
+  border: 1px solid #d9e1da;
+  border-radius: 16px;
+  outline: none;
+  color: #26384c;
+  background: #fff;
+  line-height: 1.4;
+  resize: vertical;
+}
+
+.business-document-composer-photos {
+  position: absolute;
+  right: 5px;
+  bottom: 5px;
+  display: grid;
+  place-items: center;
+  width: 40px;
+  min-width: 40px;
+  height: 40px;
+  min-height: 40px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #165b3a;
+  background: transparent;
+}
+
+.business-document-composer-microphone {
+  flex: 0 0 auto;
+  min-width: 0;
+}
+
+.business-document-send-message {
+  display: grid;
+  place-items: center;
+  flex: 0 0 46px;
+  width: 46px;
+  min-width: 46px;
+  height: 46px;
+  min-height: 46px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: #168364;
+}
+
+.business-document-send-symbol {
+  display: block;
+  margin-top: -2px;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 25px;
+  font-weight: 800;
+  line-height: 1;
+}
+
+.business-document-composer-tray {
+  margin-top: 8px;
+  padding: 12px;
+  border: 1px solid #d9e6dc;
+  border-radius: 14px;
+  background: #fff;
+}
+
+.business-document-composer-tray-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.business-document-composer-action {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 7px;
+  min-width: 0;
+  min-height: 82px;
+  padding: 4px;
+  border: 0;
+  border-radius: 12px;
+  color: #475569;
+  background: transparent;
+  font-size: 11px;
+  font-weight: 750;
+  line-height: 1.2;
+  text-align: center;
+}
+
+.business-document-composer-action-icon {
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+}
+
+.business-document-composer-action-icon > *,
+.business-document-composer-action-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.business-document-composer-action-label {
+  display: block;
+}
+
+.business-document-composer-action:focus-visible,
+.business-document-composer-plus:focus-visible,
+.business-document-composer-photos:focus-visible,
+.business-document-send-message:focus-visible {
+  outline: 3px solid #77a98a;
+  outline-offset: 2px;
+}
+
+.workflow-microphone-compact {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.workflow-microphone-compact-trigger,
+.workflow-microphone-compact-dismiss {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  min-height: 44px;
+  padding: 0;
+  border: 1px solid #e6ecef;
+  border-radius: 50%;
+  color: #168364;
+  background: #fff;
+}
+
+.workflow-microphone-compact-trigger svg,
+.workflow-microphone-compact-dismiss svg,
+.workflow-microphone-compact-cancel svg,
+.workflow-microphone-compact-stop svg {
+  width: 20px;
+  height: 20px;
+}
+
+.workflow-microphone-compact.is-transcribing {
+  opacity: .65;
+}
+
+.workflow-microphone-compact-recording {
+  gap: 3px;
+  min-height: 44px;
+  padding: 3px;
+  border: 1px solid #ead9d7;
+  border-radius: 999px;
+  background: #fff;
+}
+
+.workflow-microphone-compact-cancel,
+.workflow-microphone-compact-stop {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  min-width: 36px;
+  height: 36px;
+  min-height: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #7b312c;
+  background: #fff4f2;
+}
+
+.workflow-microphone-compact-stop {
+  color: #fff;
+  background: #c83a31;
+}
+
+.workflow-microphone-compact-live {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  height: 36px;
+}
+
+.workflow-microphone-compact-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #c6281f;
+  box-shadow: 0 0 0 4px #fbe9e7;
+}
+
+.workflow-microphone-compact-status-text {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.workflow-microphone-compact-error {
+  position: relative;
+}
+
+.workflow-microphone-compact-message {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 5;
+  width: max-content;
+  max-width: min(250px, calc(100vw - 28px));
+  padding: 8px 10px;
+  border: 1px solid #efd0cc;
+  border-radius: 10px;
+  color: #8f1b13;
+  background: #fff8f7;
+  box-shadow: 0 8px 22px rgba(71, 29, 24, .12);
+  font-size: 11px;
+  line-height: 1.35;
+}
 
 .business-document-conversation-shortcuts { display: flex; gap: 7px; overflow-x: auto; margin-top: 8px; padding-bottom: 3px; }
 .business-document-conversation-shortcuts button { flex: 0 0 auto; border: 1px solid #dfe6df; border-radius: 10px; color: #385547; background: #fff; padding: 8px 10px; font-size: 10px; font-weight: 850; }
@@ -882,41 +1217,68 @@
    * merely because a browser/emulator reports a wide viewport.
    */
   #root[data-app-layout="mobile"] .business-document-workspace {
-    display: block;
-    height: auto;
-    min-height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+    height: 100dvh;
+    min-height: 0;
     padding-bottom:
       calc(
         var(--meetro-mobile-bottom-nav-clearance, 96px) +
         env(safe-area-inset-bottom)
       );
-    overflow-x: clip;
-    overflow-y: visible;
+    overflow: hidden;
+  }
+
+  #root[data-app-layout="mobile"]
+    .business-document-workspace.is-keyboard-open {
+    padding-bottom: 0;
+  }
+
+  #root[data-app-layout="mobile"] .business-document-header,
+  #root[data-app-layout="mobile"] .business-document-tabs,
+  #root[data-app-layout="mobile"] .business-document-mobile-switch {
+    flex: 0 0 auto;
   }
 
   #root[data-app-layout="mobile"] .business-document-main {
+    flex: 1 1 auto;
     height: auto;
-    overflow: visible;
+    min-height: 0;
+    overflow: hidden;
   }
 
   #root[data-app-layout="mobile"] .business-document-conversation,
   #root[data-app-layout="mobile"] .business-document-preview {
     display: none;
-    height: auto;
+    height: 100%;
     min-height: 0;
-    overflow: visible;
   }
 
-  #root[data-app-layout="mobile"] .business-document-conversation.mobile-active,
-  #root[data-app-layout="mobile"] .business-document-preview.mobile-active {
+  #root[data-app-layout="mobile"]
+    .business-document-conversation.mobile-active {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  #root[data-app-layout="mobile"]
+    .business-document-preview.mobile-active {
     display: block;
+    overflow-y: auto;
+  }
+
+  #root[data-app-layout="mobile"]
+    .business-document-conversation-context {
+    flex: 0 0 auto;
   }
 
   #root[data-app-layout="mobile"] .business-document-chat-shell {
     display: grid;
+    flex: 1 1 auto;
     grid-template-rows: minmax(0, 1fr) auto auto;
-    height: 56dvh;
-    min-height: 220px;
+    height: auto;
+    min-height: 0;
   }
 
   #root[data-app-layout="mobile"] .business-document-workflow-backdrop {
@@ -965,16 +1327,17 @@
 }
 
 @media (max-width: 767px) {
-  .business-document-workspace { padding-bottom: calc(var(--meetro-mobile-bottom-nav-clearance, 96px) + env(safe-area-inset-bottom)); }
-  .business-document-chat-shell {
-    height: 56dvh;
-    min-height: 220px;
+  .business-document-header-menu { display: block; }
+
+  #root[data-app-layout="mobile"] .business-document-chat-shell {
+    height: auto;
+    min-height: 0;
   }
   .business-document-composer textarea {
     min-height: 58px;
     max-height: 120px;
   }
-  .business-document-control-toolbar { gap: 4px; }
+  .business-document-control-toolbar { display: none; }
   .business-document-control-toolbar > button { gap: 5px; padding: 8px 5px; font-size: 9px; }
   #root[data-app-layout="mobile"] .business-document-workflow-backdrop {
     position: fixed;
@@ -994,7 +1357,28 @@
     max-height: min(82dvh, 720px);
     border-radius: 18px;
   }
-  .business-document-tabs button { font-size: 11px; gap: 5px; }
+  .business-document-tabs {
+    max-height: 48px;
+    border-bottom-color: rgba(41, 63, 53, .12);
+    opacity: 1;
+    transform: translateY(0);
+    transition: max-height 180ms ease, opacity 140ms ease, transform 180ms ease, border-color 180ms ease;
+  }
+  .business-document-tabs.is-collapsed {
+    max-height: 0;
+    border-bottom-color: transparent;
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  .business-document-tabs-saved-files { display: none !important; }
+  .business-document-tabs button { min-height: 44px; font-size: 11px; gap: 5px; }
+  .business-document-mobile-switch {
+    gap: 2px;
+    margin: 4px 0 6px;
+    padding: 2px;
+    border-radius: 9px;
+  }
+  .business-document-mobile-switch button { min-height: 44px; padding: 0 8px; font-size: 11px; }
   .business-document-actions { padding-bottom: 4px; }
   .business-saved-drawer { width: 100vw; }
   .business-document-manual { inset: max(8px, env(safe-area-inset-top)) max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left)); width: auto; max-width: 100%; max-height: calc(100dvh - 16px); padding: 13px; }
@@ -1003,11 +1387,95 @@
   .business-document-invoice-manual .business-document-manual-rows button { grid-column: 1 / -1; justify-self: start; }
   .business-document-manual-rows > div { grid-template-columns: minmax(0, 1fr) minmax(86px, .5fr); }
   .business-document-manual-rows > div > button { grid-column: 1 / -1; justify-self: start; }
-  .business-document-header { align-items: flex-start; flex-wrap: wrap; }
-  .business-document-header-actions { flex: 1 1 100%; grid-template-columns: minmax(0, 1fr) auto; align-items: center; justify-items: start; padding-left: 58px; }
-  .business-document-start-new { max-width: 100%; white-space: normal; text-align: left; }
-  .business-document-save-status { padding-left: 0; text-align: right; }
-  .business-document-start-new-error { grid-column: 1 / -1; max-width: none; text-align: left; }
+  .business-document-header {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr) 44px;
+    grid-template-areas:
+      "back title menu"
+      ". status status";
+    align-items: center;
+    gap: 4px 8px;
+    flex-wrap: nowrap;
+    padding: 6px 8px 7px;
+  }
+
+  .business-document-back {
+    grid-area: back;
+  }
+
+  .business-document-header > div:nth-child(2) {
+    grid-area: title;
+    min-width: 0;
+  }
+
+  .business-document-title-row {
+    flex-wrap: nowrap;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .business-document-title-row h1 {
+    min-width: 0;
+    overflow: hidden;
+    font-size: 17px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .business-document-title-row span {
+    flex: 0 0 auto;
+    padding: 3px 6px;
+    font-size: 9px;
+  }
+
+  .business-document-header p {
+    margin-top: 2px;
+    overflow: hidden;
+    font-size: 10px;
+    line-height: 1.2;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .business-document-header-menu {
+    grid-area: menu;
+    justify-self: end;
+  }
+
+  .business-document-header-actions {
+    grid-area: status;
+    display: flex;
+    flex: none;
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    justify-content: flex-end;
+    padding-left: 0;
+  }
+
+  .business-document-action-menu-panel {
+    right: 0;
+    left: auto;
+    width: min(300px, calc(100vw - 16px));
+    max-width: calc(100vw - 16px);
+  }
+
+  .business-document-start-new {
+    display: none;
+  }
+
+  .business-document-save-status {
+    padding-left: 0;
+    font-size: 9px;
+    line-height: 1.2;
+    text-align: right;
+  }
+
+  .business-document-start-new-error {
+    grid-column: 1 / -1;
+    max-width: none;
+    text-align: right;
+  }
   .business-document-confirm { inset: auto 8px max(8px, env(safe-area-inset-bottom)); width: calc(100vw - 16px); padding: 14px; }
   .business-document-confirm > footer { display: grid; grid-template-columns: 1fr; }
   .business-document-delivery-review dl { grid-template-columns: 1fr; }
@@ -1017,6 +1485,442 @@
   .business-photo-review-list article { grid-template-columns: 84px minmax(0, 1fr); }
   .business-photo-review-list img { width: 84px; }
   .business-saved-filters { grid-template-columns: 1fr; }
+  .business-document-intro-long { display: none; }
+  .business-document-intro-compact { display: inline; }
+  .business-document-conversation-footer { display: none; }
+  .business-document-customer-control { margin: 8px 0; padding: 8px; }
+  .business-document-customer-summary { align-items: center; flex-direction: row; }
+  .business-document-customer-summary > div:last-child { display: none; }
+  .business-document-composer {
+    padding: 0;
+    border: 0;
+    background: transparent;
+  }
+
+  .business-document-composer-row {
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    min-width: 0;
+    min-height: 52px;
+    padding: 4px 2px;
+    border-top: 0;
+  }
+
+  .business-document-composer-plus {
+    flex: 0 0 50px;
+    width: 50px;
+    min-width: 50px;
+    height: 50px;
+    min-height: 50px;
+    border: 1px solid #e6ecef;
+    border-radius: 12px;
+    color: #168364;
+    background: #fff;
+    box-shadow: 0 1px 4px rgba(31, 52, 40, .06);
+  }
+
+  .business-document-composer-plus-symbol {
+    margin-top: -2px;
+    font-size: 32px;
+  }
+
+  .business-document-composer-plus[aria-expanded="true"]
+    .business-document-composer-plus-symbol {
+    transform: rotate(45deg);
+  }
+
+  .business-document-composer-input-shell {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .business-document-composer-row textarea {
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    min-height: 44px;
+    max-height: 112px;
+    padding: 10px 46px 10px 16px;
+    overflow-x: clip;
+    overflow-y: hidden;
+    border: 1px solid #e6ecef;
+    border-radius: 22px;
+    color: #0f172a;
+    background: #fff;
+    font-size: 16px;
+    line-height: 22px;
+    resize: none;
+    box-shadow: 0 1px 4px rgba(31, 52, 40, .05);
+  }
+
+  .business-document-composer-row textarea::placeholder {
+    color: #94a3b8;
+    opacity: 1;
+  }
+
+  .business-document-composer-photos {
+    right: 3px;
+    bottom: 2px;
+    width: 40px;
+    min-width: 40px;
+    height: 40px;
+    min-height: 40px;
+    color: #168364;
+  }
+
+  .business-document-composer-microphone {
+    flex: 0 0 auto;
+    width: auto;
+    max-width: none;
+  }
+
+  .workflow-microphone-compact-trigger,
+  .workflow-microphone-compact-dismiss {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    border-color: #e6ecef;
+    color: #168364;
+    box-shadow: 0 1px 4px rgba(31, 52, 40, .06);
+  }
+
+  .workflow-microphone-compact-recording {
+    min-height: 44px;
+    box-shadow: 0 1px 4px rgba(71, 29, 24, .06);
+  }
+
+  .business-document-send-message {
+    flex: 0 0 46px;
+    width: 46px;
+    min-width: 46px;
+    height: 46px;
+    min-height: 46px;
+    color: #fff;
+    background: #168364;
+    box-shadow: 0 3px 10px rgba(22, 131, 100, .20);
+  }
+
+  .business-document-send-symbol {
+    font-size: 25px;
+  }
+
+  .business-document-composer-tray {
+    min-height: 120px;
+    margin: 0;
+    padding: 18px 16px;
+    border: 0;
+    border-top: 1px solid #e6ecef;
+    border-radius: 0;
+    background: #fbfcfb;
+    box-shadow: 0 -5px 18px rgba(20, 39, 29, .06);
+  }
+
+  .business-document-composer-tray-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 18px;
+  }
+
+  .business-document-composer-action {
+    gap: 8px;
+    min-height: 88px;
+    padding: 0;
+    border-radius: 12px;
+    color: #475569;
+    font-size: 13px;
+    font-weight: 500;
+    line-height: 16px;
+  }
+
+  .business-document-composer-action-icon {
+    width: 56px;
+    height: 56px;
+  }
+
+  .business-document-composer-action-icon > *,
+  .business-document-composer-action-icon svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  .business-document-composer-action--note
+    .business-document-composer-action-icon {
+    color: #168364;
+    background: #e6f7ef;
+  }
+
+  .business-document-composer-action--reminder
+    .business-document-composer-action-icon {
+    color: #3b82f6;
+    background: #eaf2ff;
+  }
+
+  .business-document-composer-action--amount
+    .business-document-composer-action-icon {
+    color: #f26b21;
+    background: #fff7e6;
+  }
+
+  .business-document-turns {
+    padding-bottom: 8px;
+    scroll-padding-bottom: 8px;
+  }
+
+  /* ==========================================================
+     MOBILE QUOTE READABILITY SCALE
+     Body text should remain comfortably readable on iPhone.
+     ========================================================== */
+
+  #root[data-app-layout="mobile"] .business-document-workspace {
+    font-size: 16px;
+  }
+
+  .business-document-header h1 {
+    font-size: 19px;
+  }
+
+  .business-document-title-row span {
+    font-size: 12px;
+  }
+
+  .business-document-header p,
+  .business-document-save-status {
+    font-size: 13px;
+    line-height: 1.3;
+  }
+
+  .business-document-tabs button {
+    font-size: 14px;
+    line-height: 1.2;
+  }
+
+  .business-document-mobile-switch button {
+    font-size: 15px;
+  }
+
+  .business-document-action-menu-heading {
+    font-size: 12px;
+  }
+
+  .business-document-action-menu-panel button[role="menuitem"] {
+    font-size: 15px;
+    line-height: 1.3;
+  }
+
+  .business-document-turns > article.meetro p,
+  .business-document-turns > article.you p {
+    font-size: 16px;
+    line-height: 1.5;
+  }
+
+  .business-document-customer-summary span {
+    font-size: 12px;
+  }
+
+  .business-document-customer-summary strong {
+    font-size: 16px;
+  }
+
+  .business-document-customer-summary small,
+  .business-document-customer-control > p,
+  .business-document-customer-control label {
+    font-size: 14px;
+    line-height: 1.4;
+  }
+
+  .business-document-customer-control button {
+    font-size: 14px;
+  }
+
+  .business-document-preview > header h2 {
+    font-size: 21px;
+  }
+
+  .business-document-preview > header span {
+    font-size: 13px;
+  }
+
+  .business-document-meta dt {
+    font-size: 12px;
+  }
+
+  .business-document-meta dd {
+    font-size: 15px;
+  }
+
+  .business-document-footer-grid h3 {
+    font-size: 16px;
+  }
+
+  .business-document-footer-grid p,
+  .business-document-table > div,
+  .business-document-payment-summary > div span,
+  .business-live-document > footer {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .business-document-manual label,
+  .business-document-manual-rows button,
+  .business-document-manual > footer button,
+  .business-document-prefill-details label,
+  .business-document-prefill-details footer button,
+  .business-document-agreement-presets button {
+    font-size: 14px;
+  }
+
+  .business-document-manual-fields legend,
+  .business-document-manual-pricing h3,
+  .business-document-manual-rows legend,
+  .business-document-prefill-details summary,
+  .business-document-agreement-editor summary {
+    font-size: 15px;
+  }
+
+  .business-document-prefill-details p,
+  .business-document-agreement-editor p {
+    font-size: 14px;
+    line-height: 1.5;
+  }
+
+  .business-document-composer-action {
+    font-size: 15px;
+    line-height: 18px;
+  }
+
+  .business-document-proposal > header h3 {
+    font-size: 18px;
+  }
+
+  .business-document-proposal > header p,
+  .business-document-proposal-section p,
+  .business-document-proposal-section li {
+    font-size: 15px;
+    line-height: 1.5;
+  }
+
+  .business-document-proposal-section h4 {
+    font-size: 16px;
+  }
+
+
+  /* ==========================================================
+     MOBILE TITLE SPACING AND COMPOSER FLOOR
+     ========================================================== */
+
+  /*
+   * Long project titles and the document-state badge should not
+   * compete for the same horizontal space.
+   */
+  .business-document-title-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+    gap: 5px;
+    min-width: 0;
+  }
+
+  .business-document-title-row h1 {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .business-document-title-row span {
+    justify-self: start;
+    width: max-content;
+    max-width: 100%;
+    margin: 0;
+  }
+
+  .business-document-header p {
+    margin-top: 5px;
+  }
+
+  /*
+   * Make the actual conversation occupy all remaining workspace
+   * height. The composer then settles immediately above the
+   * bottom navigation rather than ending midway up the page.
+   */
+  #root[data-app-layout="mobile"] .business-document-main {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  #root[data-app-layout="mobile"]
+    .business-document-conversation.mobile-active {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+  }
+
+  #root[data-app-layout="mobile"] .business-document-chat-shell {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  #root[data-app-layout="mobile"] .business-document-composer {
+    position: fixed;
+    z-index: 120;
+
+    left: max(12px, env(safe-area-inset-left));
+    right: max(12px, env(safe-area-inset-right));
+
+    bottom:
+      calc(
+        var(--meetro-mobile-bottom-nav-clearance, 96px) + 4px
+      );
+
+    width: auto;
+    max-width: none;
+
+    margin-top: 0;
+    padding-top: 6px;
+
+    background:
+      linear-gradient(
+        180deg,
+        rgba(248, 245, 238, 0) 0%,
+        rgba(248, 245, 238, .96) 30%,
+        #f8f5ee 100%
+      );
+  }
+
+  /*
+   * When the iOS keyboard is open, the composer attaches to the
+   * visual viewport boundary rather than remaining in document
+   * flow above a large empty region.
+   */
+  #root[data-app-layout="mobile"]
+    .business-document-workspace.is-keyboard-open
+    .business-document-composer {
+    bottom: 0;
+  }
+
+  /*
+   * Preserve reachability of the newest conversation item behind
+   * the fixed composer.
+   */
+  #root[data-app-layout="mobile"] .business-document-turns {
+    padding-bottom: 84px;
+    scroll-padding-bottom: 84px;
+  }
+
+  /*
+   * The open + tray grows upward from the bottom interaction
+   * boundary. Give conversation history matching clearance.
+   */
+  #root[data-app-layout="mobile"]
+    .business-document-workspace.is-composer-tray-open
+    .business-document-turns {
+    padding-bottom: 230px;
+    scroll-padding-bottom: 230px;
+  }
+
 }
 
 @media (max-width: 900px) and (orientation: portrait) {
@@ -1037,14 +1941,19 @@
     display: block !important;
   }
 
-  .business-document-mobile-switch { display: grid; }
-  .business-document-main { display: block; min-height: 0; }
-  .business-document-conversation,
-  .business-document-preview { display: none; padding: 14px 0 0; }
-  .business-document-conversation.mobile-active,
-  .business-document-preview.mobile-active { display: block; }
-  .business-document-conversation { border-right: 0; }
-  .business-document-chat-shell {
+  #root[data-app-layout="tablet"] .business-document-mobile-switch { display: grid; }
+  #root[data-app-layout="tablet"] .business-document-main { display: block; min-height: 0; }
+  #root[data-app-layout="tablet"] .business-document-conversation,
+  #root[data-app-layout="tablet"] .business-document-preview {
+    display: none;
+    padding: 14px 0 0;
+  }
+  #root[data-app-layout="tablet"] .business-document-conversation.mobile-active,
+  #root[data-app-layout="tablet"] .business-document-preview.mobile-active {
+    display: block;
+  }
+  #root[data-app-layout="tablet"] .business-document-conversation { border-right: 0; }
+  #root[data-app-layout="tablet"] .business-document-chat-shell {
     height: 58dvh;
     min-height: 260px;
   }
@@ -1152,6 +2061,9 @@
 @media (prefers-reduced-motion: no-preference) {
   .business-saved-drawer { animation: business-saved-enter 180ms ease-out; }
   @keyframes business-saved-enter { from { transform: translateX(18px); opacity: .65; } to { transform: translateX(0); opacity: 1; } }
+}
+@media (prefers-reduced-motion: reduce) {
+  .business-document-tabs { transition: none; }
 }
 .business-document-pricing-note {
   margin: 0;

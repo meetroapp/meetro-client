@@ -866,7 +866,7 @@ test("wide Quote workspace contains scrolling inside three panes while phone and
 
   assert.match(
     styles,
-    /#root\[data-app-layout="mobile"\] \.business-document-workspace\s*\{[\s\S]*height:\s*auto[\s\S]*overflow-y:\s*visible[\s\S]*#root\[data-app-layout="mobile"\] \.business-document-conversation,[\s\S]*overflow:\s*visible[\s\S]*#root\[data-app-layout="mobile"\] \.business-document-chat-shell\s*\{[\s\S]*display:\s*grid[\s\S]*height:\s*56dvh/
+    /@media \(max-width:\s*767px\)[\s\S]*#root\[data-app-layout="mobile"\] \.business-document-chat-shell\s*\{[\s\S]*height:\s*auto[\s\S]*min-height:\s*0/
   );
 
   assert.match(

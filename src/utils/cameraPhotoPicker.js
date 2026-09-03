@@ -68,15 +68,26 @@ export async function pickNativeJobPhoto({
   }
 
   const { Camera, CameraResultType, CameraSource } = cameraModule;
-  const photo = await Camera.getPhoto({
-    allowEditing: false,
-    quality,
-    resultType: CameraResultType.Base64,
-    source: CameraSource.Prompt,
-    promptLabelHeader: "Add job photo",
-    promptLabelPhoto: "Choose from Library",
-    promptLabelPicture: "Take Photo",
-  });
+  let photo;
+
+  try {
+    photo = await Camera.getPhoto({
+      allowEditing: false,
+      quality,
+      resultType: CameraResultType.Base64,
+      source: CameraSource.Prompt,
+      promptLabelHeader: "Add job photo",
+      promptLabelPhoto: "Choose from Library",
+      promptLabelPicture: "Take Photo",
+      promptLabelCancel: "Cancel",
+    });
+  } catch (error) {
+    if (isCancelError(error)) {
+      return { cancelled: true };
+    }
+
+    throw error;
+  }
 
   if (!photo?.base64String) {
     return { cancelled: true };
