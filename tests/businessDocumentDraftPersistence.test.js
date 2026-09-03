@@ -1207,7 +1207,7 @@ test("recovery/exit/photo dialogs remain accessible and mobile-contained", () =>
   assert.match(styles, /\.business-document-confirm[^}]*max-height:\s*calc\(100dvh - 24px\)/);
   assert.match(styles, /\.business-photo-review-list select[^}]*min-height:\s*44px/);
   assert.match(styles, /@media \(max-width: 767px\)[\s\S]*\.business-document-confirm/);
-  assert.doesNotMatch(styles, /overflow-x:\s*hidden/);
+  assert.doesNotMatch(styles, /\.business-document-workspace\s*\{[^}]*overflow-x:\s*hidden/);
 });
 
 

@@ -13,6 +13,22 @@ function normalizedPhone(value) {
   return text(value).replace(/\D+/g, "");
 }
 
+export const BUSINESS_DOCUMENT_CUSTOMER_STATES = Object.freeze({
+  MEETRO: "MEETRO_CUSTOMER",
+  EXTERNAL: "EXTERNAL_CUSTOMER",
+  DOCUMENT_ONLY: "DOCUMENT_ONLY_CUSTOMER",
+});
+
+export function businessDocumentCustomerState({
+  jobLinked = false,
+  customerParty = null,
+  linkedContact = null,
+} = {}) {
+  if (jobLinked) return BUSINESS_DOCUMENT_CUSTOMER_STATES.MEETRO;
+  if (customerParty || linkedContact) return BUSINESS_DOCUMENT_CUSTOMER_STATES.EXTERNAL;
+  return BUSINESS_DOCUMENT_CUSTOMER_STATES.DOCUMENT_ONLY;
+}
+
 export function normalizeBusinessDocumentCustomerParty(value) {
   if (!value) return null;
   const businessContactId = text(value.businessContactId).toLowerCase();

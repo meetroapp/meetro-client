@@ -1012,6 +1012,40 @@ test("explicit customer-name mutation language preserves the full professional n
   }
 });
 
+test("natural customer declarations capture one customer and keep contact facts out of Quote scope", () => {
+  const cases = [
+    {
+      prompt: "This quote is for Maggie. Replace the damaged living room ceiling fan and test operation.",
+      name: "Maggie",
+    },
+    {
+      prompt: "This job is for Maggie Johnson. Her phone number is 239-555-0174. Replace the fan.",
+      name: "Maggie Johnson",
+      phone: "239-555-0174",
+    },
+    {
+      prompt: "Put this under Maggie Johnson. Her email is maggie@example.test. Replace the fan.",
+      name: "Maggie Johnson",
+      email: "maggie@example.test",
+    },
+    {
+      prompt: "Customer is Maggie Johnson. Her address is 123 Main Street. Replace the fan.",
+      name: "Maggie Johnson",
+      address: "123 Main Street",
+    },
+  ];
+
+  for (const example of cases) {
+    const patch = buildQuickQuoteConversationPatch({ prompt: example.prompt });
+    assert.equal(patch.customerName, example.name, example.prompt);
+    if (example.phone) assert.equal(patch.customerPhone, example.phone, example.prompt);
+    if (example.email) assert.equal(patch.customerEmail, example.email, example.prompt);
+    if (example.address) assert.equal(patch.customerAddress, example.address, example.prompt);
+    assert.match(patch.projectDescription, /Replace the fan|Replace the damaged living room ceiling fan/, example.prompt);
+    assert.doesNotMatch(patch.projectDescription, /Maggie|239-555-0174|maggie@example\.test|123 Main Street/, example.prompt);
+  }
+});
+
 test("multiline labeled Quote facts stay bounded and preserve the professional duration detail", () => {
   const patch = buildQuickQuoteConversationPatch({
     prompt: [

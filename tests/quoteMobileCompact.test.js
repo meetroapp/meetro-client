@@ -69,6 +69,15 @@ test("document selector keeps Quote, Invoice, and Deposit Request while Saved Fi
   assert.match(workspace, /Saved Files/);
 });
 
+test("Deposit Request opens its preparation workspace before authority exists", () => {
+  const start = workspace.indexOf("async function openDepositRequest");
+  const end = workspace.indexOf("\n  return (", start);
+  const handler = workspace.slice(start, end);
+  assert.match(handler, /setPage\([\s\S]*depositRequestBuilder/);
+  assert.doesNotMatch(handler, /fetchProfessionalPreWorkDeposit|eligible/);
+  assert.match(read("src/components/DepositRequestWorkspace.jsx"), /Preparation is available now/);
+});
+
 test("top document actions menu reuses existing handlers with grouped accessible actions", () => {
   for (const label of [
     "Start New {label}",

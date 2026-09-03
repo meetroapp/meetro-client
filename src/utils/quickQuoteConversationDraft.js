@@ -106,6 +106,8 @@ function explicitCustomerName(text) {
     /\b(?:set|change)\s+(?:the\s+)?(?:customer|client)(?:\s+name)?\s+to\s+([^.!?;]+)/i,
     /\b(?:customer|client)\s+name\s*(?:is|:)?\s+([^.!?;]+)/i,
     /\b(?:quote\s+for|customer\s+is|client\s+is)\s+([^.!?;]+)/i,
+    /\b(?:this\s+(?:quote|job)|this)\s+is\s+for\s+([^.!?;]+)/i,
+    /\bput\s+this\s+under\s+([^.!?;]+)/i,
     /\b(?:customer|client)\s+([^.!?;]+)/i,
   ]);
   if (explicit) {
@@ -113,7 +115,7 @@ function explicitCustomerName(text) {
       /\s+(?=(?:at|for|needs?|wants?|ceiling|fan|install|installation|repair|replace|replacement|rebuild|paint|painting|service|work|materials?|labor|labour|price|total)\b)/i
     )[0];
     const words = candidate.match(/[A-Za-zÀ-ÖØ-öø-ÿ'’-]+/g) || [];
-    if (words.length >= 2 && words.length <= 4) return candidate;
+    if (words.length >= 1 && words.length <= 4) return candidate;
   }
 
   const serviceForCustomer = text.match(
@@ -310,6 +312,7 @@ function explicitMaterialItems(text) {
     const match = statement.match(/(?:^|[.!?;,]\s*)(?:the\s+)?(.+?)\s+(?:costs?|is)\s*\$?\s*([\d,.]+)/i);
     const amount = parseAmount(match?.[2]);
     const name = capitalizeLabel(match?.[1] || "");
+    if (/^(?:her|his|their|customer(?:'s)?|client(?:'s)?)\s+(?:phone|number|email|e-mail|address)\b/i.test(name)) return;
     if (amount !== null && name && !/^(?:labor|labour|installation|materials?|tax|subtotal|total|price|project price|final price|final quote|amount)$/i.test(name)) {
       items.push({ name, total: String(amount) });
     }
@@ -386,11 +389,21 @@ function explicitLaborItems(text) {
 
 function cleanScope(text) {
   let scope = text;
+  scope = scope.replace(new RegExp(
+    `\\b(?:her|his|their|customer(?:'s)?|client(?:'s)?)?\\s*(?:phone|number)\\s*(?:is|:)\\s*${CUSTOMER_PHONE_PATTERN.source}[.!?;]?`,
+    "i"
+  ), "");
+  scope = scope.replace(new RegExp(
+    `\\b(?:her|his|their|customer(?:'s)?|client(?:'s)?)?\\s*(?:email|e-mail)\\s*(?:is|:)\\s*${CUSTOMER_EMAIL_PATTERN.source}[.!?;]?`,
+    "i"
+  ), "");
+  scope = scope.replace(/\b(?:her|his|their|customer(?:'s)?|client(?:'s)?)?\s*(?:customer\s+address|service\s+(?:address|area)|address|location)\s*(?:is|:)?\s*[^.!?;]+[.!?;]?/gi, "");
   scope = scope.replace(CUSTOMER_EMAIL_PATTERN, "");
   scope = scope.replace(CUSTOMER_PHONE_PATTERN, "");
-  scope = scope.replace(/\b(?:customer\s+address|service\s+(?:address|area)|address|location)\s*(?:is|:)?\s*[^.!?;]+[.!?;]?/gi, "");
   scope = scope.replace(/\b(?:set|change)\s+(?:the\s+)?(?:customer|client)(?:\s+name)?\s+to\s+[^.!?;]+[.!?;]?/i, "");
   scope = scope.replace(/\b(?:quote\s+for|customer(?:\s+name)?\s*(?:is|:)|client(?:\s+name)?\s*(?:is|:))\s+[^.!?;]+[.!?;]?/i, "");
+  scope = scope.replace(/\b(?:this\s+(?:quote|job)|this)\s+is\s+for\s+[^.!?;]+[.!?;]?/i, "");
+  scope = scope.replace(/\bput\s+this\s+under\s+[^.!?;]+[.!?;]?/i, "");
   scope = scope.replace(/\b(?:customer|client)\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+\s+[A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?=[.!?;]|$)/i, "");
   scope = scope.replace(/\s+for\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?=[.!?;]|$)/g, "");
   scope = scope.replace(

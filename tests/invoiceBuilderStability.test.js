@@ -116,11 +116,11 @@ test("Job-linked saved-customer recognition is bounded, read-only, and suppresse
 test("saved-customer empty states and customer language use the approved plain wording", () => {
   assert.equal(t("businessDocumentCustomerEmptyDirectory", "en"), "No saved customers yet.");
   assert.equal(t("businessDocumentCustomerNoMatches", "en"), "No saved customers match your search.");
-  assert.equal(t("businessDocumentCustomerSave", "en"), "Save as Customer");
-  assert.equal(t("businessDocumentCustomerSaveTitle", "en"), "Save Customer");
-  assert.equal(t("businessDocumentCustomerSaveHelp", "en"), "Save this customer for future quotes and invoices.");
+  assert.equal(t("businessDocumentCustomerSave", "en"), "Create external customer");
+  assert.equal(t("businessDocumentCustomerSaveTitle", "en"), "Create external customer");
+  assert.equal(t("businessDocumentCustomerSaveHelp", "en"), "Save this business-owned customer contact for future Quotes, Invoices, and Deposit Requests. No Meetro account is created.");
   assert.equal(t("businessDocumentCustomerPerson", "en"), "Individual");
   assert.equal(t("businessDocumentCustomerOrganization", "en"), "Business");
-  assert.equal(t("businessDocumentCustomerSavedContact", "en"), "Saved customer");
+  assert.equal(t("businessDocumentCustomerSavedContact", "en"), "External customer");
   assert.match(workspace, /control\.contacts\.length && control\.search\.trim\(\)/);
 });

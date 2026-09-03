@@ -15,6 +15,30 @@ import {
   previewBusinessDocumentPdfArtifact,
 } from "../utils/businessDocumentDeviceShare.js";
 import {
+  assignBusinessContactRole,
+  createBusinessContact,
+  createBusinessContactCommandKey,
+  createDeterministicBusinessContactKey,
+  getBusinessContact,
+  getBusinessContactActiveRoles,
+  listBusinessContacts,
+  loadBusinessContactProfileId,
+} from "../utils/businessContactsApi.js";
+import {
+  createBusinessCustomerRelationshipCommandKey,
+  establishBusinessCustomerRelationship,
+  getBusinessCustomerRelationshipByContact,
+} from "../utils/businessCustomerRelationshipsApi.js";
+import {
+  applyBusinessContactToDocumentSnapshot,
+  businessContactDisplayName,
+  businessDocumentCustomerState,
+  filterBusinessDocumentCustomerContacts,
+  findBusinessContactDuplicateCandidates,
+  hasBusinessDocumentCustomerSnapshot,
+  normalizeBusinessDocumentCustomerParty,
+} from "../utils/businessDocumentCustomerParty.js";
+import {
   fetchProfessionalPreWorkDeposit,
   formatDepositMoney,
 } from "../utils/preWorkDepositApi.js";
@@ -28,6 +52,7 @@ function initialContent(job, quote) {
     customerName: job?.customerName || quote?.customerName || "",
     customerEmail: quote?.customerEmail || "",
     customerPhone: quote?.customerPhone || "",
+    customerAddress: job?.customerAddress || quote?.customerAddress || "",
     customerLocation: job?.location || quote?.customerLocation || "",
     projectTitle: job?.title || quote?.projectTitle || "",
     quoteReference: quote?.quoteNumber || "",
@@ -38,7 +63,7 @@ function initialContent(job, quote) {
   };
 }
 
-function documentPayload({ jobId, paymentRequirementId, content }) {
+function documentPayload({ jobId, paymentRequirementId, content, customerParty }) {
   return {
     documentType: "DEPOSIT_REQUEST",
     jobId,
@@ -51,7 +76,7 @@ function documentPayload({ jobId, paymentRequirementId, content }) {
       privateReminders: [],
     },
     photos: [],
-    customerParty: null,
+    customerParty: customerParty || null,
   };
 }
 
@@ -93,8 +118,26 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
   const [deliveries, setDeliveries] = useState([]);
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState(null);
+  const [customerParty, setCustomerParty] = useState(() =>
+    normalizeBusinessDocumentCustomerParty(quote?.customerParty)
+  );
+  const [linkedContact, setLinkedContact] = useState(null);
+  const [businessProfileId, setBusinessProfileId] = useState(null);
+  const [customerControl, setCustomerControl] = useState({
+    open: false,
+    mode: "choose",
+    search: "",
+    contacts: [],
+    selectedId: "",
+    busy: false,
+    error: "",
+    duplicateCandidates: [],
+    duplicateConfirmed: false,
+    partyType: "PERSON",
+  });
 
   const jobId = job?.id || "";
+  const jobLinked = Boolean(job?.customerLinkedFromJob || job?.relationshipId);
   const dirty = JSON.stringify(content) !== JSON.stringify(baseline);
   const authority = document?.depositRequestAuthority || deposit;
   const eligible = Boolean(
@@ -104,26 +147,54 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
 
   useEffect(() => {
     let active = true;
+    const readPromise = jobId
+      ? fetchProfessionalPreWorkDeposit({ jobId, setPage })
+      : Promise.resolve({
+          code: "PREPARATION_ONLY",
+          preparation: true,
+          preparationMessage: "Save and approve a Quote with a deposit requirement before sending this request.",
+          deposit: null,
+        });
+    const draftsPromise = listBusinessDocumentDrafts({ type: "DEPOSIT_REQUEST", setPage })
+      .catch(() => []);
     void Promise.all([
-      fetchProfessionalPreWorkDeposit({ jobId, setPage }),
-      listBusinessDocumentDrafts({ type: "DEPOSIT_REQUEST", setPage }),
+      readPromise,
+      draftsPromise,
     ]).then(async ([read, documents]) => {
       if (!active) return;
       const exact = documents.find((candidate) =>
         candidate.jobId === jobId &&
+        read.deposit?.obligationId &&
         candidate.paymentRequirementId === read.deposit.obligationId
       ) || null;
       const nextContent = exact?.content || initialContent(job, quote);
       const history = exact
-        ? await listBusinessDocumentDeliveries({ draftId: exact.id, setPage })
+        ? await listBusinessDocumentDeliveries({ draftId: exact.id, setPage }).catch(() => [])
         : [];
       if (!active) return;
-      setDeposit(read.deposit);
+      const nextParty = normalizeBusinessDocumentCustomerParty(
+        exact?.customerParty || quote?.customerParty
+      );
+      setDeposit(read.deposit || null);
       setDocument(exact);
+      setCustomerParty(nextParty);
       setContent(nextContent);
       setBaseline(nextContent);
       setDeliveries(history);
       setPhase("ready");
+      if (nextParty) {
+        try {
+          setLinkedContact(await getBusinessContact({
+            contactId: nextParty.businessContactId,
+            setPage,
+          }));
+        } catch {
+          setLinkedContact(null);
+        }
+      }
+      if (read.preparation) {
+        setNotice(read.preparationMessage || "Approval is required before a Deposit Request can be sent.");
+      }
     }).catch((reason) => {
       if (!active) return;
       setError(reason?.message || "The exact deposit requirement could not be loaded.");
@@ -133,7 +204,7 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
   }, [jobId, setPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const money = useMemo(() => {
-    if (!authority) return null;
+    if (!authority || !["DUE", "PARTIALLY_SATISFIED"].includes(authority.state)) return null;
     return {
       project: formatDepositMoney(authority.quoteTotalMinor, authority.currency),
       requested: formatDepositMoney(authority.requiredMinor, authority.currency),
@@ -142,10 +213,164 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
       needed: formatDepositMoney(authority.remainingMinor, authority.currency),
     };
   }, [authority]);
+  const customerState = businessDocumentCustomerState({
+    jobLinked,
+    customerParty,
+    linkedContact,
+  });
+  const visibleCustomerContacts = filterBusinessDocumentCustomerContacts(
+    customerControl.contacts,
+    customerControl.search
+  );
+  const selectedCustomer = customerControl.contacts.find(
+    (contact) => contact.id === customerControl.selectedId
+  );
 
-  async function save() {
-    if (!deposit?.obligationId || !eligible) throw new Error("This deposit requirement is no longer available for preparation.");
-    const payload = documentPayload({ jobId, paymentRequirementId: deposit.obligationId, content });
+  function updateCustomerControl(patch) {
+    setCustomerControl((current) => ({ ...current, ...patch }));
+  }
+
+  async function resolveBusinessProfileId() {
+    if (businessProfileId) return businessProfileId;
+    const id = await loadBusinessContactProfileId({ setPage });
+    setBusinessProfileId(id);
+    return id;
+  }
+
+  async function openCustomerControl(mode) {
+    updateCustomerControl({
+      open: true,
+      mode,
+      search: "",
+      selectedId: "",
+      busy: true,
+      error: "",
+      duplicateCandidates: [],
+      duplicateConfirmed: false,
+    });
+    try {
+      const contractorProfileId = await resolveBusinessProfileId();
+      const contacts = await listBusinessContacts({
+        contractorProfileId,
+        status: "ACTIVE",
+        setPage,
+      });
+      updateCustomerControl({ contacts, busy: false });
+    } catch (reason) {
+      updateCustomerControl({
+        busy: false,
+        error: reason?.message || "Saved customer contacts are unavailable.",
+      });
+    }
+  }
+
+  async function resolveCustomerRelationship(contact) {
+    const existing = await getBusinessCustomerRelationshipByContact({
+      businessContactId: contact.id,
+      setPage,
+    });
+    if (existing) return existing;
+    return establishBusinessCustomerRelationship({
+      contractorProfileId: await resolveBusinessProfileId(),
+      businessContactId: contact.id,
+      idempotencyKey: createBusinessCustomerRelationshipCommandKey(),
+      setPage,
+    });
+  }
+
+  async function applyCustomer(contact) {
+    if (!contact) return;
+    updateCustomerControl({ busy: true, error: "" });
+    try {
+      const relationship = await resolveCustomerRelationship(contact);
+      const party = normalizeBusinessDocumentCustomerParty({
+        businessContactId: contact.id,
+        customerRelationshipId: relationship.id,
+      });
+      const nextContent = applyBusinessContactToDocumentSnapshot({
+        content,
+        contact,
+        replace: !hasBusinessDocumentCustomerSnapshot(content),
+      });
+      setContent(nextContent);
+      setCustomerParty(party);
+      setLinkedContact(contact);
+      if (eligible) {
+        await save({ contentOverride: nextContent, customerPartyOverride: party });
+      }
+      updateCustomerControl({ open: false, busy: false });
+      setNotice(eligible
+        ? "External customer linked to this Deposit Request."
+        : "External customer selected. It will be linked when the request becomes eligible to save.");
+    } catch (reason) {
+      updateCustomerControl({ busy: false, error: reason?.message || "The external customer could not be linked." });
+    }
+  }
+
+  async function createExternalCustomer({ bypassDuplicates = false } = {}) {
+    if (!String(content.customerName || "").trim()) {
+      updateCustomerControl({ error: "Enter a customer name before creating an external customer." });
+      return;
+    }
+    const duplicates = findBusinessContactDuplicateCandidates(customerControl.contacts, content);
+    if (duplicates.length && !bypassDuplicates && !customerControl.duplicateConfirmed) {
+      updateCustomerControl({ duplicateCandidates: duplicates, error: "A matching saved customer exists. Choose it or confirm creation." });
+      return;
+    }
+    updateCustomerControl({ busy: true, error: "", duplicateCandidates: [] });
+    const createKey = createBusinessContactCommandKey();
+    try {
+      const contractorProfileId = await resolveBusinessProfileId();
+      const created = await createBusinessContact({
+        contractorProfileId,
+        partyType: customerControl.partyType,
+        displayName: content.customerName,
+        companyName: customerControl.partyType === "ORGANIZATION" ? content.customerName : undefined,
+        email: content.customerEmail,
+        phone: content.customerPhone,
+        address: content.customerAddress || content.customerLocation,
+        idempotencyKey: createKey,
+        setPage,
+      });
+      let contact = created.contact;
+      if (!getBusinessContactActiveRoles(contact).includes("CUSTOMER")) {
+        contact = await assignBusinessContactRole({
+          contactId: contact.id,
+          expectedVersion: contact.version,
+          role: "CUSTOMER",
+          idempotencyKey: createDeterministicBusinessContactKey(`${createKey}:assign:CUSTOMER`),
+          setPage,
+        });
+      }
+      const relationship = await resolveCustomerRelationship(contact);
+      const party = normalizeBusinessDocumentCustomerParty({
+        businessContactId: contact.id,
+        customerRelationshipId: relationship.id,
+      });
+      setCustomerParty(party);
+      setLinkedContact(contact);
+      if (eligible) {
+        await save({ customerPartyOverride: party });
+      }
+      updateCustomerControl({ open: false, busy: false, duplicateConfirmed: false });
+      setNotice(eligible
+        ? "External customer created and linked to this Deposit Request."
+        : "External customer created. The Deposit Request remains preparation-only until its canonical requirement exists.");
+    } catch (reason) {
+      updateCustomerControl({ busy: false, error: reason?.message || "The external customer could not be created." });
+    }
+  }
+
+  async function save({ contentOverride = content, customerPartyOverride = customerParty } = {}) {
+    if (!deposit?.obligationId || !eligible) {
+      throw new Error("This Deposit Request is preparation-only until an approved Quote creates an unpaid deposit requirement. Nothing was sent.");
+    }
+    const payload = documentPayload({
+      jobId,
+      paymentRequirementId: deposit.obligationId,
+      content: contentOverride,
+      customerParty: customerPartyOverride,
+    });
     const saved = document
       ? await updateBusinessDocumentDraft({
           draftId: document.id,
@@ -181,6 +406,10 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
   }
 
   async function beginDelivery() {
+    if (!eligible) {
+      setError("Send is disabled until an approved Quote creates an unpaid canonical deposit requirement.");
+      return;
+    }
     setBusy(true);
     setError("");
     try {
@@ -198,7 +427,7 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
   }
 
   async function send() {
-    if (!review?.document) return;
+    if (!eligible || !review?.document) return;
     setBusy(true);
     setError("");
     try {
@@ -228,6 +457,10 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
   }
 
   async function pdf(action) {
+    if (!eligible) {
+      setError("PDF is disabled until an approved Quote creates an unpaid canonical deposit requirement.");
+      return;
+    }
     if (!document || dirty) {
       setError("Save the exact request version before opening its customer PDF.");
       return;
@@ -248,15 +481,15 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
   }
 
   if (phase === "loading") return <div className="app-page meetro-form-page"><p role="status">Loading the exact deposit requirement…</p></div>;
-  if (phase === "error" || !eligible || !money) {
-    return <div className="app-page meetro-form-page" role="alert"><h1>Deposit Request unavailable</h1><p>{error || "This Job has no active unpaid deposit requirement."}</p><button type="button" onClick={onBack}>Go Back</button></div>;
+  if (phase === "error") {
+    return <div className="app-page meetro-form-page" role="alert"><h1>Deposit Request unavailable</h1><p>{error || "The Deposit Request workspace could not be loaded."}</p><button type="button" onClick={onBack}>Go Back</button></div>;
   }
 
   return (
     <div className="app-page meetro-wide-page business-document-workspace" style={styles.page}>
       <header className="business-document-header">
         <button type="button" className="business-document-back" onClick={onBack} aria-label="Leave Deposit Request workspace">←</button>
-        <div><div className="business-document-title-row"><h1>{content.projectTitle || "Deposit Request"}</h1><span>Job linked</span></div><p>{content.customerName ? `Customer: ${content.customerName}` : "Customer linked through the approved Job"}</p></div>
+        <div><div className="business-document-title-row"><h1>{content.projectTitle || "Deposit Request"}</h1><span>{eligible ? "Ready for review" : "Preparation only"}</span></div><p>{content.customerName ? `Customer: ${content.customerName}` : jobId ? "Customer can be selected before approval" : "Customer not selected"}</p></div>
         <div className="business-document-header-actions"><span>{document ? `Saved · v${document.version}` : "Not saved"}</span></div>
       </header>
 
@@ -270,6 +503,30 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
         <section style={styles.assistant} aria-label="Meetro-assisted Deposit Request review">
           <h2>Prepare Deposit Request</h2>
           <p>Tell Meetro what customer-facing note, due date, or payment instructions to propose. Nothing is applied or sent automatically.</p>
+          <section aria-label="Deposit Request customer" style={styles.customerSection}>
+            <strong>Customer</strong>
+            <p>{customerState === "MEETRO_CUSTOMER" ? "Meetro customer" : customerState === "EXTERNAL_CUSTOMER" ? `External customer${linkedContact ? `: ${businessContactDisplayName(linkedContact)}` : ""}` : "Document-only customer"}</p>
+            {!jobLinked ? <small>External customers are business-owned Contacts; no Meetro account is required.</small> : null}
+            {!jobLinked ? <div style={styles.actions}>
+              <button type="button" onClick={() => void openCustomerControl("choose")} disabled={customerControl.busy}>Choose existing customer</button>
+              <button type="button" onClick={() => void openCustomerControl("save")} disabled={customerControl.busy}>Create external customer</button>
+              {!customerParty && hasBusinessDocumentCustomerSnapshot(content) ? <button type="button" onClick={() => setNotice("This customer is document-only. No Contact, account, or relationship was created.")}>Use on this document only</button> : null}
+            </div> : null}
+            {customerControl.open ? <div style={styles.customerPanel}>
+              <div style={styles.row}><strong>{customerControl.mode === "choose" ? "Choose existing customer" : "Create external customer"}</strong><button type="button" onClick={() => updateCustomerControl({ open: false })}>Close</button></div>
+              {customerControl.mode === "choose" ? <>
+                <label>Search saved customers<input type="search" value={customerControl.search} onChange={(event) => updateCustomerControl({ search: event.target.value })} style={styles.input} /></label>
+                <div style={styles.customerResults} role="listbox" aria-label="Saved customers">{visibleCustomerContacts.map((contact) => <button type="button" role="option" aria-selected={customerControl.selectedId === contact.id} key={contact.id} onClick={() => updateCustomerControl({ selectedId: contact.id })}><strong>{businessContactDisplayName(contact)}</strong><small>{[contact.email, contact.phone].filter(Boolean).join(" · ")}</small></button>)}</div>
+                {!customerControl.busy && !visibleCustomerContacts.length ? <p role="status">{customerControl.search ? "No saved customers match your search." : "No saved customers yet."}</p> : null}
+                <button type="button" onClick={() => void applyCustomer(selectedCustomer)} disabled={!selectedCustomer || customerControl.busy}>Use selected customer</button>
+              </> : <>
+                <label>Customer type<select value={customerControl.partyType} onChange={(event) => updateCustomerControl({ partyType: event.target.value })} style={styles.input}><option value="PERSON">Individual</option><option value="ORGANIZATION">Business</option></select></label>
+                {customerControl.duplicateCandidates.length ? <div role="alert"><p>A matching saved customer exists. Choose it or confirm creation.</p>{customerControl.duplicateCandidates.map((contact) => <button type="button" key={contact.id} onClick={() => void applyCustomer(contact)}>{businessContactDisplayName(contact)}</button>)}<button type="button" onClick={() => void createExternalCustomer({ bypassDuplicates: true })}>Confirm create external customer</button></div> : <button type="button" onClick={() => void createExternalCustomer()} disabled={customerControl.busy}>Save external customer</button>}
+              </>}
+              {customerControl.error ? <p role="alert" style={styles.error}>{customerControl.error}</p> : null}
+              {customerControl.busy ? <p role="status">Working…</p> : null}
+            </div> : null}
+          </section>
           <textarea rows={4} value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Thank the customer and tell them they can pay by check." style={styles.input} />
           <button type="button" onClick={propose} disabled={!instruction.trim()}>Propose Change</button>
           {proposal ? <div style={styles.proposal}><strong>Review proposed changes</strong>{Object.entries(proposal).map(([key, value]) => <p key={key}><b>{key.replace(/([A-Z])/g, " $1")}:</b> {value}</p>)}<div style={styles.row}><button type="button" onClick={() => setProposal(null)}>Dismiss</button><button type="button" onClick={() => { setContent((current) => ({ ...current, ...proposal })); setProposal(null); setInstruction(""); }}>Apply</button></div></div> : null}
@@ -277,6 +534,8 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
           {manual ? <div style={styles.form}>
             <label>Customer<input value={content.customerName} onChange={(event) => setContent({ ...content, customerName: event.target.value })} style={styles.input} /></label>
             <label>Customer email<input type="email" value={content.customerEmail} onChange={(event) => setContent({ ...content, customerEmail: event.target.value })} style={styles.input} /></label>
+            <label>Customer phone<input type="tel" value={content.customerPhone} onChange={(event) => setContent({ ...content, customerPhone: event.target.value })} style={styles.input} /></label>
+            <label>Customer address<input value={content.customerAddress} onChange={(event) => setContent({ ...content, customerAddress: event.target.value })} style={styles.input} /></label>
             <label>Due date<input type="date" min={today()} value={/^\d{4}-\d{2}-\d{2}$/.test(content.dueDate) ? content.dueDate : ""} onChange={(event) => setContent({ ...content, dueDate: event.target.value })} style={styles.input} /></label>
             <label>Note<textarea rows={3} value={content.notes} onChange={(event) => setContent({ ...content, notes: event.target.value })} style={styles.input} /></label>
             <label>Payment instructions<textarea rows={3} value={content.paymentInstructions} onChange={(event) => setContent({ ...content, paymentInstructions: event.target.value })} style={styles.input} /></label>
@@ -291,13 +550,14 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
           <dl style={styles.summary}>
             <div><dt>Customer</dt><dd>{content.customerName || "Linked customer"}</dd></div>
             <div><dt>Project</dt><dd>{content.projectTitle || "Linked Job"}</dd></div>
-            <div><dt>Approved Quote</dt><dd>{document?.depositRequestAuthority?.quoteReference || content.quoteReference || "Verified approved Quote"}</dd></div>
+            <div><dt>Approved Quote</dt><dd>{document?.depositRequestAuthority?.quoteReference || content.quoteReference || (authority ? "Verified approved Quote" : "Approval pending")}</dd></div>
           </dl>
-          <div style={styles.money}><p><span>Project total</span><strong>{money.project}</strong></p><p><span>Deposit requested</span><strong>{money.requested}</strong></p><p><span>Amount remaining after deposit</span><strong>{money.after}</strong></p>{authority.appliedMinor > 0 ? <p><span>Payments received</span><strong>{money.received}</strong></p> : null}<p><span>Amount still needed</span><strong>{money.needed}</strong></p></div>
+          {money ? <div style={styles.money}><p><span>Project total</span><strong>{money.project}</strong></p><p><span>Deposit requested</span><strong>{money.requested}</strong></p><p><span>Amount remaining after deposit</span><strong>{money.after}</strong></p>{authority.appliedMinor > 0 ? <p><span>Payments received</span><strong>{money.received}</strong></p> : null}<p><span>Amount still needed</span><strong>{money.needed}</strong></p></div> : <div style={styles.preparation} role="status"><strong>Deposit not ready to send</strong><p><span>Requested deposit</span><br />Pending canonical requirement</p><p>{authority?.state === "NOT_REQUIRED" ? "Add a deposit requirement to the approved Quote before sending a Deposit Request." : "An approved Quote with an unpaid deposit requirement is required before sending a Deposit Request."}</p><p>Preparation is available now; the amount, save, PDF, and send actions remain disabled until the canonical requirement exists.</p></div>}
           {content.dueDate ? <p><strong>Due date</strong><br />{content.dueDate}</p> : null}
           {content.paymentInstructions ? <p><strong>Payment instructions</strong><br />{content.paymentInstructions}</p> : null}
           {content.notes ? <p><strong>Note</strong><br />{content.notes}</p> : null}
-          <div style={styles.actions}><button type="button" onClick={saveClick} disabled={busy || (document && !dirty)}>{busy ? "Working…" : document ? "Save Draft" : "Save Draft"}</button><button type="button" onClick={() => void pdf("preview")} disabled={!document || dirty || busy}>Preview PDF</button><button type="button" onClick={() => void pdf("download")} disabled={!document || dirty || busy}>Download PDF</button><button type="button" onClick={beginDelivery} disabled={busy}>{deliveryLabel(deliveries)}</button></div>
+          {content.customerMessage ? <p><strong>Customer message</strong><br />{content.customerMessage}</p> : null}
+          <div style={styles.actions}><button type="button" onClick={saveClick} disabled={!eligible || busy || (document && !dirty)}>{busy ? "Working…" : "Save Draft"}</button><button type="button" onClick={() => void pdf("preview")} disabled={!eligible || !document || dirty || busy}>Preview PDF</button><button type="button" onClick={() => void pdf("download")} disabled={!eligible || !document || dirty || busy}>Download PDF</button><button type="button" onClick={beginDelivery} disabled={!eligible || busy}>{deliveryLabel(deliveries)}</button></div>
           {deliveries.length ? <section><h3>Delivery history</h3><ul>{deliveries.map((item) => <li key={item.id}>{item.state === "FAILED" ? "Deposit request delivery failed" : item.channel === "EMAIL" ? "Deposit request emailed" : "Deposit request sent in Meetro"} · {new Date(item.requestedAt).toLocaleString()}</li>)}</ul></section> : null}
         </section>
       </main>
@@ -317,6 +577,10 @@ const styles = {
   summary: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, margin: 0 },
   money: { padding: 18, borderRadius: 12, background: "#f2f7f3" },
   actions: { display: "flex", flexWrap: "wrap", gap: 8 },
+  customerSection: { display: "grid", gap: 8, padding: 14, border: "1px solid #d9e4dc", borderRadius: 10, background: "#f8fbf9" },
+  customerPanel: { display: "grid", gap: 10, padding: 12, border: "1px solid #b9c8bd", borderRadius: 8, background: "#fff" },
+  customerResults: { display: "grid", gap: 6, maxHeight: 180, overflow: "auto" },
+  preparation: { padding: 18, borderRadius: 12, background: "#fff7e6", border: "1px solid #e6c67a" },
   row: { display: "flex", justifyContent: "flex-end", gap: 8 },
   input: { width: "100%", boxSizing: "border-box", marginTop: 5, padding: 10, border: "1px solid #b9c8bd", borderRadius: 8 },
   form: { display: "grid", gap: 12 },

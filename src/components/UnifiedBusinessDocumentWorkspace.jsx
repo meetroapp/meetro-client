@@ -132,6 +132,7 @@ import {
 import {
   applyBusinessContactToDocumentSnapshot,
   businessContactDisplayName,
+  businessDocumentCustomerState,
   completeBusinessDocumentCustomerWorkflow,
   filterBusinessDocumentCustomerContacts,
   findBusinessContactDuplicateCandidates,
@@ -1405,7 +1406,6 @@ function CustomerPartyControl({
   customerParty,
   jobLinked = false,
   linkedContact,
-  linkedDurably,
   control,
   onOpen,
   onClose,
@@ -1413,31 +1413,27 @@ function CustomerPartyControl({
   onSelect,
   onUse,
   onSaveContact,
+  onUseDocumentOnly,
   onPartyType,
   onRetry,
   onCreateAnyway,
 }) {
-  const jobLinkedLabel = ({
-    en: "Linked from Job",
-    es: "Vinculado desde el trabajo",
-    fr: "Lié depuis le travail",
-    "pt-BR": "Vinculado a partir do trabalho",
-  })[language] || "Linked from Job";
   const visibleContacts = filterBusinessDocumentCustomerContacts(
     control.contacts,
     control.search
   );
   const selected = control.contacts.find((contact) => contact.id === control.selectedId);
   const durableContact = linkedContact || control.pendingContact;
-  const status = durableContact
-    ? t("businessDocumentCustomerSavedContact", language)
-    : jobLinked
-      ? jobLinkedLabel
-    : linkedDurably
-      ? t("businessDocumentCustomerLinked", language)
-    : customerParty
-      ? t("businessDocumentCustomerSavedContact", language)
-      : t("businessDocumentCustomerNotLinked", language);
+  const state = businessDocumentCustomerState({
+    jobLinked,
+    customerParty,
+    linkedContact: durableContact,
+  });
+  const status = state === "MEETRO_CUSTOMER"
+    ? t("businessDocumentCustomerMeetro", language)
+    : state === "EXTERNAL_CUSTOMER"
+      ? t("businessDocumentCustomerExternal", language)
+      : t("businessDocumentCustomerDocumentOnly", language);
   const linkedName = jobLinked
     ? content.customerName
     : durableContact
@@ -1453,7 +1449,8 @@ function CustomerPartyControl({
       </div>
       <div>
         {!jobLinked ? <button type="button" onClick={() => onOpen("choose")}>{t("businessDocumentCustomerChoose", language)}</button> : null}
-        {!durableContact ? <button type="button" onClick={() => onOpen("save")}>{t("businessDocumentCustomerSave", language)}</button> : null}
+        {!jobLinked && !durableContact ? <button type="button" onClick={() => onOpen("save")}>{t("businessDocumentCustomerSave", language)}</button> : null}
+        {!jobLinked && !customerParty && hasBusinessDocumentCustomerSnapshot(content) ? <button type="button" onClick={onUseDocumentOnly}>{t("businessDocumentCustomerUseDocumentOnly", language)}</button> : null}
       </div>
     </div>
     {!customerParty && !jobLinked ? <p>{t("businessDocumentCustomerNotLinkedHelp", language)}</p> : null}
@@ -4466,6 +4463,23 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     pendingStartNewRef.current && startNewState.error
   );
 
+  async function openDepositRequest() {
+    const depositRequestJobId =
+      documentJobIds.quote ||
+      documentJobIds.invoice ||
+      activeSaved?.jobId ||
+      job.id ||
+      "";
+
+    setMobilePane("conversation");
+    setNotice("");
+
+    setPage(
+      depositRequestJobId
+        ? `depositRequestBuilder?jobId=${encodeURIComponent(depositRequestJobId)}`
+        : "depositRequestBuilder"
+    );
+  }
 
   return (
     <div
@@ -4506,9 +4520,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         activeDocument={activeDocument}
         onDocumentChange={switchDocument}
         onSavedFiles={() => setSavedFilesOpen(true)}
-        onDepositRequest={job.id
-          ? () => setPage(`depositRequestBuilder?jobId=${encodeURIComponent(job.id)}`)
-          : null}
+        onDepositRequest={() => void openDepositRequest()}
         collapsed={documentSelectorCollapsed}
         onFocus={revealDocumentSelector}
       />
@@ -4726,7 +4738,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
           </div>
         </section>
         {documentPhotos.length ? <JobEvidencePanel photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onAddPhotos={() => onAddPhotos(activeDocument)} canAddPhotos={canAddPhotos} busy={photoBusy || currentAnalysisRequest.busy} /> : null}
-        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} jobLinked={Boolean((activeDocument === "quote" && job.customerLinkedFromJob) || invoicePreparation)} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={activeContent} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityPresentation={activeQuoteAuthorityPresentation} jobLinked={Boolean(job.customerLinkedFromJob)} /> : <InvoicePreview invoice={activeContent} preparation={invoicePreparation} canonicalInvoice={invoiceCreateState.invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? activeExternalIssuedQuote ? <><DeliveryMenu kind="quote" onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} allowMeetroMessage={false} />{activeIssuedQuote.approval?.source !== "EXTERNAL_EVIDENCE" ? <button type="button" onClick={openExternalQuoteApproval}>Record Customer Approval</button> : null}</> : <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || activeQuoteAuthorityPresentation.actionDisabled} onClick={() => void beginGovernedQuoteIssue()}>{quoteIssueState?.busy ? "Preparing…" : activeQuoteAuthorityPresentation.actionLabel}</button> : activeDocument === "invoice" && invoicePreparation ? invoiceCreateState.invoice ? <button type="button" className="business-document-primary" onClick={openCreatedInvoiceDelivery}>Send to Customer</button> : <button type="button" className="business-document-primary" disabled={invoiceCreateState.busy} onClick={() => void createReviewedInvoice()}>{invoiceCreateState.busy ? "Creating…" : "Create Invoice"}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{invoiceCreateState.error && mobilePane === "preview" ? <p className="business-document-notice" role="alert">{invoiceCreateState.error}</p> : null}{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
+        <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} jobLinked={Boolean((activeDocument === "quote" && job.customerLinkedFromJob) || invoicePreparation)} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onUseDocumentOnly={() => { setCustomerControl(emptyCustomerControl()); setNotice("This customer remains document-only. No Contact, account, or relationship was created."); }} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={activeContent} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityPresentation={activeQuoteAuthorityPresentation} jobLinked={Boolean(job.customerLinkedFromJob)} /> : <InvoicePreview invoice={activeContent} preparation={invoicePreparation} canonicalInvoice={invoiceCreateState.invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? activeExternalIssuedQuote ? <><DeliveryMenu kind="quote" onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} allowMeetroMessage={false} />{activeIssuedQuote.approval?.source !== "EXTERNAL_EVIDENCE" ? <button type="button" onClick={openExternalQuoteApproval}>Record Customer Approval</button> : null}</> : <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || activeQuoteAuthorityPresentation.actionDisabled} onClick={() => void beginGovernedQuoteIssue()}>{quoteIssueState?.busy ? "Preparing…" : activeQuoteAuthorityPresentation.actionLabel}</button> : activeDocument === "invoice" && invoicePreparation ? invoiceCreateState.invoice ? <button type="button" className="business-document-primary" onClick={openCreatedInvoiceDelivery}>Send to Customer</button> : <button type="button" className="business-document-primary" disabled={invoiceCreateState.busy} onClick={() => void createReviewedInvoice()}>{invoiceCreateState.busy ? "Creating…" : "Create Invoice"}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{invoiceCreateState.error && mobilePane === "preview" ? <p className="business-document-notice" role="alert">{invoiceCreateState.error}</p> : null}{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}
       {photoReviewOpen && documentPhotos.length ? <PhotoReviewDialog photos={documentPhotos} assignments={photoAssignments} onCancel={() => setPhotoReviewOpen(false)} onApply={(assignments) => { setPhotoAssignments((current) => ({ ...current, ...Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...normalizeBusinessDocumentPhotoAssignment(assignment), documentType: activeDocument }])) })); setPhotoReviewOpen(false); }} /> : null}

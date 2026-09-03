@@ -12,6 +12,7 @@ import {
 import {
   applyBusinessContactToDocumentSnapshot,
   businessContactSearchText,
+  businessDocumentCustomerState,
   completeBusinessDocumentCustomerWorkflow,
   filterBusinessDocumentCustomerContacts,
   findBusinessContactDuplicateCandidates,
@@ -27,6 +28,7 @@ import { SUPPORTED_LANGUAGES, t } from "../src/utils/language.js";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const workspace = read("src/components/UnifiedBusinessDocumentWorkspace.jsx");
+const depositWorkspace = read("src/components/DepositRequestWorkspace.jsx");
 const styles = read("src/components/UnifiedBusinessDocumentWorkspace.css");
 const CONTACT_ONE = "11111111-1111-4111-8111-111111111111";
 const CONTACT_TWO = "22222222-2222-4222-8222-222222222222";
@@ -89,6 +91,15 @@ test("Quote and Invoice customer lookup offers ACTIVE Contacts and searches disp
   assert.doesNotMatch(businessContactSearchText(records[1]), new RegExp(CONTACT_TWO));
   assert.match(workspace, /activeDocument === "quote" \? quote : invoice/);
   assert.match(workspace, /status: "ACTIVE"/);
+});
+
+test("customer presentation distinguishes Meetro, external, and document-only without creating identity from text", () => {
+  assert.equal(businessDocumentCustomerState({ jobLinked: true }), "MEETRO_CUSTOMER");
+  assert.equal(businessDocumentCustomerState({ linkedContact: contact() }), "EXTERNAL_CUSTOMER");
+  assert.equal(businessDocumentCustomerState({ customerParty: { businessContactId: CONTACT_ONE } }), "EXTERNAL_CUSTOMER");
+  assert.equal(businessDocumentCustomerState({}), "DOCUMENT_ONLY_CUSTOMER");
+  assert.match(depositWorkspace, /Use on this document only/);
+  assert.match(depositWorkspace, /No Contact, account, or relationship was created/);
 });
 
 test("saved Contact snapshot is copied once into blank fields and never live-synced", () => {

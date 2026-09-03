@@ -246,6 +246,24 @@ test("read uses one authenticated no-store GET and preserves reconciliation stat
   }]);
 });
 
+test("approved-agreement absence is an explicit preparation state without fabricated deposit amounts", async () => {
+  const result = await fetchProfessionalPreWorkDeposit({
+    jobId: ids.job,
+    authFetchImpl: async () => ({
+      response: { ok: false, status: 409 },
+      data: {
+        success: false,
+        code: "PRE_WORK_DEPOSIT_APPROVED_AGREEMENT_REQUIRED",
+        message: "An approved Quote is required before a Deposit Request can be sent.",
+      },
+    }),
+  });
+  assert.equal(result.preparation, true);
+  assert.equal(result.deposit, null);
+  assert.equal(result.code, "PRE_WORK_DEPOSIT_APPROVED_AGREEMENT_REQUIRED");
+  assert.equal(result.preparationMessage, "An approved Quote is required before a Deposit Request can be sent.");
+});
+
 test("payment command sends only bounded evidence with an idempotency key and adopts server result", async () => {
   const calls = [];
   const result = await confirmProfessionalPreWorkDepositReceived({

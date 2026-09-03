@@ -90,6 +90,12 @@ test("workspace exposes explicit prepare, review, send, retry, resend, history, 
   assert.match(source, /Project total/);
   assert.match(source, /Deposit requested/);
   assert.match(source, /Amount remaining after deposit/);
+  assert.match(source, /Preparation is available now/);
+  assert.match(source, /Send is disabled until an approved Quote creates an unpaid canonical deposit requirement/);
+  assert.match(source, /Choose existing customer/);
+  assert.match(source, /Create external customer/);
+  assert.match(source, /customerParty: customerParty \|\| null/);
+  assert.match(source, /disabled=\{!eligible \|\| busy/);
 });
 
 test("accepted unpaid Work Center exposes preparation while confirmed payment remains separate", () => {

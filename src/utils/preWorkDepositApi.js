@@ -20,6 +20,9 @@ const READ_CODES = new Set([
   "PRE_WORK_DEPOSIT_RECONCILIATION_REQUIRED",
   "PRE_WORK_DEPOSIT_STATUS_FOUND",
 ]);
+const PREPARATION_CODES = new Set([
+  "PRE_WORK_DEPOSIT_APPROVED_AGREEMENT_REQUIRED",
+]);
 
 export class PreWorkDepositApiError extends Error {
   constructor({
@@ -326,9 +329,16 @@ export function normalizeExternalPaymentMethod({ method, customMethod = "" } = {
     : null;
 }
 
-async function request(endpoint, options, setPage, authFetchImpl) {
+async function request(endpoint, options, setPage, authFetchImpl, { allowPreparation = false } = {}) {
   const result = await authFetchImpl(endpoint, options, setPage);
   if (!result?.response?.ok || result?.data?.success !== true) {
+    if (allowPreparation && PREPARATION_CODES.has(result?.data?.code)) {
+      return Object.freeze({
+        preparation: true,
+        code: result.data.code,
+        message: result.data.message || "An approved Quote is required before this request can be sent.",
+      });
+    }
     throw new PreWorkDepositApiError({
       status: result?.response?.status || 500,
       code: result?.data?.code,
@@ -352,8 +362,18 @@ export async function fetchProfessionalPreWorkDeposit({
     `/jobs/${encodeURIComponent(normalizedJobId)}/pre-work-deposit`,
     { method: "GET", cache: "no-store" },
     setPage,
-    authFetchImpl
+    authFetchImpl,
+    { allowPreparation: true }
   );
+  if (data.preparation) {
+    return Object.freeze({
+      code: data.code,
+      preparation: true,
+      preparationMessage: data.message,
+      reconciliationRequired: false,
+      deposit: null,
+    });
+  }
   if (!READ_CODES.has(data.code)) {
     throw new PreWorkDepositApiError({ status: 502, code: "UNSAFE_PRE_WORK_DEPOSIT_RESPONSE" });
   }
