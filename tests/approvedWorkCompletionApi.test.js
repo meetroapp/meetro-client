@@ -19,6 +19,7 @@ const ACTIVITY_ID = "68a9621c-dcdd-4883-8632-acc7387ea08e";
 const NON_EXECUTION_ACTIVITY_ID = "11111111-1111-4111-8111-111111111111";
 const QUOTE_ID = "f1858dc5-0c68-4296-af12-2e714ee8a42a";
 const DECISION_ID = "89ffcce1-df4b-42d0-b0b3-d6c8739646ca";
+const QUOTE_APPROVAL_ID = "12345678-1234-4123-8123-123456789abc";
 const CUSTOMER_ID = "22222222-2222-4222-8222-222222222222";
 const BINDING_ID = "33333333-3333-4333-8333-333333333333";
 
@@ -48,6 +49,37 @@ function executionBase(overrides = {}) {
     ],
     ...overrides,
   };
+}
+
+function commonMeetroExecution(overrides = {}) {
+  return executionBase({
+    source: {
+      quoteId: QUOTE_ID,
+      issuedQuoteVersion: 3,
+      approvedCustomerDecisionId: DECISION_ID,
+      quoteApprovalId: QUOTE_APPROVAL_ID,
+      approvalSource: "MEETRO_CUSTOMER",
+      customerParticipantId: CUSTOMER_ID,
+      currency: "USD",
+    },
+    ...overrides,
+  });
+}
+
+function externalExecutionBase(overrides = {}) {
+  return executionBase({
+    relationshipId: null,
+    source: {
+      quoteId: QUOTE_ID,
+      issuedQuoteVersion: 3,
+      approvedCustomerDecisionId: null,
+      quoteApprovalId: QUOTE_APPROVAL_ID,
+      approvalSource: "EXTERNAL_EVIDENCE",
+      customerParticipantId: null,
+      currency: "USD",
+    },
+    ...overrides,
+  });
 }
 
 function executionDetail(overrides = {}) {
@@ -108,6 +140,14 @@ function executionDetail(overrides = {}) {
   };
 }
 
+function externalExecutionDetail(overrides = {}) {
+  return executionDetail({
+    relationshipId: null,
+    source: externalExecutionBase().source,
+    ...overrides,
+  });
+}
+
 function completionResponse() {
   return {
     success: true,
@@ -155,6 +195,72 @@ function completionResponse() {
   };
 }
 
+function externalCompletionResponse() {
+  return {
+    success: true,
+    code: "APPROVED_WORK_COMPLETED",
+    completion: {
+      contractVersion: 1,
+      state: "WORK_COMPLETED",
+      jobId: JOB_ID,
+      relationshipId: null,
+      executionId: EXECUTION_ID,
+      executionVersion: 2,
+      quoteId: QUOTE_ID,
+      issuedQuoteVersion: 3,
+      approvedCustomerDecisionId: null,
+      quoteApprovalId: QUOTE_APPROVAL_ID,
+      completedByParticipantId:
+        "44444444-4444-4444-8444-444444444444",
+      completedAt: "2026-08-29T14:00:00.000Z",
+      evidence: {
+        type: "APPROVED_WORK_EXECUTION_VERSION",
+        commandId: "55555555-5555-4555-8555-555555555555",
+        integrityHash: "hash",
+      },
+      startEvidence: {
+        count: 1,
+        firstStartedAt: "2026-08-28T16:00:00.000Z",
+      },
+      activities: [],
+      workstreams: [],
+      nextAction: {
+        code: "READY_TO_INVOICE",
+        label: "Ready to Invoice",
+      },
+    },
+    execution: externalExecutionDetail({
+      currentVersion: 2,
+      state: "CLOSED",
+      versionCreatedAt: "2026-08-29T14:00:00.000Z",
+      safeNextActions: [],
+      boundWorkstreams:
+        externalExecutionDetail().boundWorkstreams.map((binding) => ({
+          ...binding,
+          workstream: {
+            ...binding.workstream,
+            state: "COMPLETED",
+            currentVersion: 2,
+          },
+        })),
+      activityClassifications:
+        externalExecutionDetail().activityClassifications.map(
+          (classification) =>
+            classification.classification === "EXECUTION"
+              ? {
+                  ...classification,
+                  activity: {
+                    ...classification.activity,
+                    status: "DONE",
+                    currentVersion: 3,
+                  },
+                }
+              : classification
+        ),
+    }),
+  };
+}
+
 function ok(data, status = 200) {
   return { response: { ok: true, status }, data };
 }
@@ -167,6 +273,188 @@ test("canonical detail yields the exact execution, Workstream, and EXECUTION Act
     expectedWorkstreams: [{ workstreamId: WORKSTREAM_ID, expectedVersion: 1 }],
     expectedActivities: [{ activityId: ACTIVITY_ID, expectedVersion: 3 }],
   });
+});
+
+test("new Meetro-customer execution preserves common approval plus customer-decision provenance", () => {
+  const execution = normalizeApprovedWorkExecution(
+    commonMeetroExecution(),
+    { jobId: JOB_ID }
+  );
+
+  assert.ok(execution);
+  assert.equal(execution.relationshipId, 345);
+  assert.equal(
+    execution.source.approvedCustomerDecisionId,
+    DECISION_ID
+  );
+  assert.equal(
+    execution.source.quoteApprovalId,
+    QUOTE_APPROVAL_ID
+  );
+  assert.equal(
+    execution.source.approvalSource,
+    "MEETRO_CUSTOMER"
+  );
+  assert.equal(
+    execution.source.customerParticipantId,
+    CUSTOMER_ID
+  );
+});
+
+test("external execution uses common approval with nullable customer provenance", () => {
+  const execution = normalizeApprovedWorkExecution(
+    externalExecutionDetail(),
+    { jobId: JOB_ID, detail: true }
+  );
+
+  assert.ok(execution);
+  assert.equal(execution.relationshipId, null);
+  assert.equal(
+    execution.source.approvedCustomerDecisionId,
+    null
+  );
+  assert.equal(
+    execution.source.customerParticipantId,
+    null
+  );
+  assert.equal(
+    execution.source.quoteApprovalId,
+    QUOTE_APPROVAL_ID
+  );
+  assert.equal(
+    execution.source.approvalSource,
+    "EXTERNAL_EVIDENCE"
+  );
+
+  assert.deepEqual(
+    buildApprovedWorkCompletionSnapshot(execution),
+    {
+      expectedExecutionVersion: 1,
+      expectedWorkstreams: [
+        {
+          workstreamId: WORKSTREAM_ID,
+          expectedVersion: 1,
+        },
+      ],
+      expectedActivities: [
+        {
+          activityId: ACTIVITY_ID,
+          expectedVersion: 3,
+        },
+      ],
+    }
+  );
+});
+
+test("execution common-approval provenance rejects malformed hybrid customer authority", () => {
+  const external = externalExecutionBase();
+
+  assert.equal(
+    normalizeApprovedWorkExecution(
+      externalExecutionBase({
+        relationshipId: 345,
+      }),
+      { jobId: JOB_ID }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeApprovedWorkExecution(
+      externalExecutionBase({
+        source: {
+          ...external.source,
+          approvedCustomerDecisionId: DECISION_ID,
+        },
+      }),
+      { jobId: JOB_ID }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeApprovedWorkExecution(
+      externalExecutionBase({
+        source: {
+          ...external.source,
+          customerParticipantId: CUSTOMER_ID,
+        },
+      }),
+      { jobId: JOB_ID }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeApprovedWorkExecution(
+      externalExecutionBase({
+        source: {
+          ...external.source,
+          quoteApprovalId: null,
+        },
+      }),
+      { jobId: JOB_ID }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeApprovedWorkExecution(
+      commonMeetroExecution({
+        source: {
+          ...commonMeetroExecution().source,
+          customerParticipantId: null,
+        },
+      }),
+      { jobId: JOB_ID }
+    ),
+    null
+  );
+});
+
+test("external Complete Work preserves common approval and does not require fabricated relationship or decision", async () => {
+  const calls = [];
+
+  const result = await completeApprovedWork({
+    jobId: JOB_ID,
+    executionId: EXECUTION_ID,
+    idempotencyKey: "approved-work:complete:external-fixed",
+    authFetchImpl: async (endpoint, options) => {
+      calls.push({ endpoint, options });
+
+      return calls.length === 1
+        ? ok({
+            success: true,
+            code: "APPROVED_WORK_EXECUTION_FOUND",
+            execution: externalExecutionDetail(),
+          })
+        : ok(externalCompletionResponse());
+    },
+  });
+
+  assert.equal(
+    calls.filter((call) => call.options.method === "POST").length,
+    1
+  );
+
+  assert.equal(result.completion.relationshipId, null);
+  assert.equal(
+    result.completion.approvedCustomerDecisionId,
+    null
+  );
+  assert.equal(
+    result.completion.quoteApprovalId,
+    QUOTE_APPROVAL_ID
+  );
+  assert.equal(
+    result.execution.source.approvalSource,
+    "EXTERNAL_EVIDENCE"
+  );
+  assert.equal(
+    result.execution.source.customerParticipantId,
+    null
+  );
+  assert.equal(result.execution.state, "CLOSED");
 });
 
 test("NON_EXECUTION Activity versions never enter the completion command", () => {

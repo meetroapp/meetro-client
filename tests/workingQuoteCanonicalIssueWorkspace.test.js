@@ -25,7 +25,7 @@ test("Job-linked Quote workspace exposes one reviewed business-facing send actio
 
 test("workspace re-reads the exact saved Quote without saving, then delegates governed send once", () => {
   const begin = block("async function beginGovernedQuoteIssue", "async function confirmGovernedQuoteIssue");
-  const confirm = block("async function confirmGovernedQuoteIssue", "async function shareSavedDocument");
+  const confirm = block("async function confirmGovernedQuoteIssue", "function openExternalQuoteApproval");
   assert.match(begin, /savedDocumentsRef\.current\.quote \|\| activeSaved/);
   assert.match(begin, /getBusinessDocumentDraft\(\{/);
   assert.ok(begin.indexOf("getBusinessDocumentDraft") < begin.indexOf("fetchWorkingQuoteReviewIdentity"));
@@ -69,7 +69,7 @@ test("review dialog shows customer, project, Quote, version, and USD total in bu
 
 test("dialog and handler share one fail-closed readiness gate while Cancel has no command authority", () => {
   const dialog = block("function QuoteIssueReviewDialog", "function NumberingSetupDialog");
-  const confirm = block("async function confirmGovernedQuoteIssue", "async function shareSavedDocument");
+  const confirm = block("async function confirmGovernedQuoteIssue", "function openExternalQuoteApproval");
   assert.match(dialog, /disabled: state\.busy \|\| readiness\?\.ready !== true/);
   assert.match(dialog, /label: "Cancel", onClick: onCancel/);
   assert.doesNotMatch(dialog, /issueAndSendWorkingQuote|authFetch|fetch\(/);
@@ -111,7 +111,7 @@ test("saved Quote authority is persisted separately from transient command state
 });
 
 test("issued result is canonical server evidence, not browser-local lifecycle authority", () => {
-  const confirm = block("async function confirmGovernedQuoteIssue", "async function shareSavedDocument");
+  const confirm = block("async function confirmGovernedQuoteIssue", "function openExternalQuoteApproval");
   assert.match(confirm, /issuedQuote: result\.issuedQuote/);
   assert.match(confirm, /canonicalQuote: result\.canonicalQuote/);
   assert.match(confirm, /result\.delivery/);
@@ -129,6 +129,72 @@ test("workspace never presents issuance alone as customer delivery", () => {
   assert.doesNotMatch(workspace, /activeIssuedQuote \? "Quote Sent"/);
 });
 
+test("external issued Quotes hand off only to external delivery channels", () => {
+  assert.match(
+    workspace,
+    /activeExternalIssuedQuote/
+  );
+  assert.match(
+    workspace,
+    /allowMeetroMessage=\{false\}/
+  );
+  assert.match(
+    workspace,
+    /Quote issued — delivery required/
+  );
+  assert.match(
+    workspace,
+    /It has not been sent yet/
+  );
+  assert.match(
+    workspace,
+    /Choose Email with Meetro or Share with device/
+  );
+  assert.match(
+    workspace,
+    /result\.externalDeliveryRequired === true/
+  );
+  assert.match(
+    workspace,
+    /persistedExternalQuote/
+  );
+});
+
+test("external issued Quote exposes bounded customer approval evidence recording", () => {
+  assert.match(
+    workspace,
+    /Record Customer Approval/
+  );
+  assert.match(
+    workspace,
+    /recordExternalQuoteApproval/
+  );
+  assert.match(
+    workspace,
+    /createExternalQuoteApprovalKey/
+  );
+  assert.match(
+    workspace,
+    /externalApprovalState/
+  );
+  assert.match(
+    workspace,
+    /At least a reference or note is required/
+  );
+  assert.match(
+    workspace,
+    /does not record payment,[\s\S]*scheduling,[\s\S]*work start/
+  );
+  assert.match(
+    workspace,
+    /hydratePersistedQuoteAuthority/
+  );
+  assert.doesNotMatch(
+    workspace,
+    /customerDecision:\s*"APPROVED"/
+  );
+});
+
 test("failure and success copy remain truthful without exposing orchestration terminology", () => {
   assert.match(workspace, /We couldn't prepare this quote for sending/);
   assert.match(workspace, /Nothing was sent\. Your saved quote is unchanged\./);
@@ -142,7 +208,7 @@ test("failure and success copy remain truthful without exposing orchestration te
 
 test("delivered and terminal Quotes expose explicit confirmed same-version COPY actions", () => {
   const begin = block("async function beginGovernedQuoteIssue", "async function confirmGovernedQuoteIssue");
-  const confirm = block("async function confirmGovernedQuoteIssue", "async function shareSavedDocument");
+  const confirm = block("async function confirmGovernedQuoteIssue", "function openExternalQuoteApproval");
   const dialog = block("function QuoteIssueReviewDialog", "function NumberingSetupDialog");
   assert.match(workspace, /\["DELIVERED", "APPROVED", "DECLINED"\]/);
   assert.match(begin, /deliveryIntent = [\s\S]*\? "COPY"[\s\S]*: "INITIAL"/);

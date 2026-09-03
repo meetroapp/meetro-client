@@ -143,6 +143,8 @@ test("clean reopen resolves the exact source mapping and issued-without-delivery
   assert.equal(authority.sourceDocument.documentVersion, 1);
   assert.equal(authority.sourceDocument.documentNumber, "Q-0000001");
   assert.equal(authority.canonicalQuote.id, IDS.quote);
+  assert.equal(authority.canonicalQuote.requestId, 23);
+  assert.equal(authority.canonicalQuote.relationshipId, 345);
   assert.equal(authority.canonicalQuote.status, "ISSUED");
   assert.equal(authority.canonicalQuote.currentVersion, 2);
   assert.equal(authority.canonicalQuote.totalMinor, 68000);
@@ -231,6 +233,70 @@ test("exact delivery and exact decisions hydrate without inventing state", async
     assert.equal(presentation.actionLabel, "Send Copy Again");
     assert.equal(presentation.actionDisabled, false);
   }
+});
+
+test("external Quote hard refresh preserves null marketplace identity and external approval without loading Meetro delivery", async () => {
+  const externalApproved = {
+    ...canonicalQuote(),
+    requestId: null,
+    relationshipId: null,
+    approval: {
+      id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      source: "EXTERNAL_EVIDENCE",
+      issuedQuoteVersion: 2,
+      approvedAt: "2026-09-02T20:00:00.000Z",
+      externalEvidence: {
+        id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+        method: "EMAIL",
+        recordedByParticipantId:
+          "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+        reference: "Approval email",
+        note: null,
+      },
+    },
+  };
+
+  const authority = await hydrateSavedQuoteAuthority({
+    document,
+    authFetchImpl:
+      quoteListTransport([externalApproved], []),
+    fetchDeliveryImpl: async () =>
+      assert.fail(
+        "External Quote hydration must not request Meetro delivery authority"
+      ),
+  });
+
+  assert.equal(
+    authority.canonicalQuote.requestId,
+    null
+  );
+  assert.equal(
+    authority.canonicalQuote.relationshipId,
+    null
+  );
+  assert.equal(
+    authority.canonicalQuote.decisionState,
+    null
+  );
+  assert.equal(
+    authority.canonicalQuote.approval.source,
+    "EXTERNAL_EVIDENCE"
+  );
+  assert.equal(authority.delivery, null);
+
+  const presentation =
+    workingQuoteDeliveryPresentation({
+      canonicalQuote: authority.canonicalQuote,
+    });
+
+  assert.equal(
+    presentation.state,
+    "EXTERNAL_APPROVED"
+  );
+  assert.equal(
+    presentation.badgeLabel,
+    "APPROVED · EXTERNAL EVIDENCE"
+  );
 });
 
 test("ownership/read failures and exact source drift fail closed without write requests", async () => {

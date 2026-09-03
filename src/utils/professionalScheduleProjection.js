@@ -4,6 +4,17 @@ const UUID_PATTERN =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 const VIEWS = Object.freeze(["active", "history"]);
 const PURPOSES = Object.freeze(["EVALUATION", "APPROVED_WORK"]);
+const APPROVAL_SOURCES = Object.freeze([
+  "MEETRO_CUSTOMER",
+  "EXTERNAL_EVIDENCE",
+]);
+const EXTERNAL_CONFIRMATION_METHODS = Object.freeze([
+  "PHONE",
+  "EMAIL",
+  "TEXT_MESSAGE",
+  "IN_PERSON",
+  "OTHER",
+]);
 const VISIT_STATES = Object.freeze([
   "PROPOSED",
   "SCHEDULED",
@@ -119,6 +130,18 @@ function normalizeOpportunity(value) {
   const evaluationId = uuid(source?.evaluationId, { nullable: true });
   const quoteId = uuid(source?.quoteId, { nullable: true });
   const decisionId = uuid(source?.approvedQuoteDecisionId, { nullable: true });
+  const hasQuoteApprovalId = Object.hasOwn(source || {}, "quoteApprovalId");
+  const hasApprovalSource = Object.hasOwn(source || {}, "approvalSource");
+  const quoteApprovalId = hasQuoteApprovalId
+    ? uuid(source?.quoteApprovalId, { nullable: true })
+    : null;
+  const approvalSource = hasApprovalSource
+    ? source?.approvalSource == null
+      ? null
+      : APPROVAL_SOURCES.includes(source.approvalSource)
+        ? source.approvalSource
+        : undefined
+    : null;
   const authority = record(source?.authority);
   const job = normalizeJob(source?.job, jobId);
   const customer = normalizeCustomer(source?.customer);
@@ -135,8 +158,26 @@ function normalizeOpportunity(value) {
     !location ||
     actions?.canStartScheduling !== true ||
     typeof actions?.canViewJob !== "boolean" ||
-    (source.purpose === "EVALUATION" && (quoteId || decisionId)) ||
-    (source.purpose === "APPROVED_WORK" && (evaluationId || !quoteId || !decisionId))
+    approvalSource === undefined ||
+    (source.purpose === "EVALUATION" &&
+      (
+        quoteId ||
+        decisionId ||
+        quoteApprovalId ||
+        approvalSource
+      )) ||
+    (source.purpose === "APPROVED_WORK" &&
+      (
+        evaluationId ||
+        !quoteId ||
+        (
+          approvalSource === "EXTERNAL_EVIDENCE"
+            ? (!quoteApprovalId || decisionId)
+            : approvalSource === "MEETRO_CUSTOMER"
+              ? (!quoteApprovalId || !decisionId)
+              : (quoteApprovalId || !decisionId)
+        )
+      ))
   ) return null;
   return Object.freeze({
     kind: "opportunity",
@@ -146,6 +187,8 @@ function normalizeOpportunity(value) {
     evaluationId,
     quoteId,
     approvedQuoteDecisionId: decisionId,
+    ...(hasQuoteApprovalId ? { quoteApprovalId } : {}),
+    ...(hasApprovalSource ? { approvalSource } : {}),
     authority: Object.freeze({ state: authority.state }),
     job,
     customer,
@@ -168,6 +211,58 @@ function normalizeChangeRequest(value) {
     : null;
 }
 
+function normalizeExternalScheduleConfirmation(value) {
+  if (value == null) return null;
+
+  const source = record(value);
+  const id = uuid(source?.id);
+  const method = EXTERNAL_CONFIRMATION_METHODS.includes(source?.method)
+    ? source.method
+    : null;
+  const confirmedAt = timestamp(source?.confirmedAt);
+  const proposedVisitVersion = integer(source?.proposedVisitVersion, {
+    minimum: 1,
+  });
+  const scheduledVisitVersion = integer(source?.scheduledVisitVersion, {
+    minimum: 1,
+  });
+  const proposedIntegrityHash =
+    typeof source?.proposedIntegrityHash === "string" &&
+    /^[0-9a-f]{64}$/.test(source.proposedIntegrityHash)
+      ? source.proposedIntegrityHash
+      : null;
+  const recordedByParticipantId = uuid(source?.recordedByParticipantId);
+  const recordedAt = timestamp(source?.recordedAt);
+
+  if (
+    !source ||
+    source.source !== "BUSINESS_RECORDED_EXTERNAL_EVIDENCE" ||
+    !id ||
+    !method ||
+    !confirmedAt ||
+    !proposedVisitVersion ||
+    !scheduledVisitVersion ||
+    scheduledVisitVersion !== proposedVisitVersion + 1 ||
+    !proposedIntegrityHash ||
+    !recordedByParticipantId ||
+    !recordedAt
+  ) {
+    return null;
+  }
+
+  return Object.freeze({
+    id,
+    source: source.source,
+    method,
+    confirmedAt,
+    proposedVisitVersion,
+    scheduledVisitVersion,
+    proposedIntegrityHash,
+    recordedByParticipantId,
+    recordedAt,
+  });
+}
+
 function normalizeVisit(value) {
   const source = record(value);
   const id = uuid(source?.id);
@@ -177,6 +272,27 @@ function normalizeVisit(value) {
   const scheduledEndAt = timestamp(source?.scheduledEndAt, { nullable: true });
   const timeZone = text(source?.timeZone, 100);
   const evaluationId = uuid(source?.evaluationId, { nullable: true });
+  const hasQuoteApprovalId = Object.hasOwn(source || {}, "quoteApprovalId");
+  const hasApprovalSource = Object.hasOwn(source || {}, "approvalSource");
+  const hasExternalScheduleConfirmation = Object.hasOwn(
+    source || {},
+    "externalScheduleConfirmation"
+  );
+  const quoteApprovalId = hasQuoteApprovalId
+    ? uuid(source?.quoteApprovalId, { nullable: true })
+    : null;
+  const approvalSource = hasApprovalSource
+    ? source?.approvalSource == null
+      ? null
+      : APPROVAL_SOURCES.includes(source.approvalSource)
+        ? source.approvalSource
+        : undefined
+    : null;
+  const externalScheduleConfirmation = hasExternalScheduleConfirmation
+    ? normalizeExternalScheduleConfirmation(
+        source.externalScheduleConfirmation
+      )
+    : null;
   const approvedEvidence = record(source?.approvedQuoteDecisionEvidence);
   const approvedDecisionId = uuid(approvedEvidence?.decisionId, { nullable: true });
   const latestCustomerChangeRequest = normalizeChangeRequest(source?.latestCustomerChangeRequest);
@@ -212,14 +328,51 @@ function normalizeVisit(value) {
     ["canConfirm", "canReschedule", "canCancel", "canComplete", "canViewJob"].some(
       (key) => typeof actions[key] !== "boolean"
     ) ||
+    (
+      Object.hasOwn(actions, "canRecordExternalConfirmation") &&
+      typeof actions.canRecordExternalConfirmation !== "boolean"
+    ) ||
     (source.cancellationReason != null && !cancellationReason) ||
     (source.cancelledAt != null && !cancelledAt) ||
     (source.startedAt != null && !startedAt) ||
     (source.completedAt != null && !completedAt) ||
     (source.latestCustomerChangeRequest != null && !latestCustomerChangeRequest) ||
-    (source.purpose === "EVALUATION" && approvedEvidence) ||
+    approvalSource === undefined ||
+    (
+      hasExternalScheduleConfirmation &&
+      source.externalScheduleConfirmation != null &&
+      !externalScheduleConfirmation
+    ) ||
+    (source.purpose === "EVALUATION" &&
+      (
+        approvedEvidence ||
+        quoteApprovalId ||
+        approvalSource ||
+        externalScheduleConfirmation
+      )) ||
     (source.purpose === "APPROVED_WORK" &&
-      (evaluationId || !approvedDecisionId || approvedEvidence?.decision !== "APPROVED")) ||
+      (
+        evaluationId ||
+        (
+          approvalSource === "EXTERNAL_EVIDENCE"
+            ? (!quoteApprovalId || approvedDecisionId)
+            : approvalSource === "MEETRO_CUSTOMER"
+              ? (
+                  !quoteApprovalId ||
+                  !approvedDecisionId ||
+                  approvedEvidence?.decision !== "APPROVED"
+                )
+              : (
+                  quoteApprovalId ||
+                  !approvedDecisionId ||
+                  approvedEvidence?.decision !== "APPROVED"
+                )
+        ) ||
+        (
+          externalScheduleConfirmation &&
+          approvalSource !== "EXTERNAL_EVIDENCE"
+        )
+      )) ||
     (source.semanticState === "WAITING_FOR_CUSTOMER" && source.state !== "PROPOSED") ||
     (source.semanticState === "CHANGE_REQUESTED" && source.state !== "PROPOSED") ||
     (["SCHEDULED", "STARTED", "CANCELLED", "COMPLETED"].includes(source.semanticState) &&
@@ -243,6 +396,11 @@ function normalizeVisit(value) {
     startedAt,
     completedAt,
     evaluationId,
+    ...(hasQuoteApprovalId ? { quoteApprovalId } : {}),
+    ...(hasApprovalSource ? { approvalSource } : {}),
+    ...(hasExternalScheduleConfirmation
+      ? { externalScheduleConfirmation }
+      : {}),
     approvedQuoteDecisionEvidence: approvedDecisionId
       ? Object.freeze({ decisionId: approvedDecisionId, decision: "APPROVED" })
       : null,
@@ -253,6 +411,12 @@ function normalizeVisit(value) {
     versionCreatedAt,
     actions: Object.freeze({
       canConfirm: actions.canConfirm === true,
+      ...(Object.hasOwn(actions, "canRecordExternalConfirmation")
+        ? {
+            canRecordExternalConfirmation:
+              actions.canRecordExternalConfirmation === true,
+          }
+        : {}),
       canReschedule: actions.canReschedule === true,
       canCancel: actions.canCancel === true,
       canStart: actions.canStart === true,

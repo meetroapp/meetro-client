@@ -21,6 +21,10 @@ const WORKSTREAM_STATES = new Set([
 ]);
 const ACTIVITY_STATUSES = new Set(["PLANNED", "IN_PROGRESS", "DONE", "CANCELLED"]);
 const ACTIVITY_CLASSIFICATIONS = new Set(["EXECUTION", "NON_EXECUTION"]);
+const APPROVAL_SOURCES = new Set([
+  "MEETRO_CUSTOMER",
+  "EXTERNAL_EVIDENCE",
+]);
 
 export class ApprovedWorkExecutionApiError extends Error {
   constructor({
@@ -76,23 +80,107 @@ function unique(values) {
 }
 
 function normalizeSource(value) {
-  if (!exact(value, [
+  if (!plain(value)) return null;
+
+  const hasQuoteApprovalId = Object.hasOwn(value, "quoteApprovalId");
+  const hasApprovalSource = Object.hasOwn(value, "approvalSource");
+
+  const keys = [
     "quoteId",
     "issuedQuoteVersion",
     "approvedCustomerDecisionId",
+    ...(hasQuoteApprovalId ? ["quoteApprovalId"] : []),
+    ...(hasApprovalSource ? ["approvalSource"] : []),
     "customerParticipantId",
     "currency",
-  ])) return null;
-  const normalized = {
-    quoteId: uuid(value.quoteId),
-    issuedQuoteVersion: integer(value.issuedQuoteVersion),
-    approvedCustomerDecisionId: uuid(value.approvedCustomerDecisionId),
-    customerParticipantId: uuid(value.customerParticipantId),
-    currency: typeof value.currency === "string" && /^[A-Z]{3}$/.test(value.currency)
+  ];
+
+  if (!exact(value, keys)) return null;
+
+  const quoteId = uuid(value.quoteId);
+  const issuedQuoteVersion = integer(value.issuedQuoteVersion);
+  const approvedCustomerDecisionId = uuid(
+    value.approvedCustomerDecisionId,
+    { nullable: true }
+  );
+  const quoteApprovalId = hasQuoteApprovalId
+    ? uuid(value.quoteApprovalId, { nullable: true })
+    : null;
+  const approvalSource = hasApprovalSource
+    ? value.approvalSource == null
+      ? null
+      : APPROVAL_SOURCES.has(value.approvalSource)
+        ? value.approvalSource
+        : undefined
+    : null;
+  const customerParticipantId = uuid(
+    value.customerParticipantId,
+    { nullable: true }
+  );
+  const normalizedCurrency =
+    typeof value.currency === "string" && /^[A-Z]{3}$/.test(value.currency)
       ? value.currency
-      : null,
-  };
-  return Object.values(normalized).every((item) => item != null) ? normalized : null;
+      : null;
+
+  const external = approvalSource === "EXTERNAL_EVIDENCE";
+  const commonMeetro = approvalSource === "MEETRO_CUSTOMER";
+  const legacyMeetro = approvalSource == null;
+
+  if (
+    !quoteId ||
+    !issuedQuoteVersion ||
+    approvalSource === undefined ||
+    !normalizedCurrency ||
+    (
+      value.approvedCustomerDecisionId != null &&
+      !approvedCustomerDecisionId
+    ) ||
+    (
+      hasQuoteApprovalId &&
+      value.quoteApprovalId != null &&
+      !quoteApprovalId
+    ) ||
+    (
+      value.customerParticipantId != null &&
+      !customerParticipantId
+    ) ||
+    (
+      external &&
+      (
+        !quoteApprovalId ||
+        approvedCustomerDecisionId ||
+        customerParticipantId
+      )
+    ) ||
+    (
+      commonMeetro &&
+      (
+        !quoteApprovalId ||
+        !approvedCustomerDecisionId ||
+        !customerParticipantId
+      )
+    ) ||
+    (
+      legacyMeetro &&
+      (
+        quoteApprovalId ||
+        !approvedCustomerDecisionId ||
+        !customerParticipantId
+      )
+    )
+  ) {
+    return null;
+  }
+
+  return Object.freeze({
+    quoteId,
+    issuedQuoteVersion,
+    approvedCustomerDecisionId,
+    ...(hasQuoteApprovalId ? { quoteApprovalId } : {}),
+    ...(hasApprovalSource ? { approvalSource } : {}),
+    customerParticipantId,
+    currency: normalizedCurrency,
+  });
 }
 
 function normalizeExecutionBase(value, { jobId } = {}) {
@@ -116,7 +204,8 @@ function normalizeExecutionBase(value, { jobId } = {}) {
     contractVersion: integer(value.contractVersion),
     id: uuid(value.id),
     jobId: uuid(value.jobId),
-    relationshipId: integer(value.relationshipId),
+    relationshipId:
+      value.relationshipId == null ? null : integer(value.relationshipId),
     source: normalizeSource(value.source),
     currentVersion: integer(value.currentVersion),
     state: EXECUTION_STATES.has(value.state) ? value.state : null,
@@ -130,8 +219,13 @@ function normalizeExecutionBase(value, { jobId } = {}) {
     !normalized.id ||
     !normalized.jobId ||
     (jobId && normalized.jobId !== uuid(jobId)) ||
-    !normalized.relationshipId ||
+    (value.relationshipId != null && !normalized.relationshipId) ||
     !normalized.source ||
+    (
+      normalized.source.approvalSource === "EXTERNAL_EVIDENCE"
+        ? normalized.relationshipId != null
+        : !normalized.relationshipId
+    ) ||
     !normalized.currentVersion ||
     !normalized.state ||
     (value.successorExecutionId != null && !normalized.successorExecutionId) ||
@@ -449,35 +543,89 @@ export function buildApprovedWorkCompletionSnapshot(execution) {
 
 function normalizeCompletion(value, expected) {
   if (!plain(value)) return null;
+
+  const hasQuoteApprovalId = Object.hasOwn(value, "quoteApprovalId");
+
   const normalized = {
     contractVersion: integer(value.contractVersion),
     state: value.state === "WORK_COMPLETED" ? value.state : null,
     jobId: uuid(value.jobId),
-    relationshipId: integer(value.relationshipId),
+    relationshipId:
+      value.relationshipId == null ? null : integer(value.relationshipId),
     executionId: uuid(value.executionId),
     executionVersion: integer(value.executionVersion),
     quoteId: uuid(value.quoteId),
     issuedQuoteVersion: integer(value.issuedQuoteVersion),
-    approvedCustomerDecisionId: uuid(value.approvedCustomerDecisionId),
-    completedAt: timestamp(value.completedAt),
-    nextAction: plain(value.nextAction) && value.nextAction.code === "READY_TO_INVOICE"
-      ? { code: value.nextAction.code, label: text(value.nextAction.label, 200) }
+    approvedCustomerDecisionId: uuid(
+      value.approvedCustomerDecisionId,
+      { nullable: true }
+    ),
+    quoteApprovalId: hasQuoteApprovalId
+      ? uuid(value.quoteApprovalId, { nullable: true })
       : null,
+    completedAt: timestamp(value.completedAt),
+    nextAction:
+      plain(value.nextAction) &&
+      value.nextAction.code === "READY_TO_INVOICE"
+        ? {
+            code: value.nextAction.code,
+            label: text(value.nextAction.label, 200),
+          }
+        : null,
   };
+
   if (
     normalized.contractVersion !== 1 ||
     normalized.state !== "WORK_COMPLETED" ||
     normalized.jobId !== expected.jobId ||
     normalized.executionId !== expected.executionId ||
-    !normalized.relationshipId ||
+    (
+      value.relationshipId != null &&
+      !normalized.relationshipId
+    ) ||
+    normalized.relationshipId !== expected.relationshipId ||
     !normalized.executionVersion ||
-    !normalized.quoteId ||
-    !normalized.issuedQuoteVersion ||
-    !normalized.approvedCustomerDecisionId ||
+    normalized.quoteId !== expected.source.quoteId ||
+    normalized.issuedQuoteVersion !== expected.source.issuedQuoteVersion ||
+    (
+      value.approvedCustomerDecisionId != null &&
+      !normalized.approvedCustomerDecisionId
+    ) ||
+    normalized.approvedCustomerDecisionId !==
+      expected.source.approvedCustomerDecisionId ||
+    (
+      expected.source.quoteApprovalId
+        ? (
+            !hasQuoteApprovalId ||
+            normalized.quoteApprovalId !== expected.source.quoteApprovalId
+          )
+        : (
+            hasQuoteApprovalId &&
+            normalized.quoteApprovalId != null
+          )
+    ) ||
     !normalized.completedAt ||
     !normalized.nextAction?.label
-  ) return null;
-  return normalized;
+  ) {
+    return null;
+  }
+
+  return {
+    contractVersion: normalized.contractVersion,
+    state: normalized.state,
+    jobId: normalized.jobId,
+    relationshipId: normalized.relationshipId,
+    executionId: normalized.executionId,
+    executionVersion: normalized.executionVersion,
+    quoteId: normalized.quoteId,
+    issuedQuoteVersion: normalized.issuedQuoteVersion,
+    approvedCustomerDecisionId: normalized.approvedCustomerDecisionId,
+    ...(hasQuoteApprovalId
+      ? { quoteApprovalId: normalized.quoteApprovalId }
+      : {}),
+    completedAt: normalized.completedAt,
+    nextAction: normalized.nextAction,
+  };
 }
 
 export async function completeApprovedWork({
@@ -518,6 +666,8 @@ export async function completeApprovedWork({
     ? normalizeCompletion(data.completion, {
         jobId: normalizedJobId,
         executionId: normalizedExecutionId,
+        relationshipId: execution.relationshipId,
+        source: execution.source,
       })
     : null;
   const completedExecution = normalizeApprovedWorkExecution(data.execution, {

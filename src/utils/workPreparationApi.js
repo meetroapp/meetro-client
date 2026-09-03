@@ -282,15 +282,90 @@ function normalizeDeposit(value) {
 }
 
 function normalizeSource(value) {
-  if (!exact(value, ["quoteId", "issuedQuoteVersion", "approvedCustomerDecisionId"])) {
+  if (!plain(value)) return null;
+
+  const hasQuoteApprovalId = Object.hasOwn(value, "quoteApprovalId");
+  const hasApprovalSource = Object.hasOwn(value, "approvalSource");
+
+  if (hasQuoteApprovalId !== hasApprovalSource) return null;
+
+  const keys = [
+    "quoteId",
+    "issuedQuoteVersion",
+    "approvedCustomerDecisionId",
+    ...(hasQuoteApprovalId ? ["quoteApprovalId", "approvalSource"] : []),
+  ];
+
+  if (!exact(value, keys)) return null;
+
+  const quoteId = uuid(value.quoteId);
+  const issuedQuoteVersion = integer(value.issuedQuoteVersion);
+  const approvedCustomerDecisionId = uuid(
+    value.approvedCustomerDecisionId,
+    { nullable: true }
+  );
+  const quoteApprovalId = hasQuoteApprovalId
+    ? uuid(value.quoteApprovalId, { nullable: true })
+    : null;
+  const approvalSource = hasApprovalSource
+    ? value.approvalSource == null
+      ? null
+      : ["MEETRO_CUSTOMER", "EXTERNAL_EVIDENCE"].includes(
+          value.approvalSource
+        )
+        ? value.approvalSource
+        : undefined
+    : null;
+
+  const external = approvalSource === "EXTERNAL_EVIDENCE";
+  const commonMeetro = approvalSource === "MEETRO_CUSTOMER";
+  const legacyMeetro = !hasQuoteApprovalId && !hasApprovalSource;
+
+  if (
+    !quoteId ||
+    !issuedQuoteVersion ||
+    approvalSource === undefined ||
+    (
+      value.approvedCustomerDecisionId != null &&
+      !approvedCustomerDecisionId
+    ) ||
+    (
+      hasQuoteApprovalId &&
+      value.quoteApprovalId != null &&
+      !quoteApprovalId
+    ) ||
+    (
+      external &&
+      (
+        !quoteApprovalId ||
+        approvedCustomerDecisionId
+      )
+    ) ||
+    (
+      commonMeetro &&
+      (
+        !quoteApprovalId ||
+        !approvedCustomerDecisionId
+      )
+    ) ||
+    (
+      legacyMeetro &&
+      (
+        quoteApprovalId ||
+        !approvedCustomerDecisionId
+      )
+    )
+  ) {
     return null;
   }
-  const normalized = {
-    quoteId: uuid(value.quoteId),
-    issuedQuoteVersion: integer(value.issuedQuoteVersion),
-    approvedCustomerDecisionId: uuid(value.approvedCustomerDecisionId),
-  };
-  return Object.values(normalized).every(Boolean) ? Object.freeze(normalized) : null;
+
+  return Object.freeze({
+    quoteId,
+    issuedQuoteVersion,
+    approvedCustomerDecisionId,
+    ...(hasQuoteApprovalId ? { quoteApprovalId } : {}),
+    ...(hasApprovalSource ? { approvalSource } : {}),
+  });
 }
 
 function normalizePlanPurchaseSummary(value, expectedCurrency) {
@@ -351,7 +426,8 @@ export function normalizeWorkPreparation(value, { jobId = "" } = {}) {
     exists: true,
     id: uuid(value.id),
     jobId: uuid(value.jobId),
-    relationshipId: integer(value.relationshipId),
+    relationshipId:
+      value.relationshipId == null ? null : integer(value.relationshipId),
     source: normalizeSource(value.source),
     currentVersion: integer(value.currentVersion),
     planningState,
@@ -369,7 +445,14 @@ export function normalizeWorkPreparation(value, { jobId = "" } = {}) {
   };
   if (
     normalized.contractVersion !== 1 || normalized.jobId !== expectedJobId ||
-    !normalized.id || !normalized.relationshipId || !normalized.source ||
+    !normalized.id ||
+    (value.relationshipId != null && !normalized.relationshipId) ||
+    !normalized.source ||
+    (
+      normalized.source.approvalSource === "EXTERNAL_EVIDENCE"
+        ? normalized.relationshipId != null
+        : !normalized.relationshipId
+    ) ||
     !normalized.currentVersion || !normalized.planningState ||
     !normalized.workStartPolicy || !normalized.readiness || !normalized.deposit ||
     !normalized.createdAt || !normalized.updatedAt ||
@@ -565,22 +648,53 @@ async function requestPlanCommand({
 
 export async function materializeWorkPreparation({
   jobId,
-  approvedCustomerDecisionId,
+  approvedCustomerDecisionId = null,
+  quoteApprovalId = null,
   idempotencyKey,
   setPage,
   authFetchImpl = authFetch,
 } = {}) {
   const identity = normalizedIdentityCommand({ jobId, idempotencyKey });
-  const decisionId = uuid(approvedCustomerDecisionId);
-  if (!decisionId) {
+
+  const decisionId =
+    approvedCustomerDecisionId == null
+      ? null
+      : uuid(approvedCustomerDecisionId);
+
+  const approvalId =
+    quoteApprovalId == null
+      ? null
+      : uuid(quoteApprovalId);
+
+  if (
+    (!decisionId && !approvalId) ||
+    (
+      approvedCustomerDecisionId != null &&
+      !decisionId
+    ) ||
+    (
+      quoteApprovalId != null &&
+      !approvalId
+    )
+  ) {
     throw new WorkPreparationApiError({
       status: 400,
-      code: "INVALID_APPROVED_CUSTOMER_DECISION",
+      code: "INVALID_APPROVED_WORK_APPROVAL",
     });
   }
+
+  const body = {
+    ...(decisionId
+      ? { approvedCustomerDecisionId: decisionId }
+      : {}),
+    ...(approvalId
+      ? { quoteApprovalId: approvalId }
+      : {}),
+  };
+
   return requestPlanCommand({
     endpoint: `/jobs/${encodeURIComponent(identity.jobId)}/work-preparation/materialize`,
-    body: { approvedCustomerDecisionId: decisionId },
+    body,
     command: "MATERIALIZE",
     jobId: identity.jobId,
     idempotencyKey: identity.idempotencyKey,

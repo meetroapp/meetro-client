@@ -5,7 +5,9 @@ function sameOpportunity(candidate, opportunity) {
   ) return false;
   return opportunity.purpose === "EVALUATION"
     ? candidate.jobId === opportunity.jobId
-    : candidate.approvedQuoteDecisionId === opportunity.approvedQuoteDecisionId;
+    : opportunity.quoteApprovalId
+      ? candidate.quoteApprovalId === opportunity.quoteApprovalId
+      : candidate.approvedQuoteDecisionId === opportunity.approvedQuoteDecisionId;
 }
 
 export async function prepareProfessionalSchedulingOpportunity({

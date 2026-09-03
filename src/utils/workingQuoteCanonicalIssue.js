@@ -133,6 +133,146 @@ function normalizeCurrentVersion(value, expectedVersion) {
   });
 }
 
+function normalizeWorkingQuoteApproval(value, currentVersion) {
+  if (value == null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const hasExternalEvidence =
+    Object.hasOwn(value, "externalEvidence");
+
+  const expectedKeys = [
+    "id",
+    "source",
+    "issuedQuoteVersion",
+    "approvedAt",
+    ...(hasExternalEvidence ? ["externalEvidence"] : []),
+  ];
+
+  if (
+    JSON.stringify(Object.keys(value).sort()) !==
+    JSON.stringify(expectedKeys.sort())
+  ) {
+    return undefined;
+  }
+
+  const id = uuid(value.id);
+  const issuedQuoteVersion = positiveInteger(
+    value.issuedQuoteVersion
+  );
+  const approvedAt =
+    typeof value.approvedAt === "string" &&
+    !Number.isNaN(Date.parse(value.approvedAt))
+      ? new Date(value.approvedAt).toISOString()
+      : null;
+
+  const source = [
+    "MEETRO_CUSTOMER",
+    "EXTERNAL_EVIDENCE",
+  ].includes(value.source)
+    ? value.source
+    : null;
+
+  let externalEvidence = null;
+
+  if (hasExternalEvidence) {
+    const evidence = value.externalEvidence;
+
+    if (
+      !evidence ||
+      typeof evidence !== "object" ||
+      Array.isArray(evidence) ||
+      JSON.stringify(Object.keys(evidence).sort()) !==
+        JSON.stringify([
+          "id",
+          "method",
+          "recordedByParticipantId",
+          "reference",
+          "note",
+        ].sort())
+    ) {
+      return undefined;
+    }
+
+    const evidenceId = uuid(evidence.id);
+    const recordedByParticipantId = uuid(
+      evidence.recordedByParticipantId
+    );
+    const method = [
+      "PHONE",
+      "EMAIL",
+      "TEXT_MESSAGE",
+      "IN_PERSON",
+      "SIGNED_QUOTE",
+      "OTHER",
+    ].includes(evidence.method)
+      ? evidence.method
+      : null;
+
+    const reference =
+      evidence.reference == null
+        ? null
+        : typeof evidence.reference === "string" &&
+            evidence.reference.trim() &&
+            evidence.reference.trim().length <= 1000
+          ? evidence.reference.trim()
+          : undefined;
+
+    const note =
+      evidence.note == null
+        ? null
+        : typeof evidence.note === "string" &&
+            evidence.note.trim() &&
+            evidence.note.trim().length <= 8000
+          ? evidence.note.trim()
+          : undefined;
+
+    if (
+      !evidenceId ||
+      !recordedByParticipantId ||
+      !method ||
+      reference === undefined ||
+      note === undefined
+    ) {
+      return undefined;
+    }
+
+    externalEvidence = Object.freeze({
+      id: evidenceId,
+      method,
+      recordedByParticipantId,
+      reference,
+      note,
+    });
+  }
+
+  if (
+    !id ||
+    !source ||
+    issuedQuoteVersion !== currentVersion ||
+    !approvedAt ||
+    (
+      source === "MEETRO_CUSTOMER" &&
+      hasExternalEvidence
+    ) ||
+    (
+      source === "EXTERNAL_EVIDENCE" &&
+      !externalEvidence
+    )
+  ) {
+    return undefined;
+  }
+
+  return Object.freeze({
+    id,
+    source,
+    issuedQuoteVersion,
+    approvedAt,
+    ...(externalEvidence ? { externalEvidence } : {}),
+  });
+}
+
 export function normalizeWorkingDocumentCanonicalQuote(value, {
   documentId,
   documentVersion,
@@ -141,8 +281,10 @@ export function normalizeWorkingDocumentCanonicalQuote(value, {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const id = uuid(value.id);
   const normalizedJobId = uuid(value.jobId);
-  const requestId = positiveInteger(value.requestId);
-  const relationshipId = positiveInteger(value.relationshipId);
+  const requestId =
+    value.requestId == null ? null : positiveInteger(value.requestId);
+  const relationshipId =
+    value.relationshipId == null ? null : positiveInteger(value.relationshipId);
   const issuerParticipantId = uuid(value.issuerParticipantId);
   const currentVersion = positiveInteger(value.currentVersion);
   const totalMinor = nonnegativeInteger(value.totalMinor);
@@ -166,6 +308,13 @@ export function normalizeWorkingDocumentCanonicalQuote(value, {
     : !Number.isNaN(Date.parse(value.decidedAt))
       ? new Date(value.decidedAt).toISOString()
       : null;
+  const hasApproval = Object.hasOwn(value, "approval");
+  const approval = hasApproval
+    ? normalizeWorkingQuoteApproval(
+        value.approval,
+        currentVersion
+      )
+    : null;
   const noDecision =
     value.decisionState == null &&
     value.decisionVersion == null &&
@@ -181,12 +330,15 @@ export function normalizeWorkingDocumentCanonicalQuote(value, {
     sourceBusinessDocument?.currentDocumentVersion === positiveInteger(documentVersion) &&
     sourceBusinessDocument?.currentSnapshotMatchesSource === true
   );
+  const marketplaceIdentity = Boolean(requestId && relationshipId);
+  const externalBusinessIdentity =
+    value.requestId == null &&
+    value.relationshipId == null;
   if (
     !id ||
     !normalizedJobId ||
     normalizedJobId !== uuid(jobId) ||
-    !requestId ||
-    !relationshipId ||
+    (!marketplaceIdentity && !externalBusinessIdentity) ||
     !issuerParticipantId ||
     !["DRAFT", "ISSUED"].includes(value.status) ||
     !currentVersion ||
@@ -200,6 +352,16 @@ export function normalizeWorkingDocumentCanonicalQuote(value, {
     current.totalMinor !== totalMinor ||
     (value.status === "DRAFT" && value.issuedAt != null) ||
     (value.status === "ISSUED" && !issuedAt) ||
+    (hasApproval && approval === undefined) ||
+    (approval && value.status !== "ISSUED") ||
+    (
+      approval?.source === "MEETRO_CUSTOMER" &&
+      decisionState !== "APPROVED"
+    ) ||
+    (
+      approval?.source === "EXTERNAL_EVIDENCE" &&
+      decisionState != null
+    ) ||
     (!noDecision && !exactDecision)
   ) return null;
   return Object.freeze({
@@ -216,6 +378,7 @@ export function normalizeWorkingDocumentCanonicalQuote(value, {
     decisionState,
     decisionVersion,
     decidedAt,
+    ...(hasApproval ? { approval } : {}),
     integrityHash: current.integrityHash,
     documentNumber: typeof value.documentNumber === "string"
       ? value.documentNumber
@@ -285,6 +448,12 @@ export function workingQuoteDeliveryPresentation({
       actionDisabled: true,
     });
   }
+  const externalBusinessQuote = Boolean(
+    canonicalQuote &&
+    canonicalQuote.requestId == null &&
+    canonicalQuote.relationshipId == null
+  );
+
   if (canonicalQuote?.status === "DRAFT") {
     return Object.freeze({
       state: "CANONICAL_DRAFT",
@@ -292,10 +461,13 @@ export function workingQuoteDeliveryPresentation({
       delivered: false,
       badgeLabel: "CANONICAL DRAFT",
       statusText: "Canonical Quote prepared · Not issued.",
-      actionLabel: "Send Quote to Customer",
+      actionLabel: externalBusinessQuote
+        ? "Issue Quote"
+        : "Send Quote to Customer",
       actionDisabled: false,
     });
   }
+
   const issued = issuedQuote?.status === "ISSUED" && Boolean(uuid(issuedQuote.id));
   const delivered = Boolean(
     issued &&
@@ -306,6 +478,35 @@ export function workingQuoteDeliveryPresentation({
     typeof deliveryEvidence?.sentAt === "string" &&
     !Number.isNaN(Date.parse(deliveryEvidence.sentAt))
   );
+
+  if (
+    issued &&
+    externalBusinessQuote &&
+    issuedQuote.approval?.source === "EXTERNAL_EVIDENCE"
+  ) {
+    return Object.freeze({
+      state: "EXTERNAL_APPROVED",
+      issued: true,
+      delivered: false,
+      badgeLabel: "APPROVED · EXTERNAL EVIDENCE",
+      statusText: "Customer approval recorded from external evidence.",
+      actionLabel: "Deliver Quote",
+      actionDisabled: false,
+    });
+  }
+
+  if (issued && externalBusinessQuote) {
+    return Object.freeze({
+      state: "EXTERNAL_ISSUED_DELIVERY_REQUIRED",
+      issued: true,
+      delivered: false,
+      badgeLabel: "ISSUED · DELIVERY REQUIRED",
+      statusText: "Quote issued · Choose Email or Share with device to deliver it.",
+      actionLabel: "Deliver Quote",
+      actionDisabled: false,
+    });
+  }
+
   if (issued && issuedQuote.decisionState === "APPROVED") {
     if (!delivered) {
       return Object.freeze({
@@ -494,8 +695,10 @@ export function normalizeWorkingQuoteReviewIdentity(value, {
     documentId: uuid(value.documentId),
     documentVersion: positiveInteger(value.documentVersion),
     jobId: uuid(value.jobId),
-    requestId: positiveInteger(value.requestId),
-    relationshipId: positiveInteger(value.relationshipId),
+    requestId:
+      value.requestId == null ? null : positiveInteger(value.requestId),
+    relationshipId:
+      value.relationshipId == null ? null : positiveInteger(value.relationshipId),
     customerName: typeof value.customerName === "string"
       ? value.customerName.trim()
       : "",
@@ -509,8 +712,16 @@ export function normalizeWorkingQuoteReviewIdentity(value, {
     normalized.documentId !== uuid(documentId) ||
     normalized.documentVersion !== positiveInteger(documentVersion) ||
     normalized.jobId !== uuid(jobId) ||
-    !normalized.requestId ||
-    !normalized.relationshipId ||
+    !(
+      (
+        normalized.requestId &&
+        normalized.relationshipId
+      ) ||
+      (
+        value.requestId == null &&
+        value.relationshipId == null
+      )
+    ) ||
     !normalized.customerName ||
     normalized.customerName.length > 200 ||
     !normalized.projectTitle ||
@@ -649,8 +860,8 @@ export async function issueCanonicalWorkingQuote({
     !issuedQuote ||
     issuedQuote.status !== "ISSUED" ||
     issuedQuote.id !== quote.id ||
-    (quote.relationshipId != null &&
-      issuedQuote.relationshipId !== quote.relationshipId) ||
+    issuedQuote.requestId !== quote.requestId ||
+    issuedQuote.relationshipId !== quote.relationshipId ||
     (quote.issuerParticipantId != null &&
       issuedQuote.issuerParticipantId !== quote.issuerParticipantId) ||
     issuedQuote.currentVersion !== quote.currentVersion + 1 ||
@@ -748,6 +959,21 @@ export async function issueAndSendWorkingQuote({
     }
   }
   const issuedCheckpoint = { canonicalQuote, issuedQuote };
+
+  const externalBusinessQuote =
+    issuedQuote.requestId == null &&
+    issuedQuote.relationshipId == null;
+
+  if (externalBusinessQuote) {
+    return Object.freeze({
+      canonicalQuote,
+      issuedQuote,
+      delivery: null,
+      deliveryEvidence: null,
+      externalDeliveryRequired: true,
+    });
+  }
+
   try {
     if (!delivery) {
       delivery = await fetchDeliveryImpl({

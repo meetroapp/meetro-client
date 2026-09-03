@@ -18,6 +18,11 @@ const IDS = {
   job: "10000000-0000-4000-8000-000000000001",
   evaluation: "20000000-0000-4000-8000-000000000002",
   visit: "30000000-0000-4000-8000-000000000003",
+  quote: "40000000-0000-4000-8000-000000000004",
+  decision: "50000000-0000-4000-8000-000000000005",
+  quoteApproval: "60000000-0000-4000-8000-000000000006",
+  externalConfirmation: "70000000-0000-4000-8000-000000000007",
+  professional: "80000000-0000-4000-8000-000000000008",
 };
 
 function payload(overrides = {}) {
@@ -89,6 +94,98 @@ function payload(overrides = {}) {
   };
 }
 
+function externalPayload({ scheduled = false } = {}) {
+  const response = payload();
+
+  response.schedule.opportunities = [{
+    semanticState: "READY_TO_SCHEDULE",
+    jobId: IDS.job,
+    purpose: "APPROVED_WORK",
+    evaluationId: null,
+    quoteId: IDS.quote,
+    approvedQuoteDecisionId: null,
+    quoteApprovalId: IDS.quoteApproval,
+    approvalSource: "EXTERNAL_EVIDENCE",
+    authority: { state: "ACTIVE" },
+    job: {
+      id: IDS.job,
+      title: "External customer repair",
+      category: "Handyman",
+    },
+    customer: { displayName: "External Customer" },
+    location: {
+      mode: "JOB_SERVICE_LOCATION",
+      serviceArea: "Cape Coral, FL",
+      address: null,
+    },
+    actions: {
+      canStartScheduling: true,
+      canViewJob: true,
+    },
+  }];
+
+  response.schedule.visits = [{
+    id: IDS.visit,
+    jobId: IDS.job,
+    purpose: "APPROVED_WORK",
+    state: scheduled ? "SCHEDULED" : "PROPOSED",
+    semanticState: scheduled ? "SCHEDULED" : "WAITING_FOR_CUSTOMER",
+    currentVersion: scheduled ? 2 : 1,
+    scheduledStartAt: "2026-08-20T14:00:00.000Z",
+    scheduledEndAt: "2026-08-20T15:00:00.000Z",
+    timeZone: "America/New_York",
+    locationMode: "JOB_SERVICE_LOCATION",
+    location: {
+      mode: "JOB_SERVICE_LOCATION",
+      serviceArea: "Cape Coral, FL",
+      address: null,
+    },
+    cancellationReason: null,
+    cancelledAt: null,
+    startedAt: null,
+    completedAt: null,
+    evaluationId: null,
+    quoteApprovalId: IDS.quoteApproval,
+    approvalSource: "EXTERNAL_EVIDENCE",
+    externalScheduleConfirmation: scheduled
+      ? {
+          id: IDS.externalConfirmation,
+          source: "BUSINESS_RECORDED_EXTERNAL_EVIDENCE",
+          method: "TEXT_MESSAGE",
+          confirmedAt: "2026-08-13T14:15:00.000Z",
+          proposedVisitVersion: 1,
+          scheduledVisitVersion: 2,
+          proposedIntegrityHash: "d".repeat(64),
+          recordedByParticipantId: IDS.professional,
+          recordedAt: "2026-08-13T14:15:01.000Z",
+        }
+      : null,
+    approvedQuoteDecisionEvidence: null,
+    latestCustomerChangeRequest: null,
+    job: {
+      id: IDS.job,
+      title: "External customer repair",
+      category: "Handyman",
+    },
+    customer: { displayName: "External Customer" },
+    createdAt: "2026-08-13T12:00:00.000Z",
+    versionCreatedAt: scheduled
+      ? "2026-08-13T14:15:01.000Z"
+      : "2026-08-13T12:00:00.000Z",
+    actions: {
+      canConfirm: false,
+      canRecordExternalConfirmation: !scheduled,
+      canReschedule: true,
+      canCancel: true,
+      canStart: false,
+      canComplete: false,
+      canViewJob: true,
+    },
+  }];
+
+  return response;
+}
+
 test("normalizer allowlists server Schedule truth and drops raw/private fields", () => {
   const schedule = normalizeProfessionalSchedule(payload());
   assert.equal(schedule.source, "PROFESSIONAL_SCHEDULE");
@@ -103,6 +200,80 @@ test("normalizer allowlists server Schedule truth and drops raw/private fields",
   assert.equal("email" in schedule.opportunities[0].customer, false);
   assert.equal("rawGrantRows" in schedule.opportunities[0].authority, false);
   assert.equal("canDelete" in schedule.opportunities[0].actions, false);
+});
+
+test("external Approved Work Schedule uses common Quote approval without fabricated customer decision", () => {
+  const schedule = normalizeProfessionalSchedule(externalPayload());
+
+  assert.ok(schedule);
+  assert.equal(schedule.opportunities.length, 1);
+  assert.equal(schedule.visits.length, 1);
+
+  const opportunity = schedule.opportunities[0];
+  assert.equal(opportunity.purpose, "APPROVED_WORK");
+  assert.equal(opportunity.quoteId, IDS.quote);
+  assert.equal(opportunity.quoteApprovalId, IDS.quoteApproval);
+  assert.equal(opportunity.approvalSource, "EXTERNAL_EVIDENCE");
+  assert.equal(opportunity.approvedQuoteDecisionId, null);
+
+  const visit = schedule.visits[0];
+  assert.equal(visit.quoteApprovalId, IDS.quoteApproval);
+  assert.equal(visit.approvalSource, "EXTERNAL_EVIDENCE");
+  assert.equal(visit.approvedQuoteDecisionEvidence, null);
+  assert.equal(visit.externalScheduleConfirmation, null);
+  assert.equal(visit.actions.canConfirm, false);
+  assert.equal(visit.actions.canRecordExternalConfirmation, true);
+});
+
+test("scheduled external Visit preserves canonical external confirmation evidence", () => {
+  const schedule = normalizeProfessionalSchedule(
+    externalPayload({ scheduled: true })
+  );
+
+  assert.ok(schedule);
+  const visit = schedule.visits[0];
+
+  assert.equal(visit.state, "SCHEDULED");
+  assert.equal(
+    visit.externalScheduleConfirmation.source,
+    "BUSINESS_RECORDED_EXTERNAL_EVIDENCE"
+  );
+  assert.equal(visit.externalScheduleConfirmation.method, "TEXT_MESSAGE");
+  assert.equal(
+    visit.externalScheduleConfirmation.proposedVisitVersion,
+    1
+  );
+  assert.equal(
+    visit.externalScheduleConfirmation.scheduledVisitVersion,
+    2
+  );
+  assert.equal(visit.actions.canRecordExternalConfirmation, false);
+});
+
+test("external Schedule provenance fails closed when common approval identity is mixed or malformed", () => {
+  const withDecision = externalPayload();
+  withDecision.schedule.opportunities[0].approvedQuoteDecisionId = IDS.decision;
+  assert.equal(normalizeProfessionalSchedule(withDecision), null);
+
+  const missingApproval = externalPayload();
+  missingApproval.schedule.opportunities[0].quoteApprovalId = null;
+  assert.equal(normalizeProfessionalSchedule(missingApproval), null);
+
+  const visitWithDecision = externalPayload();
+  visitWithDecision.schedule.visits[0].approvedQuoteDecisionEvidence = {
+    decisionId: IDS.decision,
+    decision: "APPROVED",
+  };
+  assert.equal(normalizeProfessionalSchedule(visitWithDecision), null);
+
+  const wrongSource = externalPayload({ scheduled: true });
+  wrongSource.schedule.visits[0].approvalSource = "MEETRO_CUSTOMER";
+  assert.equal(normalizeProfessionalSchedule(wrongSource), null);
+
+  const badConfirmation = externalPayload({ scheduled: true });
+  badConfirmation.schedule.visits[0]
+    .externalScheduleConfirmation.scheduledVisitVersion = 3;
+  assert.equal(normalizeProfessionalSchedule(badConfirmation), null);
 });
 
 test("Schedule read preserves Evaluation arrival truth without an invented end", () => {

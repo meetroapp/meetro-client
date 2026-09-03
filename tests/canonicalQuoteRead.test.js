@@ -32,6 +32,11 @@ const ids = Object.freeze({
   rootMaterial: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   customerMaterial: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
   separateProposal: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  businessDocument: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+  approval: "eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee",
+  approvalEvidence: "ffffffff-ffff-4fff-8fff-ffffffffffff",
+  businessContact: "12121212-1212-4121-8121-121212121212",
+  customerRelationship: "13131313-1313-4131-8131-131313131313",
 });
 
 const createdAt = "2026-08-11T18:00:00.000Z";
@@ -238,6 +243,51 @@ function rootQuote(overrides = {}) {
   };
 }
 
+function externalQuote({
+  mode = "DOCUMENT_ONLY",
+  approvalMethod = "PHONE",
+  ...overrides
+} = {}) {
+  const linked = mode === "EXTERNAL_CONTACT";
+  return rootQuote({
+    requestId: null,
+    relationshipId: null,
+    decisionState: null,
+    decisionVersion: null,
+    decidedAt: null,
+    documentNumber: "Q-0000009",
+    sourceBusinessDocument: {
+      documentId: ids.businessDocument,
+      documentVersion: 1,
+    },
+    customerParty: null,
+    customerSnapshot: {
+      mode,
+      name: linked ? "External Contact Customer" : "Document Only Customer",
+      companyName: null,
+      email: "customer@example.com",
+      phone: "2395550100",
+      address: "Cape Coral, FL",
+      businessContactId: linked ? ids.businessContact : null,
+      customerRelationshipId: linked ? ids.customerRelationship : null,
+    },
+    approval: {
+      id: ids.approval,
+      source: "EXTERNAL_EVIDENCE",
+      issuedQuoteVersion: 2,
+      approvedAt: decidedAt,
+      externalEvidence: {
+        id: ids.approvalEvidence,
+        method: approvalMethod,
+        recordedByParticipantId: ids.participant,
+        reference: "Customer confirmed approval",
+        note: null,
+      },
+    },
+    ...overrides,
+  });
+}
+
 function supplementalQuote(overrides = {}) {
   const scopeItems = overrides.scopeItems || [
     includedLabor({
@@ -415,6 +465,150 @@ test("canonical status, customer decision, server totals, and exclusions are pre
   );
   assert.equal(
     validateCanonicalQuoteProjection({ ...rootQuote(), accepted: true, paid: true }),
+    null
+  );
+});
+
+test("external-contact Quote read uses common approval without fabricated marketplace identity", () => {
+  const quote = validateCanonicalQuoteProjection(
+    externalQuote({ mode: "EXTERNAL_CONTACT", approvalMethod: "EMAIL" })
+  );
+
+  assert.ok(quote);
+  assert.equal(quote.requestId, null);
+  assert.equal(quote.relationshipId, null);
+  assert.equal(quote.decisionState, null);
+  assert.equal(quote.customerSnapshot.mode, "EXTERNAL_CONTACT");
+  assert.equal(quote.customerSnapshot.businessContactId, ids.businessContact);
+  assert.equal(
+    quote.customerSnapshot.customerRelationshipId,
+    ids.customerRelationship
+  );
+  assert.equal(quote.approval.id, ids.approval);
+  assert.equal(quote.approval.source, "EXTERNAL_EVIDENCE");
+  assert.equal(quote.approval.issuedQuoteVersion, 2);
+  assert.equal(quote.approval.externalEvidence.method, "EMAIL");
+  assert.equal(
+    quote.approval.externalEvidence.recordedByParticipantId,
+    ids.participant
+  );
+
+  assert.equal(Object.hasOwn(quote, "customerDecisionId"), false);
+  assert.equal(Object.hasOwn(quote, "customerParticipantId"), false);
+});
+
+test("document-only Quote read preserves frozen customer and external approval evidence", () => {
+  const quote = validateCanonicalQuoteProjection(
+    externalQuote({ mode: "DOCUMENT_ONLY", approvalMethod: "IN_PERSON" })
+  );
+
+  assert.ok(quote);
+  assert.equal(quote.requestId, null);
+  assert.equal(quote.relationshipId, null);
+  assert.equal(quote.decisionState, null);
+  assert.equal(quote.customerParty, null);
+  assert.equal(quote.customerSnapshot.mode, "DOCUMENT_ONLY");
+  assert.equal(quote.customerSnapshot.businessContactId, null);
+  assert.equal(quote.customerSnapshot.customerRelationshipId, null);
+  assert.equal(quote.approval.source, "EXTERNAL_EVIDENCE");
+  assert.equal(quote.approval.externalEvidence.method, "IN_PERSON");
+});
+
+test("common Quote approval stays distinct from Meetro customer decision provenance", () => {
+  const marketplace = rootQuote({
+    approval: {
+      id: ids.approval,
+      source: "MEETRO_CUSTOMER",
+      issuedQuoteVersion: 2,
+      approvedAt: decidedAt,
+    },
+  });
+
+  const normalized = validateCanonicalQuoteProjection(marketplace);
+  assert.ok(normalized);
+  assert.equal(normalized.decisionState, "APPROVED");
+  assert.equal(normalized.approval.source, "MEETRO_CUSTOMER");
+  assert.equal(
+    Object.hasOwn(normalized.approval, "externalEvidence"),
+    false
+  );
+
+  assert.equal(
+    validateCanonicalQuoteProjection(
+      rootQuote({
+        decisionState: null,
+        decisionVersion: null,
+        decidedAt: null,
+        approval: {
+          id: ids.approval,
+          source: "MEETRO_CUSTOMER",
+          issuedQuoteVersion: 2,
+          approvedAt: decidedAt,
+        },
+      })
+    ),
+    null
+  );
+});
+
+test("external Quote identity and approval combinations fail closed when provenance is malformed", () => {
+  const external = externalQuote({ mode: "DOCUMENT_ONLY" });
+
+  assert.equal(
+    validateCanonicalQuoteProjection({
+      ...external,
+      relationshipId: 52,
+    }),
+    null
+  );
+
+  assert.equal(
+    validateCanonicalQuoteProjection({
+      ...external,
+      sourceBusinessDocument: null,
+    }),
+    null
+  );
+
+  assert.equal(
+    validateCanonicalQuoteProjection({
+      ...external,
+      decisionState: "APPROVED",
+      decisionVersion: 2,
+      decidedAt,
+    }),
+    null
+  );
+
+  assert.equal(
+    validateCanonicalQuoteProjection({
+      ...external,
+      approval: {
+        ...external.approval,
+        issuedQuoteVersion: 1,
+      },
+    }),
+    null
+  );
+
+  assert.equal(
+    validateCanonicalQuoteProjection(
+      externalQuote({
+        mode: "EXTERNAL_CONTACT",
+        customerSnapshot: {
+          ...externalQuote({ mode: "EXTERNAL_CONTACT" }).customerSnapshot,
+          businessContactId: null,
+        },
+      })
+    ),
+    null
+  );
+
+  assert.equal(
+    validateCanonicalQuoteProjection({
+      ...rootQuote(),
+      approval: external.approval,
+    }),
     null
   );
 });

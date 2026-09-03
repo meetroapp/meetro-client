@@ -75,6 +75,10 @@ async function loadSubject({
         purpose === "APPROVED_WORK"
           ? authority.approvedQuoteDecisionId
           : null,
+      quoteApprovalId:
+        purpose === "APPROVED_WORK"
+          ? authority.quoteApprovalId
+          : null,
       setPage,
     });
     const details = await loadVisitDetails({
@@ -196,11 +200,21 @@ export async function loadCanonicalVisitWorkspace({
         ? quoteResult.value
         : [];
     const approvedQuotes = quotes.filter(
-      (quote) => quote.status === "ISSUED" && quote.decisionState === "APPROVED"
+      (quote) =>
+        quote.status === "ISSUED" &&
+        (
+          quote.decisionState === "APPROVED" ||
+          ["MEETRO_CUSTOMER", "EXTERNAL_EVIDENCE"].includes(
+            quote.approval?.source
+          )
+        )
     );
     const quoteDecisionSummary = {
       pending: quotes.filter(
-        (quote) => quote.status === "ISSUED" && quote.decisionState == null
+        (quote) =>
+          quote.status === "ISSUED" &&
+          quote.decisionState == null &&
+          !quote.approval
       ).length,
       declined: quotes.filter(
         (quote) => quote.status === "ISSUED" && quote.decisionState === "DECLINED"

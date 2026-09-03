@@ -101,12 +101,15 @@ function safeCanonicalQuoteProjection(quote, canonicalCustomerParty = null) {
   return Object.freeze({
     id: quote.id,
     jobId: quote.jobId,
+    requestId: quote.requestId,
+    relationshipId: quote.relationshipId,
     status: quote.status,
     currentVersion: quote.currentVersion,
     issuedAt: quote.issuedAt,
     decisionState: quote.decisionState,
     decisionVersion: quote.decisionVersion,
     decidedAt: quote.decidedAt,
+    approval: quote.approval || null,
     totalMinor: quote.totalMinor,
     currency: quote.currency,
     documentNumber: quote.documentNumber,
@@ -184,7 +187,14 @@ export async function hydrateSavedQuoteAuthority({
   );
 
   let delivery = null;
-  if (canonicalQuote.status === "ISSUED") {
+  const externalBusinessQuote =
+    canonicalQuote.requestId == null &&
+    canonicalQuote.relationshipId == null;
+
+  if (
+    canonicalQuote.status === "ISSUED" &&
+    !externalBusinessQuote
+  ) {
     delivery = await fetchDeliveryImpl({
       quoteId: canonicalQuote.id,
       jobId: canonicalQuote.jobId,

@@ -17,6 +17,7 @@ const IDS = Object.freeze({
   plan: "22222222-2222-4222-8222-222222222222",
   quote: "33333333-3333-4333-8333-333333333333",
   decision: "44444444-4444-4444-8444-444444444444",
+  approval: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   item: "55555555-5555-4555-8555-555555555555",
   scope: "66666666-6666-4666-8666-666666666666",
   purchase: "77777777-7777-4777-8777-777777777777",
@@ -55,6 +56,33 @@ function plan(overrides = {}) {
   };
 }
 
+function commonMeetroPlan(overrides = {}) {
+  return plan({
+    source: {
+      quoteId: IDS.quote,
+      issuedQuoteVersion: 3,
+      approvedCustomerDecisionId: IDS.decision,
+      quoteApprovalId: IDS.approval,
+      approvalSource: "MEETRO_CUSTOMER",
+    },
+    ...overrides,
+  });
+}
+
+function externalPlan(overrides = {}) {
+  return plan({
+    relationshipId: null,
+    source: {
+      quoteId: IDS.quote,
+      issuedQuoteVersion: 3,
+      approvedCustomerDecisionId: null,
+      quoteApprovalId: IDS.approval,
+      approvalSource: "EXTERNAL_EVIDENCE",
+    },
+    ...overrides,
+  });
+}
+
 function authResponse(data, status = 200) {
   return { response: { ok: status >= 200 && status < 300, status }, data };
 }
@@ -71,6 +99,99 @@ test("strict professional projection preserves planning, acquisition, and prepar
   assert.equal(normalizeWorkPreparation({ ...plan(), browserReady: true }, { jobId: IDS.job }), null);
   assert.equal(normalizeWorkPreparation(plan({ deposit: { state: "DUE", commitmentLocked: false } }), { jobId: IDS.job }), null);
   assert.equal(normalizeWorkPreparation(plan({ items: [item({ readyForWorkStart: true })] }), { jobId: IDS.job }).items[0].acquisitionState, "PURCHASED");
+});
+
+test("Work Preparation accepts new Meetro common approval with customer-decision provenance", () => {
+  const normalized = normalizeWorkPreparation(
+    commonMeetroPlan(),
+    { jobId: IDS.job }
+  );
+
+  assert.ok(normalized);
+  assert.equal(normalized.relationshipId, 42);
+  assert.equal(
+    normalized.source.approvedCustomerDecisionId,
+    IDS.decision
+  );
+  assert.equal(
+    normalized.source.quoteApprovalId,
+    IDS.approval
+  );
+  assert.equal(
+    normalized.source.approvalSource,
+    "MEETRO_CUSTOMER"
+  );
+});
+
+test("external Work Preparation uses common approval without fabricated relationship or decision", () => {
+  const normalized = normalizeWorkPreparation(
+    externalPlan(),
+    { jobId: IDS.job }
+  );
+
+  assert.ok(normalized);
+  assert.equal(normalized.relationshipId, null);
+  assert.equal(
+    normalized.source.approvedCustomerDecisionId,
+    null
+  );
+  assert.equal(
+    normalized.source.quoteApprovalId,
+    IDS.approval
+  );
+  assert.equal(
+    normalized.source.approvalSource,
+    "EXTERNAL_EVIDENCE"
+  );
+});
+
+test("Work Preparation common-approval provenance fails closed for hybrid authority", () => {
+  assert.equal(
+    normalizeWorkPreparation(
+      externalPlan({ relationshipId: 42 }),
+      { jobId: IDS.job }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeWorkPreparation(
+      externalPlan({
+        source: {
+          ...externalPlan().source,
+          approvedCustomerDecisionId: IDS.decision,
+        },
+      }),
+      { jobId: IDS.job }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeWorkPreparation(
+      externalPlan({
+        source: {
+          ...externalPlan().source,
+          quoteApprovalId: null,
+        },
+      }),
+      { jobId: IDS.job }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeWorkPreparation(
+      commonMeetroPlan({
+        source: {
+          ...commonMeetroPlan().source,
+          approvedCustomerDecisionId: null,
+        },
+      }),
+      { jobId: IDS.job }
+    ),
+    null
+  );
 });
 
 test("canonical deposit states are consumed exactly and never calculated from client amounts", () => {
@@ -137,6 +258,61 @@ test("materialization uses approved-decision evidence and Idempotency-Key", asyn
   assert.equal(calls[0].endpoint, `/jobs/${IDS.job}/work-preparation/materialize`);
   assert.equal(calls[0].options.headers["Idempotency-Key"], "work-preparation:materialize:fixed");
   assert.deepEqual(JSON.parse(calls[0].options.body), { approvedCustomerDecisionId: IDS.decision });
+});
+
+test("external Work Preparation materialization sends common Quote approval and no fabricated decision", async () => {
+  const calls = [];
+
+  const result = await materializeWorkPreparation({
+    jobId: IDS.job,
+    quoteApprovalId: IDS.approval,
+    idempotencyKey: "work-preparation:materialize:external-fixed",
+    authFetchImpl: async (endpoint, options) => {
+      calls.push({ endpoint, options });
+
+      return authResponse({
+        success: true,
+        code: "WORK_PREPARATION_MATERIALIZED",
+        workPreparation: externalPlan(),
+        replayed: false,
+      }, 201);
+    },
+  });
+
+  assert.equal(result.workPreparation.id, IDS.plan);
+  assert.deepEqual(
+    JSON.parse(calls[0].options.body),
+    { quoteApprovalId: IDS.approval }
+  );
+});
+
+test("new Meetro Work Preparation materialization can bind common approval plus decision provenance", async () => {
+  const calls = [];
+
+  await materializeWorkPreparation({
+    jobId: IDS.job,
+    approvedCustomerDecisionId: IDS.decision,
+    quoteApprovalId: IDS.approval,
+    idempotencyKey: "work-preparation:materialize:common-fixed",
+    authFetchImpl: async (endpoint, options) => {
+      calls.push({ endpoint, options });
+
+      return authResponse({
+        success: true,
+        code: "WORK_PREPARATION_MATERIALIZED",
+        workPreparation: commonMeetroPlan(),
+        replayed: false,
+      }, 201);
+    },
+  });
+
+  assert.deepEqual(
+    JSON.parse(calls[0].options.body),
+    {
+      approvedCustomerDecisionId: IDS.decision,
+      quoteApprovalId: IDS.approval,
+    }
+  );
 });
 
 test("revision sends a full bounded snapshot without browser-derived readiness", async () => {

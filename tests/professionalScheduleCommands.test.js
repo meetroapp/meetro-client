@@ -43,6 +43,40 @@ test("ACTIVE authority never reactivates and a failed activation gate remains cl
   assert.equal(activations, 1);
 });
 
+test("external Approved Work opportunity refresh binds by common Quote approval", async () => {
+  const external = {
+    jobId: opportunity.jobId,
+    purpose: "APPROVED_WORK",
+    quoteId: "30000000-0000-4000-8000-000000000003",
+    approvedQuoteDecisionId: null,
+    quoteApprovalId: "40000000-0000-4000-8000-000000000004",
+    approvalSource: "EXTERNAL_EVIDENCE",
+    authority: { state: "AVAILABLE" },
+  };
+
+  const collision = {
+    ...external,
+    quoteApprovalId: "50000000-0000-4000-8000-000000000005",
+    authority: { state: "ACTIVE" },
+  };
+
+  const active = {
+    ...external,
+    authority: { state: "ACTIVE" },
+  };
+
+  const result = await prepareProfessionalSchedulingOpportunity({
+    opportunity: external,
+    activate: async () => {},
+    readActive: async () => ({
+      opportunities: [collision, active],
+    }),
+  });
+
+  assert.equal(result, active);
+  assert.equal(result.quoteApprovalId, external.quoteApprovalId);
+});
+
 test("canonical subject identity prevents a refreshed opportunity collision", async () => {
   const collision = {
     ...opportunity,

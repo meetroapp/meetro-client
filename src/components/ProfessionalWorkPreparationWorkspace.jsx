@@ -336,6 +336,26 @@ export default function ProfessionalWorkPreparationWorkspace({
   }, [keyFor, load, onCanonicalChange]);
 
   const plan = state.plan?.exists ? state.plan : null;
+
+  const materializeAuthority = useMemo(() => {
+    const authority = state.decision;
+    if (!authority) return null;
+
+    const approvedCustomerDecisionId =
+      authority.customerDecisionId || null;
+    const quoteApprovalId =
+      authority.quoteApprovalId || null;
+
+    if (!approvedCustomerDecisionId && !quoteApprovalId) {
+      return null;
+    }
+
+    return Object.freeze({
+      approvedCustomerDecisionId,
+      quoteApprovalId,
+    });
+  }, [state.decision]);
+
   const canRevise = plan?.safeNextActions.includes("REVISE_PLAN");
   const canPurchase = plan?.safeNextActions.includes("RECORD_PURCHASE") && !plan.deposit.commitmentLocked;
   const canPrepare = plan?.safeNextActions.includes("RECORD_PREPARATION") && !plan.deposit.commitmentLocked;
@@ -369,12 +389,47 @@ export default function ProfessionalWorkPreparationWorkspace({
       {state.status === "ready" && !state.plan.exists && (
         <WorkCenterEmptyState
           icon="workCenter" title={copy.emptyTitle} body={copy.emptyBody}
-          action={state.decision?.customerDecisionId ? (
-            <button type="button" style={styles.primaryButton} disabled={Boolean(busy)} onClick={() => {
-              const payload = { approvedCustomerDecisionId: state.decision.customerDecisionId };
-              void runCommand("materialize", payload, (idempotencyKey) => materializeWorkPreparation({ jobId, approvedCustomerDecisionId: state.decision.customerDecisionId, idempotencyKey, setPage }));
-            }}>{busy === "materialize" ? copy.creating : copy.createPlan}</button>
-          ) : <p style={styles.muted}>{copy.noDecision}</p>}
+          action={materializeAuthority ? (
+            <button
+              type="button"
+              style={styles.primaryButton}
+              disabled={Boolean(busy)}
+              onClick={() => {
+                const payload = {
+                  ...(materializeAuthority.approvedCustomerDecisionId
+                    ? {
+                        approvedCustomerDecisionId:
+                          materializeAuthority.approvedCustomerDecisionId,
+                      }
+                    : {}),
+                  ...(materializeAuthority.quoteApprovalId
+                    ? {
+                        quoteApprovalId:
+                          materializeAuthority.quoteApprovalId,
+                      }
+                    : {}),
+                };
+
+                void runCommand(
+                  "materialize",
+                  payload,
+                  (idempotencyKey) =>
+                    materializeWorkPreparation({
+                      jobId,
+                      ...payload,
+                      idempotencyKey,
+                      setPage,
+                    })
+                );
+              }}
+            >
+              {busy === "materialize"
+                ? copy.creating
+                : copy.createPlan}
+            </button>
+          ) : (
+            <p style={styles.muted}>{copy.noDecision}</p>
+          )}
         />
       )}
 

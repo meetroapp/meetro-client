@@ -10,6 +10,7 @@ import {
   fetchCanonicalVisits,
   normalizeCanonicalVisit,
   normalizeCanonicalVisitAuthority,
+  recordExternalVisitConfirmation,
   runCanonicalVisitCommand,
 } from "../src/utils/canonicalVisitProjection.js";
 import { loadCanonicalVisitWorkspace } from "../src/utils/canonicalVisitController.js";
@@ -23,6 +24,8 @@ const ids = Object.freeze({
   professional: "66666666-6666-4666-8666-666666666666",
   customer: "77777777-7777-4777-8777-777777777777",
   event: "88888888-8888-4888-8888-888888888888",
+  quoteApproval: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+  externalConfirmation: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
 });
 
 const startAt = "2026-08-14T14:00:00.000Z";
@@ -89,6 +92,25 @@ function approvedAuthority(overrides = {}) {
     },
     ...overrides,
   };
+}
+
+const externalProfessionalCapabilities = [
+  "visit.read",
+  "visit.propose",
+  "visit.reschedule",
+  "visit.cancel",
+  "visit.external_confirmation.record",
+];
+
+function externalApprovedAuthority(overrides = {}) {
+  return approvedAuthority({
+    approvalSource: "EXTERNAL_EVIDENCE",
+    quoteApprovalId: ids.quoteApproval,
+    approvedQuoteDecisionId: null,
+    customerCapabilities: [],
+    professionalCapabilities: externalProfessionalCapabilities,
+    ...overrides,
+  });
 }
 
 function visit(overrides = {}) {
@@ -171,6 +193,26 @@ function approvedVisit(overrides = {}) {
   });
 }
 
+function externalApprovedVisit(overrides = {}) {
+  return visit({
+    purpose: "APPROVED_WORK",
+    evaluationId: null,
+    quoteApprovalId: ids.quoteApproval,
+    approvalSource: "EXTERNAL_EVIDENCE",
+    approvedQuoteDecisionEvidence: null,
+    actions: {
+      canConfirm: false,
+      canRequestChange: false,
+      canRecordExternalConfirmation: true,
+      canReschedule: true,
+      canCancel: true,
+      canStart: false,
+      canComplete: false,
+    },
+    ...overrides,
+  });
+}
+
 function record() {
   return {
     source: "CANONICAL_BACKEND_READ",
@@ -228,6 +270,64 @@ test("Approved Work authority remains tied to exact Quote decision evidence", ()
   assert.equal(
     normalizeCanonicalVisitAuthority(
       { authority: approvedAuthority({ approvedQuoteDecisionId: null }) },
+      { jobId: ids.job, purpose: "APPROVED_WORK", subjectId: ids.quote }
+    ),
+    null
+  );
+});
+
+test("External Approved Work authority uses common Quote approval without customer grants", () => {
+  const authority = normalizeCanonicalVisitAuthority(
+    { authority: externalApprovedAuthority() },
+    { jobId: ids.job, purpose: "APPROVED_WORK", subjectId: ids.quote }
+  );
+
+  assert.ok(authority);
+  assert.equal(authority.quoteId, ids.quote);
+  assert.equal(authority.quoteApprovalId, ids.quoteApproval);
+  assert.equal(authority.approvalSource, "EXTERNAL_EVIDENCE");
+  assert.equal(authority.approvedQuoteDecisionId, null);
+  assert.deepEqual(authority.customerCapabilities, []);
+  assert.deepEqual(
+    authority.professionalCapabilities,
+    externalProfessionalCapabilities
+  );
+  assert.equal(authority.actions.canPropose, true);
+
+  assert.equal(
+    normalizeCanonicalVisitAuthority(
+      {
+        authority: externalApprovedAuthority({
+          approvedQuoteDecisionId: ids.decision,
+        }),
+      },
+      { jobId: ids.job, purpose: "APPROVED_WORK", subjectId: ids.quote }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeCanonicalVisitAuthority(
+      {
+        authority: externalApprovedAuthority({
+          customerCapabilities: ["visit.read"],
+        }),
+      },
+      { jobId: ids.job, purpose: "APPROVED_WORK", subjectId: ids.quote }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeCanonicalVisitAuthority(
+      {
+        authority: externalApprovedAuthority({
+          professionalCapabilities: [
+            ...externalProfessionalCapabilities,
+            "visit.start",
+          ],
+        }),
+      },
       { jobId: ids.job, purpose: "APPROVED_WORK", subjectId: ids.quote }
     ),
     null
@@ -364,6 +464,114 @@ test("Visit DTO is allowlisted and drops actor identity and sentinel fields", ()
     canStart: false,
     canComplete: false,
   });
+});
+
+test("External Approved Work Visit preserves common approval and external confirmation action", () => {
+  const normalized = normalizeCanonicalVisit(externalApprovedVisit(), {
+    jobId: ids.job,
+  });
+
+  assert.ok(normalized);
+  assert.equal(normalized.purpose, "APPROVED_WORK");
+  assert.equal(normalized.quoteApprovalId, ids.quoteApproval);
+  assert.equal(normalized.approvalSource, "EXTERNAL_EVIDENCE");
+  assert.equal(normalized.approvedQuoteDecisionEvidence, null);
+  assert.equal(normalized.externalScheduleConfirmation, null);
+  assert.equal(normalized.actions.canConfirm, false);
+  assert.equal(normalized.actions.canRecordExternalConfirmation, true);
+  assert.equal(normalized.actions.canStart, false);
+  assert.equal(normalized.actions.canComplete, false);
+
+  assert.equal(
+    normalizeCanonicalVisit(
+      externalApprovedVisit({
+        approvedQuoteDecisionEvidence: {
+          decisionId: ids.decision,
+          decision: "APPROVED",
+        },
+      }),
+      { jobId: ids.job }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeCanonicalVisit(
+      externalApprovedVisit({
+        approvalSource: "MEETRO_CUSTOMER",
+      }),
+      { jobId: ids.job }
+    ),
+    null
+  );
+});
+
+test("External scheduled Visit preserves canonical external confirmation evidence", () => {
+  const normalized = normalizeCanonicalVisit(
+    externalApprovedVisit({
+      state: "SCHEDULED",
+      currentVersion: 2,
+      externalScheduleConfirmation: {
+        id: ids.externalConfirmation,
+        source: "BUSINESS_RECORDED_EXTERNAL_EVIDENCE",
+        method: "PHONE",
+        confirmedAt: "2026-08-13T14:15:00.000Z",
+        proposedVisitVersion: 1,
+        scheduledVisitVersion: 2,
+        proposedIntegrityHash: "c".repeat(64),
+        recordedByParticipantId: ids.professional,
+        recordedAt: "2026-08-13T14:15:01.000Z",
+      },
+      actions: {
+        canConfirm: false,
+        canRequestChange: false,
+        canRecordExternalConfirmation: false,
+        canReschedule: true,
+        canCancel: true,
+        canStart: false,
+        canComplete: false,
+      },
+    }),
+    { jobId: ids.job }
+  );
+
+  assert.ok(normalized);
+  assert.equal(normalized.state, "SCHEDULED");
+  assert.equal(
+    normalized.externalScheduleConfirmation.source,
+    "BUSINESS_RECORDED_EXTERNAL_EVIDENCE"
+  );
+  assert.equal(normalized.externalScheduleConfirmation.method, "PHONE");
+  assert.equal(
+    normalized.externalScheduleConfirmation.proposedVisitVersion,
+    1
+  );
+  assert.equal(
+    normalized.externalScheduleConfirmation.scheduledVisitVersion,
+    2
+  );
+
+  assert.equal(
+    normalizeCanonicalVisit(
+      externalApprovedVisit({
+        state: "SCHEDULED",
+        currentVersion: 2,
+        externalScheduleConfirmation: {
+          id: ids.externalConfirmation,
+          source: "BUSINESS_RECORDED_EXTERNAL_EVIDENCE",
+          method: "PHONE",
+          confirmedAt: "2026-08-13T14:15:00.000Z",
+          proposedVisitVersion: 1,
+          scheduledVisitVersion: 3,
+          proposedIntegrityHash: "c".repeat(64),
+          recordedByParticipantId: ids.professional,
+          recordedAt: "2026-08-13T14:15:01.000Z",
+        },
+      }),
+      { jobId: ids.job }
+    ),
+    null
+  );
 });
 
 test("canonical Visit DTO and immutable history preserve a nullable end time", () => {
@@ -512,6 +720,207 @@ test("propose commands include only canonical subject, schedule, and empty optio
     workstreamIds: [],
     approvedQuoteDecisionId: ids.decision,
   });
+});
+
+test("External Approved Work proposal sends common Quote approval and no fabricated decision", async () => {
+  let requestCall;
+
+  await runCanonicalVisitCommand({
+    jobId: ids.job,
+    command: "propose",
+    purpose: "APPROVED_WORK",
+    quoteApprovalId: ids.quoteApproval,
+    schedule: {
+      scheduledStartAt: startAt,
+      scheduledEndAt: endAt,
+      timeZone: "America/New_York",
+      locationMode: "JOB_SERVICE_LOCATION",
+    },
+    cryptoProvider: cryptoProvider(),
+    authFetchImpl: async (endpoint, options) => {
+      requestCall = { endpoint, options };
+      return {
+        response: { ok: true, status: 201 },
+        data: {
+          success: true,
+          visit: externalApprovedVisit(),
+        },
+      };
+    },
+  });
+
+  assert.equal(requestCall.endpoint, `/jobs/${ids.job}/visits`);
+  assert.deepEqual(JSON.parse(requestCall.options.body), {
+    purpose: "APPROVED_WORK",
+    scheduledStartAt: startAt,
+    scheduledEndAt: endAt,
+    timeZone: "America/New_York",
+    locationMode: "JOB_SERVICE_LOCATION",
+    evaluationId: null,
+    workstreamIds: [],
+    approvedQuoteDecisionId: null,
+    quoteApprovalId: ids.quoteApproval,
+  });
+});
+
+test("Approved Work Visit list can bind by common Quote approval without decision evidence", async () => {
+  const visits = await fetchCanonicalVisits({
+    jobId: ids.job,
+    purpose: "APPROVED_WORK",
+    quoteApprovalId: ids.quoteApproval,
+    authFetchImpl: async () => ({
+      response: { ok: true, status: 200 },
+      data: {
+        success: true,
+        visits: [externalApprovedVisit()],
+      },
+    }),
+  });
+
+  assert.equal(visits.length, 1);
+  assert.equal(visits[0].quoteApprovalId, ids.quoteApproval);
+  assert.equal(visits[0].approvedQuoteDecisionEvidence, null);
+});
+
+test("external customer schedule confirmation uses its dedicated evidence route", async () => {
+  let requestCall;
+
+  const confirmedAt = "2026-08-13T14:15:00.000Z";
+
+  const result = await recordExternalVisitConfirmation({
+    jobId: ids.job,
+    visit: externalApprovedVisit(),
+    evidenceMethod: "TEXT_MESSAGE",
+    confirmedAt,
+    evidenceReference: "Customer confirmed the proposed time by text.",
+    evidenceNote: null,
+    cryptoProvider: cryptoProvider(),
+    authFetchImpl: async (endpoint, options) => {
+      requestCall = { endpoint, options };
+
+      return {
+        response: { ok: true, status: 201 },
+        data: {
+          success: true,
+          code: "VISIT_EXTERNAL_CONFIRMATION_RECORDED",
+          visit: externalApprovedVisit({
+            state: "SCHEDULED",
+            currentVersion: 2,
+            externalScheduleConfirmation: {
+              id: ids.externalConfirmation,
+              source: "BUSINESS_RECORDED_EXTERNAL_EVIDENCE",
+              method: "TEXT_MESSAGE",
+              confirmedAt,
+              proposedVisitVersion: 1,
+              scheduledVisitVersion: 2,
+              proposedIntegrityHash: "c".repeat(64),
+              recordedByParticipantId: ids.professional,
+              recordedAt: "2026-08-13T14:15:01.000Z",
+            },
+            actions: {
+              canConfirm: false,
+              canRequestChange: false,
+              canRecordExternalConfirmation: false,
+              canReschedule: true,
+              canCancel: true,
+              canStart: false,
+              canComplete: false,
+            },
+          }),
+        },
+      };
+    },
+  });
+
+  assert.equal(
+    requestCall.endpoint,
+    `/jobs/${ids.job}/visits/${ids.visit}/external-confirmation`
+  );
+
+  assert.deepEqual(JSON.parse(requestCall.options.body), {
+    expectedVersion: 1,
+    quoteApprovalId: ids.quoteApproval,
+    evidenceMethod: "TEXT_MESSAGE",
+    confirmedAt,
+    evidenceReference: "Customer confirmed the proposed time by text.",
+    evidenceNote: null,
+  });
+
+  assert.ok(requestCall.options.headers["Idempotency-Key"]);
+  assert.equal(result.state, "SCHEDULED");
+  assert.equal(result.quoteApprovalId, ids.quoteApproval);
+  assert.equal(
+    result.externalScheduleConfirmation.method,
+    "TEXT_MESSAGE"
+  );
+});
+
+test("ordinary professional confirmation and external evidence confirmation remain separate commands", async () => {
+  let calls = 0;
+
+  await assert.rejects(
+    recordExternalVisitConfirmation({
+      jobId: ids.job,
+      visit: approvedVisit(),
+      evidenceMethod: "PHONE",
+      confirmedAt: "2026-08-13T14:15:00.000Z",
+      evidenceReference: "Customer called.",
+      authFetchImpl: async () => {
+        calls += 1;
+        throw new Error("network should not be reached");
+      },
+    }),
+    (error) =>
+      error instanceof CanonicalVisitError &&
+      error.code === "INVALID_EXTERNAL_VISIT_CONFIRMATION"
+  );
+
+  assert.equal(calls, 0);
+});
+
+test("external confirmation requires bounded real evidence and exact proposed Visit identity", async () => {
+  let calls = 0;
+
+  for (const input of [
+    {
+      visit: externalApprovedVisit(),
+      evidenceMethod: "SIGNED_QUOTE",
+      evidenceReference: "Unsupported method",
+    },
+    {
+      visit: externalApprovedVisit(),
+      evidenceMethod: "PHONE",
+      evidenceReference: null,
+      evidenceNote: null,
+    },
+    {
+      visit: externalApprovedVisit({ state: "SCHEDULED" }),
+      evidenceMethod: "PHONE",
+      evidenceReference: "Too late",
+    },
+    {
+      visit: externalApprovedVisit({ quoteApprovalId: null }),
+      evidenceMethod: "PHONE",
+      evidenceReference: "Missing approval",
+    },
+  ]) {
+    await assert.rejects(
+      recordExternalVisitConfirmation({
+        jobId: ids.job,
+        confirmedAt: "2026-08-13T14:15:00.000Z",
+        authFetchImpl: async () => {
+          calls += 1;
+          throw new Error("network should not be reached");
+        },
+        ...input,
+      }),
+      (error) =>
+        error instanceof CanonicalVisitError &&
+        error.code === "INVALID_EXTERNAL_VISIT_CONFIRMATION"
+    );
+  }
+
+  assert.equal(calls, 0);
 });
 
 test("Evaluation propose sends the certified nullable end-time contract", async () => {

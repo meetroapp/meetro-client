@@ -20,6 +20,7 @@ const VISIT_EVENT_TYPES = Object.freeze([
   "VISIT_PROPOSED",
   "VISIT_SCHEDULE_PROPOSED",
   "VISIT_CONFIRMED",
+  "VISIT_EXTERNAL_CONFIRMATION_RECORDED",
   "VISIT_CHANGE_REQUESTED",
   "VISIT_RESCHEDULED",
   "VISIT_CANCELLED",
@@ -44,6 +45,30 @@ const PROFESSIONAL_CAPABILITIES = Object.freeze([
   "visit.cancel",
   "visit.start",
   "visit.complete",
+]);
+const EXTERNAL_PROFESSIONAL_CAPABILITIES = Object.freeze([
+  "visit.read",
+  "visit.propose",
+  "visit.reschedule",
+  "visit.cancel",
+  "visit.external_confirmation.record",
+]);
+const ALL_PROFESSIONAL_CAPABILITIES = Object.freeze([
+  ...new Set([
+    ...PROFESSIONAL_CAPABILITIES,
+    ...EXTERNAL_PROFESSIONAL_CAPABILITIES,
+  ]),
+]);
+const QUOTE_APPROVAL_SOURCES = Object.freeze([
+  "MEETRO_CUSTOMER",
+  "EXTERNAL_EVIDENCE",
+]);
+const EXTERNAL_CONFIRMATION_METHODS = Object.freeze([
+  "PHONE",
+  "EMAIL",
+  "TEXT_MESSAGE",
+  "IN_PERSON",
+  "OTHER",
 ]);
 const AUTHORITY_SOURCES = Object.freeze({
   EVALUATION: "CANONICAL_EVALUATION_VISIT_AUTHORITY",
@@ -141,10 +166,28 @@ function normalizeVisitActions(value) {
     "canRequestChange",
     ...PROFESSIONAL_ACTIONS.filter((key) => key !== "canStart"),
   ];
-  if (keys.some((key) => typeof value[key] !== "boolean")) return null;
+  const hasExternalConfirmationAction = Object.hasOwn(
+    value,
+    "canRecordExternalConfirmation"
+  );
+  if (
+    keys.some((key) => typeof value[key] !== "boolean") ||
+    (
+      hasExternalConfirmationAction &&
+      typeof value.canRecordExternalConfirmation !== "boolean"
+    )
+  ) {
+    return null;
+  }
   return Object.freeze({
     canConfirm: value.canConfirm === true,
     canRequestChange: value.canRequestChange === true,
+    ...(hasExternalConfirmationAction
+      ? {
+          canRecordExternalConfirmation:
+            value.canRecordExternalConfirmation === true,
+        }
+      : {}),
     canReschedule: value.canReschedule === true,
     canCancel: value.canCancel === true,
     canStart: value.canStart === true,
@@ -249,6 +292,80 @@ function normalizeVisitHistory(value) {
   return { versions, events };
 }
 
+function normalizeExternalScheduleConfirmation(value) {
+  if (value == null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return undefined;
+  }
+
+  const id = canonicalUuid(value.id);
+  const method = EXTERNAL_CONFIRMATION_METHODS.includes(value.method)
+    ? value.method
+    : null;
+  const confirmedAt = canonicalTimestamp(value.confirmedAt);
+  const proposedVisitVersion = positiveInteger(value.proposedVisitVersion);
+  const scheduledVisitVersion = positiveInteger(value.scheduledVisitVersion);
+  const proposedIntegrityHash =
+    typeof value.proposedIntegrityHash === "string" &&
+    /^[0-9a-f]{64}$/.test(value.proposedIntegrityHash)
+      ? value.proposedIntegrityHash
+      : null;
+  const recordedByParticipantId = canonicalUuid(
+    value.recordedByParticipantId
+  );
+  const recordedAt = canonicalTimestamp(value.recordedAt);
+
+  if (
+    value.source !== "BUSINESS_RECORDED_EXTERNAL_EVIDENCE" ||
+    !id ||
+    !method ||
+    !confirmedAt ||
+    !proposedVisitVersion ||
+    !scheduledVisitVersion ||
+    scheduledVisitVersion !== proposedVisitVersion + 1 ||
+    !proposedIntegrityHash ||
+    !recordedByParticipantId ||
+    !recordedAt
+  ) {
+    return undefined;
+  }
+
+  return Object.freeze({
+    id,
+    source: value.source,
+    method,
+    confirmedAt,
+    proposedVisitVersion,
+    scheduledVisitVersion,
+    proposedIntegrityHash,
+    recordedByParticipantId,
+    recordedAt,
+  });
+}
+
+function approvedWorkVisitIdentity({
+  approvalSource,
+  quoteApprovalId,
+  approvedEvidence,
+}) {
+  if (approvalSource === "EXTERNAL_EVIDENCE") {
+    return Boolean(quoteApprovalId && !approvedEvidence);
+  }
+  if (approvalSource === "MEETRO_CUSTOMER") {
+    return Boolean(
+      quoteApprovalId &&
+      approvedEvidence?.decisionId &&
+      approvedEvidence.decision === "APPROVED"
+    );
+  }
+  return Boolean(
+    !approvalSource &&
+    !quoteApprovalId &&
+    approvedEvidence?.decisionId &&
+    approvedEvidence.decision === "APPROVED"
+  );
+}
+
 export function normalizeCanonicalVisit(value, { jobId, detail = false } = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
   const expectedJobId = canonicalUuid(jobId);
@@ -267,6 +384,17 @@ export function normalizeCanonicalVisit(value, { jobId, detail = false } = {}) {
   const startedAt = canonicalTimestamp(value.startedAt, { nullable: true });
   const completedAt = canonicalTimestamp(value.completedAt, { nullable: true });
   const evaluationId = canonicalUuid(value.evaluationId, { nullable: true });
+  const quoteApprovalId = canonicalUuid(value.quoteApprovalId, {
+    nullable: true,
+  });
+  const approvalSource =
+    value.approvalSource == null
+      ? null
+      : QUOTE_APPROVAL_SOURCES.includes(value.approvalSource)
+        ? value.approvalSource
+        : undefined;
+  const externalScheduleConfirmation =
+    normalizeExternalScheduleConfirmation(value.externalScheduleConfirmation);
   const createdAt = canonicalTimestamp(value.createdAt);
   const versionCreatedAt = canonicalTimestamp(value.versionCreatedAt);
   const actions = normalizeVisitActions(value.actions);
@@ -305,11 +433,22 @@ export function normalizeCanonicalVisit(value, { jobId, detail = false } = {}) {
     !createdAt ||
     !versionCreatedAt ||
     !actions ||
-    (value.purpose === "EVALUATION" && approvedEvidence) ||
+    approvalSource === undefined ||
+    externalScheduleConfirmation === undefined ||
+    (value.purpose === "EVALUATION" &&
+      (approvedEvidence ||
+        quoteApprovalId ||
+        approvalSource ||
+        externalScheduleConfirmation)) ||
     (value.purpose === "APPROVED_WORK" &&
       (evaluationId ||
-        !approvedEvidence?.decisionId ||
-        approvedEvidence.decision !== "APPROVED")) ||
+        !approvedWorkVisitIdentity({
+          approvalSource,
+          quoteApprovalId,
+          approvedEvidence,
+        }) ||
+        (externalScheduleConfirmation &&
+          approvalSource !== "EXTERNAL_EVIDENCE"))) ||
     (detail && !history) ||
     (history && history.versions.at(-1)?.version !== currentVersion)
   ) {
@@ -332,6 +471,9 @@ export function normalizeCanonicalVisit(value, { jobId, detail = false } = {}) {
     completedAt,
     evaluationId,
     workstreamIds,
+    quoteApprovalId,
+    approvalSource,
+    externalScheduleConfirmation,
     approvedQuoteDecisionEvidence: approvedEvidence,
     createdAt,
     versionCreatedAt,
@@ -358,13 +500,19 @@ export function normalizeCanonicalVisitAuthority(
     return null;
   }
   const normalizedJobId = canonicalUuid(value.jobId);
+  const approvalSource =
+    value.approvalSource == null
+      ? null
+      : QUOTE_APPROVAL_SOURCES.includes(value.approvalSource)
+        ? value.approvalSource
+        : undefined;
   const customerCapabilities = normalizeCapabilities(
     value.customerCapabilities,
     CUSTOMER_CAPABILITIES
   );
   const professionalCapabilities = normalizeCapabilities(
     value.professionalCapabilities,
-    PROFESSIONAL_CAPABILITIES
+    ALL_PROFESSIONAL_CAPABILITIES
   );
   const activatedAt = canonicalTimestamp(value.activatedAt, { nullable: true });
   const canActivate = value.actions?.canActivate;
@@ -379,6 +527,9 @@ export function normalizeCanonicalVisitAuthority(
       : ["AVAILABLE", "ACTIVE", "LOCKED"].includes(value.state);
   const evaluationId = canonicalUuid(value.evaluationId, { nullable: true });
   const quoteId = canonicalUuid(value.quoteId, { nullable: true });
+  const quoteApprovalId = canonicalUuid(value.quoteApprovalId, {
+    nullable: true,
+  });
   const approvedQuoteDecisionId = canonicalUuid(
     value.approvedQuoteDecisionId,
     { nullable: true }
@@ -390,15 +541,31 @@ export function normalizeCanonicalVisitAuthority(
   const deposit = purpose === "APPROVED_WORK"
     ? normalizePreWorkDepositGate(value.deposit)
     : null;
+  const isExternalApproval = approvalSource === "EXTERNAL_EVIDENCE";
+  const expectedCustomerCapabilities = isExternalApproval
+    ? []
+    : CUSTOMER_CAPABILITIES;
+  const expectedProfessionalCapabilities = isExternalApproval
+    ? EXTERNAL_PROFESSIONAL_CAPABILITIES
+    : PROFESSIONAL_CAPABILITIES.filter(
+        (capability) => capability !== "visit.start"
+      );
   const hasCompleteCapabilities =
-    CUSTOMER_CAPABILITIES.every((capability) =>
+    expectedCustomerCapabilities.every((capability) =>
       customerCapabilities?.includes(capability)
     ) &&
-    PROFESSIONAL_CAPABILITIES
-      .filter((capability) => capability !== "visit.start")
-      .every((capability) => professionalCapabilities?.includes(capability));
+    expectedProfessionalCapabilities.every((capability) =>
+      professionalCapabilities?.includes(capability)
+    ) &&
+    (!isExternalApproval ||
+      (
+        customerCapabilities?.length === 0 &&
+        professionalCapabilities?.length ===
+          EXTERNAL_PROFESSIONAL_CAPABILITIES.length
+      ));
   if (
     value.authoritySource !== AUTHORITY_SOURCES[purpose] ||
+    approvalSource === undefined ||
     normalizedJobId !== expectedJobId ||
     value.purpose !== purpose ||
     !stateAllowed ||
@@ -413,14 +580,22 @@ export function normalizeCanonicalVisitAuthority(
     (purpose === "EVALUATION" &&
       (evaluationId !== expectedSubjectId ||
         quoteId ||
+        quoteApprovalId ||
+        approvalSource ||
         approvedQuoteDecisionId ||
         issuedQuoteVersion)) ||
     (purpose === "APPROVED_WORK" &&
       (quoteId !== expectedSubjectId ||
         evaluationId ||
-        !approvedQuoteDecisionId ||
         !issuedQuoteVersion ||
         !deposit ||
+        (
+          approvalSource === "EXTERNAL_EVIDENCE"
+            ? (!quoteApprovalId || approvedQuoteDecisionId)
+            : approvalSource === "MEETRO_CUSTOMER"
+              ? (!quoteApprovalId || !approvedQuoteDecisionId)
+              : (quoteApprovalId || !approvedQuoteDecisionId)
+        ) ||
         (value.state === "LOCKED") !== deposit.schedulingLocked))
   ) {
     return null;
@@ -433,6 +608,8 @@ export function normalizeCanonicalVisitAuthority(
     activatedAt,
     evaluationId,
     quoteId,
+    quoteApprovalId,
+    approvalSource,
     approvedQuoteDecisionId,
     issuedQuoteVersion,
     ...(purpose === "APPROVED_WORK" ? { deposit } : {}),
@@ -562,13 +739,24 @@ export async function fetchCanonicalVisits({
   purpose,
   evaluationId = null,
   approvedQuoteDecisionId = null,
+  quoteApprovalId = null,
   setPage,
   authFetchImpl = authFetch,
 } = {}) {
+  const normalizedDecisionId = canonicalUuid(approvedQuoteDecisionId, {
+    nullable: true,
+  });
+  const normalizedQuoteApprovalId = canonicalUuid(quoteApprovalId, {
+    nullable: true,
+  });
   if (
     !canonicalUuid(jobId) ||
     !VISIT_PURPOSES.includes(purpose) ||
-    (purpose === "APPROVED_WORK" && !canonicalUuid(approvedQuoteDecisionId))
+    (
+      purpose === "APPROVED_WORK" &&
+      !normalizedDecisionId &&
+      !normalizedQuoteApprovalId
+    )
   ) {
     throw new CanonicalVisitError({
       status: 400,
@@ -591,7 +779,12 @@ export async function fetchCanonicalVisits({
         ? visit?.purpose === purpose &&
           (evaluationId == null || visit.evaluationId === canonicalUuid(evaluationId))
         : visit?.purpose === purpose &&
-          visit.approvedQuoteDecisionEvidence?.decisionId === approvedQuoteDecisionId
+          (
+            normalizedQuoteApprovalId
+              ? visit.quoteApprovalId === normalizedQuoteApprovalId
+              : visit.approvedQuoteDecisionEvidence?.decisionId ===
+                normalizedDecisionId
+          )
     );
   if (visits.length !== data.visits.filter((visit) => {
     if (purpose === "EVALUATION") {
@@ -599,7 +792,15 @@ export async function fetchCanonicalVisits({
         (evaluationId == null || visit?.evaluationId === canonicalUuid(evaluationId));
     }
     return visit?.purpose === purpose &&
-      visit?.approvedQuoteDecisionEvidence?.decisionId === approvedQuoteDecisionId;
+      (
+        normalizedQuoteApprovalId
+          ? canonicalUuid(visit?.quoteApprovalId, { nullable: true }) ===
+            normalizedQuoteApprovalId
+          : canonicalUuid(
+              visit?.approvedQuoteDecisionEvidence?.decisionId,
+              { nullable: true }
+            ) === normalizedDecisionId
+      );
   }).length) {
     throw invalidResponse();
   }
@@ -674,6 +875,90 @@ export async function fetchCanonicalVisitByIdentity({
   return visit;
 }
 
+export async function recordExternalVisitConfirmation({
+  jobId,
+  visit,
+  evidenceMethod,
+  confirmedAt,
+  evidenceReference = null,
+  evidenceNote = null,
+  setPage,
+  authFetchImpl = authFetch,
+  cryptoProvider = globalThis.crypto,
+} = {}) {
+  const normalizedJobId = canonicalUuid(jobId);
+  const normalizedVisitId = canonicalUuid(visit?.id);
+  const expectedVersion = positiveInteger(visit?.currentVersion);
+  const quoteApprovalId = canonicalUuid(visit?.quoteApprovalId);
+  const normalizedConfirmedAt = canonicalTimestamp(confirmedAt);
+  const normalizedReference = boundedText(evidenceReference, 1000, {
+    nullable: true,
+  });
+  const normalizedNote = boundedText(evidenceNote, 8000, {
+    nullable: true,
+  });
+
+  if (
+    !normalizedJobId ||
+    !normalizedVisitId ||
+    !expectedVersion ||
+    visit?.purpose !== "APPROVED_WORK" ||
+    visit?.state !== "PROPOSED" ||
+    visit?.approvalSource !== "EXTERNAL_EVIDENCE" ||
+    !quoteApprovalId ||
+    !EXTERNAL_CONFIRMATION_METHODS.includes(evidenceMethod) ||
+    !normalizedConfirmedAt ||
+    (evidenceReference != null && !normalizedReference) ||
+    (evidenceNote != null && !normalizedNote) ||
+    (!normalizedReference && !normalizedNote)
+  ) {
+    throw new CanonicalVisitError({
+      status: 400,
+      code: "INVALID_EXTERNAL_VISIT_CONFIRMATION",
+      message: "Valid external customer confirmation evidence is required.",
+    });
+  }
+
+  const data = await request({
+    endpoint:
+      `/jobs/${encodeURIComponent(normalizedJobId)}` +
+      `/visits/${encodeURIComponent(normalizedVisitId)}/external-confirmation`,
+    options: commandOptions(
+      "external-confirmation",
+      {
+        expectedVersion,
+        quoteApprovalId,
+        evidenceMethod,
+        confirmedAt: normalizedConfirmedAt,
+        evidenceReference: normalizedReference,
+        evidenceNote: normalizedNote,
+      },
+      cryptoProvider
+    ),
+    setPage,
+    authFetchImpl,
+  });
+
+  const result = normalizeCanonicalVisit(data.visit, {
+    jobId: normalizedJobId,
+  });
+
+  if (
+    !result ||
+    result.id !== normalizedVisitId ||
+    result.state !== "SCHEDULED" ||
+    result.quoteApprovalId !== quoteApprovalId ||
+    result.approvalSource !== "EXTERNAL_EVIDENCE" ||
+    !result.externalScheduleConfirmation
+  ) {
+    throw invalidResponse(
+      "The server returned invalid external Visit confirmation data."
+    );
+  }
+
+  return result;
+}
+
 export async function runCanonicalVisitCommand({
   jobId,
   command,
@@ -681,6 +966,7 @@ export async function runCanonicalVisitCommand({
   purpose = null,
   evaluationId = null,
   approvedQuoteDecisionId = null,
+  quoteApprovalId = null,
   schedule = null,
   reason = null,
   acknowledgeScheduleVariance = false,
@@ -710,9 +996,16 @@ export async function runCanonicalVisitCommand({
       workstreamIds: [],
       approvedQuoteDecisionId:
         purpose === "APPROVED_WORK"
-          ? canonicalUuid(approvedQuoteDecisionId)
+          ? canonicalUuid(approvedQuoteDecisionId, { nullable: true })
           : null,
     };
+    const normalizedQuoteApprovalId =
+      purpose === "APPROVED_WORK"
+        ? canonicalUuid(quoteApprovalId, { nullable: true })
+        : null;
+    if (normalizedQuoteApprovalId) {
+      body.quoteApprovalId = normalizedQuoteApprovalId;
+    }
     if (normalizedReason) body.reason = normalizedReason;
   } else {
     endpoint = `/jobs/${encodeURIComponent(normalizedJobId)}/visits/${encodeURIComponent(normalizedVisitId)}/${command}`;
@@ -741,8 +1034,11 @@ export async function runCanonicalVisitCommand({
     (command === "propose" &&
       (!VISIT_PURPOSES.includes(purpose) ||
         !normalizedSchedule ||
-        (purpose === "APPROVED_WORK" &&
-          !canonicalUuid(approvedQuoteDecisionId)))) ||
+        (
+          purpose === "APPROVED_WORK" &&
+          !canonicalUuid(approvedQuoteDecisionId, { nullable: true }) &&
+          !canonicalUuid(quoteApprovalId, { nullable: true })
+        ))) ||
     (["reschedule", "change-request"].includes(command) && !normalizedSchedule) ||
     (reason != null && !normalizedReason) ||
     typeof acknowledgeScheduleVariance !== "boolean"

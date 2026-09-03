@@ -463,12 +463,158 @@ export function getCanonicalQuoteJobContext(record = {}) {
   });
 }
 
+
+function normalizeCanonicalQuoteCustomerSnapshot(value) {
+  if (value == null) return null;
+  if (!hasExactKeys(value, [
+    "mode",
+    "name",
+    "companyName",
+    "email",
+    "phone",
+    "address",
+    "businessContactId",
+    "customerRelationshipId",
+  ])) return undefined;
+
+  const mode = ["EXTERNAL_CONTACT", "DOCUMENT_ONLY"].includes(value.mode)
+    ? value.mode
+    : null;
+  const name = boundedText(value.name, 500);
+  const companyName = boundedText(value.companyName, 500, { nullable: true });
+  const email = boundedText(value.email, 500, { nullable: true });
+  const phone = boundedText(value.phone, 100, { nullable: true });
+  const address = boundedText(value.address, 2000, { nullable: true });
+  const businessContactId = canonicalUuid(value.businessContactId, { nullable: true });
+  const customerRelationshipId = canonicalUuid(
+    value.customerRelationshipId,
+    { nullable: true }
+  );
+
+  if (
+    !mode ||
+    !name ||
+    (value.companyName != null && !companyName) ||
+    (value.email != null && !email) ||
+    (value.phone != null && !phone) ||
+    (value.address != null && !address) ||
+    (value.businessContactId != null && !businessContactId) ||
+    (value.customerRelationshipId != null && !customerRelationshipId) ||
+    (mode === "EXTERNAL_CONTACT" &&
+      (!businessContactId || !customerRelationshipId)) ||
+    (mode === "DOCUMENT_ONLY" &&
+      (businessContactId || customerRelationshipId))
+  ) {
+    return undefined;
+  }
+
+  return Object.freeze({
+    mode,
+    name,
+    companyName,
+    email,
+    phone,
+    address,
+    businessContactId,
+    customerRelationshipId,
+  });
+}
+
+function normalizeCanonicalQuoteApproval(value) {
+  if (value == null) return null;
+
+  const hasExternalEvidence = Object.hasOwn(value || {}, "externalEvidence");
+  const keys = [
+    "id",
+    "source",
+    "issuedQuoteVersion",
+    "approvedAt",
+    ...(hasExternalEvidence ? ["externalEvidence"] : []),
+  ];
+  if (!hasExactKeys(value, keys)) return undefined;
+
+  const id = canonicalUuid(value.id);
+  const source = ["MEETRO_CUSTOMER", "EXTERNAL_EVIDENCE"].includes(value.source)
+    ? value.source
+    : null;
+  const issuedQuoteVersion = positiveInteger(value.issuedQuoteVersion);
+  const approvedAt = canonicalTimestamp(value.approvedAt);
+
+  let externalEvidence = null;
+  if (hasExternalEvidence) {
+    const evidence = value.externalEvidence;
+    if (!hasExactKeys(evidence, [
+      "id",
+      "method",
+      "recordedByParticipantId",
+      "reference",
+      "note",
+    ])) return undefined;
+
+    const evidenceId = canonicalUuid(evidence.id);
+    const method = [
+      "PHONE",
+      "EMAIL",
+      "TEXT_MESSAGE",
+      "IN_PERSON",
+      "SIGNED_QUOTE",
+      "OTHER",
+    ].includes(evidence.method)
+      ? evidence.method
+      : null;
+    const recordedByParticipantId = canonicalUuid(
+      evidence.recordedByParticipantId
+    );
+    const reference = boundedText(evidence.reference, 1000, { nullable: true });
+    const note = boundedText(evidence.note, 8000, { nullable: true });
+
+    if (
+      !evidenceId ||
+      !method ||
+      !recordedByParticipantId ||
+      (evidence.reference != null && !reference) ||
+      (evidence.note != null && !note)
+    ) {
+      return undefined;
+    }
+
+    externalEvidence = Object.freeze({
+      id: evidenceId,
+      method,
+      recordedByParticipantId,
+      reference,
+      note,
+    });
+  }
+
+  if (
+    !id ||
+    !source ||
+    !issuedQuoteVersion ||
+    !approvedAt ||
+    (source === "MEETRO_CUSTOMER" && hasExternalEvidence) ||
+    (source === "EXTERNAL_EVIDENCE" && !externalEvidence)
+  ) {
+    return undefined;
+  }
+
+  return Object.freeze({
+    id,
+    source,
+    issuedQuoteVersion,
+    approvedAt,
+    ...(externalEvidence ? { externalEvidence } : {}),
+  });
+}
+
 function validateQuoteProjection(value, options) {
   const hasTerms = Object.hasOwn(value || {}, "customerTermsSnapshot");
   const hasIntegrityVersion = Object.hasOwn(value || {}, "integrityVersion");
   const hasDocumentNumber = Object.hasOwn(value || {}, "documentNumber");
   const hasSourceDocument = Object.hasOwn(value || {}, "sourceBusinessDocument");
   const hasCustomerParty = Object.hasOwn(value || {}, "customerParty");
+  const hasCustomerSnapshot = Object.hasOwn(value || {}, "customerSnapshot");
+  const hasApproval = Object.hasOwn(value || {}, "approval");
   const keys = [
     "id",
     "jobId",
@@ -500,12 +646,16 @@ function validateQuoteProjection(value, options) {
     ...(hasDocumentNumber ? ["documentNumber"] : []),
     ...(hasSourceDocument ? ["sourceBusinessDocument"] : []),
     ...(hasCustomerParty ? ["customerParty"] : []),
+    ...(hasCustomerSnapshot ? ["customerSnapshot"] : []),
+    ...(hasApproval ? ["approval"] : []),
   ];
   if (!hasExactKeys(value, keys)) return null;
   const id = canonicalUuid(value.id);
   const jobId = canonicalUuid(value.jobId);
-  const requestId = positiveInteger(value.requestId);
-  const relationshipId = positiveInteger(value.relationshipId);
+  const requestId =
+    value.requestId == null ? null : positiveInteger(value.requestId);
+  const relationshipId =
+    value.relationshipId == null ? null : positiveInteger(value.relationshipId);
   const issuerParticipantId = canonicalUuid(value.issuerParticipantId);
   const parentQuoteId = canonicalUuid(value.parentQuoteId, { nullable: true });
   const issuedAt = canonicalTimestamp(value.issuedAt, { nullable: true });
@@ -565,6 +715,12 @@ function validateQuoteProjection(value, options) {
   const customerParty = hasCustomerParty
     ? normalizeCustomerParty(value.customerParty)
     : null;
+  const customerSnapshot = hasCustomerSnapshot
+    ? normalizeCanonicalQuoteCustomerSnapshot(value.customerSnapshot)
+    : null;
+  const approval = hasApproval
+    ? normalizeCanonicalQuoteApproval(value.approval)
+    : null;
   const scopeItems = Array.isArray(value.scopeItems)
     ? value.scopeItems.map(normalizeCanonicalScopeItem)
     : null;
@@ -596,11 +752,21 @@ function validateQuoteProjection(value, options) {
     decisionVersion === currentVersion &&
     Boolean(decidedAt) &&
     value.status === "ISSUED";
+  const marketplaceIdentity = Boolean(requestId && relationshipId);
+  const businessDocumentIdentity =
+    requestId == null &&
+    relationshipId == null &&
+    Boolean(sourceBusinessDocument?.documentId) &&
+    Boolean(customerSnapshot);
+  const externalApproval =
+    approval?.source === "EXTERNAL_EVIDENCE";
+  const meetroApproval =
+    approval?.source === "MEETRO_CUSTOMER";
   if (
     !id ||
     !jobId ||
-    !requestId ||
-    !relationshipId ||
+    (!marketplaceIdentity && !businessDocumentIdentity) ||
+    ((requestId == null) !== (relationshipId == null)) ||
     !issuerParticipantId ||
     (value.parentQuoteId != null && !parentQuoteId) ||
     parentQuoteId === id ||
@@ -660,7 +826,13 @@ function validateQuoteProjection(value, options) {
           typeof sourceBusinessDocument.currentSnapshotMatchesSource !== "boolean"
         ))
       )) ||
-    (hasCustomerParty && customerParty === undefined)
+    (hasCustomerParty && customerParty === undefined) ||
+    (hasCustomerSnapshot && customerSnapshot === undefined) ||
+    (hasApproval && approval === undefined) ||
+    (approval && value.status !== "ISSUED") ||
+    (approval && approval.issuedQuoteVersion !== currentVersion) ||
+    (externalApproval && (!businessDocumentIdentity || !noDecision)) ||
+    (meetroApproval && value.decisionState !== "APPROVED")
   ) {
     return null;
   }
@@ -695,6 +867,8 @@ function validateQuoteProjection(value, options) {
     documentNumber,
     sourceBusinessDocument,
     customerParty,
+    customerSnapshot,
+    approval,
   };
 }
 

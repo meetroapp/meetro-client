@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   activateCanonicalVisitAuthority,
+  recordExternalVisitConfirmation,
   runCanonicalVisitCommand,
 } from "../utils/canonicalVisitProjection.js";
 import {
@@ -31,6 +32,8 @@ const EVENT_LABELS = Object.freeze({
   VISIT_PROPOSED: "Visit proposed",
   VISIT_SCHEDULE_PROPOSED: "New schedule proposed",
   VISIT_CONFIRMED: "Customer confirmed",
+  VISIT_EXTERNAL_CONFIRMATION_RECORDED:
+    "External customer confirmation recorded",
   VISIT_CHANGE_REQUESTED: "Customer requested a schedule change",
   VISIT_RESCHEDULED: "Visit rescheduled",
   VISIT_CANCELLED: "Visit cancelled",
@@ -158,12 +161,14 @@ export default function CanonicalJobVisits({
   const [commandError, setCommandError] = useState("");
   const [editor, setEditor] = useState(null);
   const [form, setForm] = useState(initialSchedule());
+  const [externalConfirmation, setExternalConfirmation] = useState(null);
 
   useEffect(() => {
     let active = true;
     Promise.resolve().then(() => {
       if (!active) return;
       setEditor(null);
+      setExternalConfirmation(null);
       setNotice("");
       setCommandError("");
     });
@@ -268,7 +273,12 @@ export default function CanonicalJobVisits({
       purpose: subject.purpose,
       subjectId: subject.subjectId,
       evaluationId: subject.evaluationId || null,
-      approvedQuoteDecisionId: subject.authority?.approvedQuoteDecisionId || null,
+      approvedQuoteDecisionId:
+        subject.authority?.approvedQuoteDecisionId || null,
+      quoteApprovalId:
+        subject.authority?.quoteApprovalId || null,
+      approvalSource:
+        subject.authority?.approvalSource || null,
       visit,
     });
   }
@@ -321,6 +331,7 @@ export default function CanonicalJobVisits({
         evaluationId:
           editor.purpose === "EVALUATION" ? editor.evaluationId : null,
         approvedQuoteDecisionId: editor.approvedQuoteDecisionId,
+        quoteApprovalId: editor.quoteApprovalId,
         schedule,
         reason: form.reason.trim() || null,
         setPage,
@@ -415,6 +426,77 @@ export default function CanonicalJobVisits({
       }
       if (error?.code === "STALE_VISIT_VERSION") reload();
       setCommandError(getCanonicalVisitErrorMessage(error));
+    } finally {
+      setRunningKey("");
+    }
+  }
+
+  function openExternalConfirmation(subject, visit) {
+    setNotice("");
+    setCommandError("");
+    setEditor(null);
+    setExternalConfirmation({
+      key: subjectKey(subject),
+      visitId: visit.id,
+      method: "PHONE",
+      reference: "",
+      note: "",
+    });
+  }
+
+  async function submitExternalConfirmation(event, subject, visit) {
+    event.preventDefault();
+
+    if (
+      !externalConfirmation ||
+      externalConfirmation.visitId !== visit.id
+    ) {
+      return;
+    }
+
+    const reference = externalConfirmation.reference.trim();
+    const note = externalConfirmation.note.trim();
+
+    if (!reference && !note) {
+      setCommandError(
+        "Enter how the customer confirmed this exact schedule."
+      );
+      return;
+    }
+
+    const key =
+      `${subjectKey(subject)}:external-confirm:${visit.id}`;
+
+    setRunningKey(key);
+    setNotice("");
+    setCommandError("");
+
+    try {
+      await recordExternalVisitConfirmation({
+        jobId,
+        visit,
+        evidenceMethod: externalConfirmation.method,
+        confirmedAt: new Date().toISOString(),
+        evidenceReference: reference || null,
+        evidenceNote: note || null,
+        setPage,
+      });
+
+      setNotice(
+        "Customer confirmation recorded. This Visit is now scheduled."
+      );
+      setExternalConfirmation(null);
+      reload();
+      notifyCanonicalVisitChanged(jobId, visit.id);
+    } catch (error) {
+      if (error?.code === "STALE_VISIT_VERSION") {
+        setCommandError(
+          "This Visit changed elsewhere. The latest Visit details were reloaded; confirmation was not retried."
+        );
+        reload();
+      } else {
+        setCommandError(getCanonicalVisitErrorMessage(error));
+      }
     } finally {
       setRunningKey("");
     }
@@ -632,7 +714,9 @@ export default function CanonicalJobVisits({
                             <p style={styles.pendingNotice}>
                               {visit.actions.canConfirm
                                 ? "Customer proposed a new time. Approve this exact version or edit it."
-                                : "Waiting for the customer to confirm or propose a new time."}
+                                : visit.actions.canRecordExternalConfirmation
+                                  ? "Waiting for the external customer to confirm this exact proposed time."
+                                  : "Waiting for the customer to confirm or propose a new time."}
                             </p>
                           )}
                           {changeRequest && (
@@ -662,6 +746,18 @@ export default function CanonicalJobVisits({
                                 {runningKey === `${key}:confirm:${visit.id}`
                                   ? "Confirming…"
                                   : "Approve New Time"}
+                              </button>
+                            )}
+                            {visit.actions.canRecordExternalConfirmation === true && (
+                              <button
+                                type="button"
+                                style={styles.primaryButton}
+                                disabled={Boolean(runningKey)}
+                                onClick={() =>
+                                  openExternalConfirmation(subject, visit)
+                                }
+                              >
+                                Record Customer Confirmation
                               </button>
                             )}
                             {visit.actions.canReschedule === true && (
@@ -709,6 +805,109 @@ export default function CanonicalJobVisits({
                               </button>
                             )}
                           </div>
+
+                          {externalConfirmation?.visitId === visit.id &&
+                            externalConfirmation?.key === key && (
+                              <form
+                                style={styles.form}
+                                onSubmit={(event) =>
+                                  void submitExternalConfirmation(
+                                    event,
+                                    subject,
+                                    visit
+                                  )
+                                }
+                              >
+                                <strong>
+                                  Record Customer Confirmation
+                                </strong>
+
+                                <p style={styles.message}>
+                                  Record how the external customer confirmed
+                                  this exact proposed schedule. This does not
+                                  record payment or customer approval of the
+                                  Quote.
+                                </p>
+
+                                <label style={styles.label}>
+                                  Confirmation method
+                                  <select
+                                    style={styles.input}
+                                    value={externalConfirmation.method}
+                                    onChange={(event) =>
+                                      setExternalConfirmation((current) => ({
+                                        ...current,
+                                        method: event.target.value,
+                                      }))
+                                    }
+                                  >
+                                    <option value="PHONE">Phone</option>
+                                    <option value="EMAIL">Email</option>
+                                    <option value="TEXT_MESSAGE">
+                                      Text Message
+                                    </option>
+                                    <option value="IN_PERSON">In Person</option>
+                                    <option value="OTHER">Other</option>
+                                  </select>
+                                </label>
+
+                                <label style={styles.label}>
+                                  Confirmation reference
+                                  <textarea
+                                    required
+                                    maxLength={1000}
+                                    style={styles.textarea}
+                                    placeholder="Example: Customer confirmed the proposed time by phone."
+                                    value={externalConfirmation.reference}
+                                    onChange={(event) =>
+                                      setExternalConfirmation((current) => ({
+                                        ...current,
+                                        reference: event.target.value,
+                                      }))
+                                    }
+                                  />
+                                </label>
+
+                                <label style={styles.label}>
+                                  Note (optional)
+                                  <textarea
+                                    maxLength={8000}
+                                    style={styles.textarea}
+                                    value={externalConfirmation.note}
+                                    onChange={(event) =>
+                                      setExternalConfirmation((current) => ({
+                                        ...current,
+                                        note: event.target.value,
+                                      }))
+                                    }
+                                  />
+                                </label>
+
+                                <div style={styles.actionRow}>
+                                  <button
+                                    type="submit"
+                                    style={styles.primaryButton}
+                                    disabled={Boolean(runningKey)}
+                                  >
+                                    {runningKey ===
+                                    `${key}:external-confirm:${visit.id}`
+                                      ? "Recording…"
+                                      : "Confirm Schedule"}
+                                  </button>
+
+                                  <button
+                                    type="button"
+                                    style={styles.secondaryButton}
+                                    disabled={Boolean(runningKey)}
+                                    onClick={() =>
+                                      setExternalConfirmation(null)
+                                    }
+                                  >
+                                    Close
+                                  </button>
+                                </div>
+                              </form>
+                            )}
 
                           {visit.history?.events?.length > 0 && (
                             <details style={styles.history}>

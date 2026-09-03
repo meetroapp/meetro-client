@@ -6,6 +6,7 @@ import {
   fetchWorkingQuoteReviewIdentity,
   importWorkingQuoteAsCanonicalDraft,
   issueAndSendWorkingQuote,
+  normalizeWorkingDocumentCanonicalQuote,
   normalizeWorkingQuoteReviewIdentity,
   workingQuoteDeliveryPresentation,
   workingQuoteSendReadiness,
@@ -68,6 +69,22 @@ function canonicalQuote({
   };
 }
 
+function externalCanonicalQuote(options = {}) {
+  return {
+    ...canonicalQuote(options),
+    requestId: null,
+    relationshipId: null,
+  };
+}
+
+function externalReviewIdentity(overrides = {}) {
+  return reviewIdentity({
+    requestId: null,
+    relationshipId: null,
+    ...overrides,
+  });
+}
+
 function delivery() {
   return Object.freeze({
     source: "PROFESSIONAL_QUOTE_DELIVERY",
@@ -124,6 +141,31 @@ test("presentation distinguishes working, issued-not-delivered, and delivered tr
   assert.equal(pending.actionLabel, "Send in Meetro");
   assert.equal(pending.actionDisabled, false);
 
+  const externalPending = workingQuoteDeliveryPresentation({
+    canonicalQuote: externalCanonicalQuote({
+      status: "ISSUED",
+      currentVersion: 2,
+    }),
+    issuedQuote: externalCanonicalQuote({
+      status: "ISSUED",
+      currentVersion: 2,
+    }),
+  });
+  assert.equal(
+    externalPending.state,
+    "EXTERNAL_ISSUED_DELIVERY_REQUIRED"
+  );
+  assert.equal(
+    externalPending.badgeLabel,
+    "ISSUED · DELIVERY REQUIRED"
+  );
+  assert.equal(
+    externalPending.statusText,
+    "Quote issued · Choose Email or Share with device to deliver it."
+  );
+  assert.equal(externalPending.actionLabel, "Deliver Quote");
+  assert.equal(externalPending.delivered, false);
+
   const delivered = workingQuoteDeliveryPresentation({
     issuedQuote,
     deliveryEvidence: deliveryEvidence(),
@@ -155,6 +197,146 @@ test("presentation distinguishes working, issued-not-delivered, and delivered tr
     deliveryEvidence: { ...deliveryEvidence(), quoteId: crypto.randomUUID() },
   });
   assert.equal(mismatched.state, "ISSUED_NOT_DELIVERED");
+});
+
+test("business-document Quote identity accepts exact external null request and relationship without fabricating marketplace authority", () => {
+  const normalizedQuote = normalizeWorkingDocumentCanonicalQuote(
+    externalCanonicalQuote(),
+    {
+      documentId: IDS.document,
+      documentVersion: document.version,
+      jobId: IDS.job,
+    }
+  );
+
+  assert.ok(normalizedQuote);
+  assert.equal(normalizedQuote.requestId, null);
+  assert.equal(normalizedQuote.relationshipId, null);
+
+  const normalizedReview = normalizeWorkingQuoteReviewIdentity(
+    externalReviewIdentity(),
+    {
+      documentId: IDS.document,
+      documentVersion: document.version,
+      jobId: IDS.job,
+    }
+  );
+
+  assert.ok(normalizedReview);
+  assert.equal(normalizedReview.requestId, null);
+  assert.equal(normalizedReview.relationshipId, null);
+});
+
+test("working Quote identity rejects partial-null marketplace and external hybrids", () => {
+  assert.equal(
+    normalizeWorkingDocumentCanonicalQuote(
+      {
+        ...externalCanonicalQuote(),
+        requestId: 18,
+      },
+      {
+        documentId: IDS.document,
+        documentVersion: document.version,
+        jobId: IDS.job,
+      }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeWorkingDocumentCanonicalQuote(
+      {
+        ...canonicalQuote(),
+        relationshipId: null,
+      },
+      {
+        documentId: IDS.document,
+        documentVersion: document.version,
+        jobId: IDS.job,
+      }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeWorkingQuoteReviewIdentity(
+      externalReviewIdentity({ requestId: 18 }),
+      {
+        documentId: IDS.document,
+        documentVersion: document.version,
+        jobId: IDS.job,
+      }
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizeWorkingQuoteReviewIdentity(
+      reviewIdentity({ relationshipId: null }),
+      {
+        documentId: IDS.document,
+        documentVersion: document.version,
+        jobId: IDS.job,
+      }
+    ),
+    null
+  );
+});
+
+test("external approval remains distinct from customer decision and presents external evidence truth", () => {
+  const approved = normalizeWorkingDocumentCanonicalQuote(
+    {
+      ...externalCanonicalQuote({
+        status: "ISSUED",
+        currentVersion: 2,
+      }),
+      approval: {
+        id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        source: "EXTERNAL_EVIDENCE",
+        issuedQuoteVersion: 2,
+        approvedAt: "2026-09-02T20:00:00.000Z",
+        externalEvidence: {
+          id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+          method: "EMAIL",
+          recordedByParticipantId:
+            "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          reference: "Approval email",
+          note: null,
+        },
+      },
+    },
+    {
+      documentId: IDS.document,
+      documentVersion: document.version,
+      jobId: IDS.job,
+    }
+  );
+
+  assert.ok(approved);
+  assert.equal(approved.decisionState, null);
+  assert.equal(
+    approved.approval.source,
+    "EXTERNAL_EVIDENCE"
+  );
+
+  const presentation =
+    workingQuoteDeliveryPresentation({
+      canonicalQuote: approved,
+      issuedQuote: approved,
+    });
+
+  assert.equal(
+    presentation.state,
+    "EXTERNAL_APPROVED"
+  );
+  assert.equal(
+    presentation.badgeLabel,
+    "APPROVED · EXTERNAL EVIDENCE"
+  );
+  assert.equal(
+    presentation.statusText,
+    "Customer approval recorded from external evidence."
+  );
 });
 
 test("saved Job-linked Quote readiness is one exact authoritative projection", () => {
@@ -373,6 +555,72 @@ test("one governed action bridges the exact saved version, issues once, then del
   assert.equal(sendCalls[0].deliveryIntent, "INITIAL");
   assert.equal(result.deliveryEvidence.conversationId, 341);
   assert.equal(calls.some(({ endpoint }) => /approve|decline|payment|schedule|invoice|complete/.test(endpoint)), false);
+});
+
+test("external Quote is canonically issued but never requests or fabricates Meetro conversation delivery", async () => {
+  const calls = [];
+
+  const result = await issueAndSendWorkingQuote({
+    document,
+    jobId: IDS.job,
+    commandKeys: keys,
+    authFetchImpl: async (endpoint, options) => {
+      calls.push({ endpoint, options });
+
+      if (endpoint.endsWith("/canonical-quote")) {
+        return {
+          response: { ok: true, status: 201 },
+          data: {
+            success: true,
+            quote: externalCanonicalQuote(),
+          },
+        };
+      }
+
+      if (endpoint.endsWith("/issue")) {
+        return {
+          response: { ok: true, status: 200 },
+          data: {
+            success: true,
+            quote: externalCanonicalQuote({
+              status: "ISSUED",
+              currentVersion: 2,
+            }),
+          },
+        };
+      }
+
+      throw new Error(`Unexpected endpoint ${endpoint}`);
+    },
+    fetchDeliveryImpl: async () => {
+      assert.fail("external Quote must not request Meetro delivery authority");
+    },
+    sendDeliveryImpl: async () => {
+      assert.fail("external Quote must not send into a Meetro conversation");
+    },
+  });
+
+  assert.deepEqual(
+    calls.map(({ endpoint }) => endpoint),
+    [
+      `/business-document-drafts/${IDS.document}/canonical-quote`,
+      `/quotes/${IDS.quote}/issue`,
+    ]
+  );
+
+  assert.equal(result.issuedQuote.status, "ISSUED");
+  assert.equal(result.issuedQuote.requestId, null);
+  assert.equal(result.issuedQuote.relationshipId, null);
+  assert.equal(result.delivery, null);
+  assert.equal(result.deliveryEvidence, null);
+  assert.equal(result.externalDeliveryRequired, true);
+
+  assert.equal(
+    calls.some(({ endpoint }) =>
+      /send-in-meetro|conversation|approve|payment|schedule/.test(endpoint)
+    ),
+    false
+  );
 });
 
 test("bridge failure stops before issue and delivery", async () => {

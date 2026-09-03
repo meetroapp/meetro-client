@@ -190,14 +190,42 @@ export function normalizePreWorkDeposit(value, { jobId = "", quoteId = "" } = {}
   const expectedQuoteId = quoteId ? uuid(quoteId) : normalizedQuoteId;
   const gate = normalizePreWorkDepositGate(value, { includeMaterialized: true });
   const issuedQuoteVersion = integer(value.issuedQuoteVersion, { positive: true });
-  const customerDecisionId = uuid(value.customerDecisionId);
+  const hasQuoteApprovalId = Object.hasOwn(value, "quoteApprovalId");
+  const hasApprovalSource = Object.hasOwn(value, "approvalSource");
+  const customerDecisionId =
+    value.customerDecisionId == null ? null : uuid(value.customerDecisionId);
+  const quoteApprovalId = hasQuoteApprovalId
+    ? value.quoteApprovalId == null
+      ? null
+      : uuid(value.quoteApprovalId)
+    : null;
+  const approvalSource = hasApprovalSource
+    ? value.approvalSource == null
+      ? null
+      : ["MEETRO_CUSTOMER", "EXTERNAL_EVIDENCE"].includes(value.approvalSource)
+        ? value.approvalSource
+        : undefined
+    : null;
   const quoteTotalMinor = integer(value.quoteTotalMinor, { positive: true });
   const depositRule = normalizeDepositRule(value.depositRule);
+
+  const externalApproval = approvalSource === "EXTERNAL_EVIDENCE";
+  const meetroApproval = approvalSource === "MEETRO_CUSTOMER";
+  const legacyDecisionAuthority =
+    !hasQuoteApprovalId && !hasApprovalSource;
+
   if (
     Number(value.contractVersion) !== 1 || !gate ||
     normalizedJobId !== expectedJobId || normalizedQuoteId !== expectedQuoteId ||
-    !issuedQuoteVersion || !customerDecisionId || !quoteTotalMinor ||
+    !issuedQuoteVersion || !quoteTotalMinor ||
     !gate.currency || !Array.isArray(value.paymentHistory) ||
+    hasQuoteApprovalId !== hasApprovalSource ||
+    approvalSource === undefined ||
+    (value.customerDecisionId != null && !customerDecisionId) ||
+    (hasQuoteApprovalId && value.quoteApprovalId != null && !quoteApprovalId) ||
+    (externalApproval && (!quoteApprovalId || customerDecisionId)) ||
+    (meetroApproval && (!quoteApprovalId || !customerDecisionId)) ||
+    (legacyDecisionAuthority && !customerDecisionId) ||
     (gate.state === "NOT_REQUIRED" && value.depositRule != null) ||
     (["DUE", "PARTIALLY_SATISFIED", "SATISFIED", "SUPERSEDED", "VOIDED"].includes(gate.state) &&
       !depositRule) ||
@@ -217,6 +245,8 @@ export function normalizePreWorkDeposit(value, { jobId = "", quoteId = "" } = {}
     quoteId: normalizedQuoteId,
     issuedQuoteVersion,
     customerDecisionId,
+    ...(hasQuoteApprovalId ? { quoteApprovalId } : {}),
+    ...(hasApprovalSource ? { approvalSource } : {}),
     quoteTotalMinor,
     depositRule,
     paymentHistory: Object.freeze(paymentHistory),

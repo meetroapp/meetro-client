@@ -16,6 +16,7 @@ const ids = Object.freeze({
   job: "11111111-1111-4111-8111-111111111111",
   quote: "22222222-2222-4222-8222-222222222222",
   decision: "33333333-3333-4333-8333-333333333333",
+  approval: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
   obligation: "44444444-4444-4444-8444-444444444444",
   receipt: "55555555-5555-4555-8555-555555555555",
   allocation: "66666666-6666-4666-8666-666666666666",
@@ -122,6 +123,91 @@ test("canonical deposit normalization covers due, partial, satisfied, no-deposit
   }));
   assert.equal(unverified.state, "TERMS_UNVERIFIED");
   assert.equal(unverified.schedulingLocked, true);
+});
+
+test("deposit read accepts common Meetro approval while preserving customer-decision provenance", () => {
+  const normalized = normalizePreWorkDeposit(
+    deposit({
+      quoteApprovalId: ids.approval,
+      approvalSource: "MEETRO_CUSTOMER",
+    }),
+    { jobId: ids.job, quoteId: ids.quote }
+  );
+
+  assert.ok(normalized);
+  assert.equal(normalized.customerDecisionId, ids.decision);
+  assert.equal(normalized.quoteApprovalId, ids.approval);
+  assert.equal(normalized.approvalSource, "MEETRO_CUSTOMER");
+});
+
+test("external deposit authority uses common Quote approval with no fabricated customer decision", () => {
+  const normalized = normalizePreWorkDeposit(
+    deposit({
+      customerDecisionId: null,
+      quoteApprovalId: ids.approval,
+      approvalSource: "EXTERNAL_EVIDENCE",
+    }),
+    { jobId: ids.job, quoteId: ids.quote }
+  );
+
+  assert.ok(normalized);
+  assert.equal(normalized.customerDecisionId, null);
+  assert.equal(normalized.quoteApprovalId, ids.approval);
+  assert.equal(normalized.approvalSource, "EXTERNAL_EVIDENCE");
+  assert.equal(normalized.state, "DUE");
+  assert.equal(normalized.remainingMinor, 51000);
+});
+
+test("deposit common-approval provenance rejects malformed hybrid authority", () => {
+  assert.equal(
+    normalizePreWorkDeposit(
+      deposit({
+        quoteApprovalId: ids.approval,
+        approvalSource: "EXTERNAL_EVIDENCE",
+      })
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizePreWorkDeposit(
+      deposit({
+        customerDecisionId: null,
+        quoteApprovalId: null,
+        approvalSource: "EXTERNAL_EVIDENCE",
+      })
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizePreWorkDeposit(
+      deposit({
+        customerDecisionId: null,
+        quoteApprovalId: ids.approval,
+        approvalSource: "MEETRO_CUSTOMER",
+      })
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizePreWorkDeposit(
+      deposit({
+        quoteApprovalId: ids.approval,
+      })
+    ),
+    null
+  );
+
+  assert.equal(
+    normalizePreWorkDeposit(
+      deposit({
+        approvalSource: "MEETRO_CUSTOMER",
+      })
+    ),
+    null
+  );
 });
 
 test("malformed balance, scheduling lock, identity, and reversal-adjusted history fail closed", () => {
