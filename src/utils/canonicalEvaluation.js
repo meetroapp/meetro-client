@@ -186,7 +186,6 @@ export function validateCanonicalEvaluationProjection(value) {
     !isPlainObject(capabilities) ||
     Object.keys(capabilities).length !== expectedCapabilityKeys.length ||
     expectedCapabilityKeys.some((key) => typeof capabilities[key] !== "boolean") ||
-    capabilities.canRevise ||
     capabilities.canShareWithCustomer ||
     capabilities.quoteReady ||
     capabilities.authorizationAvailable ||

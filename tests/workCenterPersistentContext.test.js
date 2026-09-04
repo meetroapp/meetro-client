@@ -6,36 +6,76 @@ const contractorDashboardSource = readFileSync(
   new URL("../src/pages/ContractorDashboard.jsx", import.meta.url),
   "utf8"
 );
-const indexCssSource = readFileSync(
-  new URL("../src/index.css", import.meta.url),
-  "utf8"
-);
 
-test("Work Center job workspace includes a persistent context region above dynamic focus", () => {
-  assert.match(contractorDashboardSource, /jobPersistentContextRegion/);
-  assert.match(contractorDashboardSource, /meetro-job-persistent-context/);
-  assert.match(contractorDashboardSource, /workCenterPersistentWorkContext/);
-  assert.match(contractorDashboardSource, /workCenterNextResponsibility/);
-  assert.match(contractorDashboardSource, /jobDynamicFocusArea/);
-  assert.match(
-    contractorDashboardSource,
-    /jobPersistentContextRegion[\s\S]{0,1800}jobDynamicFocusArea/
-  );
-});
+test("Work Center mounts one compact Current Job context above the Job workspace", () => {
+  const headers =
+    contractorDashboardSource.match(/<CompactCurrentJobHeader/g) || [];
 
-test("persistent context preserves current job identity and message action without routing changes", () => {
-  assert.match(contractorDashboardSource, /persistentContextCustomer/);
-  assert.match(contractorDashboardSource, /persistentContextService/);
-  assert.match(contractorDashboardSource, /persistentContextAddress/);
-  assert.match(contractorDashboardSource, /conversationReturnSection", "job"/);
+  assert.equal(headers.length, 1);
+
   assert.doesNotMatch(
     contractorDashboardSource,
-    /workCenterPersistentWorkContext[\s\S]{0,1000}setPage\("contractorDashboard"\)/
+    /className="meetro-job-persistent-context"/
+  );
+
+  const headerIndex =
+    contractorDashboardSource.indexOf("<CompactCurrentJobHeader");
+
+  const laterWorkspaceIndex =
+    contractorDashboardSource.indexOf(
+      "jobDynamicFocusArea",
+      headerIndex
+    );
+
+  assert.ok(headerIndex >= 0);
+  assert.ok(laterWorkspaceIndex > headerIndex);
+});
+
+test("compact Current Job context preserves identity, state, and message action", () => {
+  assert.match(
+    contractorDashboardSource,
+    /customer=\{persistentContextCustomer\}/
+  );
+
+  assert.match(
+    contractorDashboardSource,
+    /service=\{persistentContextService\}/
+  );
+
+  assert.match(
+    contractorDashboardSource,
+    /address=\{persistentContextAddress\}/
+  );
+
+  assert.match(
+    contractorDashboardSource,
+    /status=\{jobDisplayStatus\}/
+  );
+
+  assert.match(
+    contractorDashboardSource,
+    /nextStep=\{jobDisplayNextStep\}/
+  );
+
+  assert.match(
+    contractorDashboardSource,
+    /responsibility=\{jobDisplayResponsibility\}/
+  );
+
+  assert.match(
+    contractorDashboardSource,
+    /openCanonicalWorkCenterConversation/
   );
 });
 
-test("persistent context stays viewport anchored on iPhone portrait only", () => {
-  assert.match(indexCssSource, /@media \(max-width: 520px\) and \(orientation: portrait\)/);
-  assert.match(indexCssSource, /\.meetro-job-persistent-context[\s\S]{0,240}position: sticky/);
-  assert.match(indexCssSource, /\.meetro-job-persistent-context[\s\S]{0,240}safe-area-inset-top/);
+test("legacy sticky Current Job presentation cannot overlap the compact header", () => {
+  assert.doesNotMatch(
+    contractorDashboardSource,
+    /meetro-job-persistent-context/
+  );
+
+  assert.match(
+    contractorDashboardSource,
+    /<CompactCurrentJobHeader/
+  );
 });

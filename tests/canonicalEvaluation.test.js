@@ -113,6 +113,25 @@ test("strict Evaluation projection accepts only backend-confirmed Authorization 
   assert.equal(canonical.aggregate.version, 2);
   assert.equal(canonical.evaluation.content.internalNotes, "Confirm fitting stock.");
   assert.equal(canonical.evaluation.capabilities.quoteReady, false);
+
+  const completed = validateCanonicalEvaluationProjection(
+    canonicalEvaluationFixture({
+      aggregate: { version: 3 },
+      evaluation: {
+        status: "completed",
+        completedAt: "2026-09-04T20:00:00.000Z",
+        capabilities: {
+          canEditDraft: false,
+          canComplete: false,
+          canRevise: true,
+        },
+      },
+    })
+  );
+
+  assert.equal(completed.evaluation.status, "completed");
+  assert.equal(completed.evaluation.capabilities.canEditDraft, false);
+  assert.equal(completed.evaluation.capabilities.canRevise, true);
 });
 
 test("malformed identity, timestamps, content, status, and capabilities fail closed", () => {

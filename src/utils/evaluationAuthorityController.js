@@ -11,6 +11,7 @@ import {
   createEvaluationIdempotencyKey,
   listEvaluationsForEmergencyRequest,
   listEvaluationsForJob,
+  reviseEvaluation,
   updateEvaluationDraft,
 } from "./evaluationApi.js";
 
@@ -92,13 +93,32 @@ export async function saveCanonicalEvaluationDraft({
           setPage,
         });
   }
+  if (confirmed.evaluation.status === "completed") {
+    if (confirmed.evaluation.capabilities?.canRevise !== true) {
+      throw new EvaluationApiError({
+        status: 409,
+        code: "EVALUATION_REVISION_UNAVAILABLE",
+        message: "Evaluation revision is not available for this record.",
+      });
+    }
+
+    return reviseEvaluation({
+      evaluationId: confirmed.evaluation.id,
+      expectedVersion: confirmed.aggregate.version,
+      content,
+      idempotencyKey: createIdempotencyKey("revise"),
+      setPage,
+    });
+  }
+
   if (confirmed.evaluation.status !== "draft") {
     throw new EvaluationApiError({
       status: 409,
-      code: "EVALUATION_COMPLETED",
-      message: "A completed Evaluation cannot be edited or reopened.",
+      code: "EVALUATION_UPDATE_UNAVAILABLE",
+      message: "Evaluation updating is not available for this record.",
     });
   }
+
   return updateEvaluationDraft({
     evaluationId: confirmed.evaluation.id,
     expectedVersion: confirmed.aggregate.version,

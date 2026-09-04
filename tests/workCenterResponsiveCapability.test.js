@@ -154,7 +154,11 @@ test("Current Job truth and Ask Meetro remain separated at compact breakpoints",
   );
   assert.match(
     cssSource,
-    /@media \(max-width: 1099px\)[\s\S]*\.meetro-job-persistent-context,[\s\S]*\.meetro-current-job-list-card[\s\S]*padding-right: calc\(164px/
+    /@media \(max-width: 1099px\)[\s\S]*\.compact-current-job-header,[\s\S]*\.meetro-current-job-list-card[\s\S]*padding-right: calc\(164px/
+  );
+  assert.doesNotMatch(
+    dashboardSource,
+    /meetro-job-persistent-context/
   );
   assert.match(cssSource, /\.work-center-status-pill \{[\s\S]*white-space: normal;[\s\S]*overflow-wrap: anywhere;/);
   assert.match(cssSource, /padding-bottom: calc\(var\(--meetro-mobile-persistent-control-clearance/);

@@ -35,26 +35,34 @@ test("phone and tablet Work Center use a reachable right-side Companion safe doc
 });
 
 test("Current Job and list cards reserve a compact-workspace rail for Ask Meetro", () => {
-  assert.match(dashboardSource, /className="meetro-job-persistent-context"/);
+  assert.match(
+    dashboardSource,
+    /<CompactCurrentJobHeader/
+  );
+
+  assert.doesNotMatch(
+    dashboardSource,
+    /meetro-job-persistent-context/
+  );
+
   assert.match(
     dashboardSource,
     /className="meetro-visual-surface meetro-current-job-list-card"/
   );
+
   assert.match(
     cssSource,
-    /@media \(max-width: 1099px\)[\s\S]*\.meetro-job-persistent-context,[\s\S]*padding-right: calc\(164px \+ env\(safe-area-inset-right, 0px\)\) !important;/
+    /@media \(max-width: 1099px\)[\s\S]*\.compact-current-job-header,[\s\S]*\.meetro-current-job-list-card[\s\S]*padding-right: calc\(164px \+ env\(safe-area-inset-right, 0px\)\) !important;/
   );
+
   assert.match(
     cssSource,
-    /\.meetro-current-job-list-card[\s\S]*padding-right: calc\(164px \+ env\(safe-area-inset-right, 0px\)\) !important;/
+    /@media \(max-width: 520px\) and \(orientation: portrait\)[\s\S]*\.compact-current-job-header \{[\s\S]*padding-right: 14px !important;/
   );
-  assert.match(
+
+  assert.doesNotMatch(
     cssSource,
-    /@media \(max-width: 520px\) and \(orientation: portrait\)[\s\S]*\.meetro-job-persistent-context \{[\s\S]*padding-right: 14px !important;/
-  );
-  assert.match(
-    cssSource,
-    /\.meetro-job-persistent-context > :last-child \{[\s\S]*max-width: 144px;/
+    /\.meetro-job-persistent-context/
   );
 });
 

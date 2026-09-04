@@ -2798,25 +2798,15 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
 }
 
 @media (max-width: 1099px) {
-  .meetro-job-persistent-context,
+  .compact-current-job-header,
   .meetro-current-job-list-card {
     padding-right: calc(164px + env(safe-area-inset-right, 0px)) !important;
   }
 }
 
 @media (max-width: 520px) and (orientation: portrait) {
-  .meetro-job-persistent-context {
-    position: sticky;
-    top: calc(env(safe-area-inset-top, 0px) + 8px);
-    z-index: 12;
+  .compact-current-job-header {
     padding-right: 14px !important;
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-  }
-
-  .meetro-job-persistent-context > :last-child {
-    width: min(100%, 144px);
-    max-width: 144px;
   }
 }
 

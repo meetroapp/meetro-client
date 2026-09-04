@@ -64,7 +64,11 @@ test("ordinary canonical Evaluation reads no-Evaluation and existing-Evaluation 
     evaluation: {
       status: "completed",
       completedAt: "2026-08-11T16:00:00.000Z",
-      capabilities: { canEditDraft: false, canComplete: false },
+      capabilities: {
+        canEditDraft: false,
+        canComplete: false,
+        canRevise: true,
+      },
     },
   });
   const browser = installBrowser([
@@ -205,6 +209,86 @@ test("ordinary canonical Evaluation creates a pre-Visit draft and versions throu
   }
 });
 
+test("completed ordinary Evaluation uses revision authority and saves a new completed version", async () => {
+  const completed = ordinaryCanonicalEvaluationFixture({
+    aggregate: { version: 3 },
+    evaluation: {
+      status: "completed",
+      completedAt: "2026-09-04T20:00:00.000Z",
+      capabilities: {
+        canEditDraft: false,
+        canComplete: false,
+        canRevise: true,
+      },
+    },
+  });
+
+  const revised = ordinaryCanonicalEvaluationFixture({
+    aggregate: { version: 4 },
+    evaluation: {
+      status: "completed",
+      completedAt: "2026-09-04T20:00:00.000Z",
+      capabilities: {
+        canEditDraft: false,
+        canComplete: false,
+        canRevise: true,
+      },
+      content: {
+        observations:
+          "Customer added replacement of the damaged trim before Quote preparation.",
+        findings: [],
+        scopeRecommendations: [],
+      },
+    },
+  });
+
+  const browser = installBrowser([
+    { status: 200, body: { success: true, ...revised } },
+  ]);
+
+  try {
+    const result = await saveCanonicalEvaluationDraft({
+      record: ordinaryRecord,
+      form: ordinaryForm({
+        observations:
+          "Customer added replacement of the damaged trim before Quote preparation.",
+      }),
+      currentEvaluation: completed,
+      createIdempotencyKey: (command) => `${command}-completed-evaluation`,
+    });
+
+    assert.equal(result.aggregate.version, 4);
+    assert.equal(result.evaluation.status, "completed");
+    assert.equal(
+      result.evaluation.completedAt,
+      "2026-09-04T20:00:00.000Z"
+    );
+
+    assert.equal(browser.calls.length, 1);
+    assert.equal(browser.calls[0].options.method, "POST");
+    assert.ok(
+      browser.calls[0].url.endsWith(
+        `/evaluations/${completed.evaluation.id}/revisions`
+      )
+    );
+
+    const body = JSON.parse(browser.calls[0].options.body);
+
+    assert.equal(body.expectedVersion, 3);
+    assert.equal(
+      body.content.observations,
+      "Customer added replacement of the damaged trim before Quote preparation."
+    );
+
+    assert.doesNotMatch(
+      browser.calls[0].url,
+      /quotes|deposit|payment|schedule|visits|workstreams|invoices/i
+    );
+  } finally {
+    browser.restore();
+  }
+});
+
 test("missing Job identity and backend authority errors fail without false success", async () => {
   const noCalls = installBrowser([]);
   try {
@@ -263,6 +347,8 @@ test("bounded component keeps concern read-only and uses canonical EFR commands"
   assert.doesNotMatch(componentSource, /if \(!form\.observations\.trim\(\)\)/);
   assert.match(componentSource, /Fill manually/);
   assert.match(componentSource, /copy\.saveEvaluation/);
+  assert.match(componentSource, /copy\.saveUpdate/);
+  assert.match(componentSource, /capabilities\?\.canRevise === true/);
   assert.match(componentSource, /completeCanonicalEvaluationDraft/);
   assert.match(componentSource, /CanonicalFindingsPanel/);
   assert.doesNotMatch(componentSource, /localStorage|sessionStorage/);

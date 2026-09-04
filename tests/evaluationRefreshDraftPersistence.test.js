@@ -54,15 +54,41 @@ test("authority identity change resets Evaluation editing", () => {
   );
 });
 
-test("completed or server-read-only Evaluation closes local editing", () => {
+test("completed Evaluation revision authority does not force-close active manual editing", () => {
+  const start = source.indexOf("const serverReadOnly = Boolean(");
+  const end = source.indexOf(
+    "const preserveEditingDraft =",
+    start
+  );
+
+  assert.ok(start >= 0);
+  assert.ok(end > start);
+
+  const block = source.slice(start, end);
+
   assert.match(
-    source,
-    /evaluation\.evaluation\?\.status === "completed"/
+    block,
+    /capabilities\?\.canEditDraft !== true/
+  );
+
+  assert.match(
+    block,
+    /capabilities\?\.canRevise !== true/
+  );
+
+  assert.doesNotMatch(
+    block,
+    /status === "completed"/
   );
 
   assert.match(
     source,
-    /evaluation\.evaluation\?\.capabilities\?\.canEditDraft !== true/
+    /const canRevise =[\s\S]*capabilities\?\.canRevise === true/
+  );
+
+  assert.match(
+    source,
+    /const canEdit = Boolean\(canEditDraft \|\| canRevise\)/
   );
 
   assert.match(

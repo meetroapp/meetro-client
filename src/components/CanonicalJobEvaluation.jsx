@@ -355,10 +355,8 @@ export default function CanonicalJobEvaluation({
 
         const serverReadOnly = Boolean(
           evaluation &&
-          (
-            evaluation.evaluation?.status === "completed" ||
-            evaluation.evaluation?.capabilities?.canEditDraft !== true
-          )
+          evaluation.evaluation?.capabilities?.canEditDraft !== true &&
+          evaluation.evaluation?.capabilities?.canRevise !== true
         );
 
         const preserveEditingDraft =
@@ -430,9 +428,24 @@ export default function CanonicalJobEvaluation({
   const visitAllowsDocumentation = Boolean(
     evaluationVisitState.startedVisitId || evaluationVisitState.completedVisitId
   );
-  const canStart = actionCodes.has("START_EVALUATION") && visitAllowsDocumentation;
-  const canEdit = visitAllowsDocumentation && actionCodes.has("EDIT_EVALUATION") && evaluation?.evaluation?.capabilities?.canEditDraft === true;
-  const canComplete = actionCodes.has("COMPLETE_EVALUATION") && evaluation?.evaluation?.capabilities?.canComplete === true;
+  const canStart =
+    actionCodes.has("START_EVALUATION") &&
+    visitAllowsDocumentation;
+
+  const canEditDraft =
+    visitAllowsDocumentation &&
+    actionCodes.has("EDIT_EVALUATION") &&
+    evaluation?.evaluation?.capabilities?.canEditDraft === true;
+
+  const canRevise =
+    evaluation?.evaluation?.capabilities?.canRevise === true;
+
+  const canEdit = Boolean(canEditDraft || canRevise);
+
+  const canComplete =
+    actionCodes.has("COMPLETE_EVALUATION") &&
+    evaluation?.evaluation?.capabilities?.canComplete === true;
+
   const editingAllowed = evaluation ? canEdit : canStart;
   const workflowCopy = getAskMeetroWorkflowCopy(language);
   const canonicalPhotos = photoLifecycle.photos;
@@ -925,7 +938,9 @@ export default function CanonicalJobEvaluation({
       return;
     }
     setLoadState((current) => ({ ...current, status: "saving", error: "", notice: "" }));
-    const updatingExistingDraft = Boolean(evaluation);
+    const updatingExistingEvaluation = Boolean(evaluation);
+    const revisingCompletedEvaluation =
+      evaluation?.evaluation?.status === "completed";
     try {
       if (assistantEvaluationEdit) {
         const reviewed = await reviewAssistantItem(assistantEvaluationEdit, "EDITED", {
@@ -952,9 +967,11 @@ export default function CanonicalJobEvaluation({
         status: "ready",
         evaluation: confirmed,
         error: "",
-        notice: updatingExistingDraft
-          ? "Evaluation draft updated"
-          : "Evaluation draft saved",
+        notice: revisingCompletedEvaluation
+          ? copy.evaluationUpdated
+          : updatingExistingEvaluation
+            ? copy.evaluationUpdated
+            : copy.evaluationSaved,
       });
       setDocumentationReminderDismissed(false);
       setForm(formForEvaluation(confirmed));
@@ -1245,7 +1262,11 @@ export default function CanonicalJobEvaluation({
             </details>
             <div style={styles.actions}>
               <button type="button" style={styles.primaryButton} disabled={loadState.status === "saving"} onClick={() => void saveEvaluation()}>
-                {loadState.status === "saving" ? copy.saving : copy.saveEvaluation}
+                {loadState.status === "saving"
+                  ? copy.saving
+                  : evaluation
+                    ? copy.saveUpdate
+                    : copy.saveEvaluation}
               </button>
               <button type="button" style={styles.secondaryButton} disabled={loadState.status === "saving"} onClick={() => {
                 setEditing(false);

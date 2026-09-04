@@ -169,7 +169,8 @@ test("saved-draft reminder and dismissal are presentation-only", () => {
     evaluation,
     /Your latest Evaluation work is saved\. You can finish it now or return later\./
   );
-  assert.match(evaluation, /Evaluation draft updated/);
+  assert.match(evaluation, /copy\.evaluationUpdated/);
+  assert.match(evaluation, /copy\.saveUpdate/);
   assert.match(evaluation, /setLoadState\(\{[\s\S]{0,260}evaluation: confirmed/);
   assert.match(evaluation, /setDocumentationReminderDismissed\(true\)/);
   assert.doesNotMatch(

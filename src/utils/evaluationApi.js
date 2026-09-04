@@ -98,6 +98,24 @@ export function updateEvaluationDraft({ evaluationId, expectedVersion, content, 
   );
 }
 
+export function reviseEvaluation({
+  evaluationId,
+  expectedVersion,
+  content,
+  idempotencyKey,
+  setPage,
+}) {
+  return requestEvaluation(
+    `/evaluations/${encodeURIComponent(evaluationId)}/revisions`,
+    {
+      method: "POST",
+      headers: mutationHeaders(idempotencyKey),
+      body: JSON.stringify({ expectedVersion, content }),
+    },
+    setPage
+  );
+}
+
 export function completeEvaluation({ evaluationId, expectedVersion, idempotencyKey, setPage }) {
   return requestEvaluation(
     `/evaluations/${encodeURIComponent(evaluationId)}/complete`,
