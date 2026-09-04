@@ -996,12 +996,28 @@ function ContractorDashboard({ setPage, language = "en" }) {
     let active = true;
     Promise.resolve().then(() => {
       if (!active || workCenterLifecycleContextRef.current !== contextKey) return;
-      setWorkCenterLifecycleProjection({
-        status: "loading",
-        reason: "",
-        httpStatus: 0,
-        postId: target.postId,
-        projection: null,
+
+      setWorkCenterLifecycleProjection((current) => {
+        const sameConfirmedJob =
+          current?.projection &&
+          String(current.postId || "") === String(target.postId || "");
+
+        if (sameConfirmedJob) {
+          return {
+            ...current,
+            status: "ready",
+            reason: "",
+            httpStatus: 0,
+          };
+        }
+
+        return {
+          status: "loading",
+          reason: "",
+          httpStatus: 0,
+          postId: target.postId,
+          projection: null,
+        };
       });
     });
 
@@ -1015,12 +1031,28 @@ function ContractorDashboard({ setPage, language = "en" }) {
       })
       .catch(() => {
         if (!active || workCenterLifecycleContextRef.current !== contextKey) return;
-        setWorkCenterLifecycleProjection({
-          status: "error",
-          reason: "NETWORK_ERROR",
-          httpStatus: 0,
-          postId: target.postId,
-          projection: null,
+
+        setWorkCenterLifecycleProjection((current) => {
+          const sameConfirmedJob =
+            current?.projection &&
+            String(current.postId || "") === String(target.postId || "");
+
+          if (sameConfirmedJob) {
+            return {
+              ...current,
+              status: "ready",
+              reason: "NETWORK_REFRESH_FAILED",
+              httpStatus: 0,
+            };
+          }
+
+          return {
+            status: "error",
+            reason: "NETWORK_ERROR",
+            httpStatus: 0,
+            postId: target.postId,
+            projection: null,
+          };
         });
       });
 
