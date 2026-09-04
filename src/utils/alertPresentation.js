@@ -16,6 +16,12 @@ import {
 } from "./professionalWorkCenterRoute.js";
 import { buildCanonicalConversationRoute } from "./canonicalConversationMessaging.js";
 import { buildEmergencyRequestRoute } from "./emergencyRoutes.js";
+import {
+  buildHomeownerWorkCenterAlertRoute,
+} from "./alertWorkflowRoutes.js";
+import {
+  normalizeWorkCenterAlertStage,
+} from "./workCenterAlertAttention.js";
 
 export const DEFAULT_ALERT_CENTER_VIEW = "attention";
 export const ALERT_CENTER_PAGE_SIZE = 25;
@@ -98,6 +104,8 @@ const SUPPORTED_DESTINATIONS = new Set([
   "notifications",
   "job",
   "visit",
+  "quote",
+  "invoice",
 ]);
 
 export function getAlertCenterView(viewId) {
@@ -210,14 +218,30 @@ function positiveIdentity(value) {
 
 export function getAlertDestinationActionTarget(
   destination,
-  { professional = false } = {}
+  {
+    professional = false,
+    workCenterStage = null,
+    homeownerRequestId = null,
+  } = {}
 ) {
   const normalized = normalizeCanonicalAlertDestination(destination);
+  const canonicalStage =
+    normalizeWorkCenterAlertStage(
+      workCenterStage
+    );
   if (!normalized) return { ok: false, route: null, labelKey: null };
 
   if (normalized.type === "conversation") {
     if (professional && normalized.jobId && normalized.quoteId) {
-      const workCenter = getAlertWorkCenterActionTarget(normalized);
+      const route = buildProfessionalWorkCenterRoute({
+        jobId: normalized.jobId,
+        quoteId: normalized.quoteId,
+        stage: canonicalStage,
+        returnPage: "notifications",
+      });
+      const workCenter = route
+        ? { ok: true, route }
+        : { ok: false, route: null };
       if (workCenter.ok) {
         return { ...workCenter, labelKey: "quoteDecisionOpenWorkCenter" };
       }
@@ -261,28 +285,126 @@ export function getAlertDestinationActionTarget(
       ? buildProfessionalWorkCenterRoute({
           jobId: normalized.jobId,
           visitId: normalized.visitId,
+          stage: canonicalStage,
           returnPage: "notifications",
         })
-      : normalized.conversationId
-        ? buildCanonicalConversationRoute(
-            normalized.conversationId,
-            "notifications",
-            {
-              shell: "communicationCenter",
-              visitId: normalized.visitId,
-            }
-          )
-        : null;
+      : canonicalStage
+        ? buildHomeownerWorkCenterAlertRoute({
+            requestId:
+              normalized.requestId ||
+              homeownerRequestId ||
+              null,
+            jobId: normalized.jobId,
+            visitId: normalized.visitId,
+            stage: canonicalStage,
+            returnPage: "notifications",
+          })
+        : normalized.conversationId
+          ? buildCanonicalConversationRoute(
+              normalized.conversationId,
+              "notifications",
+              {
+                shell: "communicationCenter",
+                visitId: normalized.visitId,
+              }
+            )
+          : null;
+
     return route
-      ? { ok: true, route, labelKey: "alertCenterOpenDetails" }
-      : { ok: false, route: null, labelKey: null };
+      ? {
+          ok: true,
+          route,
+          labelKey: "alertCenterOpenDetails",
+        }
+      : {
+          ok: false,
+          route: null,
+          labelKey: null,
+        };
+  }
+
+  if (
+    normalized.type === "quote" ||
+    normalized.type === "invoice"
+  ) {
+    const route = professional
+      ? buildProfessionalWorkCenterRoute({
+          jobId: normalized.jobId,
+          quoteId:
+            normalized.type === "quote"
+              ? normalized.quoteId
+              : null,
+          stage:
+            canonicalStage ||
+            (normalized.type === "quote"
+              ? "quote"
+              : "invoice"),
+          returnPage: "notifications",
+        })
+      : buildHomeownerWorkCenterAlertRoute({
+          requestId:
+            homeownerRequestId || null,
+          jobId: normalized.jobId,
+          quoteId:
+            normalized.type === "quote"
+              ? normalized.quoteId
+              : null,
+          stage:
+            canonicalStage ||
+            (normalized.type === "quote"
+              ? "quote"
+              : "invoice"),
+          returnPage: "notifications",
+        });
+
+    return route
+      ? {
+          ok: true,
+          route,
+          labelKey: "alertCenterOpenDetails",
+        }
+      : {
+          ok: false,
+          route: null,
+          labelKey: null,
+        };
   }
 
   if (normalized.type === "job") {
+    if (canonicalStage) {
+      const route = professional
+        ? buildProfessionalWorkCenterRoute({
+            jobId: normalized.jobId,
+            stage: canonicalStage,
+            returnPage: "notifications",
+          })
+        : buildHomeownerWorkCenterAlertRoute({
+            requestId:
+              homeownerRequestId || null,
+            jobId: normalized.jobId,
+            stage: canonicalStage,
+            returnPage: "notifications",
+          });
+
+      return route
+        ? {
+            ok: true,
+            route,
+            labelKey:
+              "alertCenterOpenDetails",
+          }
+        : {
+            ok: false,
+            route: null,
+            labelKey: null,
+          };
+    }
+
     const params = new URLSearchParams({
       jobId: normalized.jobId,
       returnPage: "notifications",
     });
+
     return {
       ok: true,
       route: `employeeJobs?${params}`,

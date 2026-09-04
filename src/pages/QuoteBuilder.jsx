@@ -955,6 +955,11 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     savedQuoteResume: null,
     reopenDocumentId: null,
   }));
+  const [
+    depositRequestSourceQuoteDocument,
+    setDepositRequestSourceQuoteDocument,
+  ] = useState(null);
+
   const [invoicePreparation, setInvoicePreparation] = useState(() => ({
     status: isUnifiedInvoiceEntry && routeCanonicalJobId ? "loading" : "standalone",
     job: null,
@@ -1222,6 +1227,14 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
         const savedProtection = documentsResult.status === "fulfilled"
           ? resolveOwnedSavedQuotesForJob(documentsResult.value, savedQuoteContextJobId)
           : { status: "unavailable", documents: [] };
+
+        if (isUnifiedDepositRequestEntry) {
+          setDepositRequestSourceQuoteDocument(
+            savedProtection.status === "exact"
+              ? savedProtection.documents[0]
+              : null
+          );
+        }
         if (!routeSavedDocumentId && savedProtection.status === "ambiguous") {
           setJobLinkedQuoteContext({
             status: "ambiguous",
@@ -3254,6 +3267,21 @@ ${businessIdentity.businessName}`;
     canonicalStatus: "DRAFT",
   };
 
+  const unifiedDepositRequestQuote =
+    isUnifiedDepositRequestEntry && depositRequestSourceQuoteDocument
+      ? {
+          ...unifiedQuoteDraft,
+          ...depositRequestSourceQuoteDocument.content,
+          quoteNumber:
+            depositRequestSourceQuoteDocument.documentNumber ||
+            depositRequestSourceQuoteDocument.content?.quoteNumber ||
+            unifiedQuoteDraft.quoteNumber ||
+            "",
+          customerParty:
+            depositRequestSourceQuoteDocument.customerParty || null,
+        }
+      : unifiedQuoteDraft;
+
   const unifiedWorkspaceEnabled = true;
 
   if (unifiedWorkspaceEnabled) {
@@ -3406,7 +3434,11 @@ ${businessIdentity.businessName}`;
               ),
             canonical: Boolean(canonicalJobId),
           }}
-          quote={unifiedQuoteDraft}
+          quote={
+            isUnifiedDepositRequestEntry
+              ? unifiedDepositRequestQuote
+              : unifiedQuoteDraft
+          }
           invoicePreparation={invoicePreparation.status === "ready" ? invoicePreparation.job : null}
           onCreateCanonicalInvoice={createReviewedCompletedJobInvoice}
           onApplyQuotePatch={applyUnifiedQuotePatch}

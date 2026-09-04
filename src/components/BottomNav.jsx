@@ -27,6 +27,9 @@ import {
 } from "../utils/alertCountCoordinator";
 import MeetroIcon from "./MeetroIcon";
 import { getCommunicationAttention } from "../utils/communicationAttention";
+import {
+  getWorkCenterTotalUnread,
+} from "../utils/workCenterAlertAttention.js";
 
 const EmbeddedProfile = lazy(() => import("../pages/Profile"));
 
@@ -555,18 +558,33 @@ function BottomNav({ setPage, currentPage = "" }) {
     canonicalCategoryUnreadCount("emergency"),
     getUnreadMessageCount()
   );
-  const workCenterAlertCount = Math.max(
+  const legacyWorkCenterAlertCount = Math.max(
     canonicalCategoryUnreadCount("evaluation"),
     canonicalCategoryUnreadCount("proposal"),
     canonicalCategoryUnreadCount("invoice"),
     canonicalCategoryUnreadCount("payment"),
     canonicalCategoryUnreadCount("schedule"),
-    Math.max(0, canonicalCategoryUnreadCount("work") - communicationAttention.teamUnread),
+    Math.max(
+      0,
+      canonicalCategoryUnreadCount("work") -
+        communicationAttention.teamUnread
+    ),
     canonicalCategoryUnreadCount("completion"),
     canonicalCategoryUnreadCount("review"),
     getAcceptedQuoteReadyCount(),
     getActiveEmergencyAlertCount()
   );
+
+  const canonicalWorkCenterAlertCount =
+    getWorkCenterTotalUnread(
+      alertCountSnapshot,
+      alertCountIdentity
+    );
+
+  const workCenterAlertCount =
+    canonicalWorkCenterAlertCount === null
+      ? legacyWorkCenterAlertCount
+      : canonicalWorkCenterAlertCount;
   const leadsAlertCount =
     activeMode === "business" ? canonicalCategoryUnreadCount("request") : 0;
   const profileAlertCount =

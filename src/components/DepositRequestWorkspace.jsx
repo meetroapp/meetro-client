@@ -49,17 +49,35 @@ function today() {
 
 function initialContent(job, quote) {
   return {
-    customerName: job?.customerName || quote?.customerName || "",
+    customerName: quote?.customerName || job?.customerName || "",
     customerEmail: quote?.customerEmail || "",
     customerPhone: quote?.customerPhone || "",
-    customerAddress: job?.customerAddress || quote?.customerAddress || "",
-    customerLocation: job?.location || quote?.customerLocation || "",
-    projectTitle: job?.title || quote?.projectTitle || "",
+    customerAddress: quote?.customerAddress || job?.customerAddress || "",
+    customerLocation: quote?.customerLocation || job?.location || "",
+    projectTitle: quote?.projectTitle || job?.title || "",
     quoteReference: quote?.quoteNumber || "",
     dueDate: "",
     notes: "Thank you for approving the work.",
     paymentInstructions: quote?.paymentTerms || quote?.terms || "",
     customerMessage: "Please review this deposit request. Payment is required before scheduling can begin.",
+  };
+}
+
+function quoteCarryoverContent(current, job, quote) {
+  const source = initialContent(job, quote);
+
+  return {
+    ...current,
+    customerName: source.customerName,
+    customerEmail: source.customerEmail,
+    customerPhone: source.customerPhone,
+    customerAddress: source.customerAddress,
+    customerLocation: source.customerLocation,
+    projectTitle: source.projectTitle,
+    quoteReference: source.quoteReference,
+    paymentInstructions:
+      String(current?.paymentInstructions || "").trim() ||
+      source.paymentInstructions,
   };
 }
 
@@ -112,12 +130,12 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
   const [document, setDocument] = useState(null);
   const [content, setContent] = useState(() => initialContent(job, quote));
   const [baseline, setBaseline] = useState(() => initialContent(job, quote));
-  const [manual, setManual] = useState(false);
   const [instruction, setInstruction] = useState("");
   const [proposal, setProposal] = useState(null);
   const [deliveries, setDeliveries] = useState([]);
   const [busy, setBusy] = useState(false);
   const [review, setReview] = useState(null);
+  const [mobilePane, setMobilePane] = useState("details");
   const [customerParty, setCustomerParty] = useState(() =>
     normalizeBusinessDocumentCustomerParty(quote?.customerParty)
   );
@@ -167,13 +185,17 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
         read.deposit?.obligationId &&
         candidate.paymentRequirementId === read.deposit.obligationId
       ) || null;
-      const nextContent = exact?.content || initialContent(job, quote);
+      const nextContent = quoteCarryoverContent(
+        exact?.content || initialContent(job, quote),
+        job,
+        quote
+      );
       const history = exact
         ? await listBusinessDocumentDeliveries({ draftId: exact.id, setPage }).catch(() => [])
         : [];
       if (!active) return;
       const nextParty = normalizeBusinessDocumentCustomerParty(
-        exact?.customerParty || quote?.customerParty
+        quote?.customerParty || exact?.customerParty
       );
       setDeposit(read.deposit || null);
       setDocument(exact);
@@ -486,73 +508,186 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
   }
 
   return (
-    <div className="app-page meetro-wide-page business-document-workspace" style={styles.page}>
+    <div className="app-page meetro-wide-page business-document-workspace deposit-request-workspace">
       <header className="business-document-header">
         <button type="button" className="business-document-back" onClick={onBack} aria-label="Leave Deposit Request workspace">←</button>
-        <div><div className="business-document-title-row"><h1>{content.projectTitle || "Deposit Request"}</h1><span>{eligible ? "Ready for review" : "Preparation only"}</span></div><p>{content.customerName ? `Customer: ${content.customerName}` : jobId ? "Customer can be selected before approval" : "Customer not selected"}</p></div>
+        <div><div className="business-document-title-row"><h1>{content.projectTitle || "Deposit Request"}</h1><span>{eligible ? "Ready for review" : "Preparation only"}</span></div><p>{content.customerName ? `Customer: ${content.customerName}` : jobId ? "Customer carries forward from Quote" : "Quote not selected"}</p></div>
         <div className="business-document-header-actions"><span>{document ? `Saved · v${document.version}` : "Not saved"}</span></div>
       </header>
 
       <nav className="business-document-tabs" aria-label="Business documents">
         <button type="button" onClick={() => setPage(`quoteBuilder?jobId=${encodeURIComponent(jobId)}`)}>Quote</button>
-        <button type="button" onClick={() => setPage(`invoiceBuilder?jobId=${encodeURIComponent(jobId)}`)}>Invoice</button>
         <button type="button" className="active" aria-current="page">Deposit Request</button>
+        <button type="button" onClick={() => setPage(`invoiceBuilder?jobId=${encodeURIComponent(jobId)}`)}>Invoice</button>
       </nav>
 
-      <main style={styles.main}>
-        <section style={styles.assistant} aria-label="Meetro-assisted Deposit Request review">
+      <div
+        className="business-document-mobile-switch deposit-request-mobile-switch"
+        role="tablist"
+        aria-label="Deposit Request view"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mobilePane === "details"}
+          onClick={() => setMobilePane("details")}
+        >
+          Details
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mobilePane === "preview"}
+          onClick={() => setMobilePane("preview")}
+        >
+          Preview
+        </button>
+      </div>
+
+      <main className="deposit-request-main">
+        <section
+          className={`deposit-request-panel deposit-request-editor ${
+            mobilePane === "details" ? "mobile-active" : ""
+          }`}
+          style={styles.assistant}
+          aria-label="Meetro-assisted Deposit Request review"
+        >
           <h2>Prepare Deposit Request</h2>
-          <p>Tell Meetro what customer-facing note, due date, or payment instructions to propose. Nothing is applied or sent automatically.</p>
-          <section aria-label="Deposit Request customer" style={styles.customerSection}>
-            <strong>Customer</strong>
-            <p>{customerState === "MEETRO_CUSTOMER" ? "Meetro customer" : customerState === "EXTERNAL_CUSTOMER" ? `External customer${linkedContact ? `: ${businessContactDisplayName(linkedContact)}` : ""}` : "Document-only customer"}</p>
-            {!jobLinked ? <small>External customers are business-owned Contacts; no Meetro account is required.</small> : null}
-            {!jobLinked ? <div style={styles.actions}>
-              <button type="button" onClick={() => void openCustomerControl("choose")} disabled={customerControl.busy}>Choose existing customer</button>
-              <button type="button" onClick={() => void openCustomerControl("save")} disabled={customerControl.busy}>Create external customer</button>
-              {!customerParty && hasBusinessDocumentCustomerSnapshot(content) ? <button type="button" onClick={() => setNotice("This customer is document-only. No Contact, account, or relationship was created.")}>Use on this document only</button> : null}
-            </div> : null}
-            {customerControl.open ? <div style={styles.customerPanel}>
-              <div style={styles.row}><strong>{customerControl.mode === "choose" ? "Choose existing customer" : "Create external customer"}</strong><button type="button" onClick={() => updateCustomerControl({ open: false })}>Close</button></div>
-              {customerControl.mode === "choose" ? <>
-                <label>Search saved customers<input type="search" value={customerControl.search} onChange={(event) => updateCustomerControl({ search: event.target.value })} style={styles.input} /></label>
-                <div style={styles.customerResults} role="listbox" aria-label="Saved customers">{visibleCustomerContacts.map((contact) => <button type="button" role="option" aria-selected={customerControl.selectedId === contact.id} key={contact.id} onClick={() => updateCustomerControl({ selectedId: contact.id })}><strong>{businessContactDisplayName(contact)}</strong><small>{[contact.email, contact.phone].filter(Boolean).join(" · ")}</small></button>)}</div>
-                {!customerControl.busy && !visibleCustomerContacts.length ? <p role="status">{customerControl.search ? "No saved customers match your search." : "No saved customers yet."}</p> : null}
-                <button type="button" onClick={() => void applyCustomer(selectedCustomer)} disabled={!selectedCustomer || customerControl.busy}>Use selected customer</button>
-              </> : <>
-                <label>Customer type<select value={customerControl.partyType} onChange={(event) => updateCustomerControl({ partyType: event.target.value })} style={styles.input}><option value="PERSON">Individual</option><option value="ORGANIZATION">Business</option></select></label>
-                {customerControl.duplicateCandidates.length ? <div role="alert"><p>A matching saved customer exists. Choose it or confirm creation.</p>{customerControl.duplicateCandidates.map((contact) => <button type="button" key={contact.id} onClick={() => void applyCustomer(contact)}>{businessContactDisplayName(contact)}</button>)}<button type="button" onClick={() => void createExternalCustomer({ bypassDuplicates: true })}>Confirm create external customer</button></div> : <button type="button" onClick={() => void createExternalCustomer()} disabled={customerControl.busy}>Save external customer</button>}
-              </>}
-              {customerControl.error ? <p role="alert" style={styles.error}>{customerControl.error}</p> : null}
-              {customerControl.busy ? <p role="status">Working…</p> : null}
-            </div> : null}
+          <p>Review the Deposit Request created from the Quote. Customer, project, Quote reference, deposit amount, and payment terms carry forward automatically.</p>
+          <section
+            className="deposit-request-quote-source"
+            aria-label="Quote carryover"
+          >
+            <strong>Carried from Quote</strong>
+
+            <dl className="deposit-request-quote-source-summary">
+              <div>
+                <dt>Customer</dt>
+                <dd>{content.customerName || "Complete the Quote first"}</dd>
+              </div>
+
+              <div>
+                <dt>Project</dt>
+                <dd>{content.projectTitle || "Complete the Quote first"}</dd>
+              </div>
+
+              <div>
+                <dt>Quote</dt>
+                <dd>{content.quoteReference || "Approval pending"}</dd>
+              </div>
+
+              <div>
+                <dt>Deposit</dt>
+                <dd>{money?.requested || "Pending approved Quote"}</dd>
+              </div>
+            </dl>
+
+            <p>
+              Change the customer, project, or deposit terms on the Quote.
+              Deposit Request does not create a second customer or a second
+              deposit requirement.
+            </p>
+
+            {customerState === "DOCUMENT_ONLY_CUSTOMER" ? (
+              <small>
+                Use on this document only. No Contact, account, or relationship was created.
+              </small>
+            ) : null}
           </section>
+
           <textarea rows={4} value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Thank the customer and tell them they can pay by check." style={styles.input} />
           <button type="button" onClick={propose} disabled={!instruction.trim()}>Propose Change</button>
           {proposal ? <div style={styles.proposal}><strong>Review proposed changes</strong>{Object.entries(proposal).map(([key, value]) => <p key={key}><b>{key.replace(/([A-Z])/g, " $1")}:</b> {value}</p>)}<div style={styles.row}><button type="button" onClick={() => setProposal(null)}>Dismiss</button><button type="button" onClick={() => { setContent((current) => ({ ...current, ...proposal })); setProposal(null); setInstruction(""); }}>Apply</button></div></div> : null}
-          <button type="button" onClick={() => setManual((current) => !current)} aria-expanded={manual}>{manual ? "Hide manual form" : "Fill form manually"}</button>
-          {manual ? <div style={styles.form}>
-            <label>Customer<input value={content.customerName} onChange={(event) => setContent({ ...content, customerName: event.target.value })} style={styles.input} /></label>
-            <label>Customer email<input type="email" value={content.customerEmail} onChange={(event) => setContent({ ...content, customerEmail: event.target.value })} style={styles.input} /></label>
-            <label>Customer phone<input type="tel" value={content.customerPhone} onChange={(event) => setContent({ ...content, customerPhone: event.target.value })} style={styles.input} /></label>
-            <label>Customer address<input value={content.customerAddress} onChange={(event) => setContent({ ...content, customerAddress: event.target.value })} style={styles.input} /></label>
-            <label>Due date<input type="date" min={today()} value={/^\d{4}-\d{2}-\d{2}$/.test(content.dueDate) ? content.dueDate : ""} onChange={(event) => setContent({ ...content, dueDate: event.target.value })} style={styles.input} /></label>
-            <label>Note<textarea rows={3} value={content.notes} onChange={(event) => setContent({ ...content, notes: event.target.value })} style={styles.input} /></label>
-            <label>Payment instructions<textarea rows={3} value={content.paymentInstructions} onChange={(event) => setContent({ ...content, paymentInstructions: event.target.value })} style={styles.input} /></label>
-            <label>Delivery message<textarea rows={3} value={content.customerMessage} onChange={(event) => setContent({ ...content, customerMessage: event.target.value })} style={styles.input} /></label>
-          </div> : null}
+          <details className="deposit-request-customize">
+            <summary>Customize request wording</summary>
+
+            <div>
+              <label>
+                Due date
+                <input
+                  type="date"
+                  min={today()}
+                  value={
+                    /^\d{4}-\d{2}-\d{2}$/.test(content.dueDate)
+                      ? content.dueDate
+                      : ""
+                  }
+                  onChange={(event) =>
+                    setContent({
+                      ...content,
+                      dueDate: event.target.value,
+                    })
+                  }
+                  style={styles.input}
+                />
+              </label>
+
+              <label>
+                Note
+                <textarea
+                  rows={3}
+                  value={content.notes}
+                  onChange={(event) =>
+                    setContent({
+                      ...content,
+                      notes: event.target.value,
+                    })
+                  }
+                  style={styles.input}
+                />
+              </label>
+
+              <label>
+                Payment instructions
+                <textarea
+                  rows={3}
+                  value={content.paymentInstructions}
+                  onChange={(event) =>
+                    setContent({
+                      ...content,
+                      paymentInstructions: event.target.value,
+                    })
+                  }
+                  style={styles.input}
+                />
+              </label>
+
+              <label>
+                Customer message
+                <textarea
+                  rows={3}
+                  value={content.customerMessage}
+                  onChange={(event) =>
+                    setContent({
+                      ...content,
+                      customerMessage: event.target.value,
+                    })
+                  }
+                  style={styles.input}
+                />
+              </label>
+            </div>
+          </details>
+
           {error ? <p role="alert" style={styles.error}>{error}</p> : null}
           {notice ? <p role="status" style={styles.notice}>{notice}</p> : null}
         </section>
 
-        <section style={styles.preview} aria-label="Live Deposit Request Preview">
-          <header style={styles.previewHeader}><div><small>DEPOSIT REQUEST</small><h2>{document?.reference || "Draft"}</h2></div><span>Live preview</span></header>
-          <dl style={styles.summary}>
+        <section
+          className={`deposit-request-panel deposit-request-preview ${
+            mobilePane === "preview" ? "mobile-active" : ""
+          }`}
+          style={styles.preview}
+          aria-label="Live Deposit Request Preview"
+        >
+          <header className="deposit-request-preview-header" style={styles.previewHeader}><div><small>DEPOSIT REQUEST</small><h2>{document?.reference || "Draft"}</h2></div><span>Live preview</span></header>
+          <dl className="deposit-request-document-summary" style={styles.summary}>
             <div><dt>Customer</dt><dd>{content.customerName || "Linked customer"}</dd></div>
             <div><dt>Project</dt><dd>{content.projectTitle || "Linked Job"}</dd></div>
             <div><dt>Approved Quote</dt><dd>{document?.depositRequestAuthority?.quoteReference || content.quoteReference || (authority ? "Verified approved Quote" : "Approval pending")}</dd></div>
           </dl>
-          {money ? <div style={styles.money}><p><span>Project total</span><strong>{money.project}</strong></p><p><span>Deposit requested</span><strong>{money.requested}</strong></p><p><span>Amount remaining after deposit</span><strong>{money.after}</strong></p>{authority.appliedMinor > 0 ? <p><span>Payments received</span><strong>{money.received}</strong></p> : null}<p><span>Amount still needed</span><strong>{money.needed}</strong></p></div> : <div style={styles.preparation} role="status"><strong>Deposit not ready to send</strong><p><span>Requested deposit</span><br />Pending canonical requirement</p><p>{authority?.state === "NOT_REQUIRED" ? "Add a deposit requirement to the approved Quote before sending a Deposit Request." : "An approved Quote with an unpaid deposit requirement is required before sending a Deposit Request."}</p><p>Preparation is available now; the amount, save, PDF, and send actions remain disabled until the canonical requirement exists.</p></div>}
+          {money ? <div style={styles.money}><p><span>Project total</span><strong>{money.project}</strong></p><p><span>Deposit requested</span><strong>{money.requested}</strong></p><p><span>Amount remaining after deposit</span><strong>{money.after}</strong></p>{authority.appliedMinor > 0 ? <p><span>Payments received</span><strong>{money.received}</strong></p> : null}<p><span>Amount still needed</span><strong>{money.needed}</strong></p></div> : <div style={styles.preparation} role="status"><strong>Deposit not ready to send</strong><p><span>Requested deposit</span><br />Pending canonical requirement</p><p>{authority?.state === "NOT_REQUIRED" ? "Add a deposit requirement to the approved Quote before sending a Deposit Request." : "An approved Quote with an unpaid deposit requirement is required before sending a Deposit Request."}</p><p>The Quote supplies the customer, project, deposit amount, and payment terms. Save and approve the Quote with a deposit requirement to continue.</p></div>}
           {content.dueDate ? <p><strong>Due date</strong><br />{content.dueDate}</p> : null}
           {content.paymentInstructions ? <p><strong>Payment instructions</strong><br />{content.paymentInstructions}</p> : null}
           {content.notes ? <p><strong>Note</strong><br />{content.notes}</p> : null}
@@ -569,8 +704,6 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
 }
 
 const styles = {
-  page: { paddingBottom: 90 },
-  main: { display: "grid", gridTemplateColumns: "minmax(280px, .8fr) minmax(360px, 1.2fr)", gap: 20, padding: 20 },
   assistant: { display: "grid", alignContent: "start", gap: 14, padding: 20, border: "1px solid #d9e4dc", borderRadius: 14, background: "#fff" },
   preview: { display: "grid", alignContent: "start", gap: 18, padding: 28, border: "1px solid #cfdad2", borderRadius: 14, background: "#fff", boxShadow: "0 10px 32px rgba(20, 50, 32, .08)" },
   previewHeader: { display: "flex", justifyContent: "space-between", borderBottom: "2px solid #173f2b", paddingBottom: 16 },

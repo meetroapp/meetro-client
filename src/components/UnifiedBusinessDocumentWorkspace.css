@@ -2228,3 +2228,195 @@
   .business-document-proposal dd { text-align: left; }
   .business-document-proposal > footer { grid-template-columns: minmax(0, 1fr); }
 }
+
+
+/* DEPOSIT REQUEST RESPONSIVE DOCUMENT WORKSPACE */
+.deposit-request-main {
+  display: grid;
+  grid-template-columns:
+    minmax(280px, .8fr)
+    minmax(360px, 1.2fr);
+  gap: 20px;
+  min-width: 0;
+  padding: 20px;
+}
+
+.deposit-request-panel {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.deposit-request-quote-source {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #d9e4dc;
+  border-radius: 12px;
+  background: #f8fbf9;
+}
+
+.deposit-request-quote-source > strong {
+  color: #145b38;
+  font-size: 13px;
+  font-weight: 900;
+}
+
+.deposit-request-quote-source > p {
+  margin: 0;
+  color: #627268;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.deposit-request-quote-source-summary {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  min-width: 0;
+  margin: 0;
+}
+
+.deposit-request-quote-source-summary > div {
+  min-width: 0;
+  padding: 9px;
+  border-radius: 9px;
+  background: #fff;
+}
+
+.deposit-request-quote-source-summary dt {
+  color: #65766c;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.deposit-request-quote-source-summary dd {
+  min-width: 0;
+  margin: 3px 0 0;
+  overflow-wrap: anywhere;
+  color: #20372a;
+  font-size: 13px;
+  font-weight: 850;
+}
+
+.deposit-request-customize {
+  min-width: 0;
+  border: 1px solid #d8e3da;
+  border-radius: 12px;
+  background: #fbfdfb;
+}
+
+.deposit-request-customize summary {
+  display: flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 10px 12px;
+  color: #145b38;
+  font-size: 12px;
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.deposit-request-customize > div {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 0 12px 12px;
+  border-top: 1px solid #e4ebe5;
+}
+
+.deposit-request-customize label {
+  min-width: 0;
+  padding-top: 10px;
+  color: #34495e;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.deposit-request-document-summary > div {
+  min-width: 0;
+}
+
+.deposit-request-document-summary dd {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .deposit-request-workspace {
+    width: 100%;
+    max-width: 100vw;
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .deposit-request-mobile-switch {
+    flex: 0 0 auto;
+  }
+
+  .deposit-request-main {
+    display: block;
+    flex: 1 1 auto;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 0;
+    padding: 8px 0 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  .deposit-request-panel {
+    display: none !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+    margin: 0 !important;
+    padding: 14px !important;
+    overflow-x: hidden;
+    border-radius: 12px !important;
+    box-shadow: none !important;
+  }
+
+  .deposit-request-panel.mobile-active {
+    display: grid !important;
+  }
+
+  .deposit-request-quote-source-summary,
+  .deposit-request-document-summary {
+    grid-template-columns: 1fr !important;
+  }
+
+  .deposit-request-preview-header {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+
+  .deposit-request-preview-header > * {
+    min-width: 0;
+  }
+
+  .deposit-request-preview,
+  .deposit-request-preview * {
+    max-width: 100%;
+  }
+
+  .deposit-request-preview p,
+  .deposit-request-preview dd,
+  .deposit-request-preview li {
+    overflow-wrap: anywhere;
+  }
+
+  .deposit-request-preview button {
+    white-space: normal;
+  }
+
+  .deposit-request-customize input,
+  .deposit-request-customize textarea {
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+  }
+}

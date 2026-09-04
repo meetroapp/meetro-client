@@ -204,6 +204,13 @@ export default function CanonicalJobEvaluation({
   const photoUploadInputRef = useRef(null);
   const photoCameraInputRef = useRef(null);
   const [assistantEvaluationEdit, setAssistantEvaluationEdit] = useState(null);
+  const evaluationScopeRef = useRef("");
+  const editingRef = useRef(false);
+  const forceEvaluationReloadRef = useRef(false);
+
+  useEffect(() => {
+    editingRef.current = editing;
+  }, [editing]);
 
   useEffect(() => {
     let active = true;
@@ -307,10 +314,29 @@ export default function CanonicalJobEvaluation({
 
   useEffect(() => {
     let active = true;
-    setEditing(false);
-    setDocumentationReminderDismissed(false);
-    setConfirmingCompletion(false);
-    setAssistantEvaluationEdit(null);
+
+    const scopeKey =
+      environmentEnabled && jobId && requestId
+        ? `${jobId}:${requestId}:${relationshipId || ""}`
+        : "";
+
+    const scopeChanged =
+      evaluationScopeRef.current !== scopeKey;
+
+    const forceServerReload =
+      forceEvaluationReloadRef.current;
+
+    if (scopeChanged) {
+      evaluationScopeRef.current = scopeKey;
+      forceEvaluationReloadRef.current = false;
+      editingRef.current = false;
+
+      setEditing(false);
+      setDocumentationReminderDismissed(false);
+      setConfirmingCompletion(false);
+      setAssistantEvaluationEdit(null);
+    }
+
     if (!environmentEnabled || !jobId || !requestId) {
       queueMicrotask(() => {
         if (active) {
@@ -326,8 +352,42 @@ export default function CanonicalJobEvaluation({
     void loadCanonicalEvaluationForRecord({ record: scopedRecord, setPage })
       .then((evaluation) => {
         if (!active) return;
-        setLoadState({ status: "ready", evaluation, error: "", notice: "" });
-        setForm(formForEvaluation(evaluation));
+
+        const serverReadOnly = Boolean(
+          evaluation &&
+          (
+            evaluation.evaluation?.status === "completed" ||
+            evaluation.evaluation?.capabilities?.canEditDraft !== true
+          )
+        );
+
+        const preserveEditingDraft =
+          !scopeChanged &&
+          editingRef.current &&
+          !forceServerReload &&
+          !serverReadOnly;
+
+        setLoadState({
+          status: "ready",
+          evaluation,
+          error: "",
+          notice: "",
+        });
+
+        if (!preserveEditingDraft) {
+          setForm(formForEvaluation(evaluation));
+        }
+
+        if (forceServerReload) {
+          forceEvaluationReloadRef.current = false;
+        }
+
+        if (serverReadOnly) {
+          editingRef.current = false;
+          setEditing(false);
+          setConfirmingCompletion(false);
+          setAssistantEvaluationEdit(null);
+        }
       })
       .catch((error) => {
         if (active) {
@@ -903,7 +963,10 @@ export default function CanonicalJobEvaluation({
       onCanonicalChange?.();
     } catch (error) {
       setLoadState((current) => ({ ...current, status: "ready", error: errorMessage(error, copy) }));
-      if (/STALE_/.test(String(error?.code || ""))) setRefresh((value) => value + 1);
+      if (/STALE_/.test(String(error?.code || ""))) {
+        forceEvaluationReloadRef.current = true;
+        setRefresh((value) => value + 1);
+      }
     }
   }
 
@@ -934,7 +997,10 @@ export default function CanonicalJobEvaluation({
       onCanonicalChange?.();
     } catch (error) {
       setLoadState((current) => ({ ...current, status: "ready", error: errorMessage(error, copy) }));
-      if (/STALE_/.test(String(error?.code || ""))) setRefresh((value) => value + 1);
+      if (/STALE_/.test(String(error?.code || ""))) {
+        forceEvaluationReloadRef.current = true;
+        setRefresh((value) => value + 1);
+      }
     }
   }
 

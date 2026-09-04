@@ -20,6 +20,7 @@ import LegacyWorkCenterReadOnlyPanel from "../components/LegacyWorkCenterReadOnl
 import WorkCenterBackButton from "../components/WorkCenterBackButton";
 import {
   WorkCenterAccordion,
+  WorkCenterAttentionBadge,
   WorkCenterEmptyState,
   WorkCenterMetricGrid,
   WorkCenterPageHeader,
@@ -170,6 +171,16 @@ import {
 import {
   parseProfessionalWorkCenterRoute,
 } from "../utils/professionalWorkCenterRoute.js";
+import {
+  getAlertCountSnapshot,
+  subscribeAlertCounts,
+} from "../utils/alertCountCoordinator.js";
+import {
+  getBusinessWorkCenterPanelId,
+  getWorkCenterGroupedStageUnread,
+  getWorkCenterJobAttention,
+  getWorkCenterStageUnread,
+} from "../utils/workCenterAlertAttention.js";
 import {
   appendWorkflowOverrideHistory,
   getPendingWorkflowDependencies,
@@ -376,6 +387,18 @@ function ContractorDashboard({ setPage, language = "en" }) {
   const [workCenterRouteRevision, setWorkCenterRouteRevision] = useState(0);
   const appliedWorkCenterRouteRef = useRef("");
   const [workCenterJobReturnSurface, setWorkCenterJobReturnSurface] = useState("jobs");
+  const [
+    canonicalAlertCountSnapshot,
+    setCanonicalAlertCountSnapshot,
+  ] = useState(getAlertCountSnapshot);
+  const [
+    selectedWorkCenterAlertStage,
+    setSelectedWorkCenterAlertStage,
+  ] = useState(
+    () =>
+      workCenterRouteRecordRef.current?.stage ||
+      ""
+  );
   const [isEditingCompletedEvaluation, setIsEditingCompletedEvaluation] = useState(false);
   const [isJobHistoryMode, setIsJobHistoryMode] = useState(false);
   const [jobMenuTab, setJobMenuTab] = useState("current");
@@ -8526,13 +8549,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
   );
 
   useEffect(() => {
+    return subscribeAlertCounts(
+      setCanonicalAlertCountSnapshot
+    );
+  }, []);
+
+  useEffect(() => {
     const syncWorkCenterRoute = () => {
       const next = parseProfessionalWorkCenterRoute(window.location.hash);
       const current = workCenterRouteRecordRef.current;
       if (
         current?.jobId === next?.jobId &&
         current?.quoteId === next?.quoteId &&
-        current?.visitId === next?.visitId
+        current?.visitId === next?.visitId &&
+        current?.stage === next?.stage
       ) {
         return;
       }
@@ -8549,7 +8579,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
     const target = workCenterRouteRecordRef.current;
     if (!target) return;
     if (canonicalWorkCenterHydration.status !== "ready") return;
-    const token = `${target.jobId}:${target.quoteId || ""}:${target.visitId || ""}`;
+    const token = `${target.jobId}:${target.quoteId || ""}:${target.visitId || ""}:${target.stage || ""}`;
     const exactJob = findCanonicalWorkCenterEntryByJobId(
       canonicalWorkCenterHydration.entries,
       target.jobId
@@ -8558,6 +8588,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
       setSelectedWorkCenterJob(null);
       setSelectedWorkCenterQuoteId("");
       setSelectedWorkCenterVisitId("");
+      setSelectedWorkCenterAlertStage("");
       return;
     }
     if (appliedWorkCenterRouteRef.current === token) {
@@ -8580,12 +8611,62 @@ function ContractorDashboard({ setPage, language = "en" }) {
       setSelectedWorkCenterQuoteId("");
     }
     setSelectedWorkCenterVisitId(target.visitId || "");
+    setSelectedWorkCenterAlertStage(
+      target.stage || ""
+    );
     setWorkCenterJobReturnSurface(target.returnPage || (target.quoteId ? "quotes" : "jobs"));
     setSelectedWorkCenterJob(exactJob);
   }, [
     canonicalWorkCenterHydration.entries,
     canonicalWorkCenterHydration.status,
     workCenterRouteRevision,
+  ]);
+
+  useEffect(() => {
+    if (
+      !selectedWorkCenterAlertStage ||
+      !selectedWorkCenterJob ||
+      workCenterLifecycleProjection.status !==
+        "ready"
+    ) {
+      return undefined;
+    }
+
+    const panelId =
+      getBusinessWorkCenterPanelId(
+        selectedWorkCenterAlertStage
+      );
+
+    if (!panelId) return undefined;
+
+    const timeoutId = window.setTimeout(() => {
+      const section = document.querySelector(
+        `[data-work-center-accordion="${panelId}"]`
+      );
+
+      const trigger =
+        section?.querySelector(
+          ".work-center-accordion__trigger"
+        );
+
+      if (!section) return;
+
+      section.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+
+      trigger?.focus({
+        preventScroll: true,
+      });
+    }, 120);
+
+    return () =>
+      window.clearTimeout(timeoutId);
+  }, [
+    selectedWorkCenterAlertStage,
+    selectedWorkCenterJob,
+    workCenterLifecycleProjection.status,
   ]);
 
   useEffect(() => {
@@ -10918,6 +10999,45 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 workCenterLifecycleProjection.status === "ready"
                   ? workCenterLifecycleProjection.projection?.liveJob || null
                   : null;
+              const canonicalJobAlertAttention =
+                getWorkCenterJobAttention(
+                  canonicalAlertCountSnapshot,
+                  "",
+                  canonicalLiveJob?.jobId ||
+                    scopedJob.jobId ||
+                    workCenterLifecycleProjection.projection?.job?.id ||
+                    ""
+                );
+              const evaluationAlertCount =
+                getWorkCenterStageUnread(
+                  canonicalJobAlertAttention,
+                  "evaluation"
+                );
+              const quoteAlertPanelCount =
+                getWorkCenterStageUnread(
+                  canonicalJobAlertAttention,
+                  "quote"
+                );
+              const depositSchedulingAlertCount =
+                getWorkCenterGroupedStageUnread(
+                  canonicalJobAlertAttention,
+                  ["deposit", "schedule"]
+                );
+              const workPlanAlertCount =
+                getWorkCenterStageUnread(
+                  canonicalJobAlertAttention,
+                  "work"
+                );
+              const completionInvoiceAlertCount =
+                getWorkCenterGroupedStageUnread(
+                  canonicalJobAlertAttention,
+                  [
+                    "invoice",
+                    "completion",
+                    "review",
+                  ]
+                );
+
               const canonicalNextActionSection = resolveWorkCenterSectionForNextAction(
                 canonicalLiveJob?.nextAction?.code,
                 canonicalLiveJob?.stage?.code,
@@ -11305,17 +11425,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         <div className="work-center-content-grid">
 	                          <WorkCenterAccordion
 	                            id="canonical-job-evaluation"
+                            attentionCount={evaluationAlertCount}
                             icon="evaluationNotes"
                             title={workCenterWorkspaceCopy.evaluation}
                             summary={workCenterWorkspaceCopy.evaluationSummary}
                             defaultOpen={
+                              selectedWorkCenterAlertStage === "evaluation" ||
                               canonicalEvaluationHandoffIsCurrent ||
                               Boolean(selectedWorkCenterVisitId) ||
                               ["evaluation", "findings"].includes(
                                 canonicalNextActionSection
                               )
                             }
-                            autoOpenToken={canonicalEvaluationAutoOpenToken}
+                            autoOpenToken={`${canonicalEvaluationAutoOpenToken}:alert:${selectedWorkCenterAlertStage}`}
                           >
                             <CanonicalJobEvaluation
                               record={{
@@ -11356,11 +11478,16 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                          </WorkCenterAccordion>
 	                          <WorkCenterAccordion
 	                            id="canonical-job-quotes"
+                            attentionCount={quoteAlertPanelCount}
 	                            icon="quote"
 	                            title="Quote & Approval"
 	                            summary={workCenterWorkspaceCopy.quotesSummary}
-	                            defaultOpen={canonicalNextActionSection === "quotes" || Boolean(selectedWorkCenterQuoteId)}
-	                            autoOpenToken={`${canonicalAutoOpenToken}:${selectedWorkCenterQuoteId}`}
+	                            defaultOpen={
+                              selectedWorkCenterAlertStage === "quote" ||
+                              canonicalNextActionSection === "quotes" ||
+                              Boolean(selectedWorkCenterQuoteId)
+                            }
+	                            autoOpenToken={`${canonicalAutoOpenToken}:${selectedWorkCenterQuoteId}:alert:${selectedWorkCenterAlertStage}`}
 	                          >
 	                            <CanonicalQuotesPanel
 	                              record={{
@@ -11387,13 +11514,54 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                            </button>
 	                          </WorkCenterAccordion>
 	                          <WorkCenterAccordion
+                            id="canonical-job-deposit-scheduling"
+                            attentionCount={depositSchedulingAlertCount}
+                            icon="payment"
+                            title="Deposit & Scheduling"
+                            summary="Request the approved Quote deposit and continue to work scheduling when payment requirements are satisfied."
+                            defaultOpen={
+                              ["deposit", "schedule"].includes(
+                                selectedWorkCenterAlertStage
+                              )
+                            }
+                            autoOpenToken={`${canonicalAutoOpenToken}:alert:${selectedWorkCenterAlertStage}`}
+                          >
+                            <CanonicalJobVisits
+                              record={{
+                                ...selectedWorkCenterJob,
+                                lifecycleVerified: true,
+                                lifecycleContractVersion: 2,
+                                jobId:
+                                  workCenterLifecycleProjection.projection.job?.id ||
+                                  null,
+                                postId:
+                                  workCenterLifecycleProjection.projection.requestId ||
+                                  workCenterLifecycleProjection.postId,
+                                requestId:
+                                  workCenterLifecycleProjection.projection.requestId ||
+                                  workCenterLifecycleProjection.postId,
+                              }}
+                              setPage={setPage}
+                              purposeFilter="APPROVED_WORK"
+                              showDeposit
+                              embedded
+                              depositActionLabel="Request Deposit"
+                              focusVisitId={selectedWorkCenterVisitId}
+                            />
+                          </WorkCenterAccordion>
+                          <WorkCenterAccordion
 	                            id="canonical-job-work-plan"
+                            attentionCount={workPlanAlertCount}
                             icon="workCenter"
                             title={workCenterWorkspaceCopy.workPlan}
                             summary={workCenterWorkspaceCopy.workPlanSummary}
                             status={jobDisplayStatus}
-                            defaultOpen={canonicalNextActionSection === "workPlan" || Boolean(selectedWorkCenterVisitId)}
-                            autoOpenToken={canonicalAutoOpenToken}
+                            defaultOpen={
+                              selectedWorkCenterAlertStage === "work" ||
+                              canonicalNextActionSection === "workPlan" ||
+                              Boolean(selectedWorkCenterVisitId)
+                            }
+                            autoOpenToken={`${canonicalAutoOpenToken}:alert:${selectedWorkCenterAlertStage}`}
                           >
 	                            <ProfessionalWorkPlanWorkspace
 	                              jobId={workCenterLifecycleProjection.projection.job?.id || null}
@@ -11417,11 +11585,17 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                          </WorkCenterAccordion>
 	                          <WorkCenterAccordion
 	                            id="canonical-job-completion-invoice"
+                            attentionCount={completionInvoiceAlertCount}
 	                            icon="payment"
 	                            title="Invoice & Closeout"
 	                            summary={workCenterWorkspaceCopy.completionInvoiceSummary}
-	                            defaultOpen={canonicalNextActionSection === "completionInvoice"}
-	                            autoOpenToken={canonicalAutoOpenToken}
+	                            defaultOpen={
+                              ["invoice", "completion", "review"].includes(
+                                selectedWorkCenterAlertStage
+                              ) ||
+                              canonicalNextActionSection === "completionInvoice"
+                            }
+	                            autoOpenToken={`${canonicalAutoOpenToken}:alert:${selectedWorkCenterAlertStage}`}
 	                          >
 	                            {["WORK_COMPLETED", "JOB_COMPLETED"].includes(canonicalLiveJob?.stage?.code) ? (
 	                              <CompletedJobInvoiceHandoff
@@ -13163,6 +13337,20 @@ function ContractorDashboard({ setPage, language = "en" }) {
                         isCanonicalWorkCenterEntry(job);
                       const jobListPresentation =
                         getCurrentJobListPresentation(job);
+                      const jobAlertAttention =
+                        isCanonicalReadOnlyJob
+                          ? getWorkCenterJobAttention(
+                              canonicalAlertCountSnapshot,
+                              "",
+                              job.jobId
+                            )
+                          : null;
+                      const jobAlertCount =
+                        Number.isSafeInteger(
+                          jobAlertAttention?.unread
+                        )
+                          ? jobAlertAttention.unread
+                          : 0;
 
                       return (
                         <button
@@ -13175,6 +13363,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           onClick={() => {
                             setSelectedJobDetailView("");
                             setIsJobHistoryMode(false);
+                            setSelectedWorkCenterAlertStage("");
                             setIsWorkCenterSectionOpen(false);
                             setSelectedWorkCenterJob(job);
                           }}
@@ -13204,6 +13393,9 @@ function ContractorDashboard({ setPage, language = "en" }) {
                             )}
                           </span>
                           <span style={jobListAction}>
+                            <WorkCenterAttentionBadge
+                              count={jobAlertCount}
+                            />
                             {translate("workCenterJobDetails", activeLanguage)}
                           </span>
                         </button>
@@ -13483,11 +13675,19 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 );
               });
           }}
-          onOpenQuote={({ quoteId, jobId }) => {
+          onOpenQuote={({ quoteId, jobId, quote }) => {
             const exactJob = workCenterJobs.find(
               (job) => String(job?.jobId || "") === String(jobId || "")
             );
             if (!exactJob) return;
+
+            if (quote?.classification === "DRAFT") {
+              setPage(
+                `quoteBuilder?jobId=${encodeURIComponent(jobId)}`
+              );
+              return;
+            }
+
             setSelectedWorkCenterQuoteId(String(quoteId || ""));
             setWorkCenterJobReturnSurface("quotes");
             setSelectedJobDetailView("");

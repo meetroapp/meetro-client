@@ -20,9 +20,13 @@ import {
   isCurrentAlertMutationCompletion,
 } from "../utils/alertCenterController";
 import {
+  getAlertCountSnapshot,
   refreshAlertCounts,
   subscribeAlertCounts,
 } from "../utils/alertCountCoordinator";
+import {
+  getAlertWorkCenterRequestId,
+} from "../utils/workCenterAlertAttention.js";
 import { fetchCanonicalLiveJobProjection } from "../utils/canonicalLiveJobProjection.js";
 import {
   buildFieldCustomerAlertRoute,
@@ -59,12 +63,20 @@ function AlertCard({
   onDismiss,
   onMarkRead,
   onOpenDestination,
+  workCenterRequestId = null,
 }) {
   const presentation = getAlertPresentation(alert, language);
-  const destinationTarget = getAlertDestinationActionTarget(
-    alert.destination,
-    { professional: isProfessionalSession() }
-  );
+  const destinationTarget =
+    getAlertDestinationActionTarget(
+      alert.destination,
+      {
+        professional: isProfessionalSession(),
+        workCenterStage:
+          alert.payload?.workCenterStage || null,
+        homeownerRequestId:
+          workCenterRequestId,
+      }
+    );
   const canMarkRead = canMarkCanonicalAlertRead(alert);
   const canDismiss = canAttemptCanonicalAlertDismiss(alert);
   const isPending = Boolean(pendingOperation);
@@ -189,6 +201,10 @@ function Notifications({
   const [pendingDestinations, setPendingDestinations] = useState({});
   const [readAllPending, setReadAllPending] = useState(false);
   const [readAllErrorKey, setReadAllErrorKey] = useState("");
+  const [
+    canonicalCountSnapshot,
+    setCanonicalCountSnapshot,
+  ] = useState(getAlertCountSnapshot);
   const [decisionAttentionState, setDecisionAttentionState] = useState({
     status: "idle",
     quotes: [],
@@ -254,6 +270,12 @@ function Notifications({
       controller.deactivate();
     };
   }, [controller]);
+
+  useEffect(() => {
+    return subscribeAlertCounts(
+      setCanonicalCountSnapshot
+    );
+  }, []);
 
   useEffect(() => {
     if (!employeeMode) return undefined;
@@ -616,6 +638,13 @@ function Notifications({
                   <AlertCard
                     alert={alert}
                     index={index}
+                    workCenterRequestId={
+                      getAlertWorkCenterRequestId(
+                        canonicalCountSnapshot,
+                        canonicalCountSnapshot?.identity || "",
+                        alert
+                      )
+                    }
                     key={`${alert.id}:${index}`}
                     language={language}
                     destinationErrorKey={destinationErrors[alert.id]}

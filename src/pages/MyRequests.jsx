@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import {
+  WorkCenterAttentionBadge,
+} from "../components/WorkCenterWorkspaceSystem.jsx";
 import EmergencyTimeline from "../components/EmergencyTimeline";
 import HomeownerProfessionalResponseReview from "../components/HomeownerProfessionalResponseReview";
 import HomeownerRequestModificationPanel from "../components/HomeownerRequestModificationPanel";
@@ -57,6 +60,15 @@ import {
 } from "../utils/homeownerRequestCardIdentity";
 import { fetchCustomerJobQuotes } from "../utils/customerJobQuotesApi.js";
 import { parseHomeownerRequestAlertRoute } from "../utils/alertWorkflowRoutes.js";
+import {
+  getAlertCountSnapshot,
+  subscribeAlertCounts,
+} from "../utils/alertCountCoordinator.js";
+import {
+  getHomeownerWorkCenterSection,
+  getWorkCenterGroupedStageUnread,
+  getWorkCenterRequestAttention,
+} from "../utils/workCenterAlertAttention.js";
 
 const UNSUPPORTED_WORKFLOW_STATUSES = new Set([
   "accepted",
@@ -358,6 +370,8 @@ function HomeownerWorkflowHub({
   onReviewResponse,
   onPrimaryAction,
   hideCommunicationAction = false,
+  alertAttention = null,
+  focusStage = "",
 }) {
   const workflow = getHomeownerWorkflowPresentation(request, language);
   const canonicalPresentation = presentationState?.applicable
@@ -377,43 +391,80 @@ function HomeownerWorkflowHub({
   const hasCompletion =
     String(request.status || "").toLowerCase() === "completed" ||
     Boolean(request.completionRecord);
+  const focusedSection =
+    getHomeownerWorkCenterSection(
+      focusStage
+    );
+
   const visibleSections = [
     {
       key: "schedule",
+      alertStages: ["schedule"],
       label: t("myRequestsScheduleVisit", language),
       visible: Boolean(linkedAppointment || request.scheduledAt || request.appointmentDate),
     },
     {
       key: "evaluation",
+      alertStages: ["evaluation"],
       label: t("myRequestsEvaluationSummary", language),
       visible: Boolean(request.evaluationSummary || request.evaluationNotes || request.evaluationCompletedAt),
     },
     {
       key: "quote",
+      alertStages: ["quote"],
       label: t("myRequestsQuoteProposal", language),
       visible: hasQuote,
     },
     {
       key: "payment",
+      alertStages: ["deposit"],
       label: t("myRequestsPaymentDeposit", language),
       visible: hasPayment,
     },
     {
       key: "work",
+      alertStages: ["work"],
       label: t("myRequestsActiveWork", language),
       visible: hasActiveWork,
     },
     {
       key: "completion",
+      alertStages: [
+        "invoice",
+        "completion",
+        "review",
+      ],
       label: t("myRequestsCompletion", language),
       visible: hasCompletion,
     },
     {
       key: "history",
+      alertStages: [],
       label: t("myRequestsServiceHistory", language),
       visible: Boolean(request.closedAt || request.savedToHistory),
     },
-  ].filter((section) => section.visible);
+  ]
+    .map((section) => {
+      const attentionCount =
+        getWorkCenterGroupedStageUnread(
+          alertAttention,
+          section.alertStages
+        );
+
+      const focused =
+        focusedSection === section.key;
+
+      return {
+        ...section,
+        attentionCount,
+        focused,
+        visible:
+          section.visible ||
+          attentionCount > 0 ||
+          focused,
+      };
+    })
+    .filter((section) => section.visible);
   const primaryIsConversation = workflow.primaryActionKey === "messageProfessional";
   const conversationActionStage = ["completion", "history"].includes(
     workflow.key
@@ -473,8 +524,37 @@ function HomeownerWorkflowHub({
       {visibleSections.length > 0 && (
         <div style={workflowSectionList}>
           {visibleSections.map((section) => (
-            <span key={section.key} style={workflowSectionPill}>
+            <span
+              key={section.key}
+              id={`homeowner-work-center-section-${section.key}`}
+              data-homeowner-work-center-section={section.key}
+              tabIndex={section.focused ? -1 : undefined}
+              style={{
+                ...workflowSectionPill,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                ...(section.attentionCount > 0
+                  ? {
+                      border:
+                        "1px solid rgba(185, 28, 28, 0.34)",
+                      background:
+                        "rgba(254, 242, 242, 0.92)",
+                    }
+                  : {}),
+                ...(section.focused
+                  ? {
+                      outline:
+                        "2px solid rgba(31, 77, 52, 0.34)",
+                      outlineOffset: 2,
+                    }
+                  : {}),
+              }}
+            >
               {section.label}
+              <WorkCenterAttentionBadge
+                count={section.attentionCount}
+              />
             </span>
           ))}
         </div>
@@ -689,6 +769,16 @@ function MyRequests({ setPage, view = "list" }) {
   ] = useState(REQUEST_COLLECTION_STATUS.LOADING);
   const [emergencyReloadKey, setEmergencyReloadKey] =
     useState(0);
+  const [
+    canonicalAlertCountSnapshot,
+    setCanonicalAlertCountSnapshot,
+  ] = useState(getAlertCountSnapshot);
+
+  useEffect(() => {
+    return subscribeAlertCounts(
+      setCanonicalAlertCountSnapshot
+    );
+  }, []);
 
   const handleCanonicalLifecycleLoaded = useCallback(
     ({ requestId, lifecycle }) => {
@@ -935,6 +1025,70 @@ function MyRequests({ setPage, view = "list" }) {
       ? [selectedRequest]
       : []
     : sortedRequests;
+
+  const alertFocusSection =
+    getHomeownerWorkCenterSection(
+      alertRoute?.stage || ""
+    );
+
+  const selectedRequestIdentity =
+    selectedRequest
+      ? String(
+          selectedRequest.requestId ||
+          selectedRequest.id ||
+          ""
+        )
+      : "";
+
+  useEffect(() => {
+    if (
+      !isDetailView ||
+      !selectedRequestIdentity ||
+      !alertFocusSection
+    ) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(
+      () => {
+        const exactContent =
+          document.querySelector(
+            `[data-homeowner-work-center-content="${alertFocusSection}"]`
+          );
+
+        const lifecycleSection =
+          document.querySelector(
+            `[data-homeowner-work-center-section="${alertFocusSection}"]`
+          );
+
+        const target =
+          exactContent || lifecycleSection;
+
+        if (!target) return;
+
+        target.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+
+        if (
+          typeof target.focus === "function"
+        ) {
+          target.focus({
+            preventScroll: true,
+          });
+        }
+      },
+      140
+    );
+
+    return () =>
+      window.clearTimeout(timeoutId);
+  }, [
+    alertFocusSection,
+    isDetailView,
+    selectedRequestIdentity,
+  ]);
 
   function getPresentationForRequest(request = {}) {
     return deriveRequestPresentationState({
@@ -1478,6 +1632,20 @@ function MyRequests({ setPage, view = "list" }) {
 
             const authoritativeCounts = getAuthoritativeHomeownerRequestCounts(request);
 
+            const requestAlertAttention =
+              getWorkCenterRequestAttention(
+                canonicalAlertCountSnapshot,
+                "",
+                requestId
+              );
+
+            const requestAlertCount =
+              Number.isSafeInteger(
+                requestAlertAttention?.unread
+              )
+                ? requestAlertAttention.unread
+                : 0;
+
             return (
               <div
                 className="meetro-visual-surface"
@@ -1511,6 +1679,9 @@ function MyRequests({ setPage, view = "list" }) {
                         <span style={statusPill}>
                           {canonicalPresentation?.statusLabel || lifecycle.stageLabel}
                         </span>
+                        <WorkCenterAttentionBadge
+                          count={requestAlertCount}
+                        />
                       </div>
 
                       <h3
@@ -1706,6 +1877,14 @@ function MyRequests({ setPage, view = "list" }) {
                           : openHomeownerWorkflow(truthfulRequest, workflow)
                       }
                       hideCommunicationAction={hasQuoteReview}
+                      alertAttention={
+                        requestAlertAttention
+                      }
+                      focusStage={
+                        showsDedicatedDetail
+                          ? alertRoute?.stage || ""
+                          : ""
+                      }
                     />
 
                     <div
@@ -1789,7 +1968,11 @@ function MyRequests({ setPage, view = "list" }) {
 
                 {Array.isArray(truthfulRequest.quotesReceived) &&
                   truthfulRequest.quotesReceived.length > 0 && (
-                    <div style={quoteSection}>
+                    <div
+                      style={quoteSection}
+                      data-homeowner-work-center-content="quote"
+                      tabIndex={-1}
+                    >
                       <div style={quoteHeader}>
                         <div>
                           <h3 style={quoteTitle}>

@@ -31,9 +31,19 @@ test("one sidebar Quote & Invoice shortcut opens one shared workspace", () => {
   assert.match(invoiceBuilder, /<QuoteBuilder setPage=\{setPage\} initialDocument="invoice"/);
 });
 
-test("Quote, Invoice, and closed-by-default Saved Files share the workspace", () => {
-  assert.match(workspace, /\["quote", "Quote"/);
-  assert.match(workspace, /\["invoice", "Invoice"/);
+test("Quote, Deposit Request, Invoice, and closed-by-default Saved Files share the workspace", () => {
+  const tabs = workspace.slice(
+    workspace.indexOf("function DocumentTabs"),
+    workspace.indexOf("function DocumentActionMenu")
+  );
+
+  const quoteIndex = tabs.indexOf('onDocumentChange("quote")');
+  const depositIndex = tabs.indexOf('<MeetroIcon name="payment"');
+  const invoiceIndex = tabs.indexOf('onDocumentChange("invoice")');
+
+  assert.ok(quoteIndex >= 0);
+  assert.ok(depositIndex > quoteIndex);
+  assert.ok(invoiceIndex > depositIndex);
   assert.match(workspace, />\s*Saved Files\s*</);
   assert.match(workspace, /useState\(false\)[\s\S]*setSavedFilesOpen/);
   assert.match(workspace, /savedFilesOpen \? <SavedFilesDrawer/);

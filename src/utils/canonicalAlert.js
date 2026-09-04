@@ -369,6 +369,102 @@ function normalizeCount(value) {
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
+const WORK_CENTER_ALERT_STAGE_SET = new Set([
+  "evaluation",
+  "quote",
+  "deposit",
+  "schedule",
+  "work",
+  "invoice",
+  "completion",
+  "review",
+]);
+
+function normalizeWorkCenterAttention(value) {
+  if (
+    !hasExactKeys(value, ["unread", "byJob"]) ||
+    !Array.isArray(value.byJob)
+  ) {
+    return null;
+  }
+
+  const unread = normalizeCount(value.unread);
+  if (unread === null) return null;
+
+  const byJob = value.byJob.map((job) => {
+    if (
+      !hasExactKeys(
+        job,
+        ["jobId", "requestId", "unread", "stages"]
+      ) ||
+      typeof job.jobId !== "string" ||
+      !UUID_PATTERN.test(job.jobId) ||
+      !Array.isArray(job.stages)
+    ) {
+      return null;
+    }
+
+    const jobUnread = normalizeCount(job.unread);
+    const requestId =
+      job.requestId === null
+        ? null
+        : normalizePositiveNumericIdentity(
+            job.requestId
+          );
+
+    if (
+      jobUnread === null ||
+      (job.requestId !== null && !requestId)
+    ) {
+      return null;
+    }
+
+    const stages = job.stages.map((stage) => {
+      if (
+        !hasExactKeys(stage, ["stage", "unread"]) ||
+        !WORK_CENTER_ALERT_STAGE_SET.has(stage.stage)
+      ) {
+        return null;
+      }
+
+      const stageUnread = normalizeCount(stage.unread);
+      return stageUnread === null
+        ? null
+        : {
+            stage: stage.stage,
+            unread: stageUnread,
+          };
+    });
+
+    if (stages.some((stage) => !stage)) return null;
+
+    const stageTotal = stages.reduce(
+      (total, stage) => total + stage.unread,
+      0
+    );
+
+    if (stageTotal !== jobUnread) return null;
+
+    return {
+      jobId: job.jobId.toLowerCase(),
+      requestId,
+      unread: jobUnread,
+      stages,
+    };
+  });
+
+  if (byJob.some((job) => !job)) return null;
+
+  const jobTotal = byJob.reduce(
+    (total, job) => total + job.unread,
+    0
+  );
+
+  if (jobTotal !== unread) return null;
+
+  return { unread, byJob };
+}
+
 function normalizeCommunicationAttention(value) {
   if (
     !hasExactKeys(value, [
@@ -459,8 +555,25 @@ export function normalizeAlertCountsResponse(value) {
 
   const active = normalizeCount(value.counts.active);
   const unread = normalizeCount(value.counts.unread);
-  const communication = normalizeCommunicationAttention(value.counts.communication);
-  if (active === null || unread === null || !communication) return null;
+  const communication = normalizeCommunicationAttention(
+    value.counts.communication
+  );
+  const workCenter =
+    value.counts.workCenter === undefined
+      ? undefined
+      : normalizeWorkCenterAttention(
+          value.counts.workCenter
+        );
+
+  if (
+    active === null ||
+    unread === null ||
+    !communication ||
+    (value.counts.workCenter !== undefined &&
+      !workCenter)
+  ) {
+    return null;
+  }
 
   const byCategory = {};
   for (const [category, counts] of Object.entries(value.counts.byCategory)) {
@@ -477,7 +590,15 @@ export function normalizeAlertCountsResponse(value) {
   return {
     success: true,
     code: value.code,
-    counts: { active, unread, byCategory, communication },
+    counts: {
+      active,
+      unread,
+      byCategory,
+      communication,
+      ...(workCenter === undefined
+        ? {}
+        : { workCenter }),
+    },
   };
 }
 

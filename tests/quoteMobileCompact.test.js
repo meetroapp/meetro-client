@@ -58,11 +58,20 @@ test("selector behavior is attached to the internal conversation scroller and do
   assert.match(workspace, /setComposerTrayOpen\(false\)/);
 });
 
-test("document selector keeps Quote, Invoice, and Deposit Request while Saved Files moves to document actions", () => {
-  assert.match(workspace, /Quote, Invoice, and Deposit Request documents/);
-  assert.match(workspace, /\[\["quote", "Quote"/);
-  assert.match(workspace, /\["invoice", "Invoice"/);
-  assert.match(workspace, /onClick=\{onDepositRequest\}[\s\S]*Deposit Request/);
+test("document selector keeps Quote, Deposit Request, and Invoice while Saved Files moves to document actions", () => {
+  const start = workspace.indexOf("function DocumentTabs");
+  const end = workspace.indexOf("function DocumentActionMenu", start);
+  const tabs = workspace.slice(start, end);
+
+  const quoteIndex = tabs.indexOf('onDocumentChange("quote")');
+  const depositIndex = tabs.indexOf('<MeetroIcon name="payment"');
+  const invoiceIndex = tabs.indexOf('onDocumentChange("invoice")');
+
+  assert.match(tabs, /Quote, Deposit Request, and Invoice documents/);
+  assert.ok(quoteIndex >= 0);
+  assert.ok(depositIndex > quoteIndex);
+  assert.ok(invoiceIndex > depositIndex);
+  assert.match(tabs, /onClick=\{onDepositRequest\}[\s\S]*Deposit Request/);
   assert.match(workspace, /business-document-tabs-saved-files/);
   assert.match(workspace, /className="business-document-action-menu"/);
   assert.match(workspace, /Document and workspace actions/);
@@ -75,7 +84,10 @@ test("Deposit Request opens its preparation workspace before authority exists", 
   const handler = workspace.slice(start, end);
   assert.match(handler, /setPage\([\s\S]*depositRequestBuilder/);
   assert.doesNotMatch(handler, /fetchProfessionalPreWorkDeposit|eligible/);
-  assert.match(read("src/components/DepositRequestWorkspace.jsx"), /Preparation is available now/);
+  assert.match(
+    read("src/components/DepositRequestWorkspace.jsx"),
+    /The Quote supplies the customer, project, deposit amount, and payment terms/
+  );
 });
 
 test("top document actions menu reuses existing handlers with grouped accessible actions", () => {

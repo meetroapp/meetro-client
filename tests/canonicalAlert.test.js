@@ -535,3 +535,103 @@ test("malformed success envelopes fail closed", () => {
   assert.equal(normalizeAlertReadAllResponse({ success: true, code: "WRONG" }), null);
   assert.equal(normalizeAlertMutationResponse({ success: true, code: "WRONG" }, "ALERT_DISMISSED"), null);
 });
+
+
+test("canonical Alert counts accept exact Work Center Job and stage attention", () => {
+  const normalized = normalizeAlertCountsResponse({
+    success: true,
+    code: "ALERT_COUNTS_RETRIEVED",
+    counts: {
+      active: 4,
+      unread: 4,
+      byCategory: {
+        schedule: {
+          active: 1,
+          unread: 1,
+        },
+        payment: {
+          active: 3,
+          unread: 3,
+        },
+      },
+      communication: {
+        unread: 0,
+        customerUnread: 0,
+        teamUnread: 0,
+        byJob: [],
+        byConversation: [],
+      },
+      workCenter: {
+        unread: 4,
+        byJob: [{
+          jobId: "072c8736-5d97-4253-ba3e-dd1bce281a20",
+          requestId: 41,
+          unread: 4,
+          stages: [
+            {
+              stage: "evaluation",
+              unread: 1,
+            },
+            {
+              stage: "deposit",
+              unread: 3,
+            },
+          ],
+        }],
+      },
+    },
+  });
+
+  assert.ok(normalized);
+
+  assert.deepEqual(
+    normalized.counts.workCenter,
+    {
+      unread: 4,
+      byJob: [{
+        jobId:
+          "072c8736-5d97-4253-ba3e-dd1bce281a20",
+        requestId: 41,
+        unread: 4,
+        stages: [
+          {
+            stage: "evaluation",
+            unread: 1,
+          },
+          {
+            stage: "deposit",
+            unread: 3,
+          },
+        ],
+      }],
+    }
+  );
+});
+
+test("canonical Alert counts remain compatible before Work Center attention deployment", () => {
+  const normalized = normalizeAlertCountsResponse({
+    success: true,
+    code: "ALERT_COUNTS_RETRIEVED",
+    counts: {
+      active: 0,
+      unread: 0,
+      byCategory: {},
+      communication: {
+        unread: 0,
+        customerUnread: 0,
+        teamUnread: 0,
+        byJob: [],
+        byConversation: [],
+      },
+    },
+  });
+
+  assert.ok(normalized);
+  assert.equal(
+    Object.hasOwn(
+      normalized.counts,
+      "workCenter"
+    ),
+    false
+  );
+});

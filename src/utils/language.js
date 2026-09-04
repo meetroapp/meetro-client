@@ -9,6 +9,7 @@ import { customerQuoteLanguage } from "./customerQuoteLanguage.js";
 import { businessDocumentCustomerLanguage } from "./businessDocumentCustomerLanguage.js";
 import { businessDocumentWorkflowLanguage } from "./businessDocumentWorkflowLanguage.js";
 import { fieldEmployeeLanguage } from "./fieldEmployeeLanguage.js";
+import { alertLifecycleLanguage } from "./alertLifecycleLanguage.js";
 
 export const SUPPORTED_LANGUAGES = [
   { code: "en", label: "English" },
@@ -95,6 +96,7 @@ export function getLanguageLabel(language = getLanguage()) {
 
 export const translations = {
   en: {
+    ...alertLifecycleLanguage.en,
     home: "Home",
     discover: "Discover",
     chat: "Chat",
@@ -1580,6 +1582,7 @@ afterApprovalWorkStarts: "After approval work starts",
 },
 
   es: {
+    ...alertLifecycleLanguage.es,
     home: "Inicio",
     discover: "Descubrir",
     chat: "Chat",
@@ -4948,6 +4951,7 @@ const highTrafficParityLabels = {
     momentsVerifiedLabel: "Meetro Moment verificado",
   },
   fr: {
+    ...alertLifecycleLanguage.fr,
     homeLocalServicesEyebrow: "Inspiration communautaire",
     homeMyProjects: "Mes projets",
     homeMyProjectsSubtitle:
@@ -5399,6 +5403,7 @@ const highTrafficParityLabels = {
     viewMyRequests: "Examiner mes demandes",
   },
   "pt-BR": {
+    ...alertLifecycleLanguage["pt-BR"],
     homeLocalServicesEyebrow: "Inspiração da comunidade",
     homeMyProjects: "Meus projetos",
     homeMyProjectsSubtitle:

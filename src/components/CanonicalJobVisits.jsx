@@ -143,6 +143,7 @@ export default function CanonicalJobVisits({
   showDeposit = true,
   embedded = false,
   focusVisitId = "",
+  depositActionLabel = "Prepare Deposit Request",
 }) {
   const environmentEnabled = isCanonicalWorkCenterHydrationEnabled();
   const jobId = String(record.jobId || "").trim();
@@ -614,6 +615,7 @@ export default function CanonicalJobVisits({
                     quoteId={subject.subjectId}
                     visitAuthority={authority}
                     setPage={setPage}
+                    requestActionLabel={depositActionLabel}
                     onCanonicalChange={() => {
                       reload();
                       notifyCanonicalVisitChanged(jobId);

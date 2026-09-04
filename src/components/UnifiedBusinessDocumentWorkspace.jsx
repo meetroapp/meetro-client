@@ -294,12 +294,17 @@ function DocumentTabs({
   onFocus,
 }) {
   return (
-    <nav className={`business-document-tabs${collapsed ? " is-collapsed" : ""}`} aria-label="Quote, Invoice, and Deposit Request documents" data-selector-collapsed={collapsed ? "true" : "false"} onFocusCapture={onFocus}>
-      {[["quote", "Quote", "quickQuote"], ["invoice", "Invoice", "quickInvoice"]].map(([id, label, icon]) => (
-        <button key={id} type="button" className={activeDocument === id ? "active" : ""} aria-current={activeDocument === id ? "page" : undefined} onClick={() => onDocumentChange(id)}>
-          <MeetroIcon name={icon} size={17} decorative />{label}
-        </button>
-      ))}
+    <nav className={`business-document-tabs${collapsed ? " is-collapsed" : ""}`} aria-label="Quote, Deposit Request, and Invoice documents" data-selector-collapsed={collapsed ? "true" : "false"} onFocusCapture={onFocus}>
+      <button
+        type="button"
+        className={activeDocument === "quote" ? "active" : ""}
+        aria-current={activeDocument === "quote" ? "page" : undefined}
+        onClick={() => onDocumentChange("quote")}
+      >
+        <MeetroIcon name="quickQuote" size={17} decorative />
+        Quote
+      </button>
+
       <button
         type="button"
         disabled={!onDepositRequest}
@@ -307,6 +312,16 @@ function DocumentTabs({
       >
         <MeetroIcon name="payment" size={17} decorative />
         Deposit Request
+      </button>
+
+      <button
+        type="button"
+        className={activeDocument === "invoice" ? "active" : ""}
+        aria-current={activeDocument === "invoice" ? "page" : undefined}
+        onClick={() => onDocumentChange("invoice")}
+      >
+        <MeetroIcon name="quickInvoice" size={17} decorative />
+        Invoice
       </button>
       <button type="button" className="business-document-tabs-saved-files" onClick={onSavedFiles} aria-haspopup="dialog"><MeetroIcon name="history" size={17} decorative />Saved Files</button>
     </nav>

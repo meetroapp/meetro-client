@@ -49,12 +49,54 @@ export function WorkCenterStatusPill({ children, tone = "neutral", className = "
   return <span className={`work-center-status-pill work-center-status-pill--${tone} ${className}`.trim()}>{children}</span>;
 }
 
+export function WorkCenterAttentionBadge({
+  count = 0,
+}) {
+  const normalized =
+    Number.isSafeInteger(count) && count > 0
+      ? count
+      : 0;
+
+  if (!normalized) return null;
+
+  const text =
+    normalized > 99
+      ? "99+"
+      : String(normalized);
+
+  return (
+    <span
+      className="work-center-attention-badge"
+      aria-label={`${normalized} Work Center ${normalized === 1 ? "item needs" : "items need"} attention`}
+      style={{
+        minWidth: 24,
+        height: 24,
+        padding: "0 7px",
+        borderRadius: 999,
+        display: "inline-flex",
+        alignItems: "center",
+        justifyContent: "center",
+        flex: "0 0 auto",
+        background: "#b91c1c",
+        color: "#ffffff",
+        fontSize: 12,
+        fontWeight: 900,
+        lineHeight: 1,
+        boxShadow: "0 0 0 2px #ffffff",
+      }}
+    >
+      {text}
+    </span>
+  );
+}
+
 export function WorkCenterAccordion({
   id,
   icon = "workCenter",
   title,
   summary,
   status = "",
+  attentionCount = 0,
   defaultOpen = false,
   autoOpenToken = "",
   nested = false,
@@ -88,6 +130,7 @@ export function WorkCenterAccordion({
           <span>{summary}</span>
         </span>
         {status && <WorkCenterStatusPill>{status}</WorkCenterStatusPill>}
+        <WorkCenterAttentionBadge count={attentionCount} />
         <span className="work-center-accordion__chevron" aria-hidden="true">v</span>
       </button>
       <div id={`${sectionId}-content`} className="work-center-accordion__content" hidden={!open}>

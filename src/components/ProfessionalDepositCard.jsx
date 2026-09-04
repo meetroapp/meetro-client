@@ -82,6 +82,7 @@ export default function ProfessionalDepositCard({
   visitAuthority = null,
   setPage,
   onCanonicalChange,
+  requestActionLabel = "Prepare Deposit Request",
 }) {
   const [readState, setReadState] = useState({ status: "loading", read: null, error: "" });
   const [formOpen, setFormOpen] = useState(false);
@@ -433,9 +434,13 @@ export default function ProfessionalDepositCard({
         <button
           type="button"
           style={styles.secondaryButton}
-          onClick={() => setPage(`depositRequestBuilder?jobId=${encodeURIComponent(jobId)}`)}
+          onClick={() =>
+            setPage(
+              `depositRequestBuilder?jobId=${encodeURIComponent(jobId)}&quoteId=${encodeURIComponent(quoteId)}`
+            )
+          }
         >
-          Prepare Deposit Request
+          {requestActionLabel}
         </button>
       )}
 

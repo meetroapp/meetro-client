@@ -90,12 +90,123 @@ test("workspace exposes explicit prepare, review, send, retry, resend, history, 
   assert.match(source, /Project total/);
   assert.match(source, /Deposit requested/);
   assert.match(source, /Amount remaining after deposit/);
-  assert.match(source, /Preparation is available now/);
+  assert.match(source, /The Quote supplies the customer, project, deposit amount, and payment terms/);
   assert.match(source, /Send is disabled until an approved Quote creates an unpaid canonical deposit requirement/);
-  assert.match(source, /Choose existing customer/);
-  assert.match(source, /Create external customer/);
+  assert.match(source, /Carried from Quote/);
+  assert.match(source, /quoteCarryoverContent/);
+  assert.match(
+    source,
+    /Customer, project, Quote reference, deposit amount, and payment terms carry forward automatically/
+  );
+  assert.match(
+    source,
+    /Change the customer, project, or deposit terms on the Quote/
+  );
+  assert.doesNotMatch(
+    source,
+    />Choose existing customer</
+  );
+  assert.doesNotMatch(
+    source,
+    />Create external customer</
+  );
   assert.match(source, /customerParty: customerParty \|\| null/);
   assert.match(source, /disabled=\{!eligible \|\| busy/);
+});
+
+test("business document order is Quote, Deposit Request, Invoice", () => {
+  const source = readFileSync(
+    new URL(
+      "../src/components/UnifiedBusinessDocumentWorkspace.jsx",
+      import.meta.url
+    ),
+    "utf8"
+  );
+
+  const start = source.indexOf("function DocumentTabs");
+  const end = source.indexOf(
+    "function DocumentActionMenu",
+    start
+  );
+  const tabs = source.slice(start, end);
+
+  const quoteIndex = tabs.indexOf(
+    'onDocumentChange("quote")'
+  );
+  const depositIndex = tabs.indexOf(
+    '<MeetroIcon name="payment"'
+  );
+  const invoiceIndex = tabs.indexOf(
+    'onDocumentChange("invoice")'
+  );
+
+  assert.ok(quoteIndex >= 0);
+  assert.ok(depositIndex > quoteIndex);
+  assert.ok(invoiceIndex > depositIndex);
+});
+
+test("Deposit Request carries the exact owned saved Quote forward", () => {
+  const source = readFileSync(
+    new URL("../src/pages/QuoteBuilder.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(
+    source,
+    /depositRequestSourceQuoteDocument/
+  );
+  assert.match(
+    source,
+    /savedProtection\.status === "exact"/
+  );
+  assert.match(
+    source,
+    /isUnifiedDepositRequestEntry[\s\S]*unifiedDepositRequestQuote/
+  );
+});
+
+test("Deposit Request uses one-pane iPhone Details and Preview containment", () => {
+  const source = readFileSync(
+    new URL("../src/components/DepositRequestWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+  const styles = readFileSync(
+    new URL("../src/components/UnifiedBusinessDocumentWorkspace.css", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(
+    source,
+    /const \[mobilePane, setMobilePane\] = useState\("details"\)/
+  );
+  assert.match(source, />\s*Details\s*</);
+  assert.match(source, />\s*Preview\s*</);
+  assert.match(source, /deposit-request-panel deposit-request-editor/);
+  assert.match(source, /deposit-request-panel deposit-request-preview/);
+  assert.match(source, /mobilePane === "details"/);
+  assert.match(source, /mobilePane === "preview"/);
+
+  assert.doesNotMatch(
+    source,
+    /gridTemplateColumns:\s*"minmax\(280px,\s*\.8fr\)\s*minmax\(360px,\s*1\.2fr\)"/
+  );
+
+  assert.match(
+    styles,
+    /\.deposit-request-main\s*\{[\s\S]*grid-template-columns:[\s\S]*minmax\(280px,\s*\.8fr\)[\s\S]*minmax\(360px,\s*1\.2fr\)/
+  );
+  assert.match(
+    styles,
+    /@media \(max-width: 767px\)[\s\S]*\.deposit-request-panel\s*\{[\s\S]*display:\s*none !important/
+  );
+  assert.match(
+    styles,
+    /\.deposit-request-panel\.mobile-active\s*\{[\s\S]*display:\s*grid !important/
+  );
+  assert.match(
+    styles,
+    /\.deposit-request-document-summary\s*\{[\s\S]*grid-template-columns:\s*1fr !important/
+  );
 });
 
 test("accepted unpaid Work Center exposes preparation while confirmed payment remains separate", () => {
