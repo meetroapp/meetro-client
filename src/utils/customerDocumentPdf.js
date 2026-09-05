@@ -488,10 +488,11 @@ export function renderCustomerDocumentPdf(model, { jsPDFImpl = jsPDF } = {}) {
     section(agreementCopy.warranty, model.agreement?.warrantyTerms);
     section(agreementCopy.acceptance, model.agreement?.acceptanceTerms);
   }
+  section(copy.acceptance, readableStatus(model, copy));
+  if (model.notes) y += 10;
   section(copy.notes, model.notes);
   section(copy.warranty, model.warrantyNotes);
   section(copy.message, model.customerMessage);
-  section(copy.acceptance, readableStatus(model, copy));
 
   const pages = doc.getNumberOfPages();
   for (let pageNumber = 1; pageNumber <= pages; pageNumber += 1) {
