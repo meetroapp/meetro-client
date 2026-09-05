@@ -3791,7 +3791,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     if (activeSaved && !activeDirty) {
       try {
         const artifact = await savedPdfArtifact(activeSaved);
-        setNotice(previewBusinessDocumentPdfArtifact(artifact)
+        setNotice(await previewBusinessDocumentPdfArtifact(artifact)
           ? `Previewing exact saved ${activeSaved.documentType.toLowerCase()} ${displayDocumentNumber(activeSaved)}, version ${activeSaved.version}.`
           : "PDF preview is unavailable. Nothing was saved or sent.");
       } catch (error) {

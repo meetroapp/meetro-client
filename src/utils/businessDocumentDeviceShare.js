@@ -1,6 +1,8 @@
-import { Capacitor } from "@capacitor/core";
+import { Capacitor, registerPlugin } from "@capacitor/core";
 import { Directory, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
+
+const NativePdfPreview = registerPlugin("NativePdfPreview");
 
 function cancelled(error) {
   return error?.name === "AbortError" || String(error?.message || "").toLowerCase().includes("cancel");
@@ -17,6 +19,16 @@ async function blobBase64(blob) {
     binary += String.fromCharCode(...bytes.subarray(offset, offset + 8192));
   }
   return globalThis.btoa(binary);
+}
+
+async function nativePreviewArtifact(artifact, {
+  nativePdfPreview = NativePdfPreview,
+} = {}) {
+  await nativePdfPreview.preview({
+    data: await blobBase64(artifact.blob),
+    fileName: artifact.fileName,
+    title: artifactTitle(artifact),
+  });
 }
 
 async function nativeShareArtifact(artifact, {
@@ -76,20 +88,58 @@ export async function shareBusinessDocumentPdfArtifact({
   return Object.freeze({ ok: false, method: "fallback" });
 }
 
-export function previewBusinessDocumentPdfArtifact(artifact, {
+export async function previewBusinessDocumentPdfArtifact(artifact, {
+  isNative = Capacitor.isNativePlatform(),
+  platform = Capacitor.getPlatform(),
+  nativePreviewArtifactImpl = nativePreviewArtifact,
   urlObject = globalThis.URL,
   openWindow = globalThis.open,
   scheduleRevoke = globalThis.setTimeout,
 } = {}) {
-  if (!(artifact?.blob instanceof Blob) || typeof urlObject?.createObjectURL !== "function" || typeof openWindow !== "function") return false;
+  const validPdf =
+    artifact?.blob instanceof Blob &&
+    Boolean(artifact.fileName) &&
+    (
+      artifact.contentType === "application/pdf" ||
+      artifact.blob.type === "application/pdf"
+    );
+
+  if (!validPdf) return false;
+
+  if (
+    isNative &&
+    platform === "ios" &&
+    typeof nativePreviewArtifactImpl === "function"
+  ) {
+    try {
+      await nativePreviewArtifactImpl(artifact);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  if (
+    typeof urlObject?.createObjectURL !== "function" ||
+    typeof openWindow !== "function"
+  ) {
+    return false;
+  }
+
   const url = urlObject.createObjectURL(artifact.blob);
+
   try {
     openWindow(url, "_blank", "noopener,noreferrer");
   } catch {
     urlObject.revokeObjectURL?.(url);
     return false;
   }
-  scheduleRevoke?.(() => urlObject.revokeObjectURL?.(url), 60_000);
+
+  scheduleRevoke?.(
+    () => urlObject.revokeObjectURL?.(url),
+    60_000
+  );
+
   return true;
 }
 
@@ -127,5 +177,6 @@ export const businessDocumentDeviceShareInternals = Object.freeze({
   artifactTitle,
   blobBase64,
   cancelled,
+  nativePreviewArtifact,
   nativeShareArtifact,
 });

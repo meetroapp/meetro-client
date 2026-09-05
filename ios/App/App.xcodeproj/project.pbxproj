@@ -15,6 +15,7 @@
 		A1B2C3D44A5B6C7000000003 /* MainViewController.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44A5B6C7000000004 /* MainViewController.swift */; };
 		A1B2C3D44A5B6C7000000005 /* NativeContacts.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44A5B6C7000000006 /* NativeContacts.swift */; };
 		A1B2C3D44A5B6C7000000007 /* StoreKitSubscriptions.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44A5B6C7000000008 /* StoreKitSubscriptions.swift */; };
+		A1B2C3D44A5B6C7000000009 /* NativePdfPreview.swift in Sources */ = {isa = PBXBuildFile; fileRef = A1B2C3D44A5B6C7000000010 /* NativePdfPreview.swift */; };
 		504EC30D1FED79650016851F /* Main.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30B1FED79650016851F /* Main.storyboard */; };
 		504EC30F1FED79650016851F /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 504EC30E1FED79650016851F /* Assets.xcassets */; };
 		504EC3121FED79650016851F /* LaunchScreen.storyboard in Resources */ = {isa = PBXBuildFile; fileRef = 504EC3101FED79650016851F /* LaunchScreen.storyboard */; };
@@ -30,6 +31,7 @@
 		A1B2C3D44A5B6C7000000004 /* MainViewController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MainViewController.swift; sourceTree = "<group>"; };
 		A1B2C3D44A5B6C7000000006 /* NativeContacts.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativeContacts.swift; sourceTree = "<group>"; };
 		A1B2C3D44A5B6C7000000008 /* StoreKitSubscriptions.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoreKitSubscriptions.swift; sourceTree = "<group>"; };
+		A1B2C3D44A5B6C7000000010 /* NativePdfPreview.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NativePdfPreview.swift; sourceTree = "<group>"; };
 		504EC30C1FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/Main.storyboard; sourceTree = "<group>"; };
 		504EC30E1FED79650016851F /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		504EC3111FED79650016851F /* Base */ = {isa = PBXFileReference; lastKnownFileType = file.storyboard; name = Base; path = Base.lproj/LaunchScreen.storyboard; sourceTree = "<group>"; };
@@ -76,6 +78,7 @@
 				A1B2C3D44A5B6C7000000002 /* SpeechRecognition.swift */,
 				A1B2C3D44A5B6C7000000006 /* NativeContacts.swift */,
 				A1B2C3D44A5B6C7000000008 /* StoreKitSubscriptions.swift */,
+				A1B2C3D44A5B6C7000000010 /* NativePdfPreview.swift */,
 				504EC30B1FED79650016851F /* Main.storyboard */,
 				504EC30E1FED79650016851F /* Assets.xcassets */,
 				504EC3101FED79650016851F /* LaunchScreen.storyboard */,
@@ -173,6 +176,7 @@
 				A1B2C3D44A5B6C7000000001 /* SpeechRecognition.swift in Sources */,
 				A1B2C3D44A5B6C7000000005 /* NativeContacts.swift in Sources */,
 				A1B2C3D44A5B6C7000000007 /* StoreKitSubscriptions.swift in Sources */,
+				A1B2C3D44A5B6C7000000009 /* NativePdfPreview.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

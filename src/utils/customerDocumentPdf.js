@@ -3,6 +3,10 @@ import { Directory, Filesystem } from "@capacitor/filesystem";
 import { Share } from "@capacitor/share";
 import { jsPDF } from "jspdf";
 
+import {
+  previewBusinessDocumentPdfArtifact,
+} from "./businessDocumentDeviceShare.js";
+
 const PAGE = Object.freeze({ width: 612, height: 792, margin: 48, footerY: 766 });
 const COLOR = Object.freeze({ ink: [24, 49, 70], text: [42, 45, 48], muted: [91, 105, 116], line: [196, 209, 218], fill: [242, 246, 248], accent: [31, 81, 50], white: [255, 255, 255] });
 
@@ -623,42 +627,138 @@ async function createCustomerDocumentPdfArtifactWithLogo(model, options = {}) {
 }
 
 export async function previewCustomerDocumentPdfWithMedia(model, options = {}) {
-  const remoteLogo = Boolean(model?.branding?.logoUrl && !model.branding.logoUrl.startsWith("data:image/"));
-  const remotePhoto = ["projectPhotos", "beforePhotos", "afterPhotos"].some((group) =>
-    model?.photoEvidence?.[group]?.some((photo) => !photo.dataUrl)
+  const isNative =
+    options.isNative ?? Capacitor.isNativePlatform();
+
+  const platform =
+    options.platform ?? Capacitor.getPlatform();
+
+  if (isNative && platform === "ios") {
+    try {
+      const artifact =
+        await createCustomerDocumentPdfArtifactWithLogo(
+          model,
+          options
+        );
+
+      const opened =
+        await previewBusinessDocumentPdfArtifact(
+          artifact,
+          {
+            isNative,
+            platform,
+            nativePreviewArtifactImpl:
+              options.nativePreviewArtifactImpl,
+          }
+        );
+
+      return Object.freeze({
+        ok: opened,
+        method: opened
+          ? "native-quick-look"
+          : "unavailable",
+        fileName: opened
+          ? artifact.fileName
+          : undefined,
+      });
+    } catch (error) {
+      if (
+        error?.code ===
+        "CUSTOMER_DOCUMENT_PHOTO_UNAVAILABLE"
+      ) {
+        return Object.freeze({
+          ok: false,
+          method: "photo-unavailable",
+        });
+      }
+
+      throw error;
+    }
+  }
+
+  const remoteLogo = Boolean(
+    model?.branding?.logoUrl &&
+    !model.branding.logoUrl.startsWith("data:image/")
   );
-  if (!remoteLogo && !remotePhoto) return previewCustomerDocumentPdf(model, options);
-  const openWindow = options.openWindow || globalThis.open;
+
+  const remotePhoto = [
+    "projectPhotos",
+    "beforePhotos",
+    "afterPhotos",
+  ].some((group) =>
+    model?.photoEvidence?.[group]?.some(
+      (photo) => !photo.dataUrl
+    )
+  );
+
+  if (!remoteLogo && !remotePhoto) {
+    return previewCustomerDocumentPdf(model, options);
+  }
+
+  const openWindow =
+    options.openWindow || globalThis.open;
+
   let reservedWindow = null;
+
   if (typeof openWindow === "function") {
     try {
-      reservedWindow = openWindow("", "_blank");
-      if (reservedWindow) reservedWindow.opener = null;
+      reservedWindow =
+        openWindow("", "_blank");
+
+      if (reservedWindow) {
+        reservedWindow.opener = null;
+      }
     } catch {
       reservedWindow = null;
     }
   }
+
   try {
-    const result = previewCustomerDocumentPdf(
-      await prepareCustomerDocumentPdfModel(model, options),
-      {
-        ...options,
-        openWindow: (url, target, features) => {
-          if (reservedWindow?.location) {
-            reservedWindow.location.replace?.(url);
-            return reservedWindow;
-          }
-          return openWindow?.(url, target, features);
-        },
-      }
-    );
-    if (!result.ok) reservedWindow?.close?.();
+    const result =
+      previewCustomerDocumentPdf(
+        await prepareCustomerDocumentPdfModel(
+          model,
+          options
+        ),
+        {
+          ...options,
+          openWindow:
+            (url, target, features) => {
+              if (reservedWindow?.location) {
+                reservedWindow.location.replace?.(
+                  url
+                );
+
+                return reservedWindow;
+              }
+
+              return openWindow?.(
+                url,
+                target,
+                features
+              );
+            },
+        }
+      );
+
+    if (!result.ok) {
+      reservedWindow?.close?.();
+    }
+
     return result;
   } catch (error) {
     reservedWindow?.close?.();
-    if (error?.code === "CUSTOMER_DOCUMENT_PHOTO_UNAVAILABLE") {
-      return Object.freeze({ ok: false, method: "photo-unavailable" });
+
+    if (
+      error?.code ===
+      "CUSTOMER_DOCUMENT_PHOTO_UNAVAILABLE"
+    ) {
+      return Object.freeze({
+        ok: false,
+        method: "photo-unavailable",
+      });
     }
+
     throw error;
   }
 }

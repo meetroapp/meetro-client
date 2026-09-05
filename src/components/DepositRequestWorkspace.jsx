@@ -496,8 +496,22 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
         reference: document.reference,
         setPage,
       });
-      if (action === "preview") previewBusinessDocumentPdfArtifact(artifact);
-      else downloadBusinessDocumentPdfArtifact(artifact);
+      if (action === "preview") {
+        const opened =
+          await previewBusinessDocumentPdfArtifact(
+            artifact
+          );
+
+        if (!opened) {
+          setError(
+            "PDF preview is unavailable. Nothing was saved or sent."
+          );
+        }
+      } else {
+        downloadBusinessDocumentPdfArtifact(
+          artifact
+        );
+      }
     } catch (reason) { setError(reason?.message || "The saved customer PDF is unavailable."); }
     finally { setBusy(false); }
   }

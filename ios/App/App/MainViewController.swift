@@ -8,5 +8,6 @@ class MainViewController: CAPBridgeViewController {
         bridge?.registerPluginInstance(SpeechRecognition())
         bridge?.registerPluginInstance(NativeContacts())
         bridge?.registerPluginInstance(StoreKitSubscriptions())
+        bridge?.registerPluginInstance(NativePdfPreview())
     }
 }
