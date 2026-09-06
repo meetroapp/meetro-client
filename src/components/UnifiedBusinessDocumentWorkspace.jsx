@@ -1037,6 +1037,10 @@ function DeliveryReviewDialog({ state, onChange, onCancel, onSend }) {
   return <WorkspaceDialog titleId="business-document-delivery-review-title" title={`Review ${label} ${email ? "Email" : "Message"}`} onClose={state.busy ? undefined : onCancel} actions={[{ label: "Cancel", onClick: onCancel, disabled: state.busy }, { label: action, primary: true, disabled: state.busy || (email && !state.recipientEmail.trim()), onClick: onSend }]}><div className="business-document-delivery-review">{email ? <label>Recipient<input type="email" autoComplete="email" value={state.recipientEmail} onChange={(event) => onChange("recipientEmail", event.target.value)} /></label> : <p><strong>Recipient</strong><br />Active governed Meetro customer conversation</p>}<label>Subject<input value={state.subject} onChange={(event) => onChange("subject", event.target.value)} /></label><label>Customer message<textarea value={state.customerMessage} onChange={(event) => onChange("customerMessage", event.target.value)} /></label><dl><div><dt>{label} number</dt><dd>{displayDocumentNumber(state.document)}</dd></div><div><dt>Exact saved version</dt><dd>{state.document.version}</dd></div><div><dt>{quote ? "Quote amount" : "Total due"}</dt><dd>{money(state.total)}</dd></div><div><dt>Customer document</dt><dd>PDF included</dd></div><div><dt>{quote ? "Quote Agreement / Terms" : "Due terms"}</dt><dd>{state.termsIncluded ? "Included" : "No terms entered"}</dd></div><div><dt>Customer-visible photos</dt><dd>{state.photoCount}</dd></div></dl><p className="business-document-delivery-truth">This sends only the saved customer-facing package. Private reminders, private photos, working conversation, internal costs, and recovery data are excluded. Sending does not issue, accept, approve, pay, or close anything.</p>{state.error ? <p role="alert" className="business-document-delivery-error">{state.error}</p> : null}</div></WorkspaceDialog>;
 }
 
+function QuoteFinalSendConfirmationDialog({ state, onCancel, onConfirm }) {
+  return <WorkspaceDialog titleId="business-document-quote-final-send-title" title="Send this Quote?" onClose={state.busy ? undefined : onCancel} actions={[{ label: "Cancel", onClick: onCancel, disabled: state.busy }, { label: state.busy ? "Sending…" : "Send Quote", primary: true, disabled: state.busy, onClick: onConfirm }]}><div className="business-document-delivery-review"><dl><div><dt>Customer</dt><dd>{state.customerName}</dd></div><div><dt>Quote</dt><dd>{state.quoteNumber}</dd></div><div><dt>Amount</dt><dd>{money(state.amount)}</dd></div><div><dt>Via</dt><dd>{state.via}</dd></div></dl><p className="business-document-delivery-truth">This will send this saved Quote to the customer.</p></div></WorkspaceDialog>;
+}
+
 function QuoteIssueReviewDialog({ state, onCancel, onConfirm }) {
   const issuedQuote = state.result?.issuedQuote || state.checkpoint?.issuedQuote || null;
   const deliveryRetry = state.errorPhase === "DELIVERY" && Boolean(issuedQuote);
@@ -1599,6 +1603,8 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const quoteIssueAttemptRef = useRef(null);
   const quoteSafetyContinuationRef = useRef(null);
   const quoteIssueInFlightRef = useRef(false);
+  const quoteFinalSendAuthorizationRef = useRef(null);
+  const quoteFinalSendInFlightRef = useRef(false);
   const quoteAuthorityRequestRef = useRef(0);
   const initialSavedDocumentOpenRef = useRef("");
   const quoteProposalApplyInFlightRef = useRef(false);
@@ -1642,6 +1648,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const [deliveryState, setDeliveryState] = useState(null);
   const [quoteIssueState, setQuoteIssueState] = useState(null);
   const [quoteSafetyState, setQuoteSafetyState] = useState(null);
+  const [quoteFinalSendState, setQuoteFinalSendState] = useState(null);
   const [externalApprovalState, setExternalApprovalState] = useState(null);
   const [invoiceCreateState, setInvoiceCreateState] = useState({
     busy: false, error: "", invoice: null,
@@ -2410,6 +2417,13 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         authority,
         error: "",
       });
+      setQuoteIssueState((currentIssue) =>
+        currentIssue?.stage === "settled" &&
+        currentIssue.document?.id === document.id &&
+        currentIssue.document?.version === document.version
+          ? null
+          : currentIssue
+      );
       return authority;
     } catch (error) {
       const current = savedDocumentsRef.current.quote;
@@ -2425,6 +2439,13 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         authority: null,
         error: error?.message || "Unable to verify current Quote delivery status.",
       });
+      setQuoteIssueState((currentIssue) =>
+        currentIssue?.stage === "settled" &&
+        currentIssue.document?.id === document.id &&
+        currentIssue.document?.version === document.version
+          ? null
+          : currentIssue
+      );
       setNotice("Unable to verify current Quote delivery status. Sending is unavailable until the status can be checked.");
       return null;
     }
@@ -3922,6 +3943,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       channel,
       documentType: type,
       document,
+      customerName: document.customerDisplayName || content.customerName || "Customer unavailable",
       recipientEmail: content.customerEmail || "",
       subject: `${type === "quote" ? "Quote" : "Invoice"} ${displayDocumentNumber(document)}`,
       customerMessage: "Please review the attached customer document.",
@@ -4227,6 +4249,11 @@ function QuoteInvoiceBusinessDocumentWorkspace({
 
   async function confirmGovernedQuoteIssue() {
     const current = quoteIssueState;
+    const externalCustomer = Boolean(
+      current?.identity &&
+      current.identity.requestId == null &&
+      current.identity.relationshipId == null
+    );
     if (
       current?.readiness?.ready !== true ||
       !current.document ||
@@ -4235,6 +4262,10 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       !current.commandKeys ||
       current.busy ||
       quoteIssueInFlightRef.current
+    ) return;
+    if (
+      !externalCustomer &&
+      !hasQuoteFinalSendAuthorization("GOVERNED", current)
     ) return;
     quoteIssueInFlightRef.current = true;
     setQuoteIssueState((state) => ({ ...state, busy: true, error: "", errorCode: "" }));
@@ -4435,6 +4466,124 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     }
   }
 
+  function hasQuoteFinalSendAuthorization(kind, current) {
+    const authorization = quoteFinalSendAuthorizationRef.current;
+    return Boolean(
+      authorization &&
+      authorization.kind === kind &&
+      authorization.documentId === current?.document?.id &&
+      authorization.documentVersion === current?.document?.version &&
+      (kind !== "GOVERNED" || authorization.commandKeys === current.commandKeys) &&
+      (kind !== "DELIVERY" || authorization.idempotencyKey === current.idempotencyKey)
+    );
+  }
+
+  function requestDeliverySend() {
+    const current = deliveryState;
+    if (!current?.document || current.busy) return;
+    if (current.documentType !== "quote") {
+      void sendCurrentDelivery({ retry: current.failed });
+      return;
+    }
+
+    const confirmation = {
+      kind: "DELIVERY",
+      documentId: current.document.id,
+      documentVersion: current.document.version,
+      idempotencyKey: current.idempotencyKey,
+      customerName: current.customerName,
+      quoteNumber: displayDocumentNumber(current.document),
+      amount: current.total,
+      via: current.channel === "EMAIL" ? "Email" : "Meetro Message",
+      retry: current.failed === true,
+      busy: false,
+    };
+    quoteFinalSendAuthorizationRef.current = confirmation;
+    setQuoteFinalSendState(confirmation);
+  }
+
+  function requestGovernedQuoteSend() {
+    const current = quoteIssueState;
+    if (
+      current?.readiness?.ready !== true ||
+      !current.document ||
+      !current.identity ||
+      !current.commandKeys ||
+      current.busy
+    ) return;
+    const externalCustomer = Boolean(
+      current.identity &&
+      current.identity.requestId == null &&
+      current.identity.relationshipId == null
+    );
+    if (externalCustomer) {
+      void confirmGovernedQuoteIssue();
+      return;
+    }
+
+    const confirmation = {
+      kind: "GOVERNED",
+      documentId: current.document.id,
+      documentVersion: current.document.version,
+      commandKeys: current.commandKeys,
+      customerName: current.readiness.customerName,
+      quoteNumber: current.readiness.documentNumber,
+      amount: current.readiness.total,
+      via: "Meetro Message",
+      busy: false,
+    };
+    quoteFinalSendAuthorizationRef.current = confirmation;
+    setQuoteFinalSendState(confirmation);
+  }
+
+  function cancelQuoteFinalSend() {
+    if (quoteFinalSendState?.busy) return;
+    quoteFinalSendAuthorizationRef.current = null;
+    setQuoteFinalSendState(null);
+  }
+
+  function closeQuoteIssueReview() {
+    if (quoteIssueState?.busy) return;
+    setQuoteIssueState((current) => {
+      if (current?.stage !== "success") return null;
+      const refreshComplete = Boolean(
+        persistedQuoteAuthority.stage === "ready" &&
+        persistedQuoteAuthority.documentId === current.document?.id &&
+        persistedQuoteAuthority.documentVersion === current.document?.version &&
+        persistedQuoteAuthority.authority?.canonicalQuote?.id === current.result?.issuedQuote?.id &&
+        (
+          current.result?.externalDeliveryRequired === true ||
+          persistedQuoteAuthority.authority?.delivery?.existingDelivery
+        )
+      );
+      return refreshComplete ? null : { ...current, stage: "settled" };
+    });
+  }
+
+  async function confirmQuoteFinalSend() {
+    const current = quoteFinalSendState;
+    if (
+      !current ||
+      current.busy ||
+      quoteFinalSendInFlightRef.current ||
+      quoteFinalSendAuthorizationRef.current !== current
+    ) return;
+
+    quoteFinalSendInFlightRef.current = true;
+    setQuoteFinalSendState((state) => state === current ? { ...state, busy: true } : state);
+    try {
+      if (current.kind === "GOVERNED") {
+        await confirmGovernedQuoteIssue();
+      } else {
+        await sendCurrentDelivery({ retry: current.retry });
+      }
+    } finally {
+      quoteFinalSendAuthorizationRef.current = null;
+      quoteFinalSendInFlightRef.current = false;
+      setQuoteFinalSendState((state) => state?.documentId === current.documentId && state?.documentVersion === current.documentVersion ? null : state);
+    }
+  }
+
   async function shareSavedDocument(document, warningsAcknowledged = false) {
     const type = document.documentType.toLowerCase();
     const content = document.content || currentContent(type);
@@ -4488,6 +4637,10 @@ function QuoteInvoiceBusinessDocumentWorkspace({
 
   async function sendCurrentDelivery({ retry = false } = {}) {
     if (!deliveryState?.document || deliveryState.busy) return;
+    if (
+      deliveryState.documentType === "quote" &&
+      !hasQuoteFinalSendAuthorization("DELIVERY", deliveryState)
+    ) return;
 
     if (
       !quoteSafetyAllowsDelivery(deliveryState.document, {
@@ -4990,9 +5143,10 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       {photoReviewOpen && documentPhotos.length ? <PhotoReviewDialog photos={documentPhotos} assignments={photoAssignments} onCancel={() => setPhotoReviewOpen(false)} onApply={(assignments) => { setPhotoAssignments((current) => ({ ...current, ...Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...normalizeBusinessDocumentPhotoAssignment(assignment), documentType: activeDocument }])) })); setPhotoReviewOpen(false); }} /> : null}
       {deliveryState?.stage === "saveRequired" ? <WorkspaceDialog titleId="business-document-delivery-save-title" title={deliveryState.channel === "DEVICE_SHARE" ? "Save changes before sharing" : "Save changes before sending"} onClose={deliveryState.busy ? undefined : () => setDeliveryState(null)} actions={[{ label: "Cancel", disabled: deliveryState.busy, onClick: () => setDeliveryState(null) }, { label: deliveryState.busy ? "Saving…" : deliveryState.channel === "DEVICE_SHARE" ? "Save & Continue to Share" : "Save & Continue to Send", primary: true, disabled: deliveryState.busy, onClick: () => void saveAndContinueDelivery() }]}><p>The customer can receive only an exact durable document version. Saving does not send, share, issue, accept, approve, pay, or close anything.</p>{deliveryState.error ? <p role="alert">{deliveryState.error}</p> : null}</WorkspaceDialog> : null}
       {deliveryState?.stage === "shareFallback" ? <WorkspaceDialog titleId="business-document-share-fallback-title" title="Share this saved PDF" onClose={() => setDeliveryState(null)} actions={[{ label: "Close", onClick: () => setDeliveryState(null) }, { label: "Download PDF", primary: true, onClick: () => { downloadBusinessDocumentPdfArtifact(deliveryState.artifact); setNotice("PDF downloaded. No delivery has been confirmed."); } }]}><p>System file sharing is unavailable in this browser. Download the exact saved PDF, copy the customer message, or open an email draft.</p><div className="business-document-share-fallback"><button type="button" onClick={() => void copyBusinessDocumentShareMessage(deliveryState.customerMessage).then((copied) => setNotice(copied ? "Customer message copied. No document was sent." : "Clipboard access is unavailable."))}>Copy customer message</button><button type="button" onClick={() => openBusinessDocumentEmailDraft({ recipient: deliveryState.recipientEmail, subject: deliveryState.subject, message: deliveryState.customerMessage })}>Open email draft</button></div><p className="business-document-delivery-truth">The email draft cannot attach the PDF automatically. Attach the downloaded PDF before sending. Meetro cannot confirm external delivery.</p></WorkspaceDialog> : null}
-      {deliveryState?.stage === "review" ? <DeliveryReviewDialog state={deliveryState} onChange={(field, value) => setDeliveryState((current) => ({ ...current, [field]: value }))} onCancel={() => setDeliveryState(null)} onSend={() => void sendCurrentDelivery({ retry: deliveryState.failed })} /> : null}
+      {deliveryState?.stage === "review" && !quoteFinalSendState ? <DeliveryReviewDialog state={deliveryState} onChange={(field, value) => setDeliveryState((current) => ({ ...current, [field]: value }))} onCancel={() => setDeliveryState(null)} onSend={requestDeliverySend} /> : null}
       {quoteSafetyState ? <WorkspaceDialog titleId="business-document-quote-safety-title" title={quoteSafetyState.blockingErrors.length ? "Quote needs attention" : "Review Quote before sending"} onClose={cancelQuoteSafety} actions={[{ label: "Cancel", onClick: cancelQuoteSafety }, { label: "Go Back & Edit Quote", primary: quoteSafetyState.blockingErrors.length > 0, onClick: quoteSafetyState.blockingErrors[0]?.field === "deposit" ? returnToQuoteDeposit : returnToQuoteSafetyEdit }, ...(quoteSafetyState.canSendAnyway ? [{ label: "Send Anyway", primary: true, onClick: acknowledgeQuoteSafetyWarnings }] : [])]}>{quoteSafetyState.blockingErrors.length ? <section><h3>Must correct</h3><ul>{quoteSafetyState.blockingErrors.map((problem) => <li key={problem.code}>{problem.message}</li>)}</ul></section> : null}{quoteSafetyState.warnings.length ? <section><h3>Review before sending</h3><ul>{quoteSafetyState.warnings.map((problem) => <li key={problem.code}>{problem.message}</li>)}</ul></section> : null}<p>Nothing was sent. Your working Quote remains available to edit.</p></WorkspaceDialog> : null}
-      {quoteIssueState && quoteIssueState.stage !== "hydrating" ? <QuoteIssueReviewDialog state={quoteIssueState} onCancel={() => setQuoteIssueState(null)} onConfirm={() => void confirmGovernedQuoteIssue()} /> : null}
+      {quoteIssueState && !["hydrating", "settled"].includes(quoteIssueState.stage) && !quoteFinalSendState ? <QuoteIssueReviewDialog state={quoteIssueState} onCancel={closeQuoteIssueReview} onConfirm={requestGovernedQuoteSend} /> : null}
+      {quoteFinalSendState ? <QuoteFinalSendConfirmationDialog state={quoteFinalSendState} onCancel={cancelQuoteFinalSend} onConfirm={() => void confirmQuoteFinalSend()} /> : null}
       {externalApprovalState ? <ExternalQuoteApprovalDialog state={externalApprovalState} onChange={(name, value) => setExternalApprovalState((current) => current ? { ...current, error: "", form: { ...current.form, [name]: value } } : current)} onCancel={() => { if (!externalApprovalState.busy) setExternalApprovalState(null); }} onConfirm={() => void confirmExternalQuoteApproval()} /> : null}
       {exitDialogOpen ? <WorkspaceDialog titleId="business-document-exit-title" title="Save changes before leaving?" onClose={() => setExitDialogOpen(false)} actions={[{ label: "Keep Editing", onClick: () => setExitDialogOpen(false) }, { label: "Discard Changes", onClick: discardAndExit }, { label: "Save Draft & Exit", primary: true, onClick: () => void saveAllAndExit() }]}><p>Save keeps this private working document for your business. It does not send or issue anything.</p></WorkspaceDialog> : null}
       {numberingSetup ? <NumberingSetupDialog state={numberingSetup} onModeChange={chooseNumberingMode} onPreviousNumberChange={(value) => setNumberingSetup((current) => current ? { ...current, previousDocumentNumber: value } : current)} onCancel={cancelNumberingSetup} onSubmit={() => void submitNumberingSetup()} /> : null}
