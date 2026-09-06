@@ -2,9 +2,11 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  createWorkingQuoteSafetyAcknowledgement,
   createWorkingQuoteCommandKeys,
   fetchWorkingQuoteReviewIdentity,
   importWorkingQuoteAsCanonicalDraft,
+  issueCanonicalWorkingQuote,
   issueAndSendWorkingQuote,
   normalizeWorkingDocumentCanonicalQuote,
   normalizeWorkingQuoteReviewIdentity,
@@ -32,6 +34,12 @@ const keys = Object.freeze({
   bridge: "working-quote-bridge-55555555-5555-4555-8555-555555555555",
   issue: "working-quote-issue-66666666-6666-4666-8666-666666666666",
   delivery: "working-quote-delivery-77777777-7777-4777-8777-777777777777",
+});
+
+const quoteSafety = Object.freeze({
+  ready: true,
+  blockingErrors: Object.freeze([]),
+  warnings: Object.freeze([]),
 });
 
 function canonicalQuote({
@@ -123,6 +131,7 @@ function reviewIdentity(overrides = {}) {
     relationshipId: 340,
     customerName: "Meetro Stage B 20260705172957",
     projectTitle: "Slice 004 Recommendation staging certification",
+    quoteSafety,
     ...overrides,
   };
 }
@@ -449,6 +458,7 @@ test("standalone saved Quote cannot enter the Job-governed send path without can
 
 test("exact-version review identity is loaded from the owned Working Quote projection", async () => {
   const calls = [];
+  const { quoteSafety: reviewSafety, ...review } = reviewIdentity();
   const identity = await fetchWorkingQuoteReviewIdentity({
     document,
     jobId: IDS.job,
@@ -459,7 +469,8 @@ test("exact-version review identity is loaded from the owned Working Quote proje
         data: {
           success: true,
           code: "BUSINESS_DOCUMENT_QUOTE_REVIEW_LOADED",
-          review: reviewIdentity(),
+          review,
+          quoteSafety: reviewSafety,
         },
       };
     },
@@ -472,6 +483,50 @@ test("exact-version review identity is loaded from the owned Working Quote proje
   ]]);
   assert.equal(identity.customerName, "Meetro Stage B 20260705172957");
   assert.equal(identity.projectTitle, "Slice 004 Recommendation staging certification");
+});
+
+test("warning acknowledgement is bound to the exact saved document version", async () => {
+  const warnedReview = reviewIdentity({
+    quoteSafety: {
+      ready: true,
+      blockingErrors: [],
+      warnings: [{
+        code: "QUOTE_DURATION_MISSING",
+        field: "estimatedDuration",
+        message: "Add an estimated duration.",
+      }],
+    },
+  });
+  const acknowledgement = createWorkingQuoteSafetyAcknowledgement(warnedReview);
+  assert.deepEqual(acknowledgement, {
+    documentId: IDS.document,
+    documentVersion: 3,
+    warningCodes: ["QUOTE_DURATION_MISSING"],
+  });
+
+  const calls = [];
+  await issueAndSendWorkingQuote({
+    document,
+    jobId: IDS.job,
+    commandKeys: keys,
+    quoteSafetyAcknowledgement: acknowledgement,
+    authFetchImpl: commandTransport(calls),
+    fetchDeliveryImpl: async () => delivery(),
+    sendDeliveryImpl: async () => deliveryEvidence(),
+  });
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    expectedVersion: 1,
+    quoteSafetyAcknowledgement: acknowledgement,
+  });
+
+  await assert.rejects(() => issueCanonicalWorkingQuote({
+    quote: canonicalQuote({ documentVersion: 4 }),
+    document: { ...document, version: 4 },
+    jobId: IDS.job,
+    idempotencyKey: keys.issue,
+    quoteSafetyAcknowledgement: acknowledgement,
+    authFetchImpl: commandTransport([]),
+  }), (error) => error.code === "QUOTE_SAFETY_ACKNOWLEDGEMENT_INVALID");
 });
 
 test("review identity fails closed on document, version, Job, or shape drift", async () => {

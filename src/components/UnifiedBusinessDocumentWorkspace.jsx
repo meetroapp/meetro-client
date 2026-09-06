@@ -52,6 +52,7 @@ import {
   listBusinessDocumentDeliveries,
 } from "../utils/businessDocumentDraftApi.js";
 import {
+  createWorkingQuoteSafetyAcknowledgement,
   createWorkingQuoteCommandKeys,
   fetchWorkingQuoteReviewIdentity,
   issueAndSendWorkingQuote,
@@ -643,7 +644,7 @@ function EditableRows({ title, rows, nameField, onChange }) {
     onChange(rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row));
   }
   return (
-    <fieldset className="business-document-manual-rows">
+    <fieldset className="business-document-manual-rows" data-quote-safety-field="scope">
       <legend>{title}</legend>
       {rows.map((row, index) => <div key={row.id || `${title}-${index}`}><label>Description<input value={row[nameField] || ""} onChange={(event) => update(index, nameField, event.target.value)} /></label><label>Amount<input inputMode="decimal" value={row.total || row.amount || ""} onChange={(event) => update(index, "total", event.target.value)} /></label><button type="button" aria-label={`Remove ${title} row ${index + 1}`} onClick={() => onChange(rows.filter((_, rowIndex) => rowIndex !== index))}>Remove</button></div>)}
       <button type="button" onClick={() => onChange([...rows, { id: `manual-${nameField}-${Date.now()}`, [nameField]: "", total: "" }])}>Add row</button>
@@ -663,13 +664,20 @@ function StandardManualEditor({ activeDocument, quote, invoice, documentNumber, 
   const firstInputRef = useRef(null);
   const amountInputRef = useRef(null);
   const depositInputRef = useRef(null);
+  const editorRef = useRef(null);
   useEffect(() => {
-    const target =
+    let target =
       initialFocus === "amount"
         ? amountInputRef.current
         : initialFocus === "deposit"
           ? depositInputRef.current
           : firstInputRef.current;
+
+    if (!["first", "amount", "deposit"].includes(initialFocus)) {
+      target = editorRef.current?.querySelector(
+        `[data-quote-safety-field="${initialFocus}"] input, [data-quote-safety-field="${initialFocus}"] textarea, [data-quote-safety-field="${initialFocus}"] select, [data-quote-safety-field="${initialFocus}"] summary`
+      ) || target;
+    }
 
     if (initialFocus === "deposit") {
       const pricingOptions = target?.closest("details");
@@ -713,7 +721,7 @@ function StandardManualEditor({ activeDocument, quote, invoice, documentNumber, 
     const control = textareas.has(field)
       ? <textarea ref={field === "customerName" ? firstInputRef : undefined} value={value} readOnly={customerLocked} aria-readonly={customerLocked || undefined} onChange={update} />
       : <input ref={field === "customerName" ? firstInputRef : field === "totalOverride" ? amountInputRef : undefined} type={field === "dueDate" ? "date" : "text"} inputMode={field === "totalOverride" ? "decimal" : undefined} value={value} readOnly={customerLocked} aria-readonly={customerLocked || undefined} onChange={update} />;
-    return <label key={field}>{label}{control}</label>;
+    return <label key={field} data-quote-safety-field={field}>{label}{control}</label>;
   }
   const pricingSettings = normalizeQuotePricingSettings(draft);
   const depositChoice = pricingSettings.depositMode === "NONE"
@@ -754,7 +762,7 @@ function StandardManualEditor({ activeDocument, quote, invoice, documentNumber, 
   }
   return (
     <><button type="button" className="business-document-manual-backdrop" aria-label="Cancel manual edit" onClick={onCancel} />
-      <section className="business-document-manual" role="dialog" aria-modal="true" aria-labelledby="business-document-manual-title">
+      <section ref={editorRef} className="business-document-manual" role="dialog" aria-modal="true" aria-labelledby="business-document-manual-title">
         <header><div><span>Manual entry</span><h2 id="business-document-manual-title">Edit the live {activeDocument}</h2></div><button type="button" onClick={onCancel}>Cancel</button></header>
         <label className="business-document-number-field">{activeDocument === "quote" ? "Quote number" : "Invoice number"}<input value={documentNumber || "Assigned on first save"} readOnly aria-readonly="true" /></label>
         {detailFieldset}
@@ -1589,6 +1597,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const saveInFlightRef = useRef({ quote: null, invoice: null });
   const newDocumentAttemptKeysRef = useRef({ quote: "", invoice: "" });
   const quoteIssueAttemptRef = useRef(null);
+  const quoteSafetyContinuationRef = useRef(null);
   const quoteIssueInFlightRef = useRef(false);
   const quoteAuthorityRequestRef = useRef(0);
   const initialSavedDocumentOpenRef = useRef("");
@@ -3682,6 +3691,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   }
 
   function returnToQuoteDeposit() {
+    quoteSafetyContinuationRef.current = null;
     setQuoteSafetyState(null);
     setMobilePane("conversation");
     openManualEditor("deposit");
@@ -3831,6 +3841,8 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     {
       content = null,
       currentContentChanged = false,
+      warningsAcknowledged = false,
+      onSendAnyway = null,
     } = {}
   ) {
     const documentType =
@@ -3871,21 +3883,35 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       content || document?.content || quote
     );
 
-    if (safety.ready) {
+    if (
+      safety.ready &&
+      (safety.warnings.length === 0 || warningsAcknowledged || !onSendAnyway)
+    ) {
       setQuoteSafetyState(null);
       return true;
     }
 
     setDeliveryState(null);
-    setQuoteSafetyState(safety);
+    quoteSafetyContinuationRef.current =
+      safety.blockingErrors.length === 0 && typeof onSendAnyway === "function"
+        ? onSendAnyway
+        : null;
+    setQuoteSafetyState({
+      ...safety,
+      canSendAnyway: quoteSafetyContinuationRef.current != null,
+    });
     return false;
   }
 
-  function openDeliveryReview(channel, document) {
+  function openDeliveryReview(channel, document, warningsAcknowledged = false) {
     const type = document.documentType.toLowerCase();
     const content = document.content || currentContent(type);
 
-    if (!quoteSafetyAllowsDelivery(document, { content })) {
+    if (!quoteSafetyAllowsDelivery(document, {
+      content,
+      warningsAcknowledged,
+      onSendAnyway: () => openDeliveryReview(channel, document, true),
+    })) {
       return;
     }
 
@@ -3903,6 +3929,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       termsIncluded: Boolean(content.terms || content.paymentTerms || agreement.exclusions.length || BUSINESS_DOCUMENT_AGREEMENT_FIELDS.some(([key]) => agreement[key])),
       photoCount: document.photos.filter((photo) => photo.visibility === "CUSTOMER_VISIBLE" && ["GENERAL_EVIDENCE", "BEFORE", "AFTER"].includes(photo.role)).length,
       resend: history.some((delivery) => delivery.channel === channel && delivery.documentVersion === document.version && delivery.state !== "FAILED"),
+      quoteSafetyAcknowledged: warningsAcknowledged,
       idempotencyKey: createBusinessDocumentSaveKey(),
       busy: false,
       error: "",
@@ -3948,7 +3975,8 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       const quoteSafety = validateQuotePreSend(quote);
 
       if (!quoteSafety.ready) {
-        setQuoteSafetyState(quoteSafety);
+        quoteSafetyContinuationRef.current = null;
+        setQuoteSafetyState({ ...quoteSafety, canSendAnyway: false });
         return;
       }
     }
@@ -4151,7 +4179,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         commandKeys: createWorkingQuoteCommandKeys(),
       };
     }
-    setQuoteIssueState({
+    const nextQuoteIssueState = {
       stage: "review",
       busy: false,
       error: persistedDeliveryRetry
@@ -4172,7 +4200,29 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       commandKeys: readiness.ready
         ? quoteIssueAttemptRef.current.commandKeys
         : null,
-    });
+      quoteSafetyAcknowledgement: null,
+    };
+    const serverSafety = identity.quoteSafety;
+    if (
+      deliveryIntent !== "COPY" &&
+      readiness.ready &&
+      (serverSafety.blockingErrors.length > 0 || serverSafety.warnings.length > 0)
+    ) {
+      setQuoteIssueState(null);
+      const acknowledgement = createWorkingQuoteSafetyAcknowledgement(identity);
+      quoteSafetyContinuationRef.current = serverSafety.blockingErrors.length === 0
+        ? () => setQuoteIssueState({
+            ...nextQuoteIssueState,
+            quoteSafetyAcknowledgement: acknowledgement,
+          })
+        : null;
+      setQuoteSafetyState({
+        ...serverSafety,
+        canSendAnyway: quoteSafetyContinuationRef.current != null,
+      });
+      return;
+    }
+    setQuoteIssueState(nextQuoteIssueState);
   }
 
   async function confirmGovernedQuoteIssue() {
@@ -4195,6 +4245,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         commandKeys: current.commandKeys,
         checkpoint: current.checkpoint,
         deliveryIntent: current.deliveryIntent,
+        quoteSafetyAcknowledgement: current.quoteSafetyAcknowledgement,
         setPage,
       });
       setQuoteIssueState((state) => ({
@@ -4219,6 +4270,15 @@ function QuoteInvoiceBusinessDocumentWorkspace({
             : `${displayDocumentNumber(current.document)} has been sent to ${current.identity.customerName} for review. Customer acceptance is still pending.`
       );
     } catch (error) {
+      if (error?.quoteSafety) {
+        setQuoteIssueState(null);
+        quoteSafetyContinuationRef.current = null;
+        setQuoteSafetyState({
+          ...error.quoteSafety,
+          canSendAnyway: false,
+        });
+        return;
+      }
       const issuedQuote = error?.checkpoint?.issuedQuote;
       const errorMessage = current.deliveryIntent === "COPY"
         ? "The Quote copy could not be sent. The existing delivery, customer decision, and commercial terms are unchanged."
@@ -4242,6 +4302,28 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       quoteIssueInFlightRef.current = false;
       void hydratePersistedQuoteAuthority(current.document);
     }
+  }
+
+  function cancelQuoteSafety() {
+    quoteSafetyContinuationRef.current = null;
+    setQuoteSafetyState(null);
+  }
+
+  function returnToQuoteSafetyEdit() {
+    const focusField =
+      quoteSafetyState?.blockingErrors?.[0]?.field ||
+      quoteSafetyState?.warnings?.[0]?.field ||
+      "first";
+    cancelQuoteSafety();
+    setMobilePane("conversation");
+    openManualEditor(focusField === "customerName" ? "first" : focusField);
+  }
+
+  function acknowledgeQuoteSafetyWarnings() {
+    const continuation = quoteSafetyContinuationRef.current;
+    quoteSafetyContinuationRef.current = null;
+    setQuoteSafetyState(null);
+    continuation?.();
   }
 
   function openExternalQuoteApproval() {
@@ -4353,11 +4435,15 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     }
   }
 
-  async function shareSavedDocument(document) {
+  async function shareSavedDocument(document, warningsAcknowledged = false) {
     const type = document.documentType.toLowerCase();
     const content = document.content || currentContent(type);
 
-    if (!quoteSafetyAllowsDelivery(document, { content })) {
+    if (!quoteSafetyAllowsDelivery(document, {
+      content,
+      warningsAcknowledged,
+      onSendAnyway: () => void shareSavedDocument(document, true),
+    })) {
       return;
     }
 
@@ -4406,6 +4492,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     if (
       !quoteSafetyAllowsDelivery(deliveryState.document, {
         content: deliveryState.document.content,
+        warningsAcknowledged: deliveryState.quoteSafetyAcknowledged === true,
       })
     ) {
       return;
@@ -4640,6 +4727,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       className={`app-page meetro-wide-page business-document-workspace${
         keyboardOpen ? " is-keyboard-open" : ""
       }${composerTrayOpen ? " is-composer-tray-open" : ""}`}
+      data-active-document={activeDocument}
     >
       <header className="business-document-header">
         <button type="button" className="business-document-back" onClick={() => requestExit(onBack)} aria-label="Leave Quote and Invoice workspace">←</button>
@@ -4831,7 +4919,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
                       </span>
                       <span className="business-document-composer-action-label">
                         {activeDocument === "quote"
-                          ? "Quote Note"
+                          ? "Add to Quote Notes"
                           : "Invoice Note"}
                       </span>
                     </button>
@@ -4854,7 +4942,9 @@ function QuoteInvoiceBusinessDocumentWorkspace({
                         />
                       </span>
                       <span className="business-document-composer-action-label">
-                        Reminder
+                        {activeDocument === "quote"
+                          ? "Private Reminder"
+                          : "Reminder"}
                       </span>
                     </button>
 
@@ -4887,9 +4977,11 @@ function QuoteInvoiceBusinessDocumentWorkspace({
               ) : null}
             </div>
           </div>
-          <div className="business-document-conversation-footer" data-document-chat-region="actions">
-            <div className="business-document-conversation-shortcuts"><button type="button" onClick={() => focusComposer("Note: ")}>Add to {activeDocument === "quote" ? "Quote" : "Invoice"} Notes</button><button type="button" onClick={() => focusComposer("Keep this private: ")}>Private Reminder</button><button type="button" onClick={() => openManualEditor("amount")}>{activeDocument === "invoice" && invoicePreparation ? "Add Extra Work" : "Change Amount"}</button></div>
-          </div>
+          {activeDocument === "invoice" ? (
+            <div className="business-document-conversation-footer" data-document-chat-region="actions">
+              <div className="business-document-conversation-shortcuts"><button type="button" onClick={() => focusComposer("Note: ")}>Add to {activeDocument === "quote" ? "Quote" : "Invoice"} Notes</button><button type="button" onClick={() => focusComposer("Keep this private: ")}>Private Reminder</button><button type="button" onClick={() => openManualEditor("amount")}>{activeDocument === "invoice" && invoicePreparation ? "Add Extra Work" : "Change Amount"}</button></div>
+            </div>
+          ) : null}
         </section>
         {documentPhotos.length ? <JobEvidencePanel photos={documentPhotos} assignments={photoAssignments} onReview={() => setPhotoReviewOpen(true)} onAddPhotos={() => onAddPhotos(activeDocument)} canAddPhotos={canAddPhotos} busy={photoBusy || currentAnalysisRequest.busy} /> : null}
         <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} jobLinked={Boolean((activeDocument === "quote" && job.customerLinkedFromJob) || invoicePreparation)} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onUseDocumentOnly={() => { setCustomerControl(emptyCustomerControl()); setNotice("This customer remains document-only. No Contact, account, or relationship was created."); }} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={activeContent} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityPresentation={activeQuoteAuthorityPresentation} jobLinked={Boolean(job.customerLinkedFromJob)} /> : <InvoicePreview invoice={activeContent} preparation={invoicePreparation} canonicalInvoice={invoiceCreateState.invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? activeExternalIssuedQuote ? <><DeliveryMenu kind="quote" onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} allowMeetroMessage={false} />{activeIssuedQuote.approval?.source !== "EXTERNAL_EVIDENCE" ? <button type="button" onClick={openExternalQuoteApproval}>Record Customer Approval</button> : null}</> : <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || activeQuoteAuthorityPresentation.actionDisabled} onClick={() => void beginGovernedQuoteIssue()}>{quoteIssueState?.busy ? "Preparing…" : activeQuoteAuthorityPresentation.actionLabel}</button> : activeDocument === "invoice" && invoicePreparation ? invoiceCreateState.invoice ? <button type="button" className="business-document-primary" onClick={openCreatedInvoiceDelivery}>Send to Customer</button> : <button type="button" className="business-document-primary" disabled={invoiceCreateState.busy} onClick={() => void createReviewedInvoice()}>{invoiceCreateState.busy ? "Creating…" : "Create Invoice"}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{invoiceCreateState.error && mobilePane === "preview" ? <p className="business-document-notice" role="alert">{invoiceCreateState.error}</p> : null}{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
@@ -4899,7 +4991,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       {deliveryState?.stage === "saveRequired" ? <WorkspaceDialog titleId="business-document-delivery-save-title" title={deliveryState.channel === "DEVICE_SHARE" ? "Save changes before sharing" : "Save changes before sending"} onClose={deliveryState.busy ? undefined : () => setDeliveryState(null)} actions={[{ label: "Cancel", disabled: deliveryState.busy, onClick: () => setDeliveryState(null) }, { label: deliveryState.busy ? "Saving…" : deliveryState.channel === "DEVICE_SHARE" ? "Save & Continue to Share" : "Save & Continue to Send", primary: true, disabled: deliveryState.busy, onClick: () => void saveAndContinueDelivery() }]}><p>The customer can receive only an exact durable document version. Saving does not send, share, issue, accept, approve, pay, or close anything.</p>{deliveryState.error ? <p role="alert">{deliveryState.error}</p> : null}</WorkspaceDialog> : null}
       {deliveryState?.stage === "shareFallback" ? <WorkspaceDialog titleId="business-document-share-fallback-title" title="Share this saved PDF" onClose={() => setDeliveryState(null)} actions={[{ label: "Close", onClick: () => setDeliveryState(null) }, { label: "Download PDF", primary: true, onClick: () => { downloadBusinessDocumentPdfArtifact(deliveryState.artifact); setNotice("PDF downloaded. No delivery has been confirmed."); } }]}><p>System file sharing is unavailable in this browser. Download the exact saved PDF, copy the customer message, or open an email draft.</p><div className="business-document-share-fallback"><button type="button" onClick={() => void copyBusinessDocumentShareMessage(deliveryState.customerMessage).then((copied) => setNotice(copied ? "Customer message copied. No document was sent." : "Clipboard access is unavailable."))}>Copy customer message</button><button type="button" onClick={() => openBusinessDocumentEmailDraft({ recipient: deliveryState.recipientEmail, subject: deliveryState.subject, message: deliveryState.customerMessage })}>Open email draft</button></div><p className="business-document-delivery-truth">The email draft cannot attach the PDF automatically. Attach the downloaded PDF before sending. Meetro cannot confirm external delivery.</p></WorkspaceDialog> : null}
       {deliveryState?.stage === "review" ? <DeliveryReviewDialog state={deliveryState} onChange={(field, value) => setDeliveryState((current) => ({ ...current, [field]: value }))} onCancel={() => setDeliveryState(null)} onSend={() => void sendCurrentDelivery({ retry: deliveryState.failed })} /> : null}
-      {quoteSafetyState ? <WorkspaceDialog titleId="business-document-quote-safety-title" title="Quote needs attention" onClose={() => setQuoteSafetyState(null)} actions={[{ label: "Cancel", onClick: () => setQuoteSafetyState(null) }, { label: "Go Back & Add Deposit", primary: true, onClick: returnToQuoteDeposit }]}><p>{quoteSafetyState.blockingErrors[0]?.message || "A deposit is required for this Quote, but no deposit amount or percentage has been entered."}</p><p>Nothing was sent. Your working Quote remains available to edit.</p></WorkspaceDialog> : null}
+      {quoteSafetyState ? <WorkspaceDialog titleId="business-document-quote-safety-title" title={quoteSafetyState.blockingErrors.length ? "Quote needs attention" : "Review Quote before sending"} onClose={cancelQuoteSafety} actions={[{ label: "Cancel", onClick: cancelQuoteSafety }, { label: "Go Back & Edit Quote", primary: quoteSafetyState.blockingErrors.length > 0, onClick: quoteSafetyState.blockingErrors[0]?.field === "deposit" ? returnToQuoteDeposit : returnToQuoteSafetyEdit }, ...(quoteSafetyState.canSendAnyway ? [{ label: "Send Anyway", primary: true, onClick: acknowledgeQuoteSafetyWarnings }] : [])]}>{quoteSafetyState.blockingErrors.length ? <section><h3>Must correct</h3><ul>{quoteSafetyState.blockingErrors.map((problem) => <li key={problem.code}>{problem.message}</li>)}</ul></section> : null}{quoteSafetyState.warnings.length ? <section><h3>Review before sending</h3><ul>{quoteSafetyState.warnings.map((problem) => <li key={problem.code}>{problem.message}</li>)}</ul></section> : null}<p>Nothing was sent. Your working Quote remains available to edit.</p></WorkspaceDialog> : null}
       {quoteIssueState && quoteIssueState.stage !== "hydrating" ? <QuoteIssueReviewDialog state={quoteIssueState} onCancel={() => setQuoteIssueState(null)} onConfirm={() => void confirmGovernedQuoteIssue()} /> : null}
       {externalApprovalState ? <ExternalQuoteApprovalDialog state={externalApprovalState} onChange={(name, value) => setExternalApprovalState((current) => current ? { ...current, error: "", form: { ...current.form, [name]: value } } : current)} onCancel={() => { if (!externalApprovalState.busy) setExternalApprovalState(null); }} onConfirm={() => void confirmExternalQuoteApproval()} /> : null}
       {exitDialogOpen ? <WorkspaceDialog titleId="business-document-exit-title" title="Save changes before leaving?" onClose={() => setExitDialogOpen(false)} actions={[{ label: "Keep Editing", onClick: () => setExitDialogOpen(false) }, { label: "Discard Changes", onClick: discardAndExit }, { label: "Save Draft & Exit", primary: true, onClick: () => void saveAllAndExit() }]}><p>Save keeps this private working document for your business. It does not send or issue anything.</p></WorkspaceDialog> : null}

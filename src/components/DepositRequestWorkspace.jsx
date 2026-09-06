@@ -567,6 +567,7 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
           style={styles.assistant}
           aria-label="Meetro-assisted Deposit Request review"
         >
+          <div className="deposit-request-editor-scroll">
           <h2>Prepare Deposit Request</h2>
           <p>Review the Deposit Request created from the Quote. Customer, project, Quote reference, deposit amount, and payment terms carry forward automatically.</p>
           <section
@@ -610,9 +611,7 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
             ) : null}
           </section>
 
-          <textarea rows={4} value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Thank the customer and tell them they can pay by check." style={styles.input} />
-          <button type="button" onClick={propose} disabled={!instruction.trim()}>Propose Change</button>
-          {proposal ? <div style={styles.proposal}><strong>Review proposed changes</strong>{Object.entries(proposal).map(([key, value]) => <p key={key}><b>{key.replace(/([A-Z])/g, " $1")}:</b> {value}</p>)}<div style={styles.row}><button type="button" onClick={() => setProposal(null)}>Dismiss</button><button type="button" onClick={() => { setContent((current) => ({ ...current, ...proposal })); setProposal(null); setInstruction(""); }}>Apply</button></div></div> : null}
+          {proposal ? <div className="deposit-request-proposal" style={styles.proposal}><strong>Review proposed changes</strong>{Object.entries(proposal).map(([key, value]) => <p key={key}><b>{key.replace(/([A-Z])/g, " $1")}:</b> {value}</p>)}<div style={styles.row}><button type="button" onClick={() => setProposal(null)}>Dismiss</button><button type="button" onClick={() => { setContent((current) => ({ ...current, ...proposal })); setProposal(null); setInstruction(""); }}>Apply</button></div></div> : null}
           <details className="deposit-request-customize">
             <summary>Customize request wording</summary>
 
@@ -686,6 +685,12 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
 
           {error ? <p role="alert" style={styles.error}>{error}</p> : null}
           {notice ? <p role="status" style={styles.notice}>{notice}</p> : null}
+          </div>
+
+          <div className="deposit-request-composer">
+            <textarea rows={4} value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Thank the customer and tell them they can pay by check." style={styles.input} />
+            <button type="button" onClick={propose} disabled={!instruction.trim()}>Propose Change</button>
+          </div>
         </section>
 
         <section

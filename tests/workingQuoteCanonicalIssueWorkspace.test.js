@@ -232,3 +232,51 @@ test("working-document delivery remains separate for Invoice and non-Job documen
   assert.match(workspace, /Sending does not issue, accept, approve, pay, or close anything/);
   assert.match(workspace, /Save keeps this private working document for your business\. It does not send or issue anything\./);
 });
+
+test("exact saved server Quote Safety gates the review with blocker and advisory authority", () => {
+  const start = workspace.indexOf("async function beginGovernedQuoteIssue()");
+  const end = workspace.indexOf("async function confirmGovernedQuoteIssue()", start);
+  const begin = workspace.slice(start, end);
+  const identityIndex = begin.indexOf("fetchWorkingQuoteReviewIdentity");
+  const safetyIndex = begin.indexOf("const serverSafety = identity.quoteSafety");
+  assert.ok(identityIndex >= 0);
+  assert.ok(safetyIndex > identityIndex);
+  assert.match(begin, /serverSafety\.blockingErrors\.length/);
+  assert.match(begin, /serverSafety\.warnings\.length/);
+  assert.match(begin, /deliveryIntent !== "COPY"/);
+  assert.match(begin, /createWorkingQuoteSafetyAcknowledgement\(identity\)/);
+});
+
+test("warning acknowledgement enters issue review only for the reviewed exact version", () => {
+  const start = workspace.indexOf("const nextQuoteIssueState = {");
+  const end = workspace.indexOf("async function confirmGovernedQuoteIssue()", start);
+  const safetyFlow = workspace.slice(start, end);
+  assert.match(safetyFlow, /quoteSafetyAcknowledgement: null/);
+  assert.match(safetyFlow, /quoteSafetyContinuationRef\.current[\s\S]*setQuoteIssueState\(\{[\s\S]*quoteSafetyAcknowledgement: acknowledgement/);
+
+  const confirmStart = workspace.indexOf("async function confirmGovernedQuoteIssue()");
+  const confirmEnd = workspace.indexOf("function openExternalQuoteApproval()", confirmStart);
+  const confirm = workspace.slice(confirmStart, confirmEnd);
+  assert.match(confirm, /quoteSafetyAcknowledgement: current\.quoteSafetyAcknowledgement/);
+});
+
+test("Cancel and Go Back preserve the working Quote and never invoke issuance or delivery", () => {
+  const start = workspace.indexOf("function cancelQuoteSafety()");
+  const end = workspace.indexOf("function openExternalQuoteApproval()", start);
+  const handlers = workspace.slice(start, end);
+  assert.match(handlers, /setQuoteSafetyState\(null\)/);
+  assert.match(handlers, /openManualEditor/);
+  assert.match(handlers, /setMobilePane\("conversation"\)/);
+  assert.doesNotMatch(handlers, /setQuote\(|onApplyQuotePatch|issueAndSendWorkingQuote|deliverBusinessDocumentDraft/);
+});
+
+test("one dialog groups blockers and warnings and exposes Send Anyway only for acknowledged advisories", () => {
+  const start = workspace.indexOf('{quoteSafetyState ? <WorkspaceDialog');
+  const end = workspace.indexOf("{quoteIssueState &&", start);
+  const dialog = workspace.slice(start, end);
+  assert.match(dialog, /Quote needs attention/);
+  assert.match(dialog, /Review Quote before sending/);
+  assert.match(dialog, /Must correct/);
+  assert.match(dialog, /Go Back & Edit Quote/);
+  assert.match(dialog, /quoteSafetyState\.canSendAnyway[\s\S]*Send Anyway/);
+});

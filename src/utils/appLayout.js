@@ -1,5 +1,5 @@
 export const APP_DESKTOP_SIDEBAR_MAX_WIDTH = 284;
-export const APP_DESKTOP_SIDEBAR_MIN_WIDTH = 220;
+export const APP_DESKTOP_SIDEBAR_MIN_WIDTH = 248;
 export const APP_DESKTOP_WORKSPACE_MIN_WIDTH = 740;
 export const APP_DESKTOP_SHELL_GUTTER_BUDGET = 76;
 export const APP_TABLET_LAYOUT_MIN_WIDTH = 768;
@@ -27,16 +27,16 @@ export function getAppSidebarWidth(layoutWidth) {
   if (width < APP_TABLET_LAYOUT_MIN_WIDTH) return 0;
   if (width >= 1180) return APP_DESKTOP_SIDEBAR_MAX_WIDTH;
 
-  const compactTabletSidebarWidth = 188;
   const interpolationRange = 1180 - APP_TABLET_LAYOUT_MIN_WIDTH;
   const progress = (width - APP_TABLET_LAYOUT_MIN_WIDTH) / interpolationRange;
 
   return Math.min(
     APP_DESKTOP_SIDEBAR_MAX_WIDTH,
     Math.max(
-      compactTabletSidebarWidth,
-      compactTabletSidebarWidth +
-        progress * (APP_DESKTOP_SIDEBAR_MAX_WIDTH - compactTabletSidebarWidth)
+      APP_DESKTOP_SIDEBAR_MIN_WIDTH,
+      APP_DESKTOP_SIDEBAR_MIN_WIDTH +
+        progress *
+          (APP_DESKTOP_SIDEBAR_MAX_WIDTH - APP_DESKTOP_SIDEBAR_MIN_WIDTH)
     )
   );
 }
@@ -46,6 +46,46 @@ export function getAppLayoutMode(layoutWidth) {
   if (width >= APP_DESKTOP_LAYOUT_MIN_WIDTH) return "desktop";
   if (width >= APP_TABLET_LAYOUT_MIN_WIDTH) return "tablet";
   return "mobile";
+}
+
+export function getAppLayoutOrientation({
+  windowObject = globalThis.window,
+  layoutWidth = 0,
+  layoutHeight = 0,
+  isNative = false,
+} = {}) {
+  if (isNative) {
+    const orientationType = String(
+      windowObject?.screen?.orientation?.type || ""
+    ).toLowerCase();
+    if (orientationType.startsWith("portrait")) return "portrait";
+    if (orientationType.startsWith("landscape")) return "landscape";
+
+    const screenAngle = windowObject?.screen?.orientation?.angle;
+    if (typeof screenAngle === "number" && Number.isFinite(screenAngle)) {
+      const normalizedAngle = Math.abs(screenAngle) % 180;
+      return normalizedAngle === 90 ? "landscape" : "portrait";
+    }
+
+    const legacyOrientation = windowObject?.orientation;
+    if (
+      typeof legacyOrientation === "number" &&
+      Number.isFinite(legacyOrientation)
+    ) {
+      const normalizedAngle = Math.abs(legacyOrientation) % 180;
+      return normalizedAngle === 90 ? "landscape" : "portrait";
+    }
+
+    const screenWidth = Math.max(0, finite(windowObject?.screen?.width));
+    const screenHeight = Math.max(0, finite(windowObject?.screen?.height));
+    if (screenWidth && screenHeight) {
+      return screenWidth > screenHeight ? "landscape" : "portrait";
+    }
+  }
+
+  return Math.max(0, finite(layoutWidth)) > Math.max(0, finite(layoutHeight))
+    ? "landscape"
+    : "portrait";
 }
 
 function readSafeAreaInsets({ windowObject, documentObject } = {}) {
@@ -124,6 +164,12 @@ export function getAppLayoutSnapshot({
   const isNative = Boolean(capacitor?.isNativePlatform?.());
   const platform = String(capacitor?.getPlatform?.() || (isNative ? "native" : "web"));
   const sidebarWidth = getAppSidebarWidth(layoutWidth);
+  const orientation = getAppLayoutOrientation({
+    windowObject,
+    layoutWidth,
+    layoutHeight,
+    isNative,
+  });
 
   return Object.freeze({
     layoutWidth,
@@ -137,6 +183,7 @@ export function getAppLayoutSnapshot({
     visualBottomGap,
     isNative,
     platform,
+    orientation,
     sidebarWidth,
     contentWidth: Math.max(0, layoutWidth - sidebarWidth),
     layoutMode: getAppLayoutMode(layoutWidth),
@@ -216,6 +263,7 @@ function metricsSignature(metrics) {
     metrics.safeAreaBottom,
     metrics.safeAreaLeft,
     metrics.layoutMode,
+    metrics.orientation,
   ].map((value) => String(value)).join(":");
 }
 
@@ -248,6 +296,7 @@ export function publishAppLayoutMetrics(metrics) {
 export function applyAppLayoutDiagnostics(root, snapshot) {
   if (!root || !snapshot) return;
   root.dataset.appLayout = snapshot.layoutMode;
+  root.dataset.appOrientation = snapshot.orientation;
   root.dataset.appLayoutWidth = String(Math.round(snapshot.layoutWidth));
   root.dataset.appWindowWidth = String(Math.round(snapshot.windowWidth));
   root.dataset.appClientWidth = String(Math.round(snapshot.clientWidth));

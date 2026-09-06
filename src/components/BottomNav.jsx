@@ -1173,6 +1173,10 @@ const sidebarBrandTitle = {
   fontSize: "18px",
   lineHeight: 1,
   fontWeight: "950",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  hyphens: "none",
+  WebkitHyphens: "none",
 };
 
 const sidebarBrandSubtitle = {
@@ -1182,6 +1186,10 @@ const sidebarBrandSubtitle = {
   fontWeight: "850",
   textTransform: "uppercase",
   letterSpacing: "0.08em",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  hyphens: "none",
+  WebkitHyphens: "none",
 };
 
 const sidebarNavList = {
@@ -1206,6 +1214,10 @@ const sidebarShortcutHeading = {
   letterSpacing: "0.08em",
   textTransform: "uppercase",
   padding: "0 10px",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  hyphens: "none",
+  WebkitHyphens: "none",
 };
 
 const sidebarShortcutList = {
@@ -1275,6 +1287,10 @@ const sidebarLabel = {
   whiteSpace: "normal",
   overflow: "visible",
   textOverflow: "clip",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  hyphens: "none",
+  WebkitHyphens: "none",
 };
 
 const sidebarLabelActive = {
@@ -1289,6 +1305,10 @@ const sidebarSubLabel = {
   whiteSpace: "normal",
   overflow: "visible",
   textOverflow: "clip",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  hyphens: "none",
+  WebkitHyphens: "none",
 };
 
 const sidebarSubLabelActive = {

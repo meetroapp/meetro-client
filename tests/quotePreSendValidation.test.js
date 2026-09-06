@@ -4,6 +4,18 @@ import test from "node:test";
 
 import { validateQuotePreSend } from "../src/utils/quotePreSendValidation.js";
 
+const VALID_QUOTE = Object.freeze({
+  customerName: "Joe Jerez",
+  projectTitle: "Replace damaged front door and trim",
+  totalOverride: "1480.00",
+  paymentTerms: "Balance due on completion",
+  estimatedDuration: "Two working days",
+});
+
+function validate(overrides = {}) {
+  return validateQuotePreSend({ ...VALID_QUOTE, ...overrides });
+}
+
 const workspace = readFileSync(
   new URL(
     "../src/components/UnifiedBusinessDocumentWorkspace.jsx",
@@ -13,7 +25,7 @@ const workspace = readFileSync(
 );
 
 test("Quote with no deposit requirement passes pre-send validation", () => {
-  const result = validateQuotePreSend({
+  const result = validate({
     depositRequired: "No",
     depositMode: "NONE",
   });
@@ -25,7 +37,7 @@ test("Quote with no deposit requirement passes pre-send validation", () => {
 
 test("valid preset and custom percentage deposits pass", () => {
   for (const percent of [25, 50, 75, 12.5]) {
-    const result = validateQuotePreSend({
+    const result = validate({
       depositRequired: "Yes",
       depositMode: "PERCENT",
       depositPercent: String(percent),
@@ -36,7 +48,7 @@ test("valid preset and custom percentage deposits pass", () => {
 });
 
 test("percentage deposit of zero is blocked", () => {
-  const result = validateQuotePreSend({
+  const result = validate({
     depositRequired: "Yes",
     depositMode: "PERCENT",
     depositPercent: "0",
@@ -47,7 +59,7 @@ test("percentage deposit of zero is blocked", () => {
 });
 
 test("percentage deposit greater than 100 is blocked", () => {
-  const result = validateQuotePreSend({
+  const result = validate({
     depositRequired: "Yes",
     depositMode: "PERCENT",
     depositPercent: "101",
@@ -58,7 +70,7 @@ test("percentage deposit greater than 100 is blocked", () => {
 });
 
 test("blank percentage uses the missing-deposit blocking message", () => {
-  const result = validateQuotePreSend({
+  const result = validate({
     depositRequired: "Yes",
     depositMode: "PERCENT",
     depositPercent: "",
@@ -73,7 +85,7 @@ test("blank percentage uses the missing-deposit blocking message", () => {
 });
 
 test("nonnumeric percentage remains an invalid-value error", () => {
-  const result = validateQuotePreSend({
+  const result = validate({
     depositRequired: "Yes",
     depositMode: "PERCENT",
     depositPercent: "abc",
@@ -84,7 +96,7 @@ test("nonnumeric percentage remains an invalid-value error", () => {
 });
 
 test("positive fixed deposit passes", () => {
-  const result = validateQuotePreSend({
+  const result = validate({
     depositRequired: "Yes",
     depositMode: "FIXED",
     depositFixedAmount: "500",
@@ -94,7 +106,7 @@ test("positive fixed deposit passes", () => {
 });
 
 test("blank fixed deposit uses the missing-deposit blocking message", () => {
-  const result = validateQuotePreSend({
+  const result = validate({
     depositRequired: "Yes",
     depositMode: "FIXED",
     depositFixedAmount: "",
@@ -109,7 +121,7 @@ test("blank fixed deposit uses the missing-deposit blocking message", () => {
 });
 
 test("zero fixed deposit is blocked", () => {
-  const result = validateQuotePreSend({
+  const result = validate({
     depositRequired: "Yes",
     depositMode: "FIXED",
     depositFixedAmount: "0",
@@ -120,7 +132,7 @@ test("zero fixed deposit is blocked", () => {
 });
 
 test("legacy required deposit without a value is blocked", () => {
-  const result = validateQuotePreSend({
+  const result = validate({
     depositRequired: "Yes",
   });
 
@@ -133,7 +145,7 @@ test("legacy required deposit without a value is blocked", () => {
 });
 
 test("legacy required Quote with a valid fixed deposit remains compatible", () => {
-  const result = validateQuotePreSend({
+  const result = validate({
     depositRequired: "Yes",
     depositAmount: "450",
   });
@@ -142,7 +154,7 @@ test("legacy required Quote with a valid fixed deposit remains compatible", () =
 });
 
 test("invalid nonnumeric fixed deposit is blocked", () => {
-  const result = validateQuotePreSend({
+  const result = validate({
     depositRequired: "Yes",
     depositMode: "FIXED",
     depositFixedAmount: "not-an-amount",
@@ -150,6 +162,47 @@ test("invalid nonnumeric fixed deposit is blocked", () => {
 
   assert.equal(result.ready, false);
   assert.equal(result.blockingErrors[0]?.code, "DEPOSIT_FIXED_INVALID");
+});
+
+test("generalized Quote Safety blocks missing customer, project, scope, and placeholder scope", () => {
+  assert.ok(validate({ customerName: "" }).blockingErrors.some((item) => item.code === "QUOTE_CUSTOMER_REQUIRED"));
+  assert.ok(validate({ projectTitle: "", projectDescription: "" }).blockingErrors.some((item) => item.code === "QUOTE_PROJECT_REQUIRED"));
+  assert.ok(validate({ totalOverride: "", lineItems: [] }).blockingErrors.some((item) => item.code === "QUOTE_SCOPE_REQUIRED"));
+  assert.ok(validate({ projectTitle: "TBD" }).blockingErrors.some((item) => item.code === "QUOTE_SCOPE_PLACEHOLDER"));
+});
+
+test("commercial totals fail closed for malformed, zero, inconsistent, and excessive fixed deposit values", () => {
+  assert.ok(validate({ totalOverride: "1.234" }).blockingErrors.some((item) => item.code === "QUOTE_TOTAL_INVALID"));
+  assert.ok(validate({ totalOverride: "0" }).blockingErrors.some((item) => item.code === "QUOTE_TOTAL_REQUIRED"));
+  assert.ok(validate({ totalOverride: "", lineItems: [{ description: "Replace door", total: "100" }], subtotal: "90" }).blockingErrors.some((item) => item.code === "QUOTE_TOTAL_INCONSISTENT"));
+  assert.ok(validate({ depositMode: "FIXED", depositRequired: "Yes", depositFixedAmount: "2000" }).blockingErrors.some((item) => item.code === "DEPOSIT_EXCEEDS_QUOTE_TOTAL"));
+});
+
+test("contradictory structured deposit and payment terms are hard blockers", () => {
+  const result = validate({
+    depositMode: "PERCENT",
+    depositRequired: "Yes",
+    depositPercent: "75",
+    paymentTerms: "A 50% deposit is due on approval",
+  });
+  assert.equal(result.ready, false);
+  assert.ok(result.blockingErrors.some((item) => item.code === "DEPOSIT_TERMS_CONTRADICT"));
+});
+
+test("commercially useful omissions are advisory and do not make the result unready", () => {
+  const result = validate({ paymentTerms: "", estimatedDuration: "" });
+  assert.equal(result.ready, true);
+  assert.deepEqual(result.warnings.map((item) => item.code), [
+    "QUOTE_PAYMENT_TERMS_MISSING",
+    "QUOTE_DURATION_MISSING",
+  ]);
+});
+
+test("blockers and warnings remain separate in one validation result", () => {
+  const result = validate({ customerName: "", paymentTerms: "", estimatedDuration: "" });
+  assert.equal(result.ready, false);
+  assert.ok(result.blockingErrors.some((item) => item.code === "QUOTE_CUSTOMER_REQUIRED"));
+  assert.ok(result.warnings.some((item) => item.code === "QUOTE_PAYMENT_TERMS_MISSING"));
 });
 
 test("Quote Safety is isolated to governed send and does not gate Save Draft", () => {
@@ -192,10 +245,8 @@ test("governed Send Quote validates before canonical issue preparation", () => {
 
   assert.ok(safetyIndex >= 0);
   assert.ok(savedCandidateIndex > safetyIndex);
-  assert.match(
-    handler,
-    /if \(!quoteSafety\.ready\) \{[\s\S]*setQuoteSafetyState\(quoteSafety\);[\s\S]*return;/
-  );
+  assert.match(handler, /if \(!quoteSafety\.ready\)/);
+  assert.match(handler, /setQuoteSafetyState\(\{ \.\.\.quoteSafety, canSendAnyway: false \}\)/);
 });
 
 test("blocking Quote Safety dialog gives no Send Anyway escape", () => {
@@ -211,9 +262,10 @@ test("blocking Quote Safety dialog gives no Send Anyway escape", () => {
   assert.ok(start >= 0);
   assert.ok(end > start);
   assert.match(dialog, /Quote needs attention/);
-  assert.match(dialog, /Go Back & Add Deposit/);
-  assert.match(dialog, /A deposit is required for this Quote/);
-  assert.doesNotMatch(dialog, /Send Anyway/);
+  assert.match(dialog, /Must correct/);
+  assert.match(dialog, /Review before sending/);
+  assert.match(dialog, /Go Back & Edit Quote/);
+  assert.match(dialog, /quoteSafetyState\.canSendAnyway[\s\S]*Send Anyway/);
 });
 
 test("Go Back & Add Deposit opens and targets the Quote Deposit editor", () => {
@@ -350,7 +402,7 @@ test("external Quick Quote gates before save, share, review, and final delivery"
   assert.ok(saveRequiredIndex > safetyIndex);
 
   const reviewStart = workspace.indexOf(
-    "function openDeliveryReview(channel, document)"
+    "function openDeliveryReview(channel, document, warningsAcknowledged = false)"
   );
   const reviewEnd = workspace.indexOf(
     "function beginDelivery(channel)",
@@ -360,11 +412,11 @@ test("external Quick Quote gates before save, share, review, and final delivery"
 
   assert.match(
     reviewHandler,
-    /quoteSafetyAllowsDelivery\(document, \{ content \}\)/
+    /quoteSafetyAllowsDelivery\(document, \{[\s\S]*warningsAcknowledged/
   );
 
   const shareStart = workspace.indexOf(
-    "async function shareSavedDocument(document)"
+    "async function shareSavedDocument(document, warningsAcknowledged = false)"
   );
   const shareEnd = workspace.indexOf(
     "async function saveAndContinueDelivery()",
@@ -374,7 +426,7 @@ test("external Quick Quote gates before save, share, review, and final delivery"
 
   assert.match(
     shareHandler,
-    /quoteSafetyAllowsDelivery\(document, \{ content \}\)/
+    /quoteSafetyAllowsDelivery\(document, \{[\s\S]*onSendAnyway/
   );
 
   const sendStart = workspace.indexOf(

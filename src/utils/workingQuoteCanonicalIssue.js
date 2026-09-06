@@ -15,6 +15,7 @@ export class WorkingQuoteCanonicalIssueError extends Error {
     status = 0,
     phase = "BRIDGE",
     checkpoint = {},
+    quoteSafety = null,
   } = {}) {
     super(message);
     this.name = "WorkingQuoteCanonicalIssueError";
@@ -22,6 +23,7 @@ export class WorkingQuoteCanonicalIssueError extends Error {
     this.status = status;
     this.phase = phase;
     this.checkpoint = Object.freeze({ ...checkpoint });
+    this.quoteSafety = quoteSafety;
   }
 }
 
@@ -40,7 +42,57 @@ function nonnegativeInteger(value) {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : null;
 }
 
+function normalizeQuoteSafetyProblem(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const code = typeof value.code === "string" ? value.code.trim() : "";
+  const field = typeof value.field === "string" ? value.field.trim() : "";
+  const message = typeof value.message === "string" ? value.message.trim() : "";
+  if (
+    Object.keys(value).sort().join(",") !== "code,field,message" ||
+    !/^[A-Z][A-Z0-9_]{2,100}$/.test(code) ||
+    !field || field.length > 100 || !message || message.length > 1000
+  ) return null;
+  return Object.freeze({ code, field, message });
+}
+
+export function normalizeWorkingQuoteSafety(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  if (Object.keys(value).sort().join(",") !== "blockingErrors,ready,warnings") return null;
+  if (!Array.isArray(value.blockingErrors) || !Array.isArray(value.warnings)) return null;
+  const blockingErrors = value.blockingErrors.map(normalizeQuoteSafetyProblem);
+  const warnings = value.warnings.map(normalizeQuoteSafetyProblem);
+  if (
+    blockingErrors.some((item) => !item) ||
+    warnings.some((item) => !item) ||
+    value.ready !== (blockingErrors.length === 0)
+  ) return null;
+  return Object.freeze({
+    ready: value.ready,
+    blockingErrors: Object.freeze(blockingErrors),
+    warnings: Object.freeze(warnings),
+  });
+}
+
+function normalizeQuoteSafetyAcknowledgement(value, identity) {
+  if (value == null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return undefined;
+  if (Object.keys(value).sort().join(",") !== "documentId,documentVersion,warningCodes") return undefined;
+  const documentId = uuid(value.documentId);
+  const documentVersion = positiveInteger(value.documentVersion);
+  const warningCodes = Array.isArray(value.warningCodes)
+    ? [...new Set(value.warningCodes.map((code) => String(code || "").trim()))].sort()
+    : null;
+  if (
+    documentId !== identity.documentId ||
+    documentVersion !== identity.documentVersion ||
+    !warningCodes || warningCodes.length > 50 ||
+    warningCodes.some((code) => !/^[A-Z][A-Z0-9_]{2,100}$/.test(code))
+  ) return undefined;
+  return Object.freeze({ documentId, documentVersion, warningCodes: Object.freeze(warningCodes) });
+}
+
 function commandError(result, phase, checkpoint, fallbackCode, fallbackMessage) {
+  const quoteSafety = normalizeWorkingQuoteSafety(result?.data?.quoteSafety);
   return new WorkingQuoteCanonicalIssueError(
     result?.data?.message || fallbackMessage,
     {
@@ -48,6 +100,7 @@ function commandError(result, phase, checkpoint, fallbackCode, fallbackMessage) 
       code: result?.data?.code || fallbackCode,
       phase,
       checkpoint,
+      quoteSafety,
     }
   );
 }
@@ -691,6 +744,7 @@ export function normalizeWorkingQuoteReviewIdentity(value, {
   jobId,
 } = {}) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const quoteSafety = normalizeWorkingQuoteSafety(value.quoteSafety);
   const normalized = {
     documentId: uuid(value.documentId),
     documentVersion: positiveInteger(value.documentVersion),
@@ -705,10 +759,11 @@ export function normalizeWorkingQuoteReviewIdentity(value, {
     projectTitle: typeof value.projectTitle === "string"
       ? value.projectTitle.trim()
       : "",
+    quoteSafety,
   };
   if (
     Object.keys(value).sort().join(",") !==
-      "customerName,documentId,documentVersion,jobId,projectTitle,relationshipId,requestId" ||
+      "customerName,documentId,documentVersion,jobId,projectTitle,quoteSafety,relationshipId,requestId" ||
     normalized.documentId !== uuid(documentId) ||
     normalized.documentVersion !== positiveInteger(documentVersion) ||
     normalized.jobId !== uuid(jobId) ||
@@ -722,12 +777,23 @@ export function normalizeWorkingQuoteReviewIdentity(value, {
         value.relationshipId == null
       )
     ) ||
-    !normalized.customerName ||
     normalized.customerName.length > 200 ||
-    !normalized.projectTitle ||
-    normalized.projectTitle.length > 500
+    normalized.projectTitle.length > 500 ||
+    !quoteSafety
   ) return null;
   return Object.freeze(normalized);
+}
+
+export function createWorkingQuoteSafetyAcknowledgement(review) {
+  const warningCodes = review?.quoteSafety?.warnings?.map((warning) => warning.code);
+  if (!uuid(review?.documentId) || !positiveInteger(review?.documentVersion) || !Array.isArray(warningCodes)) {
+    return null;
+  }
+  return Object.freeze({
+    documentId: uuid(review.documentId),
+    documentVersion: positiveInteger(review.documentVersion),
+    warningCodes: Object.freeze([...new Set(warningCodes)].sort()),
+  });
 }
 
 export async function fetchWorkingQuoteReviewIdentity({
@@ -751,7 +817,11 @@ export async function fetchWorkingQuoteReviewIdentity({
       "The customer and project for this quote could not be verified."
     );
   }
-  const review = normalizeWorkingQuoteReviewIdentity(result.data.review, identity);
+  const review = normalizeWorkingQuoteReviewIdentity({
+    ...result.data.review,
+    quoteSafety:
+      result.data.quoteSafety ?? result.data.review?.quoteSafety,
+  }, identity);
   if (!review) {
     throw new WorkingQuoteCanonicalIssueError(
       "The working Quote review identity did not match the exact saved document and Job.",
@@ -812,6 +882,7 @@ export async function issueCanonicalWorkingQuote({
   document,
   jobId,
   idempotencyKey,
+  quoteSafetyAcknowledgement = null,
   setPage,
   authFetchImpl = authFetch,
 } = {}) {
@@ -833,12 +904,25 @@ export async function issueCanonicalWorkingQuote({
     );
   }
   const checkpoint = { canonicalQuote: quote };
+  const acknowledgement = normalizeQuoteSafetyAcknowledgement(
+    quoteSafetyAcknowledgement,
+    identity
+  );
+  if (acknowledgement === undefined) {
+    throw new WorkingQuoteCanonicalIssueError(
+      "The Quote Safety acknowledgement did not match the exact saved Quote version.",
+      { code: "QUOTE_SAFETY_ACKNOWLEDGEMENT_INVALID", phase: "ISSUE", checkpoint }
+    );
+  }
   const result = await authFetchImpl(
     `/quotes/${encodeURIComponent(quote.id)}/issue`,
     {
       method: "POST",
       headers: { "Idempotency-Key": idempotencyKey },
-      body: JSON.stringify({ expectedVersion: quote.currentVersion }),
+      body: JSON.stringify({
+        expectedVersion: quote.currentVersion,
+        ...(acknowledgement ? { quoteSafetyAcknowledgement: acknowledgement } : {}),
+      }),
     },
     setPage
   );
@@ -886,6 +970,7 @@ export async function issueAndSendWorkingQuote({
   commandKeys,
   checkpoint = {},
   deliveryIntent = "INITIAL",
+  quoteSafetyAcknowledgement = null,
   setPage,
   authFetchImpl = authFetch,
   fetchDeliveryImpl = fetchProfessionalQuoteDelivery,
@@ -945,6 +1030,7 @@ export async function issueAndSendWorkingQuote({
         document,
         jobId: identity.jobId,
         idempotencyKey: commandKeys.issue,
+        quoteSafetyAcknowledgement,
         setPage,
         authFetchImpl,
       });
