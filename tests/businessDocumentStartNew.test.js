@@ -138,6 +138,15 @@ test("server response must provide a different working ID and server-owned numbe
   );
 });
 
+test("the first customer-resolved Quote can validate without a previous empty server draft", () => {
+  const next = savedDocument({ id: QUOTE_TWO, documentNumber: "Q-0000002" });
+  assert.equal(validateNewBusinessDocumentDraft({
+    documentType: "quote",
+    previousDocument: null,
+    nextDocument: next,
+  }).id, QUOTE_TWO);
+});
+
 test("previous Quote remains independently restorable after a distinct new Quote is created", () => {
   const customerParty = {
     businessContactId: "55555555-5555-4555-8555-555555555555",
@@ -280,12 +289,14 @@ test("new Quote clears parent-held legacy prices, adjustments, deposit, and opti
     workspace.indexOf("async function refreshDeliveryHistory")
   );
   for (const field of [
-    "customerPhone", "customerAddress", "labor", "materials", "discount", "tax",
+    "labor", "materials", "discount", "tax",
     "travelFee", "disposalFee", "depositAmount", "startDate",
   ]) {
     assert.match(restoreBlock, new RegExp(`${field}: ""`), field);
     assert.match(quoteBuilder, new RegExp(`Object\\.hasOwn\\(patch, "${field}"\\)`), field);
   }
+  assert.match(restoreBlock, /customerPhone: restored\.customerParty \? restored\.content\.customerPhone : ""/);
+  assert.match(restoreBlock, /customerAddress: restored\.customerParty \? restored\.content\.customerAddress : ""/);
   assert.match(restoreBlock, /depositRequired: "No"/);
   assert.match(quoteBuilder, /Object\.hasOwn\(patch, "depositRequired"\)/);
   assert.match(quoteBuilder, /const \[labor, setLabor\] = useState/);

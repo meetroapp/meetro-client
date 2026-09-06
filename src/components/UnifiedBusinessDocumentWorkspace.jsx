@@ -133,17 +133,24 @@ import {
   createBusinessCustomerRelationshipCommandKey,
   establishBusinessCustomerRelationship,
   getBusinessCustomerRelationshipByContact,
+  listBusinessCustomerRelationships,
 } from "../utils/businessCustomerRelationshipsApi.js";
 import {
   applyBusinessContactToDocumentSnapshot,
   businessContactDisplayName,
   businessDocumentCustomerState,
   completeBusinessDocumentCustomerWorkflow,
+  customerSnapshotFromBusinessContact,
   filterBusinessDocumentCustomerContacts,
   findBusinessContactDuplicateCandidates,
   hasBusinessDocumentCustomerSnapshot,
   normalizeBusinessDocumentCustomerParty,
 } from "../utils/businessDocumentCustomerParty.js";
+import {
+  buildJobLinkedNewQuoteRoute,
+  eligibleExternalCustomerOptions,
+  fetchProfessionalQuoteCustomerOptions,
+} from "../utils/newQuoteCustomerSetup.js";
 import { t } from "../utils/language.js";
 import {
   buildCanonicalConversationRoute,
@@ -175,6 +182,33 @@ function emptyCustomerControl() {
     pendingRelationship: null,
     retryPhase: "",
     createKey: "",
+  };
+}
+
+function emptyNewQuoteSetup({ open = false, target = "" } = {}) {
+  return {
+    open,
+    target,
+    step: "CUSTOMER_TYPE",
+    busy: false,
+    error: "",
+    search: "",
+    meetroCustomers: [],
+    selectedMeetroCustomerId: null,
+    externalOptions: [],
+    allContacts: [],
+    form: {
+      partyType: "PERSON",
+      displayName: "",
+      companyName: "",
+      email: "",
+      phone: "",
+      address: "",
+    },
+    createKey: "",
+    pendingContact: null,
+    pendingRelationship: null,
+    duplicateCandidates: [],
   };
 }
 
@@ -967,6 +1001,10 @@ function WorkspaceDialog({ titleId, title, children, actions, onClose, openAtTop
   const firstRef = useRef(null);
   const dialogRef = useRef(null);
   const headingRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
   useEffect(() => {
     const frame = requestAnimationFrame(() => {
       if (openAtTop) {
@@ -977,14 +1015,93 @@ function WorkspaceDialog({ titleId, title, children, actions, onClose, openAtTop
         firstRef.current?.focus();
       }
     });
-    function escape(event) { if (event.key === "Escape") onClose?.(); }
+    return () => cancelAnimationFrame(frame);
+  }, [openAtTop, title]);
+  useEffect(() => {
+    function escape(event) { if (event.key === "Escape") onCloseRef.current?.(); }
     document.addEventListener("keydown", escape);
-    return () => {
-      cancelAnimationFrame(frame);
-      document.removeEventListener("keydown", escape);
-    };
-  }, [onClose, openAtTop]);
+    return () => document.removeEventListener("keydown", escape);
+  }, []);
   return <>{onClose ? <button type="button" className="business-document-manual-backdrop" aria-label={`Close ${title}`} onClick={onClose} /> : <div className="business-document-manual-backdrop" aria-hidden="true" />}<section ref={dialogRef} className="business-document-confirm" role="dialog" aria-modal="true" aria-labelledby={titleId}><h2 ref={headingRef} id={titleId} tabIndex={openAtTop ? -1 : undefined}>{title}</h2>{children}<footer>{actions.map((action, index) => <button ref={index === 0 ? firstRef : undefined} key={action.label} type="button" className={action.primary ? "business-document-primary" : action.destructive ? "business-document-destructive" : ""} disabled={action.disabled} onClick={action.onClick}>{action.label}</button>)}</footer></section></>;
+}
+
+function NewQuoteCustomerSetupDialog({
+  state,
+  onCancel,
+  onBack,
+  onCustomerType,
+  onSearch,
+  onMeetroCustomer,
+  onMeetroJob,
+  onExternalChoice,
+  onExternalExisting,
+  onExternalForm,
+  onExternalCreate,
+  onExternalDuplicate,
+  onRetry,
+}) {
+  if (!state?.open) return null;
+  const search = state.search.trim().toLocaleLowerCase();
+  const meetroCustomers = state.meetroCustomers.filter((customer) =>
+    !search || customer.displayName.toLocaleLowerCase().includes(search) ||
+      customer.jobs.some((job) => `${job.title} ${job.city || ""} ${job.serviceArea || ""}`.toLocaleLowerCase().includes(search))
+  );
+  const selectedMeetroCustomer = state.meetroCustomers.find(
+    (customer) => customer.customerId === state.selectedMeetroCustomerId
+  );
+  const title = state.step === "CUSTOMER_TYPE"
+    ? "New Quote"
+    : state.step.startsWith("MEETRO_")
+    ? "Choose Meetro Customer"
+    : "External Customer";
+  const backable = state.step !== "CUSTOMER_TYPE";
+  const actions = backable
+    ? [{ label: "Back", disabled: state.busy, onClick: onBack }]
+    : [{ label: "Cancel", disabled: state.busy, onClick: onCancel }];
+  return (
+    <WorkspaceDialog
+      titleId="new-quote-customer-setup-title"
+      title={title}
+      onClose={state.busy ? undefined : backable ? onBack : onCancel}
+      actions={actions}
+      openAtTop
+    >
+      <div className="new-quote-customer-setup">
+        {state.step === "CUSTOMER_TYPE" ? <>
+          <p className="new-quote-customer-question">Who is this Quote for?</p>
+          <button type="button" disabled={state.busy} onClick={() => onCustomerType("MEETRO")}><strong>Meetro Customer</strong><span>Already connected through Meetro</span></button>
+          <button type="button" disabled={state.busy} onClick={() => onCustomerType("EXTERNAL")}><strong>External Customer</strong><span>A customer outside Meetro</span></button>
+        </> : null}
+        {state.step === "MEETRO_CUSTOMER_LIST" ? <>
+          <label>Search<input type="search" value={state.search} onChange={(event) => onSearch(event.target.value)} /></label>
+          {state.busy ? <p role="status">Loading eligible Meetro customers…</p> : meetroCustomers.length ? <div className="new-quote-option-list">{meetroCustomers.map((customer) => <button type="button" key={customer.customerId} onClick={() => onMeetroCustomer(customer.customerId)}><strong>{customer.displayName}</strong><span>{customer.jobs.length} {customer.jobs.length === 1 ? "Job option" : "Job options"}</span></button>)}</div> : <p>No eligible Meetro Job is available for a new Quote.</p>}
+        </> : null}
+        {state.step === "MEETRO_JOB_LIST" ? <>
+          <p>Select the exact Job for <strong>{selectedMeetroCustomer?.displayName}</strong>.</p>
+          <div className="new-quote-option-list">{selectedMeetroCustomer?.jobs.map((job) => <button type="button" key={job.jobId} disabled={state.busy || (!job.newQuoteEligible && !job.existingQuote?.workingDraftId)} onClick={() => onMeetroJob(job)}><strong>{job.title}</strong><span>{[job.city, job.serviceArea].filter(Boolean).join(" · ")}</span><span>{job.newQuoteEligible ? "Create Quote" : job.existingQuote?.workingDraftId ? "Open Existing Quote" : "A canonical Quote already exists"}</span></button>)}</div>
+        </> : null}
+        {state.step === "EXTERNAL_CHOICE" ? <>
+          <button type="button" disabled={state.busy} onClick={() => onExternalChoice("EXISTING")}><strong>Choose Existing Customer</strong><span>Use a saved Customer relationship</span></button>
+          <p>or</p>
+          <button type="button" disabled={state.busy} onClick={() => onExternalChoice("ADD")}><strong>Add New Customer</strong><span>Save a durable Customer contact first</span></button>
+        </> : null}
+        {state.step === "EXTERNAL_EXISTING" ? <>
+          {state.busy ? <p role="status">Loading saved customers…</p> : state.externalOptions.length ? <div className="new-quote-option-list">{state.externalOptions.map(({ contact, relationship }) => <button type="button" key={relationship.id} disabled={state.busy} onClick={() => onExternalExisting(contact, relationship)}><strong>{businessContactDisplayName(contact)}</strong><span>{[contact.companyName, contact.email, contact.phone].filter(Boolean).join(" · ")}</span></button>)}</div> : <p>No active saved Customer relationship is available.</p>}
+        </> : null}
+        {state.step === "EXTERNAL_ADD" ? <form onSubmit={(event) => { event.preventDefault(); onExternalCreate(); }}>
+          <label>Customer type<select value={state.form.partyType} disabled={state.busy} onChange={(event) => onExternalForm("partyType", event.target.value)}><option value="PERSON">Person</option><option value="ORGANIZATION">Organization</option></select></label>
+          <label>Name<input required value={state.form.displayName} disabled={state.busy} onChange={(event) => onExternalForm("displayName", event.target.value)} /></label>
+          {state.form.partyType === "ORGANIZATION" ? <label>Company<input value={state.form.companyName} disabled={state.busy} onChange={(event) => onExternalForm("companyName", event.target.value)} /></label> : null}
+          <label>Email<input type="email" value={state.form.email} disabled={state.busy} onChange={(event) => onExternalForm("email", event.target.value)} /></label>
+          <label>Phone<input type="tel" value={state.form.phone} disabled={state.busy} onChange={(event) => onExternalForm("phone", event.target.value)} /></label>
+          <label>Address<input value={state.form.address} disabled={state.busy} onChange={(event) => onExternalForm("address", event.target.value)} /></label>
+          {state.duplicateCandidates.length ? <div role="alert"><p>A matching Contact already exists. Reuse it to prevent a duplicate.</p>{state.duplicateCandidates.map((contact) => <button type="button" key={contact.id} disabled={state.busy} onClick={() => onExternalDuplicate(contact)}>Use {businessContactDisplayName(contact)}</button>)}</div> : null}
+          <button type="submit" className="business-document-primary" disabled={state.busy}>{state.busy ? "Saving Customer…" : "Save Customer & Start Quote"}</button>
+        </form> : null}
+        {state.error ? <div role="alert"><p>{state.error}</p><button type="button" disabled={state.busy} onClick={onRetry}>Try Again</button></div> : null}
+      </div>
+    </WorkspaceDialog>
+  );
 }
 
 function WorkflowGuideStep({ number, title, children }) {
@@ -1561,7 +1678,8 @@ export default function UnifiedBusinessDocumentWorkspace(props) {
 
 function QuoteInvoiceBusinessDocumentWorkspace({
   setPage, language = "en", initialDocument = "quote", initialSavedDocumentId = null,
-  initialSavedDocument = null, onDurableDocumentOpened, job = {}, quote,
+  initialSavedDocument = null, onDurableDocumentOpened, genericNewQuoteIntent = false,
+  job = {}, quote,
   invoicePreparation = null, onCreateCanonicalInvoice,
   onApplyQuotePatch, onAddPhotos, canAddPhotos = true, photos = [], photoBusy = false,
   onDownloadQuote, onPreviewQuote, onBack,
@@ -1611,6 +1729,10 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const invoiceProposalApplyInFlightRef = useRef(false);
   const startNewInFlightRef = useRef(null);
   const pendingStartNewRef = useRef(null);
+  const pendingNewQuoteDestinationRef = useRef(null);
+  const newQuoteSetupAuthorityRef = useRef(
+    genericNewQuoteIntent && initialDocument === "quote"
+  );
   const pendingExitRef = useRef(null);
   const savedDocumentsRef = useRef({ quote: null, invoice: null });
   const [invoice, setInvoice] = useState(invoiceBaseline);
@@ -1666,6 +1788,10 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const [newContentAvailable, setNewContentAvailable] = useState(false);
   const [customerParties, setCustomerParties] = useState({ quote: null, invoice: null });
   const [linkedCustomerContacts, setLinkedCustomerContacts] = useState({ quote: null, invoice: null });
+  const [newQuoteSetup, setNewQuoteSetup] = useState(() => emptyNewQuoteSetup({
+    open: genericNewQuoteIntent && initialDocument === "quote",
+    target: genericNewQuoteIntent && initialDocument === "quote" ? "INITIAL" : "",
+  }));
   const invoicePreparationHydratedRef = useRef("");
   const savedJobCustomerLookupRef = useRef(null);
   const workspaceSetPageRef = useRef(setPage);
@@ -1986,7 +2112,9 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     if (!identityKey) return;
     let active = true;
     void loadBusinessDocumentRecovery({ identityKey }).then((record) => {
-      if (active && record) setRecoveryRecord(record);
+      if (active && record && !newQuoteSetupAuthorityRef.current) {
+        setRecoveryRecord(record);
+      }
     });
     return () => { active = false; };
   }, []);
@@ -2273,12 +2401,21 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         const errorMessage = t("businessDocumentStartNewSaveFailed", language);
         setStartNewState({ busy: false, error: errorMessage, documentType: setup.documentType });
         setNotice(errorMessage);
-        setSaveFailureOpen(true);
+        if (pendingNewQuoteDestinationRef.current) {
+          updateNewQuoteSetup({ busy: false, error: `${errorMessage} Your customer selection is preserved.` });
+        } else {
+          setSaveFailureOpen(true);
+        }
         return;
       }
       if (saved === false && setup.suppressFailureDialog) setSaveFailureOpen(true);
       if (saved && saved !== NUMBERING_SETUP_PENDING && pendingStartNewRef.current === setup.documentType) {
-        await createAndOpenNewDocument(setup.documentType, saved);
+        const destination = pendingNewQuoteDestinationRef.current;
+        if (setup.documentType === "quote" && destination) {
+          await completeResolvedNewQuote(destination, saved);
+        } else {
+          await createAndOpenNewDocument(setup.documentType, saved);
+        }
       }
     } catch (error) {
       setNumberingSetup((current) => current ? {
@@ -2457,8 +2594,8 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     const restoredContent = startedNew && type === "quote"
       ? {
           ...restored.content,
-          customerPhone: "",
-          customerAddress: "",
+          customerPhone: restored.customerParty ? restored.content.customerPhone : "",
+          customerAddress: restored.customerParty ? restored.content.customerAddress : "",
           problemFound: "",
           timeline: "",
           labor: "",
@@ -2585,7 +2722,10 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     nearNewestRef.current = true;
   }
 
-  async function createAndOpenNewDocument(documentType, previousDocument) {
+  async function createAndOpenNewDocument(documentType, previousDocument, {
+    customerParty = null,
+    customerSnapshot = null,
+  } = {}) {
     const labelKey = documentType === "quote"
       ? "businessDocumentNewQuoteReady"
       : "businessDocumentNewInvoiceReady";
@@ -2597,6 +2737,8 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       const payload = buildNewBusinessDocumentDraftPayload({
         documentType,
         documentDate: todayLocalIsoDate(),
+        customerParty,
+        customerSnapshot,
       });
       const document = await createBusinessDocumentDraft({
         payload,
@@ -2635,6 +2777,12 @@ function QuoteInvoiceBusinessDocumentWorkspace({
 
   async function startNewDocument(documentType = activeDocument) {
     const type = normalizeBusinessDocumentTab(documentType);
+    if (type === "quote") {
+      newQuoteSetupAuthorityRef.current = true;
+      setRecoveryRecord(null);
+      setNewQuoteSetup(emptyNewQuoteSetup({ open: true, target: "START_NEW" }));
+      return null;
+    }
     if (startNewInFlightRef.current) return startNewInFlightRef.current;
     pendingStartNewRef.current = type;
     const operation = (async () => {
@@ -2664,6 +2812,301 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       return await operation;
     } finally {
       if (startNewInFlightRef.current === operation) startNewInFlightRef.current = null;
+    }
+  }
+
+  function updateNewQuoteSetup(patch) {
+    setNewQuoteSetup((current) => ({ ...current, ...patch }));
+  }
+
+  function closeNewQuoteSetup() {
+    if (newQuoteSetup.busy) return;
+    const initialEntry = newQuoteSetup.target === "INITIAL";
+    pendingNewQuoteDestinationRef.current = null;
+    pendingStartNewRef.current = null;
+    newQuoteSetupAuthorityRef.current = false;
+    setNewQuoteSetup(emptyNewQuoteSetup());
+    if (initialEntry) onBack?.();
+  }
+
+  function backNewQuoteSetup() {
+    if (newQuoteSetup.busy) return;
+    pendingNewQuoteDestinationRef.current = null;
+    pendingStartNewRef.current = null;
+    const previousStep = {
+      MEETRO_CUSTOMER_LIST: "CUSTOMER_TYPE",
+      MEETRO_JOB_LIST: "MEETRO_CUSTOMER_LIST",
+      EXTERNAL_CHOICE: "CUSTOMER_TYPE",
+      EXTERNAL_EXISTING: "EXTERNAL_CHOICE",
+      EXTERNAL_ADD: "EXTERNAL_CHOICE",
+    }[newQuoteSetup.step];
+    if (!previousStep) return;
+    updateNewQuoteSetup({
+      step: previousStep,
+      error: "",
+      search: previousStep === "MEETRO_CUSTOMER_LIST" ? newQuoteSetup.search : "",
+    });
+  }
+
+  async function loadMeetroQuoteCustomers() {
+    updateNewQuoteSetup({
+      step: "MEETRO_CUSTOMER_LIST",
+      busy: true,
+      error: "",
+      search: "",
+      selectedMeetroCustomerId: null,
+    });
+    try {
+      const meetroCustomers = await fetchProfessionalQuoteCustomerOptions({ setPage });
+      updateNewQuoteSetup({ busy: false, meetroCustomers });
+    } catch (error) {
+      updateNewQuoteSetup({
+        busy: false,
+        error: error?.message || "Meetro customers could not be loaded.",
+      });
+    }
+  }
+
+  async function loadExternalQuoteCustomers() {
+    updateNewQuoteSetup({
+      step: "EXTERNAL_EXISTING",
+      busy: true,
+      error: "",
+      externalOptions: [],
+    });
+    try {
+      const contractorProfileId = await resolveBusinessProfileId();
+      const [customerContacts, allContacts, relationships] = await Promise.all([
+        listBusinessContacts({
+          contractorProfileId,
+          status: "ACTIVE",
+          role: "CUSTOMER",
+          setPage,
+        }),
+        listBusinessContacts({ contractorProfileId, status: "ACTIVE", setPage }),
+        listBusinessCustomerRelationships({ contractorProfileId, setPage }),
+      ]);
+      updateNewQuoteSetup({
+        busy: false,
+        allContacts,
+        externalOptions: eligibleExternalCustomerOptions({
+          contacts: customerContacts,
+          relationships,
+        }),
+      });
+    } catch (error) {
+      updateNewQuoteSetup({
+        busy: false,
+        error: error?.message || "Saved external customers could not be loaded.",
+      });
+    }
+  }
+
+  async function openExternalCustomerForm() {
+    updateNewQuoteSetup({ step: "EXTERNAL_ADD", busy: true, error: "" });
+    try {
+      const contractorProfileId = await resolveBusinessProfileId();
+      const allContacts = await listBusinessContacts({
+        contractorProfileId,
+        status: "ACTIVE",
+        setPage,
+      });
+      updateNewQuoteSetup({ busy: false, allContacts });
+    } catch (error) {
+      updateNewQuoteSetup({
+        busy: false,
+        error: error?.message || "Saved Contacts could not be checked.",
+      });
+    }
+  }
+
+  function resolvedExternalQuoteAuthority(contact, relationship) {
+    return {
+      kind: "EXTERNAL",
+      contact,
+      relationship,
+      customerParty: normalizeBusinessDocumentCustomerParty({
+        businessContactId: contact.id,
+        customerRelationshipId: relationship.id,
+      }),
+      customerSnapshot: customerSnapshotFromBusinessContact(contact),
+    };
+  }
+
+  async function completeResolvedNewQuote(destination, previousDocument = null) {
+    if (destination.kind === "MEETRO_JOB") {
+      const route = buildJobLinkedNewQuoteRoute(destination.job);
+      if (!route) throw new Error("The selected Meetro Job could not be verified.");
+      pendingNewQuoteDestinationRef.current = null;
+      pendingStartNewRef.current = null;
+      newQuoteSetupAuthorityRef.current = false;
+      setNewQuoteSetup(emptyNewQuoteSetup());
+      setPage(route);
+      return true;
+    }
+    if (destination.kind !== "EXTERNAL" || !destination.customerParty) {
+      throw new Error("The selected external Customer authority could not be verified.");
+    }
+    const document = await createAndOpenNewDocument("quote", previousDocument, {
+      customerParty: destination.customerParty,
+      customerSnapshot: destination.customerSnapshot,
+    });
+    if (!document) throw new Error("The new Quote could not be created. Your current Quote remains open.");
+    pendingNewQuoteDestinationRef.current = null;
+    pendingStartNewRef.current = null;
+    newQuoteSetupAuthorityRef.current = false;
+    setNewQuoteSetup(emptyNewQuoteSetup());
+    return document;
+  }
+
+  async function continueResolvedNewQuote(destination) {
+    if (!destination || newQuoteSetup.busy) return;
+    updateNewQuoteSetup({ busy: true, error: "" });
+    pendingNewQuoteDestinationRef.current = destination;
+    try {
+      let previousDocument = null;
+      if (newQuoteSetup.target === "START_NEW") {
+        pendingStartNewRef.current = "quote";
+        previousDocument = await ensureCurrentDocumentSaved("quote");
+        if (previousDocument === NUMBERING_SETUP_PENDING) {
+          updateNewQuoteSetup({ busy: false });
+          return;
+        }
+        if (!previousDocument) {
+          updateNewQuoteSetup({
+            busy: false,
+            error: "Your current Quote could not be saved. It remains open, and your customer selection is preserved.",
+          });
+          return;
+        }
+      }
+      await completeResolvedNewQuote(destination, previousDocument);
+    } catch (error) {
+      updateNewQuoteSetup({
+        busy: false,
+        error: error?.message || "The new Quote could not be started.",
+      });
+    }
+  }
+
+  async function createExternalQuoteCustomer(explicitContact = null) {
+    const form = newQuoteSetup.form;
+    if (!form.displayName.trim()) {
+      updateNewQuoteSetup({ error: "Enter the customer name." });
+      return;
+    }
+    const duplicateCandidates = explicitContact ? [] : findBusinessContactDuplicateCandidates(
+      newQuoteSetup.allContacts,
+      {
+        customerName: form.displayName,
+        customerEmail: form.email,
+        customerPhone: form.phone,
+      }
+    );
+    if (duplicateCandidates.length) {
+      updateNewQuoteSetup({
+        duplicateCandidates,
+        error: "Choose the matching Contact to continue without creating a duplicate.",
+      });
+      return;
+    }
+    updateNewQuoteSetup({
+      busy: true,
+      error: "",
+      duplicateCandidates: [],
+      ...(explicitContact ? { pendingContact: explicitContact } : {}),
+    });
+    try {
+      const contractorProfileId = await resolveBusinessProfileId();
+      const createKey = newQuoteSetup.createKey || createBusinessContactCommandKey();
+      updateNewQuoteSetup({ createKey });
+      const workflow = await completeBusinessDocumentCustomerWorkflow({
+        contact: explicitContact || newQuoteSetup.pendingContact,
+        relationship: newQuoteSetup.pendingRelationship,
+        createContact: async () => {
+          const result = await createBusinessContact({
+            contractorProfileId,
+            partyType: form.partyType,
+            displayName: form.displayName,
+            companyName: form.partyType === "ORGANIZATION"
+              ? form.companyName || form.displayName
+              : undefined,
+            email: form.email,
+            phone: form.phone,
+            address: form.address,
+            idempotencyKey: createKey,
+            setPage,
+          });
+          updateNewQuoteSetup({ pendingContact: result.contact });
+          return result.contact;
+        },
+        assignCustomerRole: async (contact) => {
+          if (getBusinessContactActiveRoles(contact).includes("CUSTOMER")) return contact;
+          const assigned = await assignBusinessContactRole({
+            contactId: contact.id,
+            expectedVersion: contact.version,
+            role: "CUSTOMER",
+            idempotencyKey: createDeterministicBusinessContactKey(`${createKey}:assign:CUSTOMER`),
+            setPage,
+          });
+          updateNewQuoteSetup({ pendingContact: assigned });
+          return assigned;
+        },
+        resolveRelationship: async (contact) => {
+          const existing = await getBusinessCustomerRelationshipByContact({
+            businessContactId: contact.id,
+            setPage,
+          });
+          const relationship = existing || await establishBusinessCustomerRelationship({
+            contractorProfileId,
+            businessContactId: contact.id,
+            idempotencyKey: createDeterministicBusinessContactKey(`${createKey}:relationship`),
+            setPage,
+          });
+          updateNewQuoteSetup({ pendingContact: contact, pendingRelationship: relationship });
+          return relationship;
+        },
+        linkDocument: async (contact, relationship) => {
+          const destination = resolvedExternalQuoteAuthority(contact, relationship);
+          pendingNewQuoteDestinationRef.current = destination;
+          let previousDocument = null;
+          if (newQuoteSetup.target === "START_NEW") {
+            pendingStartNewRef.current = "quote";
+            previousDocument = await ensureCurrentDocumentSaved("quote");
+            if (previousDocument === NUMBERING_SETUP_PENDING) return previousDocument;
+            if (!previousDocument) throw new Error("Your current Quote could not be saved. It remains open, and the saved Customer selection is preserved.");
+          }
+          return completeResolvedNewQuote(destination, previousDocument);
+        },
+      });
+      if (workflow.document === NUMBERING_SETUP_PENDING) {
+        updateNewQuoteSetup({ busy: false });
+      }
+    } catch (error) {
+      updateNewQuoteSetup({
+        busy: false,
+        pendingContact: error?.contact || newQuoteSetup.pendingContact,
+        pendingRelationship: error?.relationship || newQuoteSetup.pendingRelationship,
+        error: error?.message || "The external Customer could not be saved.",
+      });
+    }
+  }
+
+  function retryNewQuoteSetup() {
+    if (pendingNewQuoteDestinationRef.current) {
+      void continueResolvedNewQuote(pendingNewQuoteDestinationRef.current);
+      return;
+    }
+    if (newQuoteSetup.step === "MEETRO_CUSTOMER_LIST") {
+      void loadMeetroQuoteCustomers();
+    } else if (newQuoteSetup.step === "EXTERNAL_EXISTING") {
+      void loadExternalQuoteCustomers();
+    } else if (newQuoteSetup.step === "EXTERNAL_ADD") {
+      if (newQuoteSetup.pendingContact || newQuoteSetup.pendingRelationship) {
+        void createExternalQuoteCustomer();
+      } else {
+        void openExternalCustomerForm();
+      }
     }
   }
 
@@ -5140,6 +5583,39 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         <section ref={previewRef} tabIndex={-1} className={`business-document-preview ${mobilePane === "preview" ? "mobile-active" : ""}`} aria-labelledby="business-document-preview-title"><header><h2 id="business-document-preview-title">Live {activeDocument === "quote" ? "Quote" : "Invoice"} Preview</h2><span>● Auto-updated</span></header><CustomerPartyControl language={language} content={activeContent} customerParty={activeCustomerParty} jobLinked={Boolean((activeDocument === "quote" && job.customerLinkedFromJob) || invoicePreparation)} linkedContact={activeLinkedCustomer} linkedDurably={Boolean(activeSaved?.customerParty && activeSaved.customerParty.businessContactId === activeCustomerParty?.businessContactId && activeSaved.customerParty.customerRelationshipId === activeCustomerParty?.customerRelationshipId)} control={customerControl} onOpen={(mode) => void openCustomerControl(mode)} onClose={() => setCustomerControl(emptyCustomerControl())} onSearch={(search) => updateCustomerControl({ search })} onSelect={(selectedId) => updateCustomerControl({ selectedId, mode: "choose", duplicateCandidates: [], confirmReplacement: false })} onUse={(replace) => void applySavedCustomer(replace)} onUseDocumentOnly={() => { setCustomerControl(emptyCustomerControl()); setNotice("This customer remains document-only. No Contact, account, or relationship was created."); }} onSaveContact={() => void saveCurrentCustomerAsContact()} onPartyType={(partyType) => updateCustomerControl({ partyType })} onRetry={() => void retryCustomerWorkflow()} onCreateAnyway={() => { updateCustomerControl({ duplicateConfirmed: true, duplicateCandidates: [] }); void saveCurrentCustomerAsContact({ bypassDuplicates: true }); }} />{activeDocument === "quote" ? <QuotePreview quote={activeContent} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} authorityPresentation={activeQuoteAuthorityPresentation} jobLinked={Boolean(job.customerLinkedFromJob)} /> : <InvoicePreview invoice={activeContent} preparation={invoicePreparation} canonicalInvoice={invoiceCreateState.invoice} branding={branding} generalPhotos={generalPhotos} beforePhotos={beforePhotos} afterPhotos={afterPhotos} saved={Boolean(activeSaved && !activeDirty)} documentNumber={activeSaved?.documentNumber || ""} />}<div className="business-document-actions"><button type="button" className="business-document-save" disabled={saveState.busy || (activeSaved && !activeDirty)} onClick={() => void saveDocument(activeDocument)}>{saveLabel}</button><button type="button" onClick={() => void previewActivePdf()}>Preview PDF</button><button type="button" onClick={() => void downloadActivePdf()}>Download PDF</button>{activeDocument === "quote" && documentJobIds.quote ? activeExternalIssuedQuote ? <><DeliveryMenu kind="quote" onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} allowMeetroMessage={false} />{activeIssuedQuote.approval?.source !== "EXTERNAL_EVIDENCE" ? <button type="button" onClick={openExternalQuoteApproval}>Record Customer Approval</button> : null}</> : <button type="button" className="business-document-primary" disabled={quoteIssueState?.busy || activeQuoteAuthorityPresentation.actionDisabled} onClick={() => void beginGovernedQuoteIssue()}>{quoteIssueState?.busy ? "Preparing…" : activeQuoteAuthorityPresentation.actionLabel}</button> : activeDocument === "invoice" && invoicePreparation ? invoiceCreateState.invoice ? <button type="button" className="business-document-primary" onClick={openCreatedInvoiceDelivery}>Send to Customer</button> : <button type="button" className="business-document-primary" disabled={invoiceCreateState.busy} onClick={() => void createReviewedInvoice()}>{invoiceCreateState.busy ? "Creating…" : "Create Invoice"}</button> : <DeliveryMenu kind={activeDocument} onSelect={beginDelivery} disabled={deliveryState?.busy || deliveryState?.stage === "sharing"} />}</div><DeliveryHistory deliveries={deliveryHistory[activeDocument]} />{invoiceCreateState.error && mobilePane === "preview" ? <p className="business-document-notice" role="alert">{invoiceCreateState.error}</p> : null}{notice && mobilePane === "preview" ? <p className="business-document-notice" role="status">{notice}</p> : null}</section>
       </main>
       {savedFilesOpen ? <SavedFilesDrawer currentSavedIds={Object.values(savedDocuments).map((document) => document?.id).filter(Boolean)} setPage={setPage} onClose={() => setSavedFilesOpen(false)} onDeleted={handleDeletedDocument} onOpen={(draftId) => void openSavedDocument(draftId)} /> : null}
+      <NewQuoteCustomerSetupDialog
+        state={newQuoteSetup}
+        onCancel={closeNewQuoteSetup}
+        onBack={backNewQuoteSetup}
+        onCustomerType={(type) => {
+          if (type === "MEETRO") void loadMeetroQuoteCustomers();
+          else updateNewQuoteSetup({ step: "EXTERNAL_CHOICE", error: "" });
+        }}
+        onSearch={(search) => updateNewQuoteSetup({ search })}
+        onMeetroCustomer={(customerId) => updateNewQuoteSetup({
+          step: "MEETRO_JOB_LIST",
+          selectedMeetroCustomerId: customerId,
+          error: "",
+        })}
+        onMeetroJob={(selectedJob) => void continueResolvedNewQuote({
+          kind: "MEETRO_JOB",
+          job: selectedJob,
+        })}
+        onExternalChoice={(choice) => {
+          if (choice === "EXISTING") void loadExternalQuoteCustomers();
+          else void openExternalCustomerForm();
+        }}
+        onExternalExisting={(contact, relationship) => void continueResolvedNewQuote(
+          resolvedExternalQuoteAuthority(contact, relationship)
+        )}
+        onExternalForm={(field, value) => updateNewQuoteSetup({
+          error: "",
+          form: { ...newQuoteSetup.form, [field]: value },
+        })}
+        onExternalCreate={() => void createExternalQuoteCustomer()}
+        onExternalDuplicate={(contact) => void createExternalQuoteCustomer(contact)}
+        onRetry={retryNewQuoteSetup}
+      />
       {photoReviewOpen && documentPhotos.length ? <PhotoReviewDialog photos={documentPhotos} assignments={photoAssignments} onCancel={() => setPhotoReviewOpen(false)} onApply={(assignments) => { setPhotoAssignments((current) => ({ ...current, ...Object.fromEntries(Object.entries(assignments).map(([id, assignment]) => [id, { ...normalizeBusinessDocumentPhotoAssignment(assignment), documentType: activeDocument }])) })); setPhotoReviewOpen(false); }} /> : null}
       {deliveryState?.stage === "saveRequired" ? <WorkspaceDialog titleId="business-document-delivery-save-title" title={deliveryState.channel === "DEVICE_SHARE" ? "Save changes before sharing" : "Save changes before sending"} onClose={deliveryState.busy ? undefined : () => setDeliveryState(null)} actions={[{ label: "Cancel", disabled: deliveryState.busy, onClick: () => setDeliveryState(null) }, { label: deliveryState.busy ? "Saving…" : deliveryState.channel === "DEVICE_SHARE" ? "Save & Continue to Share" : "Save & Continue to Send", primary: true, disabled: deliveryState.busy, onClick: () => void saveAndContinueDelivery() }]}><p>The customer can receive only an exact durable document version. Saving does not send, share, issue, accept, approve, pay, or close anything.</p>{deliveryState.error ? <p role="alert">{deliveryState.error}</p> : null}</WorkspaceDialog> : null}
       {deliveryState?.stage === "shareFallback" ? <WorkspaceDialog titleId="business-document-share-fallback-title" title="Share this saved PDF" onClose={() => setDeliveryState(null)} actions={[{ label: "Close", onClick: () => setDeliveryState(null) }, { label: "Download PDF", primary: true, onClick: () => { downloadBusinessDocumentPdfArtifact(deliveryState.artifact); setNotice("PDF downloaded. No delivery has been confirmed."); } }]}><p>System file sharing is unavailable in this browser. Download the exact saved PDF, copy the customer message, or open an email draft.</p><div className="business-document-share-fallback"><button type="button" onClick={() => void copyBusinessDocumentShareMessage(deliveryState.customerMessage).then((copied) => setNotice(copied ? "Customer message copied. No document was sent." : "Clipboard access is unavailable."))}>Copy customer message</button><button type="button" onClick={() => openBusinessDocumentEmailDraft({ recipient: deliveryState.recipientEmail, subject: deliveryState.subject, message: deliveryState.customerMessage })}>Open email draft</button></div><p className="business-document-delivery-truth">The email draft cannot attach the PDF automatically. Attach the downloaded PDF before sending. Meetro cannot confirm external delivery.</p></WorkspaceDialog> : null}
@@ -5151,7 +5627,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       {exitDialogOpen ? <WorkspaceDialog titleId="business-document-exit-title" title="Save changes before leaving?" onClose={() => setExitDialogOpen(false)} actions={[{ label: "Keep Editing", onClick: () => setExitDialogOpen(false) }, { label: "Discard Changes", onClick: discardAndExit }, { label: "Save Draft & Exit", primary: true, onClick: () => void saveAllAndExit() }]}><p>Save keeps this private working document for your business. It does not send or issue anything.</p></WorkspaceDialog> : null}
       {numberingSetup ? <NumberingSetupDialog state={numberingSetup} onModeChange={chooseNumberingMode} onPreviousNumberChange={(value) => setNumberingSetup((current) => current ? { ...current, previousDocumentNumber: value } : current)} onCancel={cancelNumberingSetup} onSubmit={() => void submitNumberingSetup()} /> : null}
       {saveFailureOpen ? <WorkspaceDialog titleId="business-document-save-failure-title" title="We couldn't save your draft right now" onClose={keepEditingAfterSaveFailure} actions={startNewSaveFailure ? [{ label: "Keep Editing", onClick: keepEditingAfterSaveFailure }, { label: "Try Again", primary: true, onClick: retryFailedSave }] : [{ label: "Keep Editing", onClick: keepEditingAfterSaveFailure }, { label: "Exit with Recovery", onClick: () => void exitWithRecovery() }, { label: "Try Again", primary: true, onClick: retryFailedSave }]}><p>{saveState.error || startNewState.error || "Your work is still here."}</p>{startNewSaveFailure ? <p>No new document was created. The current working document remains open.</p> : <p>Exit with Recovery stores a temporary noncanonical copy on this device. It will not appear in Saved Files.</p>}</WorkspaceDialog> : null}
-      {recoveryRecord ? <WorkspaceDialog titleId="business-document-recovery-title" title="Continue where you left off?" actions={[{ label: "Not Now", onClick: () => void discardRecovery() }, { label: "Continue Where I Left Off", primary: true, onClick: () => void continueRecovery() }]}><p>{businessDocumentSavedResumeTarget(recoveryRecord.snapshot) ? "Meetro will reopen the exact saved server document. The local record is only a resume pointer and cannot change document authority." : "We found changes that were not successfully saved to Meetro. Recovery is device-local and still unsaved."}</p></WorkspaceDialog> : null}
+      {recoveryRecord && !newQuoteSetup.open ? <WorkspaceDialog titleId="business-document-recovery-title" title="Continue where you left off?" actions={[{ label: "Not Now", onClick: () => void discardRecovery() }, { label: "Continue Where I Left Off", primary: true, onClick: () => void continueRecovery() }]}><p>{businessDocumentSavedResumeTarget(recoveryRecord.snapshot) ? "Meetro will reopen the exact saved server document. The local record is only a resume pointer and cannot change document authority." : "We found changes that were not successfully saved to Meetro. Recovery is device-local and still unsaved."}</p></WorkspaceDialog> : null}
       <BottomNav setPage={guardedSetPage} currentPage="quoteBuilder" />
     </div>
   );

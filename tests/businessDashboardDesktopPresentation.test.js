@@ -5,14 +5,14 @@ import { t } from "../src/utils/language.js";
 
 const source = fs.readFileSync("src/pages/BusinessDashboard.jsx", "utf8");
 
-test("business dashboard desktop quick access routes to existing destinations only", () => {
+test("business dashboard desktop quick access uses explicit generic-new Quote intent", () => {
   const quickAccessStart = source.indexOf("const dashboardQuickAccessItems");
   const quickAccessEnd = source.indexOf("return (", quickAccessStart);
   const quickAccessBlock = source.slice(quickAccessStart, quickAccessEnd);
 
   assert.match(quickAccessBlock, /setPage\("hiringCenter"\)/);
   assert.match(quickAccessBlock, /setPage\("messagesInbox"\)/);
-  assert.match(quickAccessBlock, /setPage\("quoteBuilder"\)/);
+  assert.match(quickAccessBlock, /setPage\("quoteBuilder\?new=1"\)/);
   assert.match(quickAccessBlock, /setPage\("invoiceBuilder"\)/);
   assert.match(quickAccessBlock, /openWorkCenterSection\("schedule", \{ filter: "today" \}\)/);
   assert.match(quickAccessBlock, /onClick: openBusinessProfile/);

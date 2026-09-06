@@ -16155,7 +16155,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     localStorage.setItem("quoteBuilderReturnPage", "workCenter");
                     localStorage.setItem("meetroWorkCenterTab", "quotes");
                     localStorage.setItem("activeWorkCenterTab", "quotes");
-                    setPage("quoteBuilder");
+                    setPage("quoteBuilder?new=1");
                   }}
                 >
                    {translate("quoteAfterEvaluation")}
@@ -16597,7 +16597,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
               localStorage.setItem("quoteBuilderReturnPage", "workCenter");
               localStorage.setItem("meetroWorkCenterTab", "quotes");
               localStorage.setItem("activeWorkCenterTab", "quotes");
-              setPage("quoteBuilder");
+              setPage("quoteBuilder?new=1");
             }}
           >
             <span aria-hidden="true">+</span>

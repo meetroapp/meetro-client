@@ -582,6 +582,9 @@ function App() {
       ? "sessionRestoring"
       : getInitialPage()
   );
+  const [quoteRouteIdentity, setQuoteRouteIdentity] = useState(() =>
+    getHashRoute()
+  );
   const [subscriptionGate, setSubscriptionGate] = useState({
     status: "idle",
     businessAccessActive: false,
@@ -876,6 +879,9 @@ function App() {
     const handleHashChange = () => {
       if (sessionHydration.status === SESSION_HYDRATION.restoring) return;
       const hashRoute = getHashRoute();
+      if (getRoutePage(hashRoute) === "quoteBuilder") {
+        setQuoteRouteIdentity(hashRoute);
+      }
       persistRouteContext(hashRoute);
       const hashPage = getRoutePage(hashRoute);
       const legacyRouteRedirected =
@@ -1144,6 +1150,7 @@ function App() {
 	    const finalRoutePage = getRoutePage(finalPage);
 	    syncAccountModeForPage(finalRoutePage);
 	    window.location.hash = finalPage;
+	    if (finalRoutePage === "quoteBuilder") setQuoteRouteIdentity(finalPage);
 	    setPageState(finalRoutePage);
 	  };
 
@@ -1401,7 +1408,7 @@ if (page === "businessLeads") {
 }
 
 if (page === "quoteBuilder") {
-  return withStartupChrome(withAssistantLayer(<QuoteBuilder setPage={setPage} />, page, setPage), updateNotice);
+  return withStartupChrome(withAssistantLayer(<QuoteBuilder key={quoteRouteIdentity} setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "depositRequestBuilder") {

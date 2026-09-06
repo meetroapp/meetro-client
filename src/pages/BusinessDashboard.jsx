@@ -809,7 +809,15 @@ function BusinessDashboard({ setPage }) {
       tone: "#d97706",
       toneBg: "rgba(217,119,6,0.13)",
       desktopDuplicate: true,
-      onClick: () => setPage("quoteBuilder"),
+      onClick: () => {
+        localStorage.removeItem("selectedQuoteRequest");
+        localStorage.removeItem("selectedQuoteForEdit");
+        localStorage.removeItem("selectedWorkCenterRequest");
+        localStorage.removeItem("selectedHomeownerRequest");
+        localStorage.setItem("quoteBuilderSource", "business_dashboard_new_quote");
+        localStorage.setItem("quoteBuilderReturnPage", "businessDashboard");
+        setPage("quoteBuilder?new=1");
+      },
     },
     {
       key: "invoice-builder",

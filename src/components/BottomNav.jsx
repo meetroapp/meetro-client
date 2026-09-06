@@ -708,6 +708,10 @@ function BottomNav({ setPage, currentPage = "" }) {
 
     setKeyboardOpen(false);
     document.activeElement?.blur?.();
+    if (variant === "sidebar" && item.shortcut === "quoteInvoice") {
+      setPage("quoteBuilder?new=1");
+      return;
+    }
     setPage(item.page);
   };
 

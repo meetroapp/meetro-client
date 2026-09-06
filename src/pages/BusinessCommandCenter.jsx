@@ -459,7 +459,7 @@ function BusinessCommandCenter({ setPage }) {
       localStorage.removeItem("selectedQuoteForEdit");
       localStorage.setItem("quoteBuilderSource", "business_tools_quick_quote");
       localStorage.setItem("quoteBuilderReturnPage", "businessCommandCenter");
-      setPage("quoteBuilder");
+      setPage("quoteBuilder?new=1");
       return;
     }
 

@@ -78,6 +78,7 @@ import {
   replaceSavedQuoteRoute,
   resolveOwnedSavedQuotesForJob,
 } from "../utils/savedQuoteRoute.js";
+import { isGenericNewQuoteRoute } from "../utils/newQuoteCustomerSetup.js";
 import {
   quoteCustomerPricingProjection,
   quoteIndependentPaymentTerms,
@@ -463,6 +464,8 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     localStorage.getItem("invoiceBuilderSource") || "";
   const isUnifiedInvoiceEntry = initialDocument === "invoice";
   const isUnifiedDepositRequestEntry = initialDocument === "depositRequest";
+  const isGenericNewQuoteIntent =
+    initialDocument === "quote" && isGenericNewQuoteRoute(window.location.hash);
   const isWorkCenterReturn =
     quoteBuilderReturnPage === "workCenter" ||
     quoteBuilderReturnPage === "contractorDashboard";
@@ -491,15 +494,15 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   const isRevisedQuoteFlow =
     revisedQuoteContext?.source === "workflow_change_request";
 
-  const selectedWorkCenterRequest = isUniversalQuickQuote
+  const selectedWorkCenterRequest = isUniversalQuickQuote || isGenericNewQuoteIntent
     ? null
     : safeJson(localStorage.getItem("selectedWorkCenterRequest"));
 
-  const selectedQuoteRequest = isUniversalQuickQuote
+  const selectedQuoteRequest = isUniversalQuickQuote || isGenericNewQuoteIntent
     ? null
     : safeJson(localStorage.getItem("selectedQuoteRequest"));
 
-  const selectedHomeownerRequest = isUniversalQuickQuote
+  const selectedHomeownerRequest = isUniversalQuickQuote || isGenericNewQuoteIntent
     ? null
     : safeJson(localStorage.getItem("selectedHomeownerRequest"));
 
@@ -516,7 +519,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     selectedWorkCenterRequest?.id ||
     "";
 
-  const request = routeCanonicalJobId || routeSavedDocumentId || isUniversalQuickQuote
+  const request = routeCanonicalJobId || routeSavedDocumentId || isUniversalQuickQuote || isGenericNewQuoteIntent
     ? {}
     : isRevisedQuoteFlow
     ? {
@@ -2956,6 +2959,13 @@ ${businessIdentity.businessName}`;
       localStorage.removeItem("quoteBuilderReturnPage");
       localStorage.removeItem("quoteBuilderSource");
       setPage(quoteBuilderReturnPage);
+    } else if (
+      ["business_dashboard_new_quote", "meetro_assistant_new_quote"].includes(quoteBuilderSource) &&
+      quoteBuilderReturnPage
+    ) {
+      localStorage.removeItem("quoteBuilderReturnPage");
+      localStorage.removeItem("quoteBuilderSource");
+      setPage(quoteBuilderReturnPage);
     } else if (isWorkCenterReturn) {
       localStorage.setItem("meetroWorkCenterTab", "quotes");
       localStorage.setItem("activeWorkCenterTab", "quotes");
@@ -3410,6 +3420,7 @@ ${businessIdentity.businessName}`;
             (isUnifiedInvoiceEntry ? invoicePreparation.resumeDocumentId : null)
           }
           initialSavedDocument={savedRouteBootstrap.document}
+          genericNewQuoteIntent={isGenericNewQuoteIntent}
           onDurableDocumentOpened={persistOpenedQuoteRoute}
           job={{
             id: canonicalJobId || null,

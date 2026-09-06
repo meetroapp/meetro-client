@@ -561,7 +561,7 @@ const actionTargets = {
   businessTools: "businessCommandCenter",
   profile: "profile",
   legal: "legal",
-  quoteBuilder: "quoteBuilder",
+  quoteBuilder: "quoteBuilder?new=1",
   invoiceBuilder: "invoiceBuilder",
   home: "home",
 };
@@ -3458,6 +3458,14 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       localStorage.setItem("meetroWorkCenterTab", section);
       localStorage.setItem("activeWorkCenterTab", section);
     }
+    if (target === "quoteBuilder?new=1") {
+      localStorage.removeItem("selectedQuoteRequest");
+      localStorage.removeItem("selectedQuoteForEdit");
+      localStorage.removeItem("selectedWorkCenterRequest");
+      localStorage.removeItem("selectedHomeownerRequest");
+      localStorage.setItem("quoteBuilderSource", "meetro_assistant_new_quote");
+      localStorage.setItem("quoteBuilderReturnPage", currentPage || "businessDashboard");
+    }
 
     stopAssistantVoiceResponse();
     setOpen(false);
@@ -3515,6 +3523,15 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     }
 
     if (!action.target || !setPage) return;
+
+    if (action.target === "quoteBuilder?new=1") {
+      localStorage.removeItem("selectedQuoteRequest");
+      localStorage.removeItem("selectedQuoteForEdit");
+      localStorage.removeItem("selectedWorkCenterRequest");
+      localStorage.removeItem("selectedHomeownerRequest");
+      localStorage.setItem("quoteBuilderSource", "meetro_assistant_new_quote");
+      localStorage.setItem("quoteBuilderReturnPage", currentPage || "businessDashboard");
+    }
 
     stopAssistantVoiceResponse();
     setOpen(false);
