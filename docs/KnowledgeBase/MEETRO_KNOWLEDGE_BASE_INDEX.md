@@ -1,6 +1,6 @@
 # Meetro Knowledge Base Index
 
-**Status:** Knowledge Base navigation  
+**Status:** Knowledge Base navigation
 **Runtime effect:** None
 
 ## Foundation
@@ -13,6 +13,7 @@
 | [MEETRO_UNIVERSAL_WORKFLOW_ENGINE.md](./MEETRO_UNIVERSAL_WORKFLOW_ENGINE.md) | Universal workflow stages, conditional paths, classification rules, and information-sufficiency boundaries |
 | [CANONICAL_WORKFLOW_EVENT_ENVELOPE.md](./CANONICAL_WORKFLOW_EVENT_ENVELOPE.md) | Canonical workflow event shape and validation policy |
 | [WORKFLOW_IDENTITY_OWNERSHIP_SPEC.md](./WORKFLOW_IDENTITY_OWNERSHIP_SPEC.md) | Ownership and provenance of workflow identity |
+| [EXTERNAL_CUSTOMER_RELATIONSHIP_HISTORY_CONTRACT.md](./EXTERNAL_CUSTOMER_RELATIONSHIP_HISTORY_CONTRACT.md) | Canonical Business-owned External Customer authority, durable relationship continuity, full Customer Information history, and repeat-job rules |
 | [MEETRO_COMMUNITY_TERMS_OF_USE.md](./MEETRO_COMMUNITY_TERMS_OF_USE.md) | Meetro Community user-facing Terms of Use |
 | [MEETRO_COMMUNITY_PRIVACY_POLICY.md](./MEETRO_COMMUNITY_PRIVACY_POLICY.md) | Meetro Community user-facing Privacy Policy |
 | [MEETRO_COMMUNITY_GUIDELINES.md](./MEETRO_COMMUNITY_GUIDELINES.md) | Meetro Community behavior and relationship guidelines |
