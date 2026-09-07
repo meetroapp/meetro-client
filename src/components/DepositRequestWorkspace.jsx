@@ -122,7 +122,7 @@ function deliveryLabel(deliveries) {
   return "Send Deposit Request";
 }
 
-export default function DepositRequestWorkspace({ setPage, job = {}, quote = {}, onBack }) {
+export default function DepositRequestWorkspace({ setPage, job = {}, quote = {}, onBack, onDocumentChange }) {
   const [phase, setPhase] = useState("loading");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -530,9 +530,9 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
       </header>
 
       <nav className="business-document-tabs" aria-label="Business documents">
-        <button type="button" onClick={() => setPage(`quoteBuilder?jobId=${encodeURIComponent(jobId)}`)}>Quote</button>
+        <button type="button" onClick={() => onDocumentChange("quote")}>Quote</button>
         <button type="button" className="active" aria-current="page">Deposit Request</button>
-        <button type="button" onClick={() => setPage(`invoiceBuilder?jobId=${encodeURIComponent(jobId)}`)}>Invoice</button>
+        <button type="button" onClick={() => onDocumentChange("invoice")}>Invoice</button>
       </nav>
 
       <div

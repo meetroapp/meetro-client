@@ -404,7 +404,11 @@ test("hard-refresh protection opens the exact saved Quote instead of routing to 
   assert.match(quoteBuilder, /routeSavedDocumentId\s*\|\|\s*jobLinkedQuoteContext\.reopenDocumentId/);
   assert.match(workspace, /await getBusinessDocumentDraft\(\{ draftId, setPage \}\)/);
   assert.match(workspace, /expectedJobId: job\.id/);
-  assert.match(workspace, /expectedDocumentType: "QUOTE"/);
+  assert.match(
+    workspace,
+    /expectedDocumentType:\s*initialDocument === "invoice"\s*\?\s*"INVOICE"\s*:\s*"QUOTE"/
+  );
+  assert.match(workspace, /initialDocument\s*=\s*"quote"/);
   assert.match(workspace, /document\?\.status !== "WORKING_DRAFT"/);
   const directReopenEffect = workspace.slice(
     workspace.indexOf("const documentId = String(initialSavedDocumentId"),

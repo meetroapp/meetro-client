@@ -9,6 +9,29 @@ const preparation = read("src/components/CompactWorkPlanPreparation.jsx");
 const dashboard = read("src/pages/ContractorDashboard.jsx");
 const css = read("src/index.css");
 
+const phoneStart = css.indexOf("/* 90453 PHONE CURRENT JOB");
+const phoneEnd = css.indexOf("/* END 90453 PHONE CURRENT JOB */", phoneStart);
+assert.ok(phoneStart >= 0 && phoneEnd > phoneStart);
+const phoneCurrentJob = css.slice(phoneStart, phoneEnd);
+
+test("Current Job phone portrait gives identity and each state a full-width row", () => {
+  assert.match(phoneCurrentJob, /__primary,[^{]*__details\s*\{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(phoneCurrentJob, /#root\[data-app-layout="mobile"\] \.compact-current-job-header__state\s*\{[^}]*display: grid[^}]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(phoneCurrentJob, /__pill\s*\{[^}]*inline-size: fit-content[^}]*max-inline-size: 100%/);
+  assert.match(phoneCurrentJob, /:is\(\s*h2, p, strong, span, button, summary, li\s*\)\s*\{[^}]*white-space: normal[^}]*overflow-wrap: normal[^}]*word-break: normal/);
+  assert.doesNotMatch(phoneCurrentJob, /font-size|overflow:\s*hidden|text-overflow|break-all|anywhere|164px/);
+});
+
+test("Current Job landscape phone above 820px uses its real lane and contains Next and actions", () => {
+  assert.match(phoneCurrentJob, /container: phone-current-job \/ inline-size/);
+  assert.match(phoneCurrentJob, /@container phone-current-job \(min-width: 400px\)\s*\{\s*#root\[data-app-layout="mobile"\]\[data-app-orientation="landscape"\]\s*\.compact-current-job-header__state\s*\{[^}]*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(phoneCurrentJob, /@container phone-current-job \(min-width: 640px\)\s*\{\s*#root\[data-app-layout="mobile"\]\[data-app-orientation="landscape"\]\s*\.compact-current-job-header__state\s*\{[^}]*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(phoneCurrentJob, /__details\s*\{[^}]*repeat\(auto-fit, minmax\(min\(100%, 15rem\), 1fr\)\)/);
+  assert.match(phoneCurrentJob, /__action,[^{]*__blocker\s*\{[^}]*grid-column: 1 \/ -1/);
+  assert.match(phoneCurrentJob, /__state-item > \*,[^{]*__action > \*,[^{]*__details > \*\s*\)\s*\{[^}]*min-width: 0[^}]*max-width: 100%/);
+  assert.doesNotMatch(phoneCurrentJob, /@media|minmax\(390px|data-app-layout="tablet"|position:\s*absolute/);
+});
+
 test("visual fidelity keeps one compact Current Job header with supporting details", () => {
   assert.match(header, /compact-current-job-header__primary/);
   assert.match(header, /compact-current-job-header__details/);
@@ -44,8 +67,20 @@ test("materials summaries use compact icon-led expandable controls", () => {
 
 test("responsive header and Work Plan stack without tiny copy", () => {
   assert.match(css, /max-width: 820px[\s\S]*compact-current-job-header__primary[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
-  assert.match(css, /max-width: 480px[\s\S]*compact-current-job-header__state[\s\S]*repeat\(2, minmax\(0, 1fr\)\)/);
+  assert.match(css, /max-width: 480px[\s\S]*compact-current-job-header__state[\s\S]*grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(css, /max-width: 480px[\s\S]*compact-current-job-header__pill[\s\S]*max-inline-size: 100%[\s\S]*white-space: normal[\s\S]*word-break: normal/);
   assert.match(css, /work-plan-compact-area__body[\s\S]*padding-left: 0 !important/);
+});
+
+test("mobile Current Job does not reserve tablet Companion clearance", () => {
+  assert.match(
+    css,
+    /max-width: 1099px[\s\S]*#root:not\(\[data-app-layout="mobile"\]\) \.compact-current-job-header[\s\S]*164px/
+  );
+  assert.match(
+    css,
+    /#root:not\(\[data-app-layout="mobile"\]\) \.meetro-current-job-list-card/
+  );
 });
 
 test("iPad landscape Job Overview reflows within sidebar and Companion width", () => {

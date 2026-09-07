@@ -3001,3 +3001,752 @@
     max-width: 100%;
   }
 }
+
+/* 90453 PHONE DOCUMENT BASE — both orientations, independent of media width. */
+#root[data-app-layout="mobile"] .business-document-workspace {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  block-size: 100dvh;
+  min-block-size: 0;
+  min-height: 0;
+  padding-bottom: calc(var(--meetro-mobile-bottom-nav-clearance, 96px) + env(safe-area-inset-bottom, 0px));
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"] .business-document-workspace > .bottom-nav-content-spacer {
+  display: none !important;
+}
+
+#root[data-app-layout="mobile"] .business-document-mobile-switch {
+  display: grid !important;
+}
+
+#root[data-app-layout="mobile"] .business-document-main,
+#root[data-app-layout="mobile"] .business-document-main.has-evidence,
+#root[data-app-layout="mobile"] .deposit-request-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  block-size: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"] :is(
+  .business-document-conversation, .business-document-preview, .deposit-request-panel
+) {
+  display: none !important;
+  block-size: 100%;
+  min-width: 0;
+  min-height: 0;
+}
+
+#root[data-app-layout="mobile"] .business-document-conversation.mobile-active {
+  display: flex !important;
+  flex-direction: column;
+  border-right: 0;
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"] .business-document-conversation-context {
+  flex: 0 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+#root[data-app-layout="mobile"] .business-document-chat-shell {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  height: auto;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"] .business-document-turns {
+  grid-row: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#root[data-app-layout="mobile"] .business-document-workspace .business-document-turns {
+  padding-bottom: 8px;
+  scroll-padding-bottom: 8px;
+}
+
+#root[data-app-layout="mobile"] .business-document-workspace .business-document-composer {
+  grid-row: 3;
+  position: relative;
+  inset: auto;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+}
+
+#root[data-app-layout="mobile"] .business-document-evidence-panel {
+  display: none;
+}
+
+#root[data-app-layout="mobile"] .business-document-inline-evidence {
+  display: grid;
+}
+
+#root[data-app-layout="mobile"] .business-document-preview.mobile-active {
+  display: block !important;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#root[data-app-layout="mobile"] .deposit-request-main {
+  gap: 0;
+}
+
+#root[data-app-layout="mobile"] .deposit-request-panel.mobile-active {
+  display: grid !important;
+}
+
+#root[data-app-layout="mobile"] .deposit-request-editor.mobile-active {
+  grid-template-rows: minmax(0, 1fr) auto;
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"] .deposit-request-editor-scroll {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#root[data-app-layout="mobile"] .deposit-request-composer {
+  position: relative;
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  background: #fff;
+}
+
+#root[data-app-layout="mobile"] .deposit-request-composer textarea {
+  min-width: 0;
+  min-height: 44px;
+  height: 64px;
+  max-height: 88px;
+  overflow-y: auto;
+  resize: none;
+  font-size: 16px;
+}
+
+#root[data-app-layout="mobile"] .deposit-request-preview.mobile-active {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#root[data-app-layout="mobile"] :is(
+  .deposit-request-quote-source-summary, .deposit-request-document-summary
+) {
+  grid-template-columns: minmax(0, 1fr) !important;
+}
+
+#root[data-app-layout="mobile"] .deposit-request-panel :is(p, dd, dt, li) {
+  min-width: 0;
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+/* Native keyboard state restores this boundary on close, including after rotation. */
+#root[data-app-layout="mobile"][data-app-keyboard="open"] .business-document-workspace {
+  block-size: calc(var(--meetro-visual-viewport-height, 100dvh) + var(--meetro-visual-viewport-offset-top, 0px));
+  padding-bottom: 0;
+}
+
+#root[data-app-layout="mobile"][data-app-keyboard="open"]
+  .business-document-workspace .business-document-composer {
+  bottom: auto;
+}
+/* END 90453 PHONE DOCUMENT BASE */
+
+/* 90452 NATIVE IPHONE LANDSCAPE DOCUMENT CONTAINMENT
+ *
+ * A native iPhone can be wider than 767 CSS pixels in landscape while still
+ * being a mobile-capability device. Root app-layout authority therefore owns
+ * the phone document composition instead of raw viewport width.
+ *
+ * Quote, Invoice, and Deposit Request remain one-pane phone experiences. The iPad
+ * two-pane landscape contract remains tablet-only.
+ */
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"]) {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  block-size: 100dvh;
+  min-block-size: 0;
+  min-height: 0;
+  padding-bottom:
+    calc(
+      var(--meetro-mobile-bottom-nav-clearance, 96px) +
+      env(safe-area-inset-bottom, 0px)
+    );
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-header {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  grid-template-areas:
+    "back title menu"
+    ". status status";
+  align-items: center;
+  gap: 2px 8px;
+  padding: 4px 8px 5px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-back {
+  grid-area: back;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-header > div:nth-child(2) {
+  grid-area: title;
+  min-width: 0;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-title-row h1 {
+  min-width: 0;
+  overflow: hidden;
+  font-size: 17px;
+  line-height: 1.15;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-header p {
+  display: none;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-header-menu {
+  grid-area: menu;
+  display: block;
+  justify-self: end;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-header-actions {
+  grid-area: status;
+  width: 100%;
+  min-width: 0;
+  padding-left: 0;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-tabs {
+  max-height: 44px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-tabs button {
+  min-height: 40px;
+  font-size: 12px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-mobile-switch {
+  display: grid !important;
+  flex: 0 0 auto;
+  margin: 2px 0 4px;
+  padding: 2px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-mobile-switch button {
+  min-height: 40px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-main,
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-main.has-evidence {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  block-size: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-conversation,
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-preview {
+  display: none !important;
+  block-size: 100%;
+  height: 100%;
+  min-height: 0;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-conversation.mobile-active {
+  display: flex !important;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  padding: 6px 8px 0;
+  border-right: 0;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-preview.mobile-active {
+  display: block !important;
+  min-width: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  padding: 8px 10px 0;
+  overscroll-behavior: contain;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-control-toolbar,
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-conversation-footer,
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-evidence-panel {
+  display: none;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-inline-evidence {
+  display: grid;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-chat-shell {
+  display: grid;
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr) auto auto;
+  block-size: 100%;
+  height: 100%;
+  min-height: 0;
+  max-height: none;
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-turns {
+  min-height: 0;
+  overflow-y: auto;
+  padding-bottom: 8px;
+  scroll-padding-bottom: 8px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-composer {
+  position: relative;
+  z-index: 3;
+  bottom: auto;
+  padding: 0;
+  background: transparent;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-composer-row:not(:has(.workflow-microphone-compact-recording)) {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  align-items: end;
+  gap: 4px;
+  min-width: 0;
+  min-height: 44px;
+  padding: 2px 0;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-composer-input-shell {
+  width: 100%;
+  min-width: 0;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-composer-row textarea {
+  width: 100%;
+  min-width: 0;
+  height: 44px;
+  min-height: 44px;
+  max-height: 88px;
+  overflow-y: auto !important;
+  font-size: 16px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-composer-plus {
+  inline-size: 44px;
+  min-inline-size: 44px;
+  block-size: 44px;
+  min-block-size: 44px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  .business-document-composer-plus-symbol {
+  display: grid;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+  margin: 0;
+  border: 1px solid #dfe7e0;
+  border-radius: 9px;
+  background: #fff;
+  font-size: 22px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])
+  :is(
+    .workflow-microphone-compact-trigger,
+    .workflow-microphone-compact-dismiss,
+    .business-document-send-message
+  ) {
+  inline-size: 44px;
+  min-inline-size: 44px;
+  block-size: 44px;
+  min-block-size: 44px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"][data-app-keyboard="open"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"]):has(
+    .business-document-composer textarea:focus
+  ) {
+  grid-template-rows: minmax(0, 1fr);
+  block-size:
+    calc(
+      var(--meetro-visual-viewport-height, 100dvh) +
+      var(--meetro-visual-viewport-offset-top, 0px)
+    );
+  min-block-size: 0;
+  min-height: 0;
+  padding-block: 0;
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"][data-app-keyboard="open"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"]):has(
+    .business-document-composer textarea:focus
+  )
+  :is(
+    .business-document-header,
+    .business-document-tabs,
+    .business-document-mobile-switch
+  ) {
+  display: none !important;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"][data-app-keyboard="open"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"]):has(
+    .business-document-composer textarea:focus
+  )
+  .business-document-main {
+  grid-row: 1;
+  block-size: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"][data-app-keyboard="open"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"]):has(
+    .business-document-composer textarea:focus
+  )
+  .business-document-conversation.mobile-active {
+  display: flex !important;
+  block-size: 100%;
+  height: 100%;
+  min-height: 0;
+  padding-top: 0;
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"][data-app-keyboard="open"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"]):has(
+    .business-document-composer textarea:focus
+  )
+  :is(
+    .business-document-conversation-context,
+    .business-document-conversation-footer,
+    .business-document-evidence-panel,
+    .business-document-preview
+  ) {
+  display: none !important;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"][data-app-keyboard="open"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"]):has(
+    .business-document-composer textarea:focus
+  )
+  .business-document-chat-shell {
+  flex: 1 1 auto;
+  block-size: 100%;
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+
+/* Deposit Request — native iPhone landscape stays selector-owned one-pane. */
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-workspace {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(0, 1fr);
+  block-size: 100dvh;
+  min-block-size: 0;
+  min-height: 0;
+  padding-bottom:
+    calc(
+      var(--meetro-mobile-bottom-nav-clearance, 96px) +
+      env(safe-area-inset-bottom, 0px)
+    );
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-workspace
+  .business-document-header {
+  padding-top: 4px;
+  padding-bottom: 4px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-workspace
+  .business-document-header p {
+  display: none;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-workspace
+  .business-document-tabs {
+  max-height: 44px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-workspace
+  .business-document-tabs button {
+  min-height: 40px;
+  font-size: 12px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-mobile-switch {
+  display: grid !important;
+  flex: 0 0 auto;
+  margin: 2px 0 4px;
+  padding: 2px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-mobile-switch button {
+  min-height: 40px;
+  padding: 0 8px;
+  font-size: 13px;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  block-size: 100%;
+  min-height: 0;
+  padding: 4px 0 0;
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-panel {
+  display: none !important;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  block-size: 100%;
+  min-height: 0;
+  margin: 0 !important;
+  padding: 10px !important;
+  overflow: hidden;
+  border-radius: 10px !important;
+  box-shadow: none !important;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-panel.mobile-active {
+  display: grid !important;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-editor.mobile-active {
+  grid-template-rows: minmax(0, 1fr) auto;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-editor-scroll {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  min-width: 0;
+  min-height: 0;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-composer {
+  position: relative;
+  z-index: 3;
+  bottom: auto;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: end;
+  gap: 6px;
+  min-width: 0;
+  padding-top: 6px;
+  background: #fff;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-composer textarea {
+  width: 100% !important;
+  min-width: 0 !important;
+  height: 44px !important;
+  min-height: 44px !important;
+  max-height: 88px !important;
+  overflow-y: auto;
+  font-size: 16px !important;
+  resize: none;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-composer button {
+  min-height: 44px;
+  white-space: nowrap;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-preview.mobile-active {
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-quote-source-summary,
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .deposit-request-document-summary {
+  grid-template-columns: 1fr !important;
+}
+
+#root[data-app-layout="mobile"][data-app-keyboard="open"]
+  .deposit-request-workspace {
+  grid-template-rows: minmax(0, 1fr);
+  block-size:
+    calc(
+      var(--meetro-visual-viewport-height, 100dvh) +
+      var(--meetro-visual-viewport-offset-top, 0px)
+    );
+  min-block-size: 0;
+  min-height: 0;
+  padding-block: 0;
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"][data-app-keyboard="open"]
+  .deposit-request-workspace
+  :is(
+    .business-document-header,
+    .business-document-tabs,
+    .deposit-request-mobile-switch
+  ) {
+  display: none !important;
+}
+
+#root[data-app-layout="mobile"][data-app-keyboard="open"]
+  .deposit-request-main {
+  grid-row: 1;
+  block-size: 100%;
+  min-height: 0;
+  padding-top: 0;
+  overflow: hidden;
+}
+
+#root[data-app-layout="mobile"][data-app-keyboard="open"]
+  .deposit-request-editor.mobile-active {
+  display: grid !important;
+  grid-template-rows: minmax(0, 1fr) auto;
+  block-size: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+/* The editor bottom is the keyboard boundary; keep its horizontal inset only. */
+#root[data-app-layout="mobile"][data-app-keyboard="open"]
+  .deposit-request-editor.mobile-active {
+  padding-bottom: 0 !important;
+  border-bottom: 0;
+}
+
+/* Inline Invoice form controls also use the visible boundary, without hiding them. */
+#root[data-app-layout="mobile"][data-app-keyboard="open"]
+  .business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"]) {
+  block-size: calc(var(--meetro-visual-viewport-height, 100dvh) + var(--meetro-visual-viewport-offset-top, 0px));
+  padding-bottom: 0;
+}
+/* END 90452 NATIVE IPHONE LANDSCAPE DOCUMENT CONTAINMENT */

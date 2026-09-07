@@ -3,6 +3,7 @@ export const APP_DESKTOP_SIDEBAR_MIN_WIDTH = 248;
 export const APP_DESKTOP_WORKSPACE_MIN_WIDTH = 740;
 export const APP_DESKTOP_SHELL_GUTTER_BUDGET = 76;
 export const APP_TABLET_LAYOUT_MIN_WIDTH = 768;
+const APP_NATIVE_TABLET_MIN_SHORT_SIDE = 600;
 export const APP_DESKTOP_LAYOUT_MIN_WIDTH =
   APP_DESKTOP_SIDEBAR_MAX_WIDTH +
   APP_DESKTOP_WORKSPACE_MIN_WIDTH +
@@ -41,8 +42,26 @@ export function getAppSidebarWidth(layoutWidth) {
   );
 }
 
-export function getAppLayoutMode(layoutWidth) {
+export function getAppLayoutMode(
+  layoutWidth,
+  { isNative = false, screenWidth = 0, screenHeight = 0 } = {}
+) {
   const width = Math.max(0, finite(layoutWidth));
+  const physicalWidth = Math.max(0, finite(screenWidth));
+  const physicalHeight = Math.max(0, finite(screenHeight));
+  const physicalShortSide =
+    physicalWidth && physicalHeight
+      ? Math.min(physicalWidth, physicalHeight)
+      : 0;
+
+  if (
+    isNative &&
+    physicalShortSide &&
+    physicalShortSide < APP_NATIVE_TABLET_MIN_SHORT_SIDE
+  ) {
+    return "mobile";
+  }
+
   if (width >= APP_DESKTOP_LAYOUT_MIN_WIDTH) return "desktop";
   if (width >= APP_TABLET_LAYOUT_MIN_WIDTH) return "tablet";
   return "mobile";
@@ -163,7 +182,15 @@ export function getAppLayoutSnapshot({
   );
   const isNative = Boolean(capacitor?.isNativePlatform?.());
   const platform = String(capacitor?.getPlatform?.() || (isNative ? "native" : "web"));
-  const sidebarWidth = getAppSidebarWidth(layoutWidth);
+  const screenWidth = Math.max(0, finite(windowObject?.screen?.width));
+  const screenHeight = Math.max(0, finite(windowObject?.screen?.height));
+  const layoutMode = getAppLayoutMode(layoutWidth, {
+    isNative,
+    screenWidth,
+    screenHeight,
+  });
+  const sidebarWidth =
+    layoutMode === "mobile" ? 0 : getAppSidebarWidth(layoutWidth);
   const orientation = getAppLayoutOrientation({
     windowObject,
     layoutWidth,
@@ -186,7 +213,7 @@ export function getAppLayoutSnapshot({
     orientation,
     sidebarWidth,
     contentWidth: Math.max(0, layoutWidth - sidebarWidth),
-    layoutMode: getAppLayoutMode(layoutWidth),
+    layoutMode,
   });
 }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import BottomNav from "./BottomNav.jsx";
 import DepositRequestWorkspace from "./DepositRequestWorkspace.jsx";
@@ -1694,9 +1694,6 @@ function JobLinkedQuoteContext({ job }) {
 }
 
 export default function UnifiedBusinessDocumentWorkspace(props) {
-  if (normalizeBusinessDocumentTab(props.initialDocument) === "depositRequest") {
-    return <DepositRequestWorkspace {...props} />;
-  }
   return <QuoteInvoiceBusinessDocumentWorkspace {...props} />;
 }
 
@@ -1709,7 +1706,14 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   onDownloadQuote, onPreviewQuote, onBack,
   onRestorePhotos, onEnsurePhotosDurable, onPhotosPersisted, onDiscardTransientPhotos,
 }) {
-  const [activeDocument, setActiveDocument] = useState(() => normalizeBusinessDocumentTab(initialDocument));
+  const [activeDocument, setActiveDocument] = useState(() => initialDocument === "invoice" ? "invoice" : "quote");
+  const [depositRequestOpen, setDepositRequestOpen] = useState(() => normalizeBusinessDocumentTab(initialDocument) === "depositRequest");
+  const [depositRequestContext, setDepositRequestContext] = useState(() =>
+    normalizeBusinessDocumentTab(initialDocument) === "depositRequest"
+      ? { key: job.id || "working", job, quote }
+      : null
+  );
+  const invoiceVisitedRef = useRef(initialDocument === "invoice");
   const [mobilePane, setMobilePane] = useState("conversation");
   const [savedFilesOpen, setSavedFilesOpen] = useState(false);
   const [manualState, setManualState] = useState(null);
@@ -1820,6 +1824,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const savedJobCustomerLookupRef = useRef(null);
   const workspaceSetPageRef = useRef(setPage);
   workspaceSetPageRef.current = setPage;
+  const navigateWorkspace = useCallback((page) => workspaceSetPageRef.current(page), []);
 
   useEffect(() => {
     if (!invoicePreparation?.jobId || invoicePreparationHydratedRef.current === invoicePreparation.jobId) return;
@@ -2149,7 +2154,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     initialSavedDocumentOpenRef.current = documentId;
     void openSavedDocument(documentId, {
       expectedJobId: job.id,
-      expectedDocumentType: "QUOTE",
+      expectedDocumentType: initialDocument === "invoice" ? "INVOICE" : "QUOTE",
       providedDocument:
         initialSavedDocument?.id === documentId ? initialSavedDocument : null,
     });
@@ -2615,6 +2620,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   function applyRestoredDocument(document, { startedNew = false, noticeMessage = "" } = {}) {
     const restored = restoreBusinessDocumentDraft(document);
     const type = restored.documentType;
+    if (type === "invoice") invoiceVisitedRef.current = true;
     const restoredContent = startedNew && type === "quote"
       ? {
           ...restored.content,
@@ -2698,10 +2704,10 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       if (
         (expectedDocumentType && document?.documentType !== expectedDocumentType) ||
         (normalizedExpectedJobId && normalizedDocumentJobId !== normalizedExpectedJobId) ||
-        (expectedDocumentType === "QUOTE" && document?.status !== "WORKING_DRAFT")
+        (expectedDocumentType && document?.status !== "WORKING_DRAFT")
       ) {
         throw new Error(
-          "The exact saved working Quote no longer matches this Job. Nothing was opened or changed."
+          `The exact saved working ${expectedDocumentType === "INVOICE" ? "Invoice" : "Quote"} no longer matches this Job. Nothing was opened or changed.`
         );
       }
       applyRestoredDocument(document);
@@ -4197,8 +4203,36 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     }
   }
 
+  function initializeWorkingInvoice() {
+    if (invoiceVisitedRef.current || savedDocuments.invoice || invoicePreparation) return;
+    invoiceVisitedRef.current = true;
+    // Copy customer/Job context on the first visit, never Quote commercial or
+    // payment state. Later tab visits retain the independently edited Invoice.
+    const source = hydratedSavedQuotePresentation;
+    const clean = buildNewBusinessDocumentDraftPayload({
+      documentType: "invoice", documentDate: todayLocalIsoDate(),
+    }).content;
+    const next = {
+      ...clean,
+      customerName: source.customerName || "",
+      customerEmail: source.customerEmail || "",
+      customerPhone: source.customerPhone || "",
+      customerAddress: source.customerAddress || "",
+      customerLocation: source.customerLocation || "",
+      serviceAddress: source.customerLocation || "",
+      projectTitle: source.projectTitle || "",
+    };
+    setInvoice(next);
+    setInvoiceBaseline(next);
+    setDocumentJobIds((current) => ({ ...current, invoice: documentJobIds.quote }));
+    setCustomerParties((current) => ({ ...current, invoice: customerParties.quote }));
+    setLinkedCustomerContacts((current) => ({ ...current, invoice: linkedCustomerContacts.quote }));
+  }
+
   function switchDocument(documentType) {
     restoreTentativeManualInvoice();
+    if (documentType === "invoice") initializeWorkingInvoice();
+    setDepositRequestOpen(false);
     setActiveDocument(normalizeBusinessDocumentTab(documentType));
     setManualState(null);
     setComposerTrayOpen(false);
@@ -5324,25 +5358,29 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     pendingStartNewRef.current && startNewState.error
   );
 
-  async function openDepositRequest() {
+  function openDepositRequest() {
     const depositRequestJobId =
       documentJobIds.quote ||
-      documentJobIds.invoice ||
-      activeSaved?.jobId ||
-      job.id ||
+      (activeDocument === "invoice" ? documentJobIds.invoice : null) ||
       "";
-
+    const context = {
+      key: savedDocuments.quote?.id || depositRequestJobId || customerParties.quote?.businessContactId || "working",
+      job: { ...job, id: depositRequestJobId || null },
+      quote: {
+        ...hydratedSavedQuotePresentation,
+        quoteNumber: savedDocuments.quote?.documentNumber || quote?.quoteNumber || "",
+        customerParty: customerParties.quote,
+      },
+    };
+    setDepositRequestContext((current) => current?.key === context.key ? current : context);
+    setDepositRequestOpen(true);
     setMobilePane("conversation");
     setNotice("");
-
-    setPage(
-      depositRequestJobId
-        ? `depositRequestBuilder?jobId=${encodeURIComponent(depositRequestJobId)}`
-        : "depositRequestBuilder"
-    );
   }
 
   return (
+    <>
+    <div hidden={depositRequestOpen} style={{ display: depositRequestOpen ? "none" : "contents" }}>
     <div
       className={`app-page meetro-wide-page business-document-workspace${
         keyboardOpen ? " is-keyboard-open" : ""
@@ -5654,5 +5692,16 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       {recoveryRecord && !newQuoteSetup.open ? <WorkspaceDialog titleId="business-document-recovery-title" title="Continue where you left off?" actions={[{ label: "Not Now", onClick: () => void discardRecovery() }, { label: "Continue Where I Left Off", primary: true, onClick: () => void continueRecovery() }]}><p>{businessDocumentSavedResumeTarget(recoveryRecord.snapshot) ? "Meetro will reopen the exact saved server document. The local record is only a resume pointer and cannot change document authority." : "We found changes that were not successfully saved to Meetro. Recovery is device-local and still unsaved."}</p></WorkspaceDialog> : null}
       <BottomNav setPage={guardedSetPage} currentPage="quoteBuilder" />
     </div>
+    </div>
+    {depositRequestContext ? <div hidden={!depositRequestOpen} style={{ display: depositRequestOpen ? "contents" : "none" }}>
+    <DepositRequestWorkspace
+      key={depositRequestContext.key}
+      setPage={navigateWorkspace}
+      job={depositRequestContext.job}
+      quote={depositRequestContext.quote}
+      onDocumentChange={switchDocument}
+      onBack={() => requestExit(onBack)}
+    /></div> : null}
+    </>
   );
 }

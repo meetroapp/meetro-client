@@ -18,8 +18,16 @@ const proposalMarkup = workspace.slice(
   workspace.indexOf("function QuoteProposalReview"),
   workspace.indexOf("function SavedFilesDrawer")
 );
+const proposalStylesStart = styles.indexOf(
+  ".business-document-proposal {"
+);
+const proposalStylesEnd = styles.indexOf(
+  "/* DEPOSIT REQUEST RESPONSIVE DOCUMENT WORKSPACE */",
+  proposalStylesStart
+);
 const proposalStyles = styles.slice(
-  styles.indexOf(".business-document-proposal {")
+  proposalStylesStart,
+  proposalStylesEnd
 );
 const previewStyles = styles.slice(
   styles.indexOf(".business-live-document {"),

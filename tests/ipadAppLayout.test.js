@@ -38,6 +38,45 @@ const viewportSource = readFileSync(new URL("../index.html", import.meta.url), "
 const projectSource = readFileSync(new URL("../ios/App/App.xcodeproj/project.pbxproj", import.meta.url), "utf8");
 const plistSource = readFileSync(new URL("../ios/App/App/Info.plist", import.meta.url), "utf8");
 
+function phoneSection(startMarker, endMarker) {
+  const start = documentWorkspaceStyles.indexOf(startMarker);
+  const end = documentWorkspaceStyles.indexOf(endMarker, start);
+  assert.ok(start >= 0 && end > start, "phone CSS section has both boundaries");
+  return documentWorkspaceStyles.slice(start, end);
+}
+
+// These sections have no media rules: each assertion stops at its own closing brace.
+const phoneBase = phoneSection("/* 90453 PHONE DOCUMENT BASE", "/* END 90453 PHONE DOCUMENT BASE */");
+const phoneLandscape = phoneSection("/* 90452 NATIVE IPHONE LANDSCAPE DOCUMENT CONTAINMENT", "/* END 90452 NATIVE IPHONE LANDSCAPE DOCUMENT CONTAINMENT */");
+
+for (const documentType of ["quote", "invoice"]) {
+  test(`${documentType} phone portrait is selector-owned with transcript above an in-flow composer`, () => {
+    assert.match(quoteWorkspaceSource, /data-active-document=\{activeDocument\}/);
+    assert.match(phoneBase, /#root\[data-app-layout="mobile"\] \.business-document-workspace\s*\{[^}]*grid-template-rows: auto auto auto minmax\(0, 1fr\)/);
+    assert.match(phoneBase, /\.business-document-main\.has-evidence,[^{]*\{[^}]*grid-template-columns: minmax\(0, 1fr\)/);
+    assert.match(phoneBase, /\.business-document-conversation, \.business-document-preview,[^{]*\{[^}]*display: none !important/);
+    assert.match(phoneBase, /\.business-document-conversation\.mobile-active\s*\{[^}]*display: flex !important[^}]*overflow: hidden/);
+    assert.match(phoneBase, /\.business-document-preview\.mobile-active\s*\{[^}]*display: block !important[^}]*overflow-y: auto/);
+    assert.match(phoneBase, /\.business-document-chat-shell\s*\{[^}]*grid-template-rows: minmax\(0, 1fr\) auto auto[^}]*min-height: 0/);
+    assert.match(phoneBase, /\.business-document-composer\s*\{[^}]*grid-row: 3[^}]*position: relative[^}]*inset: auto/);
+    assert.match(phoneBase, /\.business-document-turns\s*\{[^}]*overflow-y: auto/);
+    assert.doesNotMatch(phoneBase, /@media|data-app-layout="tablet"|data-active-document="quote"/);
+  });
+
+  test(`${documentType} phone landscape shares only layout and restores on keyboard close`, () => {
+    const sharedSelector = '.business-document-workspace:is([data-active-document="quote"], [data-active-document="invoice"])';
+    assert.ok(phoneLandscape.includes(sharedSelector));
+    assert.doesNotMatch(phoneLandscape, /\.business-document-workspace\[data-active-document="quote"\]|\.is-keyboard-open/);
+    assert.match(phoneLandscape, /data-app-keyboard="open"\][^{]*:has\([^)]*textarea:focus[^)]*\)\s*\{[^}]*grid-template-rows: minmax\(0, 1fr\)[^}]*--meetro-visual-viewport-height[^}]*--meetro-visual-viewport-offset-top[^}]*padding-block: 0/);
+    assert.match(phoneLandscape, /:is\(\s*\.business-document-header,[^{]*\.business-document-mobile-switch\s*\)\s*\{[^}]*display: none !important/);
+    assert.match(phoneLandscape, /\.business-document-composer-row:not\([^{}]*\{[^}]*44px minmax\(0, 1fr\) 44px/);
+    assert.match(phoneLandscape, /\.business-document-composer-row textarea\s*\{[^}]*max-height: 88px[^}]*overflow-y: auto !important[^}]*font-size: 16px/);
+    assert.match(phoneBase, /data-app-keyboard="open"\] \.business-document-workspace\s*\{[^}]*padding-bottom: 0/);
+    assert.match(phoneBase, /bottom-nav-content-spacer\s*\{[^}]*display: none !important/);
+    assert.doesNotMatch(phoneLandscape, /@media|data-app-layout="tablet"|setMobilePane|setPage/);
+  });
+}
+
 function environment(width, visualWidth = width, native = false, overrides = {}) {
   const layoutHeight = overrides.layoutHeight ?? 1024;
   const visualHeight = overrides.visualHeight ?? 700;
@@ -89,6 +128,64 @@ test("stable app layout width selects phone tablet and desktop capability tiers"
   assert.equal(getAppLayoutSnapshot(environment(390)).layoutMode, "mobile");
   assert.equal(getAppLayoutSnapshot(environment(700)).layoutMode, "mobile");
 });
+
+test("native iPhone remains mobile in portrait and landscape while iPad remains tablet", () => {
+  const phonePortrait = getAppLayoutSnapshot(environment(393, 393, true, {
+    layoutHeight: 852,
+    visualHeight: 852,
+    orientationType: "portrait-primary",
+    screenWidth: 393,
+    screenHeight: 852,
+  }));
+  const phoneLandscape = getAppLayoutSnapshot(environment(852, 852, true, {
+    layoutHeight: 393,
+    visualHeight: 393,
+    orientationType: "landscape-primary",
+    screenWidth: 852,
+    screenHeight: 393,
+  }));
+  const tabletLandscape = getAppLayoutSnapshot(environment(1024, 1024, true, {
+    layoutHeight: 768,
+    visualHeight: 768,
+    orientationType: "landscape-primary",
+    screenWidth: 1024,
+    screenHeight: 768,
+  }));
+
+  assert.equal(phonePortrait.layoutMode, "mobile");
+  assert.equal(phonePortrait.orientation, "portrait");
+
+  assert.equal(phoneLandscape.layoutMode, "mobile");
+  assert.equal(phoneLandscape.orientation, "landscape");
+  assert.equal(phoneLandscape.sidebarWidth, 0);
+  assert.equal(phoneLandscape.contentWidth, 852);
+
+  assert.equal(tabletLandscape.layoutMode, "tablet");
+  assert.equal(tabletLandscape.orientation, "landscape");
+  assert.ok(tabletLandscape.sidebarWidth > 0);
+});
+
+for (const [width, height, orientation, mode] of [
+  [393, 852, "portrait", "mobile"],
+  [852, 393, "landscape", "mobile"],
+  [932, 430, "landscape", "mobile"],
+  [768, 1024, "portrait", "tablet"],
+  [1024, 768, "landscape", "tablet"],
+]) {
+  test(`${width}x${height} native ${orientation} stays ${mode} through keyboard open/close`, () => {
+    for (const [visualHeight, visualOffsetTop] of [[height, 0], [180, 32], [height, 0]]) {
+      const result = getAppLayoutSnapshot(environment(width, width, true, {
+        layoutHeight: height, visualHeight, visualOffsetTop,
+        screenWidth: width, screenHeight: height,
+        orientationType: `${orientation}-primary`,
+      }));
+      assert.equal(result.layoutMode, mode);
+      assert.equal(result.orientation, orientation);
+      assert.equal(result.visualHeight + result.visualOffsetTop, visualHeight + visualOffsetTop);
+      if (mode === "mobile") assert.equal(result.sidebarWidth, 0);
+    }
+  });
+}
 
 test("keyboard visual viewport and native touch platform do not force mobile", () => {
   const nativeTablet = getAppLayoutSnapshot(environment(1100, 560, true));
@@ -736,4 +833,65 @@ test("iOS target and viewport support native iPad presentation", () => {
   assert.match(plistSource, /<key>UISupportedInterfaceOrientations~ipad<\/key>/);
   assert.match(viewportSource, /width=device-width, initial-scale=1, viewport-fit=cover/);
   assert.doesNotMatch(viewportSource, /width=\d{3}/);
+});
+
+test("iPhone landscape Quote and Invoice stay one-pane and use the visible keyboard boundary", () => {
+  const start = documentWorkspaceStyles.indexOf(
+    "/* 90452 NATIVE IPHONE LANDSCAPE DOCUMENT CONTAINMENT"
+  );
+  const end = documentWorkspaceStyles.indexOf("/* END 90452 NATIVE IPHONE LANDSCAPE DOCUMENT CONTAINMENT */", start);
+  assert.ok(end > start);
+  const mobileLandscape = documentWorkspaceStyles.slice(start, end);
+
+  assert.ok(start >= 0);
+
+  assert.match(
+    mobileLandscape,
+    /#root\[data-app-layout="mobile"\]\[data-app-orientation="landscape"\][\s\S]*business-document-workspace:is\(\[data-active-document="quote"\], \[data-active-document="invoice"\]\)/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /business-document-mobile-switch[\s\S]*display:\s*grid !important/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /business-document-main,[\s\S]*business-document-main\.has-evidence[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /business-document-conversation,[\s\S]*business-document-preview[\s\S]*display:\s*none !important/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /business-document-conversation\.mobile-active[\s\S]*display:\s*flex !important/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /business-document-preview\.mobile-active[\s\S]*display:\s*block !important/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /business-document-composer-row:not\(:has\(\.workflow-microphone-compact-recording\)\)[\s\S]*grid-template-columns:\s*44px minmax\(0, 1fr\) 44px/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /data-app-keyboard="open"[\s\S]*:has\([\s\S]*business-document-composer textarea:focus[\s\S]*var\(--meetro-visual-viewport-height, 100dvh\)[\s\S]*var\(--meetro-visual-viewport-offset-top, 0px\)/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /data-app-keyboard="open"[\s\S]*:has\([\s\S]*business-document-header,[\s\S]*business-document-tabs,[\s\S]*business-document-mobile-switch[\s\S]*display:\s*none !important/
+  );
+
+  assert.doesNotMatch(
+    mobileLandscape,
+    /data-app-layout="tablet"/
+  );
 });

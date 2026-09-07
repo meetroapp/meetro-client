@@ -4,6 +4,7 @@ import ContextualAskMeetro from "../components/ContextualAskMeetro";
 import MeetroIcon from "../components/MeetroIcon";
 import QuickQuoteConversation from "../components/QuickQuoteConversation.jsx";
 import UnifiedBusinessDocumentWorkspace from "../components/UnifiedBusinessDocumentWorkspace.jsx";
+import ProfessionalInvoiceWorkspace from "../components/ProfessionalInvoiceWorkspace.jsx";
 import { pickNativeJobPhoto } from "../utils/cameraPhotoPicker.js";
 import {
   QUOTE_DRAFT_PHOTO_MAX_COUNT,
@@ -67,8 +68,10 @@ import {
 import {
   createCanonicalInvoice,
   createInvoiceCommandKey,
+  fetchProfessionalJobInvoice,
   fetchProfessionalInvoiceWorkspace,
 } from "../utils/invoicePaymentApi.js";
+import { resolveCompletedJobInvoiceHandoff } from "../utils/completedJobInvoiceHandoff.js";
 import {
   fetchEffectiveApprovedInvoiceQuote,
 } from "../utils/invoiceReviewDraft.js";
@@ -1116,22 +1119,40 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     const existingRequest = invoicePreparationRequestRef.current;
     const request = existingRequest?.key === requestKey
       ? existingRequest.promise
-      : Promise.all([
-          fetchProfessionalInvoiceWorkspace({ limit: 50, setPage: setPageRef.current }),
-          listBusinessDocumentDrafts({ type: "INVOICE", setPage: setPageRef.current }),
-        ]).then(async ([workspace, documents]) => {
-          const prepared = workspace.readyJobs.find((job) => job.jobId === routeCanonicalJobId);
-          if (!prepared) return { workspace, documents, prepared: null, quoteReference: null };
-          const quoteReference = await fetchEffectiveApprovedInvoiceQuote({
-            jobId: routeCanonicalJobId,
-            approvedTotalMinor: prepared.approvedAmount?.totalMinor,
-            setPage: setPageRef.current,
+      : fetchProfessionalJobInvoice({
+          jobId: routeCanonicalJobId,
+          setPage: setPageRef.current,
+        }).then((invoice) => ({
+          handoff: resolveCompletedJobInvoiceHandoff({ invoices: [invoice] }, routeCanonicalJobId),
+        })).catch((error) => {
+          // A Job-only route may already have an Invoice, including one outside
+          // the workspace's bounded list. A 404 alone is not preparation authority.
+          if (error?.status !== 404 || error?.code !== "INVOICE_UNAVAILABLE") throw error;
+          return Promise.all([
+            fetchProfessionalInvoiceWorkspace({ limit: 50, setPage: setPageRef.current }),
+            listBusinessDocumentDrafts({ type: "INVOICE", setPage: setPageRef.current }),
+          ]).then(async ([workspace, documents]) => {
+            const handoff = resolveCompletedJobInvoiceHandoff(workspace, routeCanonicalJobId);
+            if (handoff.status !== "ready") return { handoff };
+            const prepared = handoff.job;
+            const quoteReference = await fetchEffectiveApprovedInvoiceQuote({
+              jobId: routeCanonicalJobId,
+              approvedTotalMinor: prepared.approvedAmount?.totalMinor,
+              setPage: setPageRef.current,
+            });
+            return { handoff, documents, prepared, quoteReference };
           });
-          return { workspace, documents, prepared, quoteReference };
         });
     invoicePreparationRequestRef.current = { key: requestKey, promise: request };
-    void request.then(({ documents, prepared, quoteReference }) => {
+    void request.then(({ handoff, documents, prepared, quoteReference }) => {
       if (!active) return;
+      if (handoff.status === "existing") {
+        setInvoicePreparation({
+          status: "existing", invoiceId: handoff.invoice.invoiceId,
+          job: null, resumeDocumentId: null, error: "",
+        });
+        return;
+      }
       if (!prepared) {
         setInvoicePreparation({
           status: "unavailable", job: null, resumeDocumentId: null,
@@ -3332,6 +3353,18 @@ ${businessIdentity.businessName}`;
         <div className="app-page meetro-form-page business-document-context-gate">
           <p role="status">Preparing the completed Job for Invoice review…</p>
         </div>
+      );
+    }
+    if (isUnifiedInvoiceEntry && routeCanonicalJobId && invoicePreparation.status === "existing") {
+      // App navigation tracks the page name, so a query-only redirect need not
+      // rerender InvoiceBuilder. Open the same exact-Invoice boundary directly.
+      return (
+        <ProfessionalInvoiceWorkspace
+          setPage={setPage}
+          initialInvoiceId={invoicePreparation.invoiceId}
+          expectedJobId={routeCanonicalJobId}
+          onBack={() => setPage(`workCenter?jobId=${encodeURIComponent(routeCanonicalJobId)}`)}
+        />
       );
     }
     if (isUnifiedInvoiceEntry && routeCanonicalJobId && invoicePreparation.status !== "ready") {

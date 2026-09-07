@@ -59,10 +59,15 @@ test("Prefill and Manual Entry render one editor over the same working-document 
 });
 
 test("switching Prefill and Manual presentation preserves the editor instead of resetting draft values", () => {
-  const modeBlock = workspace.slice(
+  const openManualBlock = workspace.slice(
     workspace.indexOf("function openManualEditor"),
-    workspace.indexOf("function switchDocument")
+    workspace.indexOf("function returnToQuoteDeposit")
   );
+  const changeModeBlock = workspace.slice(
+    workspace.indexOf("function changeEditorMode"),
+    workspace.indexOf("function restoreTentativeManualInvoice")
+  );
+  const modeBlock = `${openManualBlock}\n${changeModeBlock}`;
   assert.match(modeBlock, /setManualState\(\(current\) => current/);
   assert.match(modeBlock, /\{ \.\.\.current, mode, focus: "first" \}/);
   assert.doesNotMatch(modeBlock, /setManualOverrides|setCustomerParties|setLinkedCustomerContacts|setTurns/);
@@ -102,10 +107,20 @@ test("Meetro proposals refresh untouched fields while professional edits stay re
 });
 
 test("mode changes preserve customer-party linkage and cannot create duplicate identity records", () => {
-  const prefillBlock = workspace.slice(
+  const usePrefillBlock = workspace.slice(
     workspace.indexOf("function usePrefill"),
-    workspace.indexOf("function switchDocument")
+    workspace.indexOf("function openManualEditor")
   );
+  const openManualBlock = workspace.slice(
+    workspace.indexOf("function openManualEditor"),
+    workspace.indexOf("function returnToQuoteDeposit")
+  );
+  const changeModeBlock = workspace.slice(
+    workspace.indexOf("function changeEditorMode"),
+    workspace.indexOf("function restoreTentativeManualInvoice")
+  );
+  const modeTransitionBlock =
+    `${usePrefillBlock}\n${openManualBlock}\n${changeModeBlock}`;
   for (const forbidden of [
     "createBusinessContact",
     "assignBusinessContactRole",
@@ -114,7 +129,7 @@ test("mode changes preserve customer-party linkage and cannot create duplicate i
     "setLinkedCustomerContacts",
     "saveDocument",
   ]) {
-    assert.doesNotMatch(prefillBlock, new RegExp(forbidden), forbidden);
+    assert.doesNotMatch(modeTransitionBlock, new RegExp(forbidden), forbidden);
   }
   assert.match(workspace, /const \[customerParties, setCustomerParties\]/);
   assert.match(workspace, /customerParty=\{activeCustomerParty\}/);

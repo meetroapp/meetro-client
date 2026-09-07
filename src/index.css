@@ -2865,8 +2865,8 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
 }
 
 @media (max-width: 1099px) {
-  .compact-current-job-header,
-  .meetro-current-job-list-card {
+  #root:not([data-app-layout="mobile"]) .compact-current-job-header,
+  #root:not([data-app-layout="mobile"]) .meetro-current-job-list-card {
     padding-right: calc(164px + env(safe-area-inset-right, 0px)) !important;
   }
 }
@@ -5650,7 +5650,7 @@ button {
 
   .compact-current-job-header__state {
     display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1fr);
     width: 100%;
   }
 
@@ -5661,12 +5661,101 @@ button {
     padding: 7px 4px;
   }
 
+  .compact-current-job-header__pill {
+    box-sizing: border-box;
+    inline-size: fit-content;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    white-space: normal;
+    overflow-wrap: normal;
+    word-break: normal;
+    hyphens: none;
+  }
+
   .compact-current-job-header__action,
   .compact-current-job-header__blocker {
     grid-column: 1 / -1;
   }
 
 }
+
+/* 90453 PHONE CURRENT JOB — capability owns layout, including >820px phones. */
+#root[data-app-layout="mobile"] .compact-current-job-header {
+  container: phone-current-job / inline-size;
+}
+
+#root[data-app-layout="mobile"] .compact-current-job-header__primary,
+#root[data-app-layout="mobile"] .compact-current-job-header__details {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+#root[data-app-layout="mobile"] .compact-current-job-header__state {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  width: 100%;
+  gap: 8px;
+}
+
+#root[data-app-layout="mobile"] .compact-current-job-header :is(
+  .compact-current-job-header__state-item,
+  .compact-current-job-header__state-item > *,
+  .compact-current-job-header__action,
+  .compact-current-job-header__action > *,
+  .compact-current-job-header__blocker,
+  .compact-current-job-header__details > *
+) {
+  min-width: 0;
+  max-width: 100%;
+}
+
+#root[data-app-layout="mobile"] .compact-current-job-header :is(
+  h2, p, strong, span, button, summary, li
+) {
+  white-space: normal;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+#root[data-app-layout="mobile"] .compact-current-job-header__state-item {
+  border-left: 0;
+  border-top: 1px solid #dce4de;
+  padding: 7px 4px;
+  align-content: start;
+}
+
+#root[data-app-layout="mobile"] .compact-current-job-header__pill {
+  box-sizing: border-box;
+  inline-size: fit-content;
+  min-inline-size: 0;
+  max-inline-size: 100%;
+}
+
+#root[data-app-layout="mobile"] .compact-current-job-header__action,
+#root[data-app-layout="mobile"] .compact-current-job-header__blocker {
+  grid-column: 1 / -1;
+}
+
+/* Only add state columns when this card's actual content lane can hold them. */
+@container phone-current-job (min-width: 400px) {
+  #root[data-app-layout="mobile"][data-app-orientation="landscape"]
+    .compact-current-job-header__state {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@container phone-current-job (min-width: 640px) {
+  #root[data-app-layout="mobile"][data-app-orientation="landscape"]
+    .compact-current-job-header__state {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+#root[data-app-layout="mobile"][data-app-orientation="landscape"]
+  .compact-current-job-header__details {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 15rem), 1fr));
+}
+/* END 90453 PHONE CURRENT JOB */
 
 .work-center-visual-review-page {
   min-height: 100vh;

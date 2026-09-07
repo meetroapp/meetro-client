@@ -384,3 +384,101 @@ test("accepted unpaid Work Center exposes preparation while confirmed payment re
   assert.match(source, /Confirm Deposit Received/);
   assert.match(source, /depositRequestBuilder\?jobId=/);
 });
+
+test("Deposit phone portrait gives Details content its own scroll row outside the composer", () => {
+  const styles = readFileSync(new URL("../src/components/UnifiedBusinessDocumentWorkspace.css", import.meta.url), "utf8");
+  const start = styles.indexOf("/* 90453 PHONE DOCUMENT BASE");
+  const end = styles.indexOf("/* END 90453 PHONE DOCUMENT BASE */", start);
+  assert.ok(start >= 0 && end > start);
+  const phone = styles.slice(start, end);
+  assert.match(phone, /\.deposit-request-panel\.mobile-active\s*\{[^}]*display: grid !important/);
+  assert.match(phone, /\.deposit-request-editor\.mobile-active\s*\{[^}]*grid-template-rows: minmax\(0, 1fr\) auto[^}]*overflow: hidden/);
+  assert.match(phone, /\.deposit-request-editor-scroll\s*\{[^}]*display: grid[^}]*min-height: 0[^}]*overflow-y: auto/);
+  assert.match(phone, /\.deposit-request-composer\s*\{[^}]*position: relative/);
+  assert.match(phone, /\.deposit-request-composer textarea\s*\{[^}]*max-height: 88px[^}]*overflow-y: auto[^}]*font-size: 16px/);
+  assert.match(phone, /\.deposit-request-preview\.mobile-active\s*\{[^}]*overflow-y: auto/);
+  assert.match(phone, /\.deposit-request-panel :is\(p, dd, dt, li\)\s*\{[^}]*overflow-wrap: normal[^}]*word-break: normal/);
+  assert.doesNotMatch(phone, /@media|data-app-layout="tablet"/);
+});
+
+test("Deposit phone keyboard focus frees room before its fixed-size action row can overflow", () => {
+  const styles = readFileSync(new URL("../src/components/UnifiedBusinessDocumentWorkspace.css", import.meta.url), "utf8");
+  const start = styles.indexOf("/* Deposit Request — native iPhone landscape");
+  const end = styles.indexOf("/* END 90452 NATIVE IPHONE LANDSCAPE DOCUMENT CONTAINMENT */", start);
+  assert.ok(start >= 0 && end > start);
+  const section = styles.slice(start, end);
+  assert.match(section, /#root\[data-app-layout="mobile"\]\[data-app-keyboard="open"\]\s*\.deposit-request-workspace\s*\{[^}]*grid-template-rows: minmax\(0, 1fr\)[^}]*padding-block: 0/);
+  assert.match(section, /data-app-keyboard="open"\][^{]*\.deposit-request-mobile-switch\s*\)\s*\{[^}]*display: none !important/);
+  assert.match(section, /data-app-keyboard="open"\]\s*\.deposit-request-editor\.mobile-active\s*\{[^}]*padding-bottom: 0 !important/);
+});
+
+test("Deposit Request iPhone landscape stays selector-owned one-pane with keyboard containment", () => {
+  const styles = readFileSync(
+    new URL("../src/components/UnifiedBusinessDocumentWorkspace.css", import.meta.url),
+    "utf8"
+  );
+
+  const start = styles.indexOf(
+    "/* 90452 NATIVE IPHONE LANDSCAPE DOCUMENT CONTAINMENT"
+  );
+  const end = styles.indexOf("/* END 90452 NATIVE IPHONE LANDSCAPE DOCUMENT CONTAINMENT */", start);
+  assert.ok(end > start);
+  const mobileLandscape = styles.slice(start, end);
+
+  assert.ok(start >= 0);
+
+  assert.match(
+    mobileLandscape,
+    /#root\[data-app-layout="mobile"\]\[data-app-orientation="landscape"\][\s\S]*deposit-request-workspace/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /deposit-request-mobile-switch[\s\S]*display:\s*grid !important/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /deposit-request-main[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\)[\s\S]*grid-template-rows:\s*minmax\(0, 1fr\)/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /deposit-request-panel[\s\S]*display:\s*none !important/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /deposit-request-panel\.mobile-active[\s\S]*display:\s*grid !important/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /deposit-request-editor\.mobile-active[\s\S]*grid-template-rows:\s*minmax\(0, 1fr\) auto/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /deposit-request-editor-scroll[\s\S]*overflow-y:\s*auto/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /deposit-request-composer[\s\S]*position:\s*relative[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\) auto/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /data-app-keyboard="open"[\s\S]*deposit-request-workspace[\s\S]*var\(--meetro-visual-viewport-height, 100dvh\)[\s\S]*var\(--meetro-visual-viewport-offset-top, 0px\)/
+  );
+
+  assert.match(
+    mobileLandscape,
+    /data-app-keyboard="open"[\s\S]*business-document-header,[\s\S]*business-document-tabs,[\s\S]*deposit-request-mobile-switch[\s\S]*display:\s*none !important/
+  );
+
+  assert.doesNotMatch(
+    mobileLandscape,
+    /grid-template-columns:\s*minmax\(0, 2fr\) 1px minmax\(0, 3fr\)/
+  );
+});

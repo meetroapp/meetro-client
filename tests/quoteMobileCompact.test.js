@@ -78,12 +78,17 @@ test("document selector keeps Quote, Deposit Request, and Invoice while Saved Fi
   assert.match(workspace, /Saved Files/);
 });
 
-test("Deposit Request opens its preparation workspace before authority exists", () => {
-  const start = workspace.indexOf("async function openDepositRequest");
+test("Deposit Request opens its shared preparation workspace before authority exists", () => {
+  const start = workspace.indexOf("function openDepositRequest()");
   const end = workspace.indexOf("\n  return (", start);
   const handler = workspace.slice(start, end);
-  assert.match(handler, /setPage\([\s\S]*depositRequestBuilder/);
+
+  assert.ok(start >= 0 && end > start);
+  assert.match(handler, /setDepositRequestContext/);
+  assert.match(handler, /setDepositRequestOpen\(true\)/);
+  assert.doesNotMatch(handler, /setPage\(|depositRequestBuilder/);
   assert.doesNotMatch(handler, /fetchProfessionalPreWorkDeposit|eligible/);
+
   assert.match(
     read("src/components/DepositRequestWorkspace.jsx"),
     /The Quote supplies the customer, project, deposit amount, and payment terms/
