@@ -88,7 +88,7 @@ test("saved review hydration cannot reuse the stale numbering warning or expose 
 
 test("post-save reference is retained synchronously for immediate review and restored drafts", () => {
   assert.match(workspace, /savedDocumentsRef\.current\[documentType\] = document;[\s\S]*setSavedDocuments/);
-  assert.match(workspace, /savedDocumentsRef\.current\[type\] = document;[\s\S]*setSavedDocuments/);
+  assert.match(workspace, /savedDocumentsRef\.current\[type\] = workingSession \? null : document;[\s\S]*setSavedDocuments/);
   assert.match(workspace, /businessDocumentRestoredSnapshotFingerprint\(document\)/);
   assert.match(workspace, /if \(type === "quote"\) void hydratePersistedQuoteAuthority\(document\)/);
   assert.match(workspace, /if \(documentType === "quote"\) void hydratePersistedQuoteAuthority\(document\)/);

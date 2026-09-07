@@ -1160,7 +1160,7 @@ test("workspace exposes real save/list/restore/exit/recovery flows without confl
   assert.match(workspace, /Continue where you left off\?/);
   assert.match(workspace, /Continue Where I Left Off/);
   assert.match(workspace, /mode: "SAVED_SERVER_DOCUMENT"/);
-  assert.match(workspace, /function discardAndExit\(\)[\s\S]*rememberSavedWorkspaceAndExit\(action\)/);
+  assert.match(workspace, /async function discardAndExit\(\)[\s\S]*deleteBusinessDocumentRecovery[\s\S]*applyRestoredDocument\(saved\)/);
   const continueBlock = workspace.slice(
     workspace.indexOf("async function continueRecovery"),
     workspace.indexOf("async function discardRecovery")

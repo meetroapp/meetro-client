@@ -1199,7 +1199,9 @@ test("Saved Files deletion requires confirmation and preserves the open workspac
   assert.match(workspace, /Delete Draft", destructive: true/);
   assert.match(workspace, /await deleteBusinessDocumentDraft/);
   assert.match(workspace, /documents\.filter\(\(document\) => document\.id !== deleteTarget\.id\)/);
-  assert.match(workspace, /await load\("Draft deleted\."\)/);
+  assert.match(workspace, /await load\(deleteTarget.documentNumber \? "Draft archived\." : "Draft deleted\."\)/);
+  assert.match(workspace, /Archive this draft\?/);
+  assert.match(workspace, /number and history retained/);
   assert.match(workspace, /currently open workspace will remain as an unsaved copy/i);
   assert.match(workspace, /setSavedDocuments\(\(current\) => \(\{ \.\.\.current, \[type\]: null \}\)\)/);
   assert.match(workspace, /setSavedFingerprints\(\(current\) => \(\{ \.\.\.current, \[type\]: "" \}\)\)/);

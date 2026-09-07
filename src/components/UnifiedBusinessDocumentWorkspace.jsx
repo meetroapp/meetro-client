@@ -219,7 +219,7 @@ function money(value) {
 }
 
 function displayDocumentNumber(document = {}) {
-  return String(document.documentNumber || document.reference || "").trim();
+  return String(document.documentNumber || (document.documentType === "QUOTE" ? "Unnumbered draft" : document.reference) || "").trim();
 }
 
 function todayLocalIsoDate(now = new Date()) {
@@ -986,8 +986,8 @@ function SavedFilesDrawer({ currentSavedIds = [], onClose, onDeleted, onOpen, se
       await onDeleted(deleteTarget);
       setDeleteTarget(null);
       setDeleteState({ busy: false, error: "" });
-      setNotice("Draft deleted.");
-      await load("Draft deleted.");
+      setNotice(deleteTarget.documentNumber ? "Draft archived." : "Draft deleted.");
+      await load(deleteTarget.documentNumber ? "Draft archived." : "Draft deleted.");
       requestAnimationFrame(() => closeRef.current?.focus());
     } catch (error) {
       setDeleteState({
@@ -1015,9 +1015,9 @@ function SavedFilesDrawer({ currentSavedIds = [], onClose, onDeleted, onOpen, se
       <form className="business-saved-search" onSubmit={(event) => { event.preventDefault(); void load(); }}><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer, job, number, or address…" aria-label="Search saved documents" /><button type="submit">Search</button></form>
       <div className="business-saved-filters" aria-label="Saved document filters"><label>Type<select value={type} onChange={(event) => setType(event.target.value)}><option value="">All Types</option><option value="QUOTE">Quotes</option><option value="INVOICE">Invoices</option></select></label><label>Status<select value="WORKING_DRAFT" disabled><option>WORKING_DRAFT</option></select></label><label>Time<select value={time} onChange={(event) => setTime(event.target.value)}><option value="ALL">All Time</option><option value="30D">Last 30 days</option><option value="90D">Last 90 days</option></select></label></div>
       {notice ? <p className="business-saved-notice" role="status">{notice}</p> : null}
-      {state.busy ? <p role="status">Loading saved documents…</p> : state.error ? <div className="business-saved-empty" role="alert"><strong>{state.error}</strong><button type="button" onClick={() => void load()}>Try Again</button></div> : state.documents.length ? <div className="business-saved-results">{state.documents.map((document) => <article key={document.id}><button type="button" className="business-saved-open" onClick={() => onOpen(document.id)}><MeetroIcon name={document.documentType === "QUOTE" ? "quickQuote" : "quickInvoice"} size={20} decorative /><span><strong>{document.content.projectTitle || document.customerDisplayName || document.content.customerName || displayDocumentNumber(document)}</strong><small>{document.documentType === "QUOTE" ? "Quote" : "Invoice"} · {document.customerDisplayName || document.content.customerName || "Customer not entered"} · {displayDocumentNumber(document)}</small><small>Updated {new Date(document.updatedAt).toLocaleString()}</small></span></button><button type="button" className="business-saved-delete" onClick={(event) => { deleteTriggerRef.current = event.currentTarget; setDeleteState({ busy: false, error: "" }); setDeleteTarget(document); }} aria-haspopup="dialog">Delete Draft</button></article>)}</div> : <div className="business-saved-empty" role="status"><MeetroIcon name="history" size={28} decorative /><strong>No saved documents match.</strong><p>Only governed server-saved working drafts appear here.</p></div>}
+      {state.busy ? <p role="status">Loading saved documents…</p> : state.error ? <div className="business-saved-empty" role="alert"><strong>{state.error}</strong><button type="button" onClick={() => void load()}>Try Again</button></div> : state.documents.length ? <div className="business-saved-results">{state.documents.map((document) => <article key={document.id}><button type="button" className="business-saved-open" onClick={() => onOpen(document.id)}><MeetroIcon name={document.documentType === "QUOTE" ? "quickQuote" : "quickInvoice"} size={20} decorative /><span><strong>{document.content.projectTitle || document.customerDisplayName || document.content.customerName || displayDocumentNumber(document)}</strong><small>{document.documentType === "QUOTE" ? "Quote" : "Invoice"} · {document.customerDisplayName || document.content.customerName || "Customer not entered"} · {displayDocumentNumber(document)}</small><small>Updated {new Date(document.updatedAt).toLocaleString()}</small></span></button><button type="button" className="business-saved-delete" onClick={(event) => { deleteTriggerRef.current = event.currentTarget; setDeleteState({ busy: false, error: "" }); setDeleteTarget(document); }} aria-haspopup="dialog">{document.documentNumber ? "Archive Draft" : "Delete Draft"}</button></article>)}</div> : <div className="business-saved-empty" role="status"><MeetroIcon name="history" size={28} decorative /><strong>No saved documents match.</strong><p>Only governed server-saved working drafts appear here.</p></div>}
     </aside>
-    {deleteTarget ? <WorkspaceDialog titleId="business-document-delete-title" title="Delete this draft?" onClose={cancelDelete} actions={[{ label: "Cancel", onClick: cancelDelete, disabled: deleteState.busy }, { label: deleteState.busy ? "Deleting…" : "Delete Draft", destructive: true, disabled: deleteState.busy, onClick: () => void confirmDelete() }]}><p>This removes the saved working draft from Meetro. It does not delete the Job or customer.</p>{currentSavedIds.includes(deleteTarget.id) ? <p>Your currently open workspace will remain as an unsaved copy.</p> : null}{deleteState.error ? <p role="alert">{deleteState.error}</p> : null}</WorkspaceDialog> : null}
+    {deleteTarget ? <WorkspaceDialog titleId="business-document-delete-title" title={deleteTarget.documentNumber ? "Archive this draft?" : "Delete this draft?"} onClose={cancelDelete} actions={[{ label: "Cancel", onClick: cancelDelete, disabled: deleteState.busy }, { label: deleteState.busy ? "Removing…" : deleteTarget.documentNumber ? "Archive Draft" : "Delete Draft", destructive: true, disabled: deleteState.busy, onClick: () => void confirmDelete() }]}><p>This removes the draft from Saved Files. Numbered drafts are archived with their number and history retained. The Job and customer remain unchanged.</p>{currentSavedIds.includes(deleteTarget.id) ? <p>Your currently open workspace will remain as an unsaved copy.</p> : null}{deleteState.error ? <p role="alert">{deleteState.error}</p> : null}</WorkspaceDialog> : null}
   </>;
 }
 
@@ -2391,6 +2391,8 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   }
 
   function cancelNumberingSetup() {
+    if (numberingSetup?.busy) return;
+    pendingExitRef.current = null;
     if (pendingStartNewRef.current) {
       pendingStartNewRef.current = null;
       setStartNewState({ busy: false, error: "", documentType: "" });
@@ -2438,6 +2440,10 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         return;
       }
       if (saved === false && setup.suppressFailureDialog) setSaveFailureOpen(true);
+      if (saved && saved !== NUMBERING_SETUP_PENDING && pendingExitRef.current) {
+        await saveAllAndExit({ ...savedDocumentsRef.current, [setup.documentType]: saved });
+        return;
+      }
       if (saved && saved !== NUMBERING_SETUP_PENDING && pendingStartNewRef.current === setup.documentType) {
         const destination = pendingNewQuoteDestinationRef.current;
         if (setup.documentType === "quote" && destination) {
@@ -2617,7 +2623,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     }
   }
 
-  function applyRestoredDocument(document, { startedNew = false, noticeMessage = "" } = {}) {
+  function applyRestoredDocument(document, { startedNew = false, workingSession = false, noticeMessage = "" } = {}) {
     const restored = restoreBusinessDocumentDraft(document);
     const type = restored.documentType;
     if (type === "invoice") invoiceVisitedRef.current = true;
@@ -2655,8 +2661,8 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     }));
     restored.photos.forEach((photo) => seenPhotoIdsRef.current.add(photo.id));
     onRestorePhotos?.(restored.photos, { documentType: type, persisted: true });
-    savedDocumentsRef.current[type] = document;
-    setSavedDocuments((current) => ({ ...current, [type]: document }));
+    savedDocumentsRef.current[type] = workingSession ? null : document;
+    setSavedDocuments((current) => ({ ...current, [type]: workingSession ? null : document }));
     setCustomerParties((current) => ({ ...current, [type]: restored.customerParty }));
     setLinkedCustomerContacts((current) => ({ ...current, [type]: null }));
     void hydrateLinkedCustomer(type, restored.customerParty);
@@ -2669,7 +2675,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       type,
       restored.jobAnalysisSessionId || null
     );
-    setSavedFingerprints((current) => ({ ...current, [type]: businessDocumentRestoredSnapshotFingerprint(document) }));
+    setSavedFingerprints((current) => ({ ...current, [type]: workingSession ? "" : businessDocumentRestoredSnapshotFingerprint(document) }));
     setDeliveryHistory((current) => ({ ...current, [type]: [] }));
     setQuoteIssueState(null);
     quoteIssueAttemptRef.current = null;
@@ -2677,8 +2683,10 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     setActiveDocument(type);
     setSavedFilesOpen(false);
     setNotice(noticeMessage || `${displayDocumentNumber(document)} reopened. Continue editing this saved working draft.`);
-    void refreshDeliveryHistory(type, document);
-    if (type === "quote") void hydratePersistedQuoteAuthority(document);
+    if (!workingSession) {
+      void refreshDeliveryHistory(type, document);
+      if (type === "quote") void hydratePersistedQuoteAuthority(document);
+    }
   }
 
   async function refreshDeliveryHistory(documentType, document = savedDocuments[documentType]) {
@@ -2738,7 +2746,12 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     setQuoteIssueState(null);
     quoteIssueAttemptRef.current = null;
     quoteIssueInFlightRef.current = false;
-    if (documentType === "quote") clearPersistedQuoteAuthority();
+    if (documentType === "quote") {
+      clearPersistedQuoteAuthority();
+      setPendingQuoteProposal(null);
+    } else {
+      setPendingInvoiceProposal(null);
+    }
     setRecoveryRecord(null);
     setRecovered(false);
     setNewContentAvailable(false);
@@ -2761,15 +2774,27 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       : "businessDocumentNewInvoiceReady";
     setStartNewState({ busy: true, error: "", documentType });
     try {
-      if (!newDocumentAttemptKeysRef.current[documentType]) {
-        newDocumentAttemptKeysRef.current[documentType] = createBusinessDocumentSaveKey();
-      }
       const payload = buildNewBusinessDocumentDraftPayload({
         documentType,
         documentDate: todayLocalIsoDate(),
         customerParty,
         customerSnapshot,
       });
+      if (documentType === "quote") {
+        // A customer-resolved session is local; CREATE is reserved for Save.
+        resetNewDocumentTransientState(documentType);
+        applyRestoredDocument(payload, {
+          startedNew: true,
+          workingSession: true,
+          noticeMessage: "Working draft · Save Draft to assign a Quote number.",
+        });
+        setSaveState({ busy: false, error: "", lastSavedAt: "", documentType });
+        setStartNewState({ busy: false, error: "", documentType: "" });
+        return payload;
+      }
+      if (!newDocumentAttemptKeysRef.current[documentType]) {
+        newDocumentAttemptKeysRef.current[documentType] = createBusinessDocumentSaveKey();
+      }
       const document = await createBusinessDocumentDraft({
         payload,
         idempotencyKey: newDocumentAttemptKeysRef.current[documentType],
@@ -2808,9 +2833,11 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   async function startNewDocument(documentType = activeDocument) {
     const type = normalizeBusinessDocumentTab(documentType);
     if (type === "quote") {
-      newQuoteSetupAuthorityRef.current = true;
-      setRecoveryRecord(null);
-      setNewQuoteSetup(emptyNewQuoteSetup({ open: true, target: "START_NEW" }));
+      requestExit(() => {
+        newQuoteSetupAuthorityRef.current = true;
+        setRecoveryRecord(null);
+        setNewQuoteSetup(emptyNewQuoteSetup({ open: true, target: "START_NEW" }));
+      });
       return null;
     }
     if (startNewInFlightRef.current) return startNewInFlightRef.current;
@@ -2994,23 +3021,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     updateNewQuoteSetup({ busy: true, error: "" });
     pendingNewQuoteDestinationRef.current = destination;
     try {
-      let previousDocument = null;
-      if (newQuoteSetup.target === "START_NEW") {
-        pendingStartNewRef.current = "quote";
-        previousDocument = await ensureCurrentDocumentSaved("quote");
-        if (previousDocument === NUMBERING_SETUP_PENDING) {
-          updateNewQuoteSetup({ busy: false });
-          return;
-        }
-        if (!previousDocument) {
-          updateNewQuoteSetup({
-            busy: false,
-            error: "Your current Quote could not be saved. It remains open, and your customer selection is preserved.",
-          });
-          return;
-        }
-      }
-      await completeResolvedNewQuote(destination, previousDocument);
+      await completeResolvedNewQuote(destination);
     } catch (error) {
       updateNewQuoteSetup({
         busy: false,
@@ -3099,14 +3110,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         linkDocument: async (contact, relationship) => {
           const destination = resolvedExternalQuoteAuthority(contact, relationship);
           pendingNewQuoteDestinationRef.current = destination;
-          let previousDocument = null;
-          if (newQuoteSetup.target === "START_NEW") {
-            pendingStartNewRef.current = "quote";
-            previousDocument = await ensureCurrentDocumentSaved("quote");
-            if (previousDocument === NUMBERING_SETUP_PENDING) return previousDocument;
-            if (!previousDocument) throw new Error("Your current Quote could not be saved. It remains open, and the saved Customer selection is preserved.");
-          }
-          return completeResolvedNewQuote(destination, previousDocument);
+          return completeResolvedNewQuote(destination);
         },
       });
       if (workflow.document === NUMBERING_SETUP_PENDING) {
@@ -3245,23 +3249,29 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     applyCustomerSnapshot(documentType, nextContent);
     setCustomerParties((current) => ({ ...current, [documentType]: customerParty }));
     setLinkedCustomerContacts((current) => ({ ...current, [documentType]: contact }));
-    const saved = await saveDocument(documentType, {
-      suppressFailureDialog: true,
-      contentOverride: nextContent,
-      customerPartyOverride: customerParty,
-    });
-    if (!saved || saved === NUMBERING_SETUP_PENDING) {
-      updateCustomerControl({
-        open: true,
-        busy: false,
-        pendingContact: contact,
-        pendingRelationship: relationship,
-        retryPhase: "LINK",
-        error: t("businessDocumentCustomerLinkFailed", language),
+    if (documentType !== "quote") {
+      const saved = await saveDocument(documentType, {
+        suppressFailureDialog: true,
+        contentOverride: nextContent,
+        customerPartyOverride: customerParty,
       });
-      return false;
+      if (!saved || saved === NUMBERING_SETUP_PENDING) {
+        updateCustomerControl({
+          open: true,
+          busy: false,
+          pendingContact: contact,
+          pendingRelationship: relationship,
+          retryPhase: "LINK",
+          error: t("businessDocumentCustomerLinkFailed", language),
+        });
+        return false;
+      }
     }
     setCustomerControl(emptyCustomerControl());
+    if (documentType === "quote") {
+      setNotice("Customer linked to working draft. Save Draft to save these Quote changes.");
+      return true;
+    }
     setNotice(t("businessDocumentCustomerLinkedNotice", language, {
       name: businessContactDisplayName(contact),
       document: t(
@@ -3463,6 +3473,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   }
 
   function requestExit(action) {
+    if (Object.values(saveInFlightRef.current).some(Boolean)) return;
     if (!dirty.quote && !dirty.invoice) {
       void rememberSavedWorkspaceAndExit(action);
       return;
@@ -3471,11 +3482,11 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     setExitDialogOpen(true);
   }
 
-  async function saveAllAndExit() {
+  async function saveAllAndExit(confirmedDocuments = savedDocumentsRef.current) {
     setExitDialogOpen(false);
-    const documents = { ...savedDocuments };
+    const documents = { ...confirmedDocuments };
     for (const type of ["quote", "invoice"]) {
-      if (dirty[type]) {
+      if (dirty[type] && documents[type] === savedDocuments[type]) {
         const saved = await saveDocument(type, {
           suppressFailureDialog: true,
         });
@@ -3526,12 +3537,39 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     else void saveDocument(activeDocument);
   }
 
-  function discardAndExit() {
+  function keepEditingBeforeExit() {
+    pendingExitRef.current = null;
     setExitDialogOpen(false);
+  }
+
+  async function discardAndExit() {
+    if (Object.values(saveInFlightRef.current).some(Boolean)) return;
+    const identityKey = getAuthenticatedIdentitySnapshot().userId;
+    if (identityKey && !(await deleteBusinessDocumentRecovery({ identityKey }))) {
+      setNotice("Temporary recovery could not be cleared. Your work is still open; try Discard Changes again.");
+      return;
+    }
+    setExitDialogOpen(false);
+    setRecoveryRecord(null);
+    setRecovered(false);
     onDiscardTransientPhotos?.();
+    for (const type of ["quote", "invoice"]) {
+      if (!dirty[type]) continue;
+      const saved = savedDocumentsRef.current[type];
+      resetNewDocumentTransientState(type);
+      if (saved) {
+        applyRestoredDocument(saved);
+      } else {
+        applyRestoredDocument(buildNewBusinessDocumentDraftPayload({
+          documentType: type,
+          documentDate: todayLocalIsoDate(),
+        }), { startedNew: true, workingSession: true, noticeMessage: "Working draft" });
+      }
+    }
+    setActiveDocument(activeDocument);
     const action = pendingExitRef.current;
     pendingExitRef.current = null;
-    void rememberSavedWorkspaceAndExit(action);
+    action?.();
   }
 
   async function continueRecovery() {
@@ -5411,7 +5449,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         </div>
         <div className="business-document-header-actions">
           <button type="button" className="business-document-start-new" disabled={startNewState.busy} aria-busy={startNewState.busy && startNewState.documentType === activeDocument} onClick={() => void startNewDocument(activeDocument)}>{startNewLabel}</button>
-          <div className="business-document-save-status" aria-live="polite">{activeSavePresentation.savedAt ? `Saved · ${new Date(activeSavePresentation.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : activeDirty && !(job.customerLinkedFromJob && !activeSaved) ? "Unsaved changes" : "Not saved"}</div>
+          <div className="business-document-save-status" aria-live="polite">{activeSavePresentation.savedAt ? `Saved · ${new Date(activeSavePresentation.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : activeDocument === "quote" && !activeSaved ? "Working draft" : activeDirty && !(job.customerLinkedFromJob && !activeSaved) ? "Unsaved changes" : "Not saved"}</div>
           {startNewState.error && startNewState.documentType === activeDocument ? <p className="business-document-start-new-error" role="alert">{startNewState.error}</p> : null}
           {howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}
         </div>
@@ -5686,7 +5724,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       {quoteIssueState && !["hydrating", "settled"].includes(quoteIssueState.stage) && !quoteFinalSendState ? <QuoteIssueReviewDialog state={quoteIssueState} onCancel={closeQuoteIssueReview} onConfirm={requestGovernedQuoteSend} /> : null}
       {quoteFinalSendState ? <QuoteFinalSendConfirmationDialog state={quoteFinalSendState} onCancel={cancelQuoteFinalSend} onConfirm={() => void confirmQuoteFinalSend()} /> : null}
       {externalApprovalState ? <ExternalQuoteApprovalDialog state={externalApprovalState} onChange={(name, value) => setExternalApprovalState((current) => current ? { ...current, error: "", form: { ...current.form, [name]: value } } : current)} onCancel={() => { if (!externalApprovalState.busy) setExternalApprovalState(null); }} onConfirm={() => void confirmExternalQuoteApproval()} /> : null}
-      {exitDialogOpen ? <WorkspaceDialog titleId="business-document-exit-title" title="Save changes before leaving?" onClose={() => setExitDialogOpen(false)} actions={[{ label: "Keep Editing", onClick: () => setExitDialogOpen(false) }, { label: "Discard Changes", onClick: discardAndExit }, { label: "Save Draft & Exit", primary: true, onClick: () => void saveAllAndExit() }]}><p>Save keeps this private working document for your business. It does not send or issue anything.</p></WorkspaceDialog> : null}
+      {exitDialogOpen ? <WorkspaceDialog titleId="business-document-exit-title" title="Save changes before leaving?" onClose={keepEditingBeforeExit} actions={[{ label: "Keep Editing", onClick: keepEditingBeforeExit }, { label: "Discard Changes", onClick: discardAndExit }, { label: "Save Draft & Exit", primary: true, onClick: () => void saveAllAndExit() }]}><p>Save keeps this private working document for your business. It does not send or issue anything.</p></WorkspaceDialog> : null}
       {numberingSetup ? <NumberingSetupDialog state={numberingSetup} onModeChange={chooseNumberingMode} onPreviousNumberChange={(value) => setNumberingSetup((current) => current ? { ...current, previousDocumentNumber: value } : current)} onCancel={cancelNumberingSetup} onSubmit={() => void submitNumberingSetup()} /> : null}
       {saveFailureOpen ? <WorkspaceDialog titleId="business-document-save-failure-title" title="We couldn't save your draft right now" onClose={keepEditingAfterSaveFailure} actions={startNewSaveFailure ? [{ label: "Keep Editing", onClick: keepEditingAfterSaveFailure }, { label: "Try Again", primary: true, onClick: retryFailedSave }] : [{ label: "Keep Editing", onClick: keepEditingAfterSaveFailure }, { label: "Exit with Recovery", onClick: () => void exitWithRecovery() }, { label: "Try Again", primary: true, onClick: retryFailedSave }]}><p>{saveState.error || startNewState.error || "Your work is still here."}</p>{startNewSaveFailure ? <p>No new document was created. The current working document remains open.</p> : <p>Exit with Recovery stores a temporary noncanonical copy on this device. It will not appear in Saved Files.</p>}</WorkspaceDialog> : null}
       {recoveryRecord && !newQuoteSetup.open ? <WorkspaceDialog titleId="business-document-recovery-title" title="Continue where you left off?" actions={[{ label: "Not Now", onClick: () => void discardRecovery() }, { label: "Continue Where I Left Off", primary: true, onClick: () => void continueRecovery() }]}><p>{businessDocumentSavedResumeTarget(recoveryRecord.snapshot) ? "Meetro will reopen the exact saved server document. The local record is only a resume pointer and cannot change document authority." : "We found changes that were not successfully saved to Meetro. Recovery is device-local and still unsaved."}</p></WorkspaceDialog> : null}

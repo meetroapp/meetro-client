@@ -145,9 +145,12 @@ test("actual initialized Quote and Invoice workspaces render clean and leave ung
 
     for (const documentType of ["quote", "invoice"]) {
       const markup = renderWorkspace(documentType);
-      assert.match(markup, /business-document-save-status[^>]*>Not saved<\/div>/);
+      assert.match(markup, new RegExp(`business-document-save-status[^>]*>${documentType === "quote" ? "Working draft" : "Not saved"}</div>`));
       assert.doesNotMatch(markup, /Unsaved changes/);
       assert.doesNotMatch(markup, /Save changes before leaving\?/);
+      const saveButton = markup.match(/<button[^>]*class="business-document-save"[^>]*>/)?.[0];
+      assert.ok(saveButton);
+      assert.doesNotMatch(saveButton, /disabled/);
     }
 
     const editedMarkup = renderWorkspace("quote", {
@@ -156,7 +159,7 @@ test("actual initialized Quote and Invoice workspaces render clean and leave ung
     });
     assert.match(
       editedMarkup,
-      /business-document-save-status[^>]*>Unsaved changes<\/div>/
+      /business-document-save-status[^>]*>Working draft<\/div>/
     );
   } finally {
     await vite.close();

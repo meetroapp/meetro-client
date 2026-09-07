@@ -138,7 +138,7 @@ test("resolved external authority is persisted on the first Quote without market
   assert.equal("relationshipId" in payload, false);
 });
 
-test("selector opening is side-effect free and save begins only after final authority selection", () => {
+test("selector follows Save/Discard intent and customer selection never saves", () => {
   const start = workspace.slice(
     workspace.indexOf("async function startNewDocument"),
     workspace.indexOf("function updateNewQuoteSetup")
@@ -149,9 +149,9 @@ test("selector opening is side-effect free and save begins only after final auth
     workspace.indexOf("async function continueResolvedNewQuote"),
     workspace.indexOf("async function createExternalQuoteCustomer")
   );
-  assert.ok(resolved.indexOf("pendingNewQuoteDestinationRef.current = destination") < resolved.indexOf("await ensureCurrentDocumentSaved(\"quote\")"));
-  assert.ok(resolved.indexOf("await ensureCurrentDocumentSaved(\"quote\")") < resolved.indexOf("await completeResolvedNewQuote(destination, previousDocument)"));
-  assert.match(resolved, /customer selection is preserved/);
+  assert.match(start, /requestExit\(\(\) =>/);
+  assert.match(resolved, /await completeResolvedNewQuote\(destination\)/);
+  assert.doesNotMatch(resolved, /ensureCurrentDocumentSaved|saveDocument|createBusinessDocumentDraft|openNumberingSetup/);
 });
 
 test("all audited generic producers use explicit new intent while contextual Quote routes remain exact", () => {
