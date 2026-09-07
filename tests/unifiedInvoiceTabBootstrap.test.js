@@ -28,6 +28,7 @@ const depositCode = block("function openDepositRequest()", "  return (\n    <>\n
 function harness({ canonicalJobId = null, savedInvoice = null, preparation = null } = {}) {
   const state = {
     activeDocument: "quote", invoice: {}, invoiceBaseline: {},
+    workingDocumentIntent: { quote: true, invoice: false },
     invoiceVisitedRef: { current: false },
     savedDocuments: { quote: null, invoice: savedInvoice },
     documentJobIds: { quote: canonicalJobId, invoice: canonicalJobId },
@@ -45,6 +46,7 @@ function harness({ canonicalJobId = null, savedInvoice = null, preparation = nul
       todayLocalIsoDate: () => "2026-09-07", emptyCustomerControl: () => ({}),
       restoreTentativeManualInvoice: () => {},
       setInvoice: set("invoice"), setInvoiceBaseline: set("invoiceBaseline"),
+      setWorkingDocumentIntent: set("workingDocumentIntent"),
       setDocumentJobIds: set("documentJobIds"), setCustomerParties: set("customerParties"),
       setLinkedCustomerContacts: set("linkedCustomerContacts"), setActiveDocument: set("activeDocument"),
       setDepositRequestOpen: set("depositRequestOpen"), setDepositRequestContext: set("depositRequestContext"),
@@ -77,6 +79,7 @@ for (const canonicalJobId of [null, jobId]) {
     run("invoice");
     assert.equal(state.depositRequestOpen, false);
     assert.equal(state.activeDocument, "invoice");
+    assert.deepEqual(state.workingDocumentIntent, { quote: true, invoice: true });
     assert.equal(state.documentJobIds.invoice, canonicalJobId);
     assert.deepEqual(state.customerParties.invoice, party);
     assert.equal(state.invoice.customerName, "Bob Hamel");
@@ -116,6 +119,7 @@ test("Invoice → Quote → Deposit → Invoice preserves unsaved Invoice and st
   run("deposit");
   assert.equal(state.depositRequestContext, depositContext);
   assert.equal(state.invoice.notes, "Unsaved Invoice note");
+  assert.deepEqual(state.workingDocumentIntent, { quote: true, invoice: true });
 });
 
 test("saved Invoice or governed preparation cannot be overwritten by generic initialization", () => {

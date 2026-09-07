@@ -1,3 +1,4 @@
+import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
@@ -16209,6 +16210,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                     localStorage.setItem("quoteBuilderReturnPage", "workCenter");
                     localStorage.setItem("meetroWorkCenterTab", "quotes");
                     localStorage.setItem("activeWorkCenterTab", "quotes");
+                    clearGenericNewQuoteContext();
                     setPage("quoteBuilder?new=1");
                   }}
                 >
@@ -16651,6 +16653,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
               localStorage.setItem("quoteBuilderReturnPage", "workCenter");
               localStorage.setItem("meetroWorkCenterTab", "quotes");
               localStorage.setItem("activeWorkCenterTab", "quotes");
+              clearGenericNewQuoteContext();
               setPage("quoteBuilder?new=1");
             }}
           >

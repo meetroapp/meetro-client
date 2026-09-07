@@ -81,7 +81,7 @@ import {
   replaceSavedQuoteRoute,
   resolveOwnedSavedQuotesForJob,
 } from "../utils/savedQuoteRoute.js";
-import { isGenericNewQuoteRoute } from "../utils/newQuoteCustomerSetup.js";
+import { isGenericNewQuoteRoute, clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import {
   quoteCustomerPricingProjection,
   quoteIndependentPaymentTerms,
@@ -455,7 +455,6 @@ const priorityOptions = ["Standard", "Urgent", "Emergency", "Flexible"];
 
 function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   const language = getLanguage();
-  const activeJobSnapshot = getActiveJobSnapshot();
   const isSpanish = language === "es";
   const quoteBuilderReturnPage =
     localStorage.getItem("quoteBuilderReturnPage") || "";
@@ -469,6 +468,10 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   const isUnifiedDepositRequestEntry = initialDocument === "depositRequest";
   const isGenericNewQuoteIntent =
     initialDocument === "quote" && isGenericNewQuoteRoute(window.location.hash);
+  const activeJobSnapshot = isGenericNewQuoteIntent ? {} : getActiveJobSnapshot();
+  useEffect(() => {
+    if (isGenericNewQuoteIntent) clearGenericNewQuoteContext();
+  }, [isGenericNewQuoteIntent]);
   const isWorkCenterReturn =
     quoteBuilderReturnPage === "workCenter" ||
     quoteBuilderReturnPage === "contractorDashboard";
@@ -490,7 +493,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   const routeCanonicalJobId = savedQuoteRoute.jobId;
   const routeSavedDocumentId = savedQuoteRoute.draftId;
 
-  const revisedQuoteContext = safeJson(
+  const revisedQuoteContext = isGenericNewQuoteIntent ? null : safeJson(
     localStorage.getItem("meetroRevisedQuoteContext")
   );
 
@@ -730,7 +733,12 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
       request.project_description,
       importedWorkItems[0]?.title,
       request.category
-    ) || (isUniversalQuickQuote ? "" : isSpanish ? "Visita programada" : "Scheduled Estimate Visit");
+    ) || (
+      !isGenericNewQuoteIntent && request.source === "schedule_evaluation" &&
+      (quoteContextPayload.scheduleId || quoteContextPayload.visitId || quoteContextPayload.evaluationId)
+        ? isSpanish ? "Visita programada" : "Scheduled Estimate Visit"
+        : ""
+    );
 
   const initialProjectDescription = isUniversalQuickQuote
     ? ""

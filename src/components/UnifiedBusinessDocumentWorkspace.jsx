@@ -1,3 +1,4 @@
+import { listQuoteInvoiceSavedFiles, quoteInvoiceFileType } from "../utils/quoteInvoiceSavedFiles.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import BottomNav from "./BottomNav.jsx";
@@ -46,7 +47,6 @@ import {
   getBusinessDocumentCustomerPdf,
   getBusinessDocumentNumbering,
   initializeBusinessDocumentNumbering,
-  listBusinessDocumentDrafts,
   updateBusinessDocumentDraft,
   deliverBusinessDocumentDraft,
   listBusinessDocumentDeliveries,
@@ -955,7 +955,7 @@ function SavedFilesDrawer({ currentSavedIds = [], onClose, onDeleted, onOpen, se
   async function load(successNotice = "") {
     setState((current) => ({ ...current, busy: true, error: "" }));
     try {
-      const documents = await listBusinessDocumentDrafts({ search, type, time, setPage });
+      const documents = await listQuoteInvoiceSavedFiles({ search, type, time, setPage });
       setState({ busy: false, error: "", documents });
       if (successNotice) setNotice(successNotice);
     } catch {
@@ -971,7 +971,7 @@ function SavedFilesDrawer({ currentSavedIds = [], onClose, onDeleted, onOpen, se
   }
 
   async function confirmDelete() {
-    if (!deleteTarget || deleteState.busy) return;
+    if (!quoteInvoiceFileType(deleteTarget) || deleteState.busy) return;
     setDeleteState({ busy: true, error: "" });
     try {
       await deleteBusinessDocumentDraft({
@@ -1015,7 +1015,7 @@ function SavedFilesDrawer({ currentSavedIds = [], onClose, onDeleted, onOpen, se
       <form className="business-saved-search" onSubmit={(event) => { event.preventDefault(); void load(); }}><input type="search" value={search} onChange={(event) => setSearch(event.target.value)} placeholder="Search customer, job, number, or address…" aria-label="Search saved documents" /><button type="submit">Search</button></form>
       <div className="business-saved-filters" aria-label="Saved document filters"><label>Type<select value={type} onChange={(event) => setType(event.target.value)}><option value="">All Types</option><option value="QUOTE">Quotes</option><option value="INVOICE">Invoices</option></select></label><label>Status<select value="WORKING_DRAFT" disabled><option>WORKING_DRAFT</option></select></label><label>Time<select value={time} onChange={(event) => setTime(event.target.value)}><option value="ALL">All Time</option><option value="30D">Last 30 days</option><option value="90D">Last 90 days</option></select></label></div>
       {notice ? <p className="business-saved-notice" role="status">{notice}</p> : null}
-      {state.busy ? <p role="status">Loading saved documents…</p> : state.error ? <div className="business-saved-empty" role="alert"><strong>{state.error}</strong><button type="button" onClick={() => void load()}>Try Again</button></div> : state.documents.length ? <div className="business-saved-results">{state.documents.map((document) => <article key={document.id}><button type="button" className="business-saved-open" onClick={() => onOpen(document.id)}><MeetroIcon name={document.documentType === "QUOTE" ? "quickQuote" : "quickInvoice"} size={20} decorative /><span><strong>{document.content.projectTitle || document.customerDisplayName || document.content.customerName || displayDocumentNumber(document)}</strong><small>{document.documentType === "QUOTE" ? "Quote" : "Invoice"} · {document.customerDisplayName || document.content.customerName || "Customer not entered"} · {displayDocumentNumber(document)}</small><small>Updated {new Date(document.updatedAt).toLocaleString()}</small></span></button><button type="button" className="business-saved-delete" onClick={(event) => { deleteTriggerRef.current = event.currentTarget; setDeleteState({ busy: false, error: "" }); setDeleteTarget(document); }} aria-haspopup="dialog">{document.documentNumber ? "Archive Draft" : "Delete Draft"}</button></article>)}</div> : <div className="business-saved-empty" role="status"><MeetroIcon name="history" size={28} decorative /><strong>No saved documents match.</strong><p>Only governed server-saved working drafts appear here.</p></div>}
+      {state.busy ? <p role="status">Loading saved documents…</p> : state.error ? <div className="business-saved-empty" role="alert"><strong>{state.error}</strong><button type="button" onClick={() => void load()}>Try Again</button></div> : state.documents.length ? <div className="business-saved-results">{state.documents.filter(quoteInvoiceFileType).map((document) => <article key={document.id}><button type="button" className="business-saved-open" onClick={() => onOpen(document.id)}><MeetroIcon name={quoteInvoiceFileType(document).icon} size={20} decorative /><span><strong>{document.content.projectTitle || document.customerDisplayName || document.content.customerName || displayDocumentNumber(document)}</strong><small>{quoteInvoiceFileType(document).label} · {document.customerDisplayName || document.content.customerName || "Customer not entered"} · {displayDocumentNumber(document)}</small><small>Updated {new Date(document.updatedAt).toLocaleString()}</small></span></button><button type="button" className="business-saved-delete" onClick={(event) => { deleteTriggerRef.current = event.currentTarget; setDeleteState({ busy: false, error: "" }); setDeleteTarget(document); }} aria-haspopup="dialog">{document.documentNumber ? "Archive Draft" : "Delete Draft"}</button></article>)}</div> : <div className="business-saved-empty" role="status"><MeetroIcon name="history" size={28} decorative /><strong>No saved documents match.</strong><p>Only governed server-saved working drafts appear here.</p></div>}
     </aside>
     {deleteTarget ? <WorkspaceDialog titleId="business-document-delete-title" title={deleteTarget.documentNumber ? "Archive this draft?" : "Delete this draft?"} onClose={cancelDelete} actions={[{ label: "Cancel", onClick: cancelDelete, disabled: deleteState.busy }, { label: deleteState.busy ? "Removing…" : deleteTarget.documentNumber ? "Archive Draft" : "Delete Draft", destructive: true, disabled: deleteState.busy, onClick: () => void confirmDelete() }]}><p>This removes the draft from Saved Files. Numbered drafts are archived with their number and history retained. The Job and customer remain unchanged.</p>{currentSavedIds.includes(deleteTarget.id) ? <p>Your currently open workspace will remain as an unsaved copy.</p> : null}{deleteState.error ? <p role="alert">{deleteState.error}</p> : null}</WorkspaceDialog> : null}
   </>;
@@ -1714,6 +1714,10 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       : null
   );
   const invoiceVisitedRef = useRef(initialDocument === "invoice");
+  const [workingDocumentIntent, setWorkingDocumentIntent] = useState(() => ({
+    quote: initialDocument === "quote",
+    invoice: initialDocument === "invoice",
+  }));
   const [mobilePane, setMobilePane] = useState("conversation");
   const [savedFilesOpen, setSavedFilesOpen] = useState(false);
   const [manualState, setManualState] = useState(null);
@@ -2021,8 +2025,8 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     invoice: businessDocumentSavePresentation({ savedDocument: savedDocuments.invoice, currentFingerprint: fingerprints.invoice, savedFingerprint: savedFingerprints.invoice, hasMeaningfulContent: hasMeaningfulBusinessDocumentDraft(invoicePayload), busy: saveState.busy && saveState.documentType === "invoice" }),
   };
   const dirty = {
-    quote: savePresentations.quote.dirty,
-    invoice: savePresentations.invoice.dirty,
+    quote: workingDocumentIntent.quote && savePresentations.quote.dirty,
+    invoice: workingDocumentIntent.invoice && savePresentations.invoice.dirty,
   };
   const activeDirty = dirty[activeDocument];
   const activeSaved = savedDocuments[activeDocument];
@@ -2266,6 +2270,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     customerPartyOverride,
   } = {}) {
     if (saveState.busy) return false;
+    setWorkingDocumentIntent((current) => ({ ...current, [documentType]: true }));
     setSaveState((current) => ({ ...current, busy: true, error: "", documentType }));
     let saveJobId = documentJobIds[documentType] || null;
     try {
@@ -2626,6 +2631,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   function applyRestoredDocument(document, { startedNew = false, workingSession = false, noticeMessage = "" } = {}) {
     const restored = restoreBusinessDocumentDraft(document);
     const type = restored.documentType;
+    setWorkingDocumentIntent((current) => ({ ...current, [type]: true }));
     if (type === "invoice") invoiceVisitedRef.current = true;
     const restoredContent = startedNew && type === "quote"
       ? {
@@ -3441,6 +3447,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   } = {}) {
     return {
       activeDocument,
+      workingDocumentIntent,
       payloads,
       savedDocuments: documents,
       savedFingerprints,
@@ -3486,7 +3493,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     setExitDialogOpen(false);
     const documents = { ...confirmedDocuments };
     for (const type of ["quote", "invoice"]) {
-      if (dirty[type] && documents[type] === savedDocuments[type]) {
+      if (workingDocumentIntent[type] && dirty[type] && documents[type] === savedDocuments[type]) {
         const saved = await saveDocument(type, {
           suppressFailureDialog: true,
         });
@@ -3598,6 +3605,18 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       }
       return;
     }
+    const recoveredIntent = Object.fromEntries(["quote", "invoice"].map((type) => {
+      // Older recovery records have no intent flag. Only explicit work evidence
+      // can restore a hidden tab's intent; prefilled content alone cannot.
+      const legacyWork = !snapshot.workingDocumentIntent && Boolean(
+        snapshot.savedDocuments?.[type]?.id ||
+        snapshot.payloads[type]?.workspace?.instructions?.length ||
+        Object.keys(snapshot.payloads[type]?.workspace?.manualOverrides || {}).length
+      );
+      return [type, snapshot.workingDocumentIntent?.[type] === true || snapshot.activeDocument === type || legacyWork];
+    }));
+    setWorkingDocumentIntent(recoveredIntent);
+    invoiceVisitedRef.current = recoveredIntent.invoice;
     const combinedTurns = [];
     for (const type of ["quote", "invoice"]) {
       const payload = snapshot.payloads[type];
@@ -4268,6 +4287,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   }
 
   function switchDocument(documentType) {
+    setWorkingDocumentIntent((current) => ({ ...current, [documentType]: true }));
     restoreTentativeManualInvoice();
     if (documentType === "invoice") initializeWorkingInvoice();
     setDepositRequestOpen(false);

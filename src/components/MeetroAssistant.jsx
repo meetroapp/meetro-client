@@ -1,3 +1,5 @@
+import { assistantQuoteContextFromRoute, isAssistantQuoteAction, isExplicitStandaloneNewQuoteIntent, resolveAssistantQuoteNavigation } from "../utils/assistantQuoteNavigation.js";
+import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Capacitor, registerPlugin } from "@capacitor/core";
 import { t } from "../utils/language";
@@ -568,12 +570,14 @@ const actionTargets = {
 
 function getSelectedContext() {
   const requestDetailContext = readRequestCompanionContext();
+  const quoteContext = assistantQuoteContextFromRoute(window.location.hash);
+  const exactIdentity = { canonicalJobId: quoteContext.jobId || "", workingDraftId: quoteContext.draftId || "" };
 
   if (!canReadLegacyWorkflowStorage()) {
     return {
       selectedRequestId: "",
       selectedProjectId: "",
-      selectedJobId: "",
+      ...exactIdentity,
       conversationId: "",
       appointmentId: "",
       quoteId: "",
@@ -587,11 +591,7 @@ function getSelectedContext() {
       localStorage.getItem("selectedHomeownerRequestId") ||
       "",
     selectedProjectId: requestDetailContext?.projectId || "",
-    selectedJobId:
-      requestDetailContext?.projectId ||
-      localStorage.getItem("activeJobId") ||
-      localStorage.getItem("activeWorkRequestId") ||
-      "",
+    ...exactIdentity,
     conversationId:
       requestDetailContext?.conversationId ||
       localStorage.getItem("activeConversationId") ||
@@ -1132,6 +1132,7 @@ function makeAssistantAction(actionKey, language) {
   const action = {
     label: copy.actions[actionKey] || actionKey,
     target: actionTargets[actionKey],
+    ...(actionKey === "quoteBuilder" ? { quoteIntent: "GENERIC_NEW" } : {}),
   };
 
   const workCenterSections = {
@@ -1195,6 +1196,8 @@ function makeRequestAssistantAction(actionKey, language, context = {}) {
     createQuote: {
       label: t("assistantRequestCreateQuote"),
       target: "quoteBuilder",
+      quoteIntent: "CONTINUE",
+      quoteContext: context,
     },
     reviewDetails: {
       label: t("assistantRequestReviewDetails"),
@@ -1634,8 +1637,9 @@ function getScheduleCreationResponse(question, roleMode, language) {
   ]);
 }
 
-function detectAssistantActionIntent(question, roleMode, language) {
+function detectAssistantActionIntent(question, roleMode, language, context = {}) {
   const text = String(question || "").toLowerCase();
+  const explicitNew = isExplicitStandaloneNewQuoteIntent(question);
   const copy = assistantCopy[language] || assistantCopy.en;
   const isBusinessMode = roleMode === "business";
   const sharedActionKeys = ["messages", "profile", "legal"];
@@ -1657,7 +1661,7 @@ function detectAssistantActionIntent(question, roleMode, language) {
       key: "quoteBuilder",
       intent: "open_quote_builder",
       pattern:
-        /(create|build|draft|make|start|help me create|help me build).*(quote|proposal)|(?:crear|hacer|preparar|empezar).*(cotiz|propuesta)/,
+        /\bnew (?:standalone )?quote\b|nueva cotizaci[oó]n|(create|build|draft|make|start|help me create|help me build).*(quote|proposal)|(?:crear|hacer|preparar|empezar).*(cotiz|propuesta)/,
     },
     {
       key: "invoiceBuilder",
@@ -1733,7 +1737,7 @@ function detectAssistantActionIntent(question, roleMode, language) {
     },
   ];
 
-  const match = routeMatches.find((route) => route.pattern.test(text));
+  const match = routeMatches.find((route) => (route.key === "quoteBuilder" && explicitNew) || route.pattern.test(text));
   if (!match) return null;
 
   if (!isBusinessMode && professionalActionKeys.includes(match.key)) {
@@ -1747,9 +1751,16 @@ function detectAssistantActionIntent(question, roleMode, language) {
   const isAllowedSharedAction = sharedActionKeys.includes(match.key);
   if (!isBusinessMode && !isAllowedSharedAction) return null;
 
-  return makeResponse(match.intent, copy.actionRoutingReady, [
-    makeAssistantAction(match.key, language),
-  ]);
+  const action = makeAssistantAction(match.key, language);
+  if (match.key === "quoteBuilder") {
+    const contextualLanguage = /\b(this|that|existing|current|same|continue|resume|revise|revision|request|job|project|conversation|schedule|evaluation|visit)\b|\b(esta|este|actual|continuar|solicitud|trabajo|proyecto|visita)\b/.test(text);
+    if (contextualLanguage || (context.hasQuoteWorkflowContext && !explicitNew)) {
+      action.target = "quoteBuilder";
+      action.quoteIntent = "CONTINUE";
+      action.quoteContext = context.quoteNavigationContext || {};
+    }
+  }
+  return makeResponse(match.intent, copy.actionRoutingReady, [action]);
 }
 
 function detectVoiceIntent(question, roleMode) {
@@ -1837,6 +1848,7 @@ function getEvaluationToQuoteResponse(question, roleMode, language) {
       {
         label: language === "es" ? "Crear cotización" : "Create Quote",
         target: "quoteBuilder",
+        quoteIntent: "CONTINUE",
       },
       makeAssistantAction("schedule", language),
     ]
@@ -1844,6 +1856,11 @@ function getEvaluationToQuoteResponse(question, roleMode, language) {
 }
 
 function getVoiceResponse(question, roleMode, language, guide, currentPage = "") {
+  // Only strict standalone-new commands precede request/evaluation guidance.
+  if (isExplicitStandaloneNewQuoteIntent(question)) {
+    return detectAssistantActionIntent(question, roleMode, language);
+  }
+
   const scheduleCreation = getScheduleCreationResponse(question, roleMode, language);
   if (scheduleCreation) return scheduleCreation;
 
@@ -1862,10 +1879,18 @@ function getVoiceResponse(question, roleMode, language, guide, currentPage = "")
     question,
     currentPage,
     language,
+    quoteNavigationContext: currentPage === "quoteBuilder"
+      ? assistantQuoteContextFromRoute(window.location.hash)
+      : {},
   });
   if (fieldProductivity) return fieldProductivity;
 
-  const actionResponse = detectAssistantActionIntent(question, roleMode, language);
+  const actionResponse = detectAssistantActionIntent(question, roleMode, language, {
+    hasQuoteWorkflowContext: ["quoteBuilder", "workCenter", "contractorDashboard", "projectDetails", "myRequests", "conversationThread", "evaluationNotes", "proposalSummary", "projectJourney"].includes(currentPage),
+    quoteNavigationContext: currentPage === "quoteBuilder"
+      ? assistantQuoteContextFromRoute(window.location.hash)
+      : {},
+  });
   if (actionResponse) return actionResponse;
 
   const intent = detectVoiceIntent(question, roleMode);
@@ -3016,7 +3041,8 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       note: feedbackNote.trim(),
       requestId: context.selectedRequestId,
       selectedRequestId: context.selectedRequestId,
-      selectedJobId: context.selectedJobId,
+      canonicalJobId: context.canonicalJobId,
+      workingDraftId: context.workingDraftId,
       conversationId: context.conversationId,
       appointmentId: context.appointmentId,
       quoteId: context.quoteId,
@@ -3442,9 +3468,39 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     }
   }
 
+  function navigateAssistantQuote(action) {
+    if (!setPage) return;
+    const navigation = resolveAssistantQuoteNavigation({
+      intent: action.quoteIntent || "CONTINUE",
+      action,
+      context: action.quoteContext || {},
+    });
+    if (navigation.kind === "BLOCKED_AMBIGUOUS") {
+      stopAssistantVoiceResponse();
+      setVoiceAnswer(language === "es"
+        ? "Abre primero el trabajo o la cotización guardada exactos en el Centro de Trabajo o en Archivos guardados. Tu trabajo actual sigue abierto."
+        : "Open the exact Job or saved Quote first in Work Center or Saved Files. Your current work is still open.");
+      setVoiceActions([]);
+      setVoiceStatusChip(null);
+      return;
+    }
+    if (navigation.kind === "GENERIC_NEW") {
+      clearGenericNewQuoteContext();
+      localStorage.setItem("quoteBuilderSource", "meetro_assistant_new_quote");
+    }
+    localStorage.setItem("quoteBuilderReturnPage", currentPage || "businessDashboard");
+    stopAssistantVoiceResponse();
+    setOpen(false);
+    setPage(navigation.route);
+  }
+
   function handleQuickAction(action) {
     const target = actionTargets[action];
     if (!target || !setPage) return;
+    if (action === "quoteBuilder") {
+      navigateAssistantQuote(makeAssistantAction(action, language));
+      return;
+    }
 
     const workCenterSections = {
       schedule: "schedule",
@@ -3458,14 +3514,6 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       localStorage.setItem("meetroWorkCenterTab", section);
       localStorage.setItem("activeWorkCenterTab", section);
     }
-    if (target === "quoteBuilder?new=1") {
-      localStorage.removeItem("selectedQuoteRequest");
-      localStorage.removeItem("selectedQuoteForEdit");
-      localStorage.removeItem("selectedWorkCenterRequest");
-      localStorage.removeItem("selectedHomeownerRequest");
-      localStorage.setItem("quoteBuilderSource", "meetro_assistant_new_quote");
-      localStorage.setItem("quoteBuilderReturnPage", currentPage || "businessDashboard");
-    }
 
     stopAssistantVoiceResponse();
     setOpen(false);
@@ -3474,6 +3522,11 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
   function handleVoiceAction(action) {
     if (!action) return;
+    // Resolve Quote intent before any legacy request/schedule storage writes.
+    if (isAssistantQuoteAction(action)) {
+      navigateAssistantQuote(action);
+      return;
+    }
 
     if (action.action === "dismiss") {
       stopAssistantVoiceResponse();
@@ -3523,15 +3576,6 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     }
 
     if (!action.target || !setPage) return;
-
-    if (action.target === "quoteBuilder?new=1") {
-      localStorage.removeItem("selectedQuoteRequest");
-      localStorage.removeItem("selectedQuoteForEdit");
-      localStorage.removeItem("selectedWorkCenterRequest");
-      localStorage.removeItem("selectedHomeownerRequest");
-      localStorage.setItem("quoteBuilderSource", "meetro_assistant_new_quote");
-      localStorage.setItem("quoteBuilderReturnPage", currentPage || "businessDashboard");
-    }
 
     stopAssistantVoiceResponse();
     setOpen(false);

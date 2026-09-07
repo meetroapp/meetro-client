@@ -308,7 +308,7 @@ test("Saved Files stays server-backed and previous documents are never deleted b
     workspace.indexOf("async function createAndOpenNewDocument"),
     workspace.indexOf("async function startNewDocument")
   );
-  assert.match(workspace, /listBusinessDocumentDrafts/);
+  assert.match(workspace, /listQuoteInvoiceSavedFiles/);
   assert.match(workspace, /getBusinessDocumentDraft/);
   assert.doesNotMatch(createBlock, /deleteBusinessDocumentDraft|handleDeletedDocument/);
   assert.doesNotMatch(createBlock, /setSavedFilesOpen\(true\)/);

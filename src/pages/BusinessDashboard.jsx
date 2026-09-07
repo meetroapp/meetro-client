@@ -1,3 +1,4 @@
+import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
@@ -810,6 +811,7 @@ function BusinessDashboard({ setPage }) {
       toneBg: "rgba(217,119,6,0.13)",
       desktopDuplicate: true,
       onClick: () => {
+        clearGenericNewQuoteContext();
         localStorage.removeItem("selectedQuoteRequest");
         localStorage.removeItem("selectedQuoteForEdit");
         localStorage.removeItem("selectedWorkCenterRequest");

@@ -1,3 +1,4 @@
+import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { setActiveAccountMode } from "../utils/session";
@@ -455,6 +456,7 @@ function BusinessCommandCenter({ setPage }) {
     }
 
     if (toolId === "quickQuote") {
+      clearGenericNewQuoteContext();
       localStorage.removeItem("selectedQuoteRequest");
       localStorage.removeItem("selectedQuoteForEdit");
       localStorage.setItem("quoteBuilderSource", "business_tools_quick_quote");

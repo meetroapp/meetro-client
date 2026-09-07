@@ -1146,7 +1146,7 @@ test("workspace exposes real save/list/restore/exit/recovery flows without confl
   assert.match(workspace, /businessDocumentSavePresentation/);
   assert.match(workspace, /createBusinessDocumentDraft/);
   assert.match(workspace, /updateBusinessDocumentDraft/);
-  assert.match(workspace, /listBusinessDocumentDrafts/);
+  assert.match(workspace, /listQuoteInvoiceSavedFiles/);
   assert.match(workspace, /getBusinessDocumentDraft/);
   assert.match(workspace, /setDocumentJobIds\(\(current\) => \(\{ \.\.\.current, \[type\]: document\.jobId \|\| null \}\)\)/);
   assert.match(workspace, /jobId: documentJobIds\[documentType\]/);

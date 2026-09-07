@@ -4,6 +4,7 @@ import test from "node:test";
 
 import {
   buildGenericNewQuoteRoute,
+  clearGenericNewQuoteContext,
   buildJobLinkedNewQuoteRoute,
   eligibleExternalCustomerOptions,
   fetchProfessionalQuoteCustomerOptions,
@@ -161,6 +162,18 @@ test("all audited generic producers use explicit new intent while contextual Quo
   assert.equal((workCenter.match(/setPage\("quoteBuilder\?new=1"\)/g) || []).length, 2);
   assert.match(assistant, /quoteBuilder: "quoteBuilder\?new=1"/);
   assert.match(workCenter, /setPage\(`quoteBuilder\?jobId=\$\{encodeURIComponent\(quoteJobId\)\}`\)/);
+  for (const source of [dashboard, businessTools, bottomNav, assistant, workCenter]) {
+    assert.match(source, /clearGenericNewQuoteContext\(\)/);
+  }
+  assert.match(read("src/utils/guideSteps.js"), /route: "quoteBuilder\?new=1"/);
+  assert.match(read("src/components/GuideOverlay.jsx"), /isGenericNewQuoteRoute\(step.route\)\) clearGenericNewQuoteContext\(\)/);
+});
+
+test("generic context reset clears quote/request/revision hints while preserving shared Job authority", () => {
+  const stale = ["selectedQuoteRequest", "selectedQuoteRequestId", "selectedQuoteForEdit", "selectedWorkCenterRequest", "selectedHomeownerRequest", "activeWorkCenterQuoteRequestId", "meetroRevisedQuoteContext", "selectedProfessionalChangeOrder", "quoteBuilderScheduleId", "lastManualQuoteNumber"];
+  const storage = new Map([...stale, "activeJobId", "activeJobService", "quoteBuilderReturnPage"].map((key) => [key, "value"]));
+  clearGenericNewQuoteContext({ removeItem: (key) => storage.delete(key) });
+  assert.deepEqual([...storage.keys()], ["activeJobId", "activeJobService", "quoteBuilderReturnPage"]);
 });
 
 test("selector navigation and error states preserve the current workspace", () => {

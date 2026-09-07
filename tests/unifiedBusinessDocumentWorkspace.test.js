@@ -1184,7 +1184,7 @@ test("Before and After photos require explicit conversation intent and independe
 });
 
 test("Saved Files uses governed server listing and reopening with no browser authority", () => {
-  assert.match(workspace, /listBusinessDocumentDrafts/);
+  assert.match(workspace, /listQuoteInvoiceSavedFiles/);
   assert.match(workspace, /getBusinessDocumentDraft/);
   assert.match(workspace, /Only governed server-saved working drafts appear here/);
   assert.match(workspace, /Search customer, job, number, or address/);

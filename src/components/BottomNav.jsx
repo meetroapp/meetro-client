@@ -1,3 +1,4 @@
+import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Keyboard } from "@capacitor/keyboard";
 import { t } from "../utils/language";
@@ -635,6 +636,7 @@ function BottomNav({ setPage, currentPage = "" }) {
 
   const prepareBusinessShortcut = (item) => {
     if (item.shortcut === "quoteInvoice") {
+      clearGenericNewQuoteContext();
       localStorage.removeItem("selectedQuoteRequest");
       localStorage.removeItem("selectedQuoteForEdit");
       localStorage.removeItem("selectedWorkCenterRequest");

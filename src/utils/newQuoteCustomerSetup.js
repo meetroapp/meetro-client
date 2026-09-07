@@ -132,3 +132,14 @@ export function buildJobLinkedNewQuoteRoute(job) {
   if (draftId) parameters.set("draftId", draftId);
   return `quoteBuilder?${parameters.toString()}`;
 }
+
+
+// Generic entry clears only Quote handoff state, never an active Job's authority.
+export function clearGenericNewQuoteContext(storage = globalThis.localStorage) {
+  for (const key of [
+    "selectedQuoteRequest", "selectedQuoteRequestId", "selectedQuoteForEdit",
+    "selectedWorkCenterRequest", "selectedHomeownerRequest",
+    "activeWorkCenterQuoteRequestId", "meetroRevisedQuoteContext",
+    "selectedProfessionalChangeOrder", "quoteBuilderScheduleId", "lastManualQuoteNumber",
+  ]) storage?.removeItem(key);
+}

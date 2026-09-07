@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { parse } from "@babel/parser";
 import * as persistence from "../src/utils/businessDocumentPersistence.js";
+import { businessDocumentSavedResumeTarget } from "../src/utils/businessDocumentRecovery.js";
 import * as customers from "../src/utils/businessDocumentCustomerParty.js";
 import { buildJobLinkedNewQuoteRoute } from "../src/utils/newQuoteCustomerSetup.js";
 import { normalizeBusinessDocumentTab } from "../src/utils/businessDocumentWorkspace.js";
@@ -11,7 +12,7 @@ const source = readFileSync(new URL("../src/components/UnifiedBusinessDocumentWo
 const ast = parse(source, { sourceType: "module", plugins: ["jsx"] });
 const component = ast.program.body.find((node) => node.type === "FunctionDeclaration" && node.id.name === "QuoteInvoiceBusinessDocumentWorkspace");
 const declarations = [...ast.program.body, ...component.body.body].filter((node) => node.type === "FunctionDeclaration");
-const names = ["emptyCustomerControl", "emptyNewQuoteSetup", "displayDocumentNumber", "todayLocalIsoDate", "currentContent", "documentPayload", "durableSaveInput", "saveDocument", "performSaveDocument", "openNumberingSetup", "submitNumberingSetup", "applyRestoredDocument", "resetNewDocumentTransientState", "createAndOpenNewDocument", "startNewDocument", "updateNewQuoteSetup", "completeResolvedNewQuote", "continueResolvedNewQuote", "resolvedExternalQuoteAuthority", "applyCustomerSnapshot", "persistCustomerLink", "workspaceRecoverySnapshot", "rememberSavedWorkspaceAndExit", "requestExit", "saveAllAndExit", "discardAndExit", "keepEditingBeforeExit", "cancelNumberingSetup", "createExternalQuoteCustomer"];
+const names = ["emptyCustomerControl", "emptyNewQuoteSetup", "displayDocumentNumber", "todayLocalIsoDate", "currentContent", "documentPayload", "durableSaveInput", "saveDocument", "performSaveDocument", "openNumberingSetup", "submitNumberingSetup", "applyRestoredDocument", "resetNewDocumentTransientState", "createAndOpenNewDocument", "startNewDocument", "updateNewQuoteSetup", "completeResolvedNewQuote", "continueResolvedNewQuote", "resolvedExternalQuoteAuthority", "applyCustomerSnapshot", "persistCustomerLink", "workspaceRecoverySnapshot", "rememberSavedWorkspaceAndExit", "requestExit", "saveAllAndExit", "discardAndExit", "continueRecovery", "keepEditingBeforeExit", "cancelNumberingSetup", "createExternalQuoteCustomer"];
 const functions = names.map((name) => {
   const node = declarations.find((item) => item.id.name === name);
   assert.ok(node, `production handler ${name} exists`);
@@ -33,7 +34,7 @@ function workspace({ initialized = true, failSave = false } = {}) {
   const documents = new Map();
   const durableCustomers = new Map([[CONTACT, { contact, relationship }]]);
   const scope = {
-    ...persistence, ...customers, buildJobLinkedNewQuoteRoute, normalizeBusinessDocumentTab,
+    ...persistence, ...customers, buildJobLinkedNewQuoteRoute, normalizeBusinessDocumentTab, businessDocumentSavedResumeTarget,
     resolveBusinessProfileId: async () => 10,
     createBusinessContactCommandKey: () => "customer-key",
     createDeterministicBusinessContactKey: (key) => key,
@@ -56,6 +57,7 @@ function workspace({ initialized = true, failSave = false } = {}) {
       return relationship;
     },
     language: "en", t: (key) => key, NUMBERING_SETUP_PENDING: Symbol("setup"),
+    workingDocumentIntent: { quote: true, invoice: false },
     activeDocument: "quote", quote: {}, invoice: {}, photos: [], photoAssignments: {}, turns: [],
     customerParties: { quote: null, invoice: null }, manualOverrides: { quote: {}, invoice: {} },
     savedDocuments: { quote: null, invoice: null }, savedFingerprints: { quote: "", invoice: "" },
@@ -320,4 +322,44 @@ test("failed recovery removal keeps discard open rather than restoring discarded
   assert.equal(w.scope.quote.customerName, "Bob");
   assert.equal(w.events.some(([event]) => event === "exit"), false);
   assert.equal(w.documents.size, 0);
+});
+
+test("local recovery retains explicit Invoice intent and does not reinitialize authored Invoice content", async () => {
+  const w = workspace();
+  w.scope.invoice = { projectTitle: "Invoice work", workPerformed: "Completed repair" };
+  w.scope.workingDocumentIntent.invoice = true;
+  const snapshot = w.handlers.workspaceRecoverySnapshot();
+  assert.deepEqual(snapshot.workingDocumentIntent, { quote: true, invoice: true });
+  w.scope.recoveryRecord = { snapshot };
+  w.scope.workingDocumentIntent = { quote: true, invoice: false };
+  await w.handlers.continueRecovery();
+  assert.equal(w.scope.workingDocumentIntent.invoice, true);
+  assert.equal(w.scope.invoiceVisitedRef.current, true);
+  assert.equal(w.scope.invoice.workPerformed, "Completed repair");
+});
+
+test("recovery of a hidden continuity baseline grants no Invoice intent", async () => {
+  for (const legacy of [false, true]) {
+    const w = workspace();
+    w.scope.invoice = { projectTitle: "Scheduled Estimate Visit" };
+    const snapshot = w.handlers.workspaceRecoverySnapshot();
+    if (legacy) delete snapshot.workingDocumentIntent;
+    w.scope.recoveryRecord = { snapshot };
+    await w.handlers.continueRecovery();
+    assert.deepEqual(w.scope.workingDocumentIntent, { quote: true, invoice: false });
+    assert.equal(w.scope.invoiceVisitedRef.current, false);
+  }
+});
+
+test("legacy recovery preserves explicitly edited Invoice intent without inferring it from baseline fields", async () => {
+  const w = workspace();
+  w.scope.invoice = { projectTitle: "Scheduled Estimate Visit", notes: "Authored Invoice note" };
+  w.scope.manualOverrides.invoice = { notes: "Authored Invoice note" };
+  const snapshot = w.handlers.workspaceRecoverySnapshot();
+  delete snapshot.workingDocumentIntent;
+  w.scope.recoveryRecord = { snapshot };
+  await w.handlers.continueRecovery();
+  assert.equal(w.scope.workingDocumentIntent.invoice, true);
+  assert.equal(w.scope.invoiceVisitedRef.current, true);
+  assert.equal(w.scope.invoice.notes, "Authored Invoice note");
 });
