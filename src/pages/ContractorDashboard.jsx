@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
 import { jsPDF } from "jspdf";
@@ -25,6 +25,11 @@ import {
   WorkCenterMetricGrid,
   WorkCenterPageHeader,
 } from "../components/WorkCenterWorkspaceSystem.jsx";
+import {
+  getPersistedWorkCenterAccordionOpen,
+  getWorkCenterAccordionStateKey,
+  persistWorkCenterAccordionOpen,
+} from "../utils/workCenterAccordionState.js";
 import ProfessionalInvoiceWorkspace from "../components/ProfessionalInvoiceWorkspace";
 import CompletedJobInvoiceHandoff from "../components/CompletedJobInvoiceHandoff";
 import { t as translate } from "../utils/language";
@@ -355,7 +360,14 @@ function readMeetroObject(key) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
-function ContractorDashboard({ setPage, language = "en" }) {
+function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
+  // App layout renders recreate its navigation prop. Keep the current callback
+  // without making viewport changes reload every canonical lifecycle panel.
+  const navigatePageRef = useRef(navigatePage);
+  useLayoutEffect(() => {
+    navigatePageRef.current = navigatePage;
+  }, [navigatePage]);
+  const setPage = useCallback((...args) => navigatePageRef.current?.(...args), []);
   const activeJobSnapshot = getActiveJobSnapshot();
   const activeWorkSnapshot = getActiveWorkSnapshot();
   const userRole = localStorage.getItem("businessCategory") || "Handyman";
@@ -371,6 +383,13 @@ function ContractorDashboard({ setPage, language = "en" }) {
     Number(localStorage.getItem("meetroViewedOpportunityCount") || "0")
   );
   const [selectedWorkCenterJob, setSelectedWorkCenterJob] = useState(null);
+  const [workCenterAccordionOpenByKey, setWorkCenterAccordionOpenByKey] =
+    useState({});
+  const selectedWorkCenterJobIdentity = selectedWorkCenterJob
+    ? getCanonicalCurrentJobIdentityKey(selectedWorkCenterJob) ||
+      String(selectedWorkCenterJob.jobId || selectedWorkCenterJob.id || "")
+    : "";
+  const focusedWorkCenterAlertRef = useRef("");
   const [selectedJobDetailView, setSelectedJobDetailView] = useState("");
   const [pendingEvaluationVisitHandoff, setPendingEvaluationVisitHandoff] =
     useState(() => readPendingEvaluationVisitHandoff());
@@ -1326,9 +1345,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
   }, [jobActionToast]);
 
   useEffect(() => {
-    if (!selectedWorkCenterJob) return;
+    if (!selectedWorkCenterJobIdentity) return undefined;
 
-    window.setTimeout(() => {
+    // Only entering another Job scrolls to its heading, never same-Job hydration.
+    const timeoutId = window.setTimeout(() => {
       const target = workCenterPanelRef.current;
 
       if (!target) return;
@@ -1340,7 +1360,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
         behavior: "smooth",
       });
     }, 80);
-  }, [selectedWorkCenterJob]);
+    return () => window.clearTimeout(timeoutId);
+  }, [selectedWorkCenterJobIdentity]);
 
   useEffect(() => {
     function syncEmergency() {
@@ -8657,12 +8678,14 @@ function ContractorDashboard({ setPage, language = "en" }) {
   useEffect(() => {
     if (
       !selectedWorkCenterAlertStage ||
-      !selectedWorkCenterJob ||
-      workCenterLifecycleProjection.status !==
-        "ready"
+      !selectedWorkCenterJobIdentity
     ) {
+      focusedWorkCenterAlertRef.current = "";
       return undefined;
     }
+    if (workCenterLifecycleProjection.status !== "ready") return undefined;
+    const focusKey = `${selectedWorkCenterJobIdentity}:${selectedWorkCenterAlertStage}:${workCenterRouteRevision}`;
+    if (focusedWorkCenterAlertRef.current === focusKey) return undefined;
 
     const panelId =
       getBusinessWorkCenterPanelId(
@@ -8682,6 +8705,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
         );
 
       if (!section) return;
+      focusedWorkCenterAlertRef.current = focusKey;
 
       section.scrollIntoView({
         behavior: "smooth",
@@ -8697,7 +8721,8 @@ function ContractorDashboard({ setPage, language = "en" }) {
       window.clearTimeout(timeoutId);
   }, [
     selectedWorkCenterAlertStage,
-    selectedWorkCenterJob,
+    selectedWorkCenterJobIdentity,
+    workCenterRouteRevision,
     workCenterLifecycleProjection.status,
   ]);
 
@@ -11076,6 +11101,30 @@ function ContractorDashboard({ setPage, language = "en" }) {
                 canonicalLiveJob?.nextAction?.label
               );
               const canonicalAutoOpenToken = `${canonicalLiveJob?.jobId || "job"}:${canonicalLiveJob?.nextAction?.code || "unavailable"}`;
+              const canonicalAccordionJobIdentity =
+                getCanonicalCurrentJobIdentityKey(selectedWorkCenterJob) ||
+                String(
+                  canonicalLiveJob?.jobId ||
+                    selectedWorkCenterJob.jobId ||
+                    selectedWorkCenterJob.id ||
+                    ""
+                );
+              const getCanonicalAccordionPresentation = (sectionId) => {
+                const stateKey = getWorkCenterAccordionStateKey(
+                  canonicalAccordionJobIdentity,
+                  sectionId
+                );
+                return {
+                  expanded: getPersistedWorkCenterAccordionOpen(
+                    workCenterAccordionOpenByKey,
+                    stateKey
+                  ),
+                  onExpandedChange: (open) =>
+                    setWorkCenterAccordionOpenByKey((current) =>
+                      persistWorkCenterAccordionOpen(current, stateKey, open)
+                    ),
+                };
+              };
               const canonicalEvaluationHandoffIsCurrent = Boolean(
                 evaluationVisitHandoffFocus &&
                 evaluationVisitHandoffFocus.jobId ===
@@ -11367,9 +11416,10 @@ function ContractorDashboard({ setPage, language = "en" }) {
                     workCenterLifecycleProjection.status === "ready" &&
                     workCenterLifecycleProjection.projection && (
                       <>
-                        <div className="work-center-content-grid">
+                        <div className="work-center-content-grid" key={canonicalAccordionJobIdentity}>
 	                          <WorkCenterAccordion
 	                            id="canonical-job-evaluation"
+                            {...getCanonicalAccordionPresentation("canonical-job-evaluation")}
                             attentionCount={evaluationAlertCount}
                             icon="evaluationNotes"
                             title={workCenterWorkspaceCopy.evaluation}
@@ -11423,6 +11473,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                          </WorkCenterAccordion>
 	                          <WorkCenterAccordion
 	                            id="canonical-job-quotes"
+                            {...getCanonicalAccordionPresentation("canonical-job-quotes")}
                             attentionCount={quoteAlertPanelCount}
 	                            icon="quote"
 	                            title="Quote & Approval"
@@ -11460,6 +11511,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                          </WorkCenterAccordion>
 	                          <WorkCenterAccordion
                             id="canonical-job-deposit-scheduling"
+                            {...getCanonicalAccordionPresentation("canonical-job-deposit-scheduling")}
                             attentionCount={depositSchedulingAlertCount}
                             icon="payment"
                             title="Deposit & Scheduling"
@@ -11496,6 +11548,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
                           </WorkCenterAccordion>
                           <WorkCenterAccordion
 	                            id="canonical-job-work-plan"
+                            {...getCanonicalAccordionPresentation("canonical-job-work-plan")}
                             attentionCount={workPlanAlertCount}
                             icon="workCenter"
                             title={workCenterWorkspaceCopy.workPlan}
@@ -11530,6 +11583,7 @@ function ContractorDashboard({ setPage, language = "en" }) {
 	                          </WorkCenterAccordion>
 	                          <WorkCenterAccordion
 	                            id="canonical-job-completion-invoice"
+                            {...getCanonicalAccordionPresentation("canonical-job-completion-invoice")}
                             attentionCount={completionInvoiceAlertCount}
 	                            icon="payment"
 	                            title="Invoice & Closeout"

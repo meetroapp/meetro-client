@@ -459,6 +459,30 @@ function DocumentActionMenu({
   );
 }
 
+export function BusinessDocumentHowItWorksControl({
+  expanded,
+  triggerRef,
+  onToggle,
+  "aria-label": accessibleLabel = "How it works",
+  title = "How it works",
+}) {
+  return (
+    <button
+      ref={triggerRef}
+      type="button"
+      className="business-document-how-it-works"
+      aria-label={accessibleLabel}
+      title={title}
+      aria-expanded={expanded}
+      aria-controls="business-document-workflow-guide"
+      onClick={onToggle}
+    >
+      <span className="business-document-how-it-works-icon" aria-hidden="true">ⓘ</span>
+      <span className="business-document-how-it-works-label">How it works</span>
+    </button>
+  );
+}
+
 function DeliveryMenu({
   kind,
   onSelect,
@@ -5367,7 +5391,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         <section className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`} aria-labelledby="business-document-conversation-title">
           <h2 id="business-document-conversation-title" className="business-document-visually-hidden">{activeDocument === "quote" ? "Quote conversation" : "Invoice conversation"}</h2>
           <div className="business-document-conversation-context" data-document-chat-region="context">
-            <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} data-assisted-active={invoicePreparation && activeDocument === "invoice" && !manualState ? "true" : undefined} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} aria-expanded={invoicePreparation && activeDocument === "invoice" ? manualState?.mode === "manual" : undefined} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><button ref={howItWorksTriggerRef} type="button" aria-expanded={howItWorksOpen} aria-controls="business-document-workflow-guide" onClick={() => setHowItWorksOpen((open) => !open)}><span aria-hidden="true">ⓘ</span><span>How it works</span></button></div>
+            <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" className="business-document-control-primary" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} data-assisted-active={invoicePreparation && activeDocument === "invoice" && !manualState ? "true" : undefined} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" className="business-document-control-primary" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} aria-expanded={invoicePreparation && activeDocument === "invoice" ? manualState?.mode === "manual" : undefined} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><BusinessDocumentHowItWorksControl aria-label="How it works" title="How it works" expanded={howItWorksOpen} triggerRef={howItWorksTriggerRef} onToggle={() => setHowItWorksOpen((open) => !open)} /></div>
             {activeDocument === "quote" ? <JobLinkedQuoteContext job={job} /> : null}
             {activeDocument === "invoice" && invoicePreparation ? <CompletedInvoiceReviewIntro /> : null}
             {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} invoicePreparation={invoicePreparation} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} lockedCustomerName={activeDocument === "quote" || invoicePreparation ? jobLinkedCustomerName : ""} onModeChange={changeEditorMode} onPreview={setInvoice} onApply={applyManualDraft} onCancel={cancelManualEditing} /> : null}

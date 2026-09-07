@@ -53,9 +53,10 @@ test("shared system owns headers, truthful metrics, empty states, statuses, and 
     "WorkCenterPageHeader", "WorkCenterMetricGrid", "WorkCenterEmptyState",
     "WorkCenterStatusPill", "WorkCenterAccordion",
   ]) assert.match(system, new RegExp(`export function ${component}`));
-  assert.match(system, /aria-expanded=\{open\}/);
+  assert.match(system, /aria-expanded=\{visibleOpen\}/);
   assert.match(system, /aria-controls=\{`\$\{sectionId\}-content`\}/);
-  assert.match(css, /\.work-center-accordion__trigger \{[\s\S]*min-height: 64px/);
+  assert.match(css, /\.work-center-accordion__header \{[\s\S]*min-height: 64px/);
+  assert.match(css, /\.work-center-accordion__trigger \{[\s\S]*min-height: 44px/);
   assert.match(css, /\.work-center-empty-state \{[\s\S]*box-shadow:/);
 });
 

@@ -99,6 +99,8 @@ export function WorkCenterAccordion({
   attentionCount = 0,
   defaultOpen = false,
   autoOpenToken = "",
+  expanded,
+  onExpandedChange,
   nested = false,
   children,
 }) {
@@ -106,22 +108,29 @@ export function WorkCenterAccordion({
   const sectionId = id || generatedId.replaceAll(":", "");
   const [open, setOpen] = useState(defaultOpen);
   const lastAutoOpenToken = useRef("");
+  const controlled = typeof expanded === "boolean";
+  const visibleOpen = controlled ? expanded : open;
+
+  const updateOpen = (nextOpen) => {
+    if (!controlled) setOpen(nextOpen);
+    onExpandedChange?.(nextOpen);
+  };
 
   useEffect(() => {
     if (!defaultOpen || !autoOpenToken || lastAutoOpenToken.current === autoOpenToken) return;
     lastAutoOpenToken.current = autoOpenToken;
-    setOpen(true);
-  }, [autoOpenToken, defaultOpen]);
+    let active = true;
+    queueMicrotask(() => {
+      if (active && !controlled) setOpen(true);
+    });
+    return () => {
+      active = false;
+    };
+  }, [autoOpenToken, controlled, defaultOpen]);
 
   return (
-    <section className={`work-center-accordion${open ? " work-center-accordion--open" : ""}${nested ? " work-center-accordion--nested" : ""}`} data-work-center-accordion={sectionId}>
-      <button
-        type="button"
-        className="work-center-accordion__trigger"
-        aria-expanded={open}
-        aria-controls={`${sectionId}-content`}
-        onClick={() => setOpen((current) => !current)}
-      >
+    <section className={`work-center-accordion${visibleOpen ? " work-center-accordion--open" : ""}${nested ? " work-center-accordion--nested" : ""}`} data-work-center-accordion={sectionId}>
+      <header className="work-center-accordion__header">
         <span className="work-center-accordion__icon" aria-hidden="true">
           <MeetroIcon name={icon} size={24} decorative />
         </span>
@@ -129,11 +138,24 @@ export function WorkCenterAccordion({
           <strong>{title}</strong>
           <span>{summary}</span>
         </span>
-        {status && <WorkCenterStatusPill>{status}</WorkCenterStatusPill>}
-        <WorkCenterAttentionBadge count={attentionCount} />
-        <span className="work-center-accordion__chevron" aria-hidden="true">v</span>
-      </button>
-      <div id={`${sectionId}-content`} className="work-center-accordion__content" hidden={!open}>
+        {(status || attentionCount > 0) && (
+          <div className="work-center-accordion__meta">
+            {status && <WorkCenterStatusPill>{status}</WorkCenterStatusPill>}
+            <WorkCenterAttentionBadge count={attentionCount} />
+          </div>
+        )}
+        <button
+          type="button"
+          className="work-center-accordion__trigger"
+          aria-label={`${visibleOpen ? "Collapse" : "Expand"} ${title}`}
+          aria-expanded={visibleOpen}
+          aria-controls={`${sectionId}-content`}
+          onClick={() => updateOpen(!visibleOpen)}
+        >
+          <span className="work-center-accordion__chevron" aria-hidden="true">v</span>
+        </button>
+      </header>
+      <div id={`${sectionId}-content`} className="work-center-accordion__content" hidden={!visibleOpen}>
         {children}
       </div>
     </section>

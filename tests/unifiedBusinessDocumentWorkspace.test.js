@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { createServer } from "vite";
 
 import {
   buildBusinessDocumentConversationPatch,
@@ -93,6 +94,43 @@ test("manual builder keeps core fields editable, server number read-only, and Bu
   assert.match(workspace, /\["total", "canonicalStatus", "quoteNumber", "invoiceNumber"\]\.includes\(key\)/);
   assert.match(styles, /\.business-document-number-field input\[readonly\]/);
   assert.match(styles, /\.business-document-manual-fields > div/);
+});
+
+test("How it works control preserves its accessible name and existing toggle behavior", async () => {
+  const vite = await createServer({
+    appType: "custom",
+    logLevel: "silent",
+    server: { middlewareMode: true, hmr: false },
+  });
+  try {
+    const { BusinessDocumentHowItWorksControl } = await vite.ssrLoadModule(
+      "/src/components/UnifiedBusinessDocumentWorkspace.jsx"
+    );
+    let toggles = 0;
+    const control = BusinessDocumentHowItWorksControl({
+      expanded: false,
+      triggerRef: null,
+      onToggle: () => { toggles += 1; },
+    });
+
+    assert.equal(control.type, "button");
+    assert.equal(control.props.className, "business-document-how-it-works");
+    assert.equal(control.props["aria-label"], "How it works");
+    assert.equal(control.props.title, "How it works");
+    assert.equal(control.props["aria-expanded"], false);
+    assert.equal(
+      control.props["aria-controls"],
+      "business-document-workflow-guide"
+    );
+    control.props.onClick();
+    assert.equal(toggles, 1);
+    assert.match(
+      workspace,
+      /onToggle=\{\(\) => setHowItWorksOpen\(\(open\) => !open\)\}/
+    );
+  } finally {
+    await vite.close();
+  }
 });
 
 test("server-owned document number requests remain non-mutating and outside Job Analysis", () => {
@@ -191,7 +229,8 @@ test("compact workspace controls stay outside conversation history and open a no
   assert.match(workspace, /const \[howItWorksOpen, setHowItWorksOpen\] = useState\(false\)/);
   assert.match(workspace, /aria-label="Let Meetro prefill the form"/);
   assert.match(workspace, /aria-label="Fill the form manually"/);
-  assert.match(workspace, /aria-expanded=\{howItWorksOpen\}/);
+  assert.match(workspace, /expanded=\{howItWorksOpen\}/);
+  assert.match(workspace, /aria-expanded=\{expanded\}/);
   assert.match(workspace, /setHowItWorksOpen\(\(open\) => !open\)/);
   assert.match(workspace, /howItWorksOpen \? <BusinessDocumentWorkflowGuide onClose=\{closeHowItWorks\}/);
   assert.match(workspace, /function closeHowItWorks\(\)[\s\S]*setHowItWorksOpen\(false\)[\s\S]*howItWorksTriggerRef\.current\?\.focus/);

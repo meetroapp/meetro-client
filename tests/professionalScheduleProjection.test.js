@@ -514,3 +514,75 @@ test("timezone resolves automatically, stays canonical, and renders business lan
   );
   assert.equal(formatProfessionalScheduleTimeZone("invalid-zone", "en"), "");
 });
+
+function depositLockedPayload() {
+  const response = externalPayload();
+  Object.assign(response.schedule.opportunities[0], {
+    semanticState: "DEPOSIT_REQUIRED",
+    authority: { state: "LOCKED" },
+    actions: { canStartScheduling: false, canViewJob: true },
+  });
+  return response;
+}
+
+for (const approvalSource of ["EXTERNAL_EVIDENCE", "MEETRO_CUSTOMER", "legacy"]) {
+  test(`deposit-locked approved work preserves approval identity and false action: ${approvalSource}`, () => {
+    const response = depositLockedPayload();
+    const item = response.schedule.opportunities[0];
+    if (approvalSource !== "EXTERNAL_EVIDENCE") {
+      item.approvedQuoteDecisionId = IDS.decision;
+      item.approvalSource = approvalSource;
+    }
+    if (approvalSource === "legacy") {
+      delete item.approvalSource;
+      delete item.quoteApprovalId;
+    }
+    const schedule = normalizeProfessionalSchedule(response);
+    assert.ok(schedule);
+    assert.equal(schedule.opportunities[0].semanticState, "DEPOSIT_REQUIRED");
+    assert.equal(schedule.opportunities[0].authority.state, "LOCKED");
+    assert.equal(schedule.opportunities[0].actions.canStartScheduling, false);
+    assert.equal(schedule.opportunities[0].quoteId, IDS.quote);
+    assert.equal(schedule.opportunities[0].approvedQuoteDecisionId, item.approvedQuoteDecisionId);
+  });
+}
+
+test("mixed ready and deposit-locked Schedule stays available without changing Visit actions", () => {
+  const response = payload();
+  response.schedule.opportunities.push(depositLockedPayload().schedule.opportunities[0]);
+  const schedule = normalizeProfessionalSchedule(response);
+  assert.ok(schedule);
+  assert.deepEqual(schedule.opportunities.map((item) => item.actions.canStartScheduling), [true, false]);
+  assert.deepEqual(schedule.visits, normalizeProfessionalSchedule(payload()).visits);
+});
+
+for (const [name, mutate] of [
+  ["Evaluation deposit lock", (item) => Object.assign(item, { purpose: "EVALUATION", quoteId: null, quoteApprovalId: null, approvalSource: null })],
+  ["deposit lock with ACTIVE authority", (item) => { item.authority.state = "ACTIVE"; }],
+  ["deposit lock with AVAILABLE authority", (item) => { item.authority.state = "AVAILABLE"; }],
+  ["deposit lock with scheduling enabled", (item) => { item.actions.canStartScheduling = true; }],
+  ["deposit lock with missing action", (item) => { delete item.actions.canStartScheduling; }],
+  ["deposit lock with coercible false", (item) => { item.actions.canStartScheduling = 0; }],
+  ["ready with LOCKED authority", (item) => Object.assign(item, { semanticState: "READY_TO_SCHEDULE", actions: { canStartScheduling: true, canViewJob: true } })],
+  ["ready with scheduling disabled", (item) => Object.assign(item, { semanticState: "READY_TO_SCHEDULE", authority: { state: "ACTIVE" } })],
+  ["deposit lock without Quote", (item) => { item.quoteId = null; }],
+  ["deposit lock without external approval", (item) => { item.quoteApprovalId = null; }],
+  ["deposit lock with mixed approval evidence", (item) => { item.approvedQuoteDecisionId = IDS.decision; }],
+  ["deposit lock without internal decision", (item) => { item.approvalSource = "MEETRO_CUSTOMER"; }],
+]) {
+  test(`Schedule rejects inconsistent authority: ${name}`, () => {
+    const response = depositLockedPayload();
+    mutate(response.schedule.opportunities[0]);
+    assert.equal(normalizeProfessionalSchedule(response), null);
+  });
+}
+
+for (const purpose of ["EVALUATION", "APPROVED_WORK"]) {
+  for (const state of ["AVAILABLE", "ACTIVE"]) {
+    test(`ready ${purpose} with ${state} authority remains schedulable`, () => {
+      const response = purpose === "EVALUATION" ? payload() : externalPayload();
+      response.schedule.opportunities[0].authority.state = state;
+      assert.equal(normalizeProfessionalSchedule(response).opportunities[0].actions.canStartScheduling, true);
+    });
+  }
+}

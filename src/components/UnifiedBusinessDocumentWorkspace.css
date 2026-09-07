@@ -167,6 +167,9 @@
 .business-document-conversation-footer {
   min-width: 0;
 }
+.business-document-conversation-context {
+  container: business-document-controls / inline-size;
+}
 .business-document-preview > header {
   display: flex;
   align-items: flex-start;
@@ -268,6 +271,52 @@
 .business-document-control-toolbar > button span { min-width: 0; overflow-wrap: anywhere; }
 .business-document-control-toolbar > [hidden] { display: none !important; }
 .business-document-control-toolbar > .business-document-workflow-backdrop { display: none; }
+
+/*
+ * The tablet landscape Conversation pane is substantially narrower than the
+ * device viewport after the Business rail and Preview take their shares.
+ * Let the two document actions use that constrained lane and reduce Help to
+ * its accessible icon control only when the lane itself needs the space.
+ */
+@container business-document-controls (max-width: 520px) {
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .business-document-workspace[data-active-document="quote"]
+    .business-document-control-toolbar {
+    grid-template-columns: repeat(2, minmax(0, 1fr)) 44px;
+    gap: 6px;
+  }
+
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .business-document-workspace[data-active-document="quote"]
+    .business-document-control-toolbar > .business-document-control-primary {
+    min-width: 0;
+  }
+
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .business-document-workspace[data-active-document="quote"]
+    .business-document-control-toolbar > .business-document-how-it-works {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+    padding: 0;
+    border-radius: 50%;
+    gap: 0;
+  }
+
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .business-document-workspace[data-active-document="quote"]
+    .business-document-how-it-works-icon {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .business-document-workspace[data-active-document="quote"]
+    .business-document-how-it-works-label {
+    display: none;
+  }
+}
 
 .business-document-job-context {
   display: grid;
@@ -2537,6 +2586,281 @@
   .business-document-turns {
   min-height: 0;
   overflow-y: auto;
+}
+
+/*
+ * A landscape iPad keyboard leaves too little vertical room for the complete
+ * split workspace. Keep physical landscape authority, but temporarily give
+ * the bounded main row to Conversation. Its existing chat grid then keeps the
+ * composer in the last row while only the transcript scrolls. Closing the
+ * keyboard removes these overrides and restores the unchanged split.
+ */
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace.is-keyboard-open:has(
+    .business-document-composer textarea:focus
+  ):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  ) {
+  block-size:
+    calc(
+      var(--meetro-visual-viewport-height, 100dvh) +
+      var(--meetro-visual-viewport-offset-top, 0px)
+    );
+  min-block-size: 0;
+  min-height: 0;
+  padding-bottom: 0;
+  overflow: hidden;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace.is-keyboard-open:has(
+    .business-document-composer textarea:focus
+  ):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  .business-document-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
+  block-size: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace.is-keyboard-open:has(
+    .business-document-composer textarea:focus
+  ):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  .business-document-conversation {
+  grid-column: 1;
+  grid-row: 1;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr);
+  block-size: 100%;
+  min-height: 0;
+  overflow: hidden;
+  border-right: 0;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace.is-keyboard-open:has(
+    .business-document-composer textarea:focus
+  ):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  :is(
+    .business-document-conversation-context,
+    .business-document-conversation-footer,
+    .business-document-evidence-panel,
+    .business-document-preview
+  ) {
+  display: none;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace.is-keyboard-open:has(
+    .business-document-composer textarea:focus
+  ):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  .business-document-chat-shell {
+  grid-row: 1;
+  block-size: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace.is-keyboard-open:has(
+    .business-document-composer textarea:focus
+  ):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  .business-document-turns {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/*
+ * Keep the tablet Quote composer compact without shrinking its touch target.
+ * The visible + treatment is smaller inside a 44px control, while the grid
+ * gives the text field every remaining horizontal pixel.
+ */
+#root[data-app-layout="tablet"]
+  .business-document-workspace[data-active-document="quote"]
+  .business-document-composer-row {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 4px;
+}
+
+#root[data-app-layout="tablet"]
+  .business-document-workspace[data-active-document="quote"]
+  .business-document-composer-plus {
+  inline-size: 44px;
+  min-inline-size: 44px;
+  block-size: 44px;
+  min-block-size: 44px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#root[data-app-layout="tablet"]
+  .business-document-workspace[data-active-document="quote"]
+  .business-document-composer-plus-symbol {
+  display: grid;
+  inline-size: 34px;
+  block-size: 34px;
+  place-items: center;
+  margin: 0;
+  border: 1px solid #dfe7e0;
+  border-radius: 10px;
+  background: #fff;
+  font-size: 25px;
+}
+
+#root[data-app-layout="tablet"]
+  .business-document-workspace[data-active-document="quote"]
+  .business-document-composer-input-shell {
+  width: 100%;
+  min-width: 0;
+}
+
+#root[data-app-layout="tablet"]
+  .business-document-workspace[data-active-document="quote"]
+  .business-document-composer-microphone {
+  justify-self: end;
+}
+
+/*
+ * Landscape split-view polish only: reclaim pane gutters for the composer.
+ * Recording retains its existing multi-control group; its Stop/Cancel actions
+ * must not be squeezed into the idle microphone's single 44px column.
+ */
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace:not(.is-keyboard-open):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  .business-document-conversation {
+  padding-inline: 6px;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace:not(.is-keyboard-open):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  .business-document-composer-row:not(:has(.workflow-microphone-compact-recording)) {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr) 44px;
+  gap: 3px;
+  padding-inline: 0;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace:not(.is-keyboard-open):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  .business-document-composer-input-shell {
+  width: 100%;
+  min-width: 0;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace:not(.is-keyboard-open):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  .business-document-composer-plus {
+  inline-size: 44px;
+  min-inline-size: 44px;
+  block-size: 44px;
+  min-block-size: 44px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace:not(.is-keyboard-open):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  .business-document-composer-plus-symbol {
+  display: grid;
+  place-items: center;
+  inline-size: 30px;
+  block-size: 30px;
+  margin: 0;
+  border: 1px solid #dfe7e0;
+  border-radius: 9px;
+  background: #fff;
+  font-size: 22px;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace:not(.is-keyboard-open):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  :is(.workflow-microphone-compact-trigger, .workflow-microphone-compact-dismiss) {
+  position: relative;
+  inline-size: 44px;
+  min-inline-size: 44px;
+  block-size: 44px;
+  min-block-size: 44px;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace:not(.is-keyboard-open):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  :is(.workflow-microphone-compact-trigger, .workflow-microphone-compact-dismiss)::before {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1px solid #e6ecef;
+  border-radius: 50%;
+  background: #fff;
+  pointer-events: none;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace:not(.is-keyboard-open):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  :is(.workflow-microphone-compact-trigger, .workflow-microphone-compact-dismiss) svg {
+  position: relative;
+  inline-size: 18px;
+  block-size: 18px;
+}
+
+#root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  .business-document-workspace:not(.is-keyboard-open):is(
+    [data-active-document="quote"],
+    [data-active-document="invoice"]
+  )
+  .business-document-send-message {
+  inline-size: 44px;
+  min-inline-size: 44px;
+  block-size: 44px;
+  min-block-size: 44px;
 }
 
 #root[data-app-layout="tablet"]

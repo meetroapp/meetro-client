@@ -285,7 +285,14 @@ function normalizeVisitHistory(value) {
   if (
     versions.some((item) => !item) ||
     events.some((item) => !item) ||
-    versions.some((item, index) => item.version !== index + 1)
+    versions.some((item, index) => item.version !== index + 1) ||
+    new Set(events.map((item) => item.id)).size !== events.length ||
+    events.some((item) =>
+      !versions.some((version) => version.version === item.visitVersion) ||
+      (item.previousVisitVersion != null &&
+        (!versions.some((version) => version.version === item.previousVisitVersion) ||
+          item.previousVisitVersion > item.visitVersion))
+    )
   ) {
     return null;
   }

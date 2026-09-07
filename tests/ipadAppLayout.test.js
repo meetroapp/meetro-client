@@ -173,6 +173,37 @@ test("visual viewport keyboard geometry includes offsetTop without changing phys
   assert.equal(snapshot.layoutMode, "tablet");
 });
 
+test("Schedule metrics use their content lane and preserve readable words at iPad widths", () => {
+  const scheduleStart = cssSource.indexOf(
+    ".professional-schedule-workspace {"
+  );
+  const scheduleEnd = cssSource.indexOf(
+    ".work-center-empty-state {",
+    scheduleStart
+  );
+  const scheduleMetrics = cssSource.slice(scheduleStart, scheduleEnd);
+
+  assert.ok(scheduleStart >= 0);
+  assert.ok(scheduleEnd > scheduleStart);
+  assert.match(
+    scheduleMetrics,
+    /container:\s*professional-schedule\s*\/\s*inline-size;/
+  );
+  assert.match(
+    scheduleMetrics,
+    /professional-schedule-workspace \.work-center-metric-grid\s*\{[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/
+  );
+  assert.match(
+    scheduleMetrics,
+    /@container professional-schedule \(min-width: 760px\)[\s\S]*grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\);/
+  );
+  assert.match(
+    scheduleMetrics,
+    /work-center-metric-card__label[\s\S]*white-space:\s*normal;[\s\S]*overflow-wrap:\s*normal;[\s\S]*word-break:\s*normal;[\s\S]*hyphens:\s*none;/
+  );
+  assert.doesNotMatch(scheduleMetrics, /font-size|fixed|overflow:\s*hidden/);
+});
+
 test("app shell receives diagnostics before render and maintains them", () => {
   for (const attribute of [
     "appLayout",
@@ -220,7 +251,8 @@ test("Quote and Deposit share one iPad keyboard visible-bottom boundary", () => 
     '#root[data-app-layout="tablet"][data-app-keyboard="open"]\n  .deposit-request-workspace,'
   );
   const portraitQuoteStart = documentWorkspaceStyles.indexOf(
-    '#root[data-app-layout="tablet"][data-app-orientation="portrait"][data-app-keyboard="open"]'
+    '#root[data-app-layout="tablet"][data-app-orientation="portrait"][data-app-keyboard="open"]',
+    sharedBoundaryStart
   );
   const sharedBoundary = documentWorkspaceStyles.slice(
     sharedBoundaryStart,
@@ -255,6 +287,91 @@ test("Quote and Deposit share one iPad keyboard visible-bottom boundary", () => 
   assert.match(
     quoteWorkspaceSource,
     /const nextHeight = Math\.min\(measuredHeight, 112\)[\s\S]*element\.style\.height = `\$\{nextHeight\}px`/
+  );
+});
+
+test("Quote and Invoice iPad landscape focus Conversation while the keyboard is open", () => {
+  const landscapeStart = documentWorkspaceStyles.indexOf(
+    "/*\n * A landscape iPad keyboard leaves too little vertical room"
+  );
+  const landscapeEnd = documentWorkspaceStyles.indexOf(
+    '/*\n * Keep the tablet Quote composer compact',
+    landscapeStart
+  );
+  const landscapeKeyboardRules = documentWorkspaceStyles.slice(
+    landscapeStart,
+    landscapeEnd
+  );
+  const splitStart = documentWorkspaceStyles.indexOf("@media (min-width: 768px)");
+  const splitEnd = documentWorkspaceStyles.indexOf("@media (min-width: 901px)", splitStart);
+  const splitRules = documentWorkspaceStyles.slice(splitStart, splitEnd);
+  const wideStart = splitEnd;
+  const wideEnd = documentWorkspaceStyles.indexOf("@media (min-width: 1180px)", wideStart);
+  const wideRules = documentWorkspaceStyles.slice(wideStart, wideEnd);
+  const keyboardEffect = quoteWorkspaceSource.slice(
+    quoteWorkspaceSource.indexOf("keyboardStateRef.current.baselineHeight"),
+    quoteWorkspaceSource.indexOf(
+      "}, []);",
+      quoteWorkspaceSource.indexOf("keyboardStateRef.current.baselineHeight")
+    )
+  );
+
+  assert.ok(landscapeStart >= 0);
+  assert.ok(landscapeEnd > landscapeStart);
+  assert.match(
+    landscapeKeyboardRules,
+    /data-app-orientation="landscape"\][\s\S]*\.business-document-workspace\.is-keyboard-open:has\([\s\S]*\.business-document-composer textarea:focus[\s\S]*\):is\(/
+  );
+  assert.match(
+    landscapeKeyboardRules,
+    /\.business-document-workspace\.is-keyboard-open:has\([\s\S]*\.business-document-composer textarea:focus[\s\S]*\):is\([\s\S]*\[data-active-document="quote"\],[\s\S]*\[data-active-document="invoice"\][\s\S]*\)/
+  );
+  assert.match(
+    landscapeKeyboardRules,
+    /\.business-document-workspace\.is-keyboard-open:has\([\s\S]*block-size:[\s\S]*var\(--meetro-visual-viewport-height, 100dvh\)[\s\S]*var\(--meetro-visual-viewport-offset-top, 0px\)[\s\S]*overflow:\s*hidden;/
+  );
+  assert.match(
+    landscapeKeyboardRules,
+    /\.business-document-main(?:\.has-evidence)?\s*\{[\s\S]*grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*grid-template-rows:\s*minmax\(0, 1fr\);[\s\S]*block-size:\s*100%;[\s\S]*overflow:\s*hidden;/
+  );
+  assert.match(
+    landscapeKeyboardRules,
+    /\.business-document-conversation\s*\{[\s\S]*display:\s*grid;[\s\S]*grid-template-rows:\s*minmax\(0, 1fr\);[\s\S]*block-size:\s*100%;[\s\S]*overflow:\s*hidden;/
+  );
+  assert.match(
+    landscapeKeyboardRules,
+    /:is\([\s\S]*\.business-document-conversation-context,[\s\S]*\.business-document-conversation-footer,[\s\S]*\.business-document-evidence-panel,[\s\S]*\.business-document-preview[\s\S]*\)\s*\{\s*display:\s*none;/
+  );
+  assert.match(
+    landscapeKeyboardRules,
+    /\.business-document-chat-shell\s*\{[\s\S]*grid-row:\s*1;[\s\S]*block-size:\s*100%;[\s\S]*min-height:\s*0;[\s\S]*overflow:\s*hidden;/
+  );
+  assert.match(
+    landscapeKeyboardRules,
+    /\.business-document-turns\s*\{[\s\S]*min-height:\s*0;[\s\S]*overflow-y:\s*auto;/
+  );
+  assert.doesNotMatch(landscapeKeyboardRules, /data-app-orientation="portrait"/);
+  assert.doesNotMatch(landscapeKeyboardRules, /position:\s*(?:fixed|absolute|sticky)/);
+
+  assert.match(
+    splitRules,
+    /\.business-document-main\s*\{[^}]*grid-template-columns:\s*minmax\(290px, \.82fr\) minmax\(430px, 1\.38fr\)/
+  );
+  assert.match(
+    wideRules,
+    /\.business-document-preview\.mobile-active\s*\{[\s\S]*display:\s*flex;/
+  );
+  assert.match(
+    documentWorkspaceStyles,
+    /\.business-document-composer\s*\{\s*grid-row:\s*3;[\s\S]*position:\s*relative/
+  );
+  assert.match(
+    documentWorkspaceStyles,
+    /\.business-document-composer-row textarea\s*\{[\s\S]*max-height:\s*112px/
+  );
+  assert.doesNotMatch(
+    keyboardEffect,
+    /setActiveDocument|setMobilePane|setMessage|setQuote|setInvoice|setPage/
   );
 });
 
@@ -416,6 +533,139 @@ test("Quote quick actions live in the plus menu without a duplicate Quote footer
     (quoteWorkspaceSource.match(/className="business-document-conversation-footer"/g) || []).length,
     1
   );
+});
+
+test("tablet Quote composer gives the input flexible width around compact controls", () => {
+  const start = documentWorkspaceStyles.indexOf(
+    '/*\n * Keep the tablet Quote composer compact'
+  );
+  const end = documentWorkspaceStyles.indexOf(
+    '#root[data-app-layout="tablet"]\n  .deposit-request-workspace',
+    start
+  );
+  const tabletComposer = documentWorkspaceStyles.slice(start, end);
+
+  assert.ok(start >= 0);
+  assert.match(
+    tabletComposer,
+    /business-document-composer-row[\s\S]*grid-template-columns:\s*44px minmax\(0, 1fr\) auto;[\s\S]*gap:\s*4px/
+  );
+  assert.match(
+    tabletComposer,
+    /business-document-composer-plus\s*\{[\s\S]*inline-size:\s*44px;[\s\S]*block-size:\s*44px;/
+  );
+  assert.match(
+    tabletComposer,
+    /business-document-composer-plus-symbol\s*\{[\s\S]*inline-size:\s*34px;[\s\S]*block-size:\s*34px;/
+  );
+  assert.match(
+    tabletComposer,
+    /business-document-composer-input-shell\s*\{[\s\S]*width:\s*100%;[\s\S]*min-width:\s*0;/
+  );
+  assert.match(tabletComposer, /business-document-composer-microphone/);
+  assert.match(quoteWorkspaceSource, /className="business-document-composer-photos"/);
+  assert.match(quoteWorkspaceSource, /className="business-document-composer-microphone"/);
+  assert.doesNotMatch(tabletComposer, /textarea[\s\S]*(?:height|min-height|max-height):/);
+});
+
+test("landscape split composer reclaims gutters while preserving keyboard, portrait, and recording layouts", () => {
+  const start = documentWorkspaceStyles.indexOf("/*\n * Landscape split-view polish only:");
+  const end = documentWorkspaceStyles.indexOf(
+    '#root[data-app-layout="tablet"]\n  .deposit-request-workspace', start
+  );
+  assert.ok(start >= 0 && end > start);
+  const polish = documentWorkspaceStyles.slice(start, end);
+  const blocks = [...polish.matchAll(/(#root[^{}]+)\{([^{}]*)\}/g)];
+  assert.equal(blocks.length, 9);
+  for (const [, selector] of blocks) {
+    assert.match(selector, /data-app-layout="tablet"\]\[data-app-orientation="landscape"/);
+    assert.match(selector, /business-document-workspace:not\(\.is-keyboard-open\):is\(/);
+    assert.match(selector, /data-active-document="quote"/);
+    assert.match(selector, /data-active-document="invoice"/);
+  }
+  assert.match(polish, /business-document-conversation\s*\{\s*padding-inline: 6px;/);
+  assert.match(polish, /composer-row:not\(:has\(\.workflow-microphone-compact-recording\)\)[\s\S]*grid-template-columns: 44px minmax\(0, 1fr\) 44px;[\s\S]*gap: 3px;[\s\S]*padding-inline: 0;/);
+  assert.match(polish, /composer-input-shell\s*\{\s*width: 100%;\s*min-width: 0;/);
+  assert.match(polish, /composer-plus\s*\{\s*inline-size: 44px;\s*min-inline-size: 44px;\s*block-size: 44px;\s*min-block-size: 44px;/);
+  assert.match(polish, /composer-plus-symbol\s*\{[\s\S]*inline-size: 30px;\s*block-size: 30px;[\s\S]*font-size: 22px;/);
+  assert.match(polish, /microphone-compact-dismiss\)\s*\{[\s\S]*inline-size: 44px;\s*min-inline-size: 44px;\s*block-size: 44px;\s*min-block-size: 44px;/);
+  assert.match(polish, /::before\s*\{[\s\S]*inset: 6px;[\s\S]*pointer-events: none;/);
+  assert.match(polish, /microphone-compact-dismiss\) svg\s*\{[\s\S]*inline-size: 18px;\s*block-size: 18px;/);
+  assert.match(polish, /business-document-send-message\s*\{\s*inline-size: 44px;\s*min-inline-size: 44px;/);
+  assert.doesNotMatch(polish, /textarea|composer-photos|visualViewport|visual-viewport|overflow:|transform:|display: none|touch-action/);
+});
+
+test("constrained landscape Quote actions reserve the lane for the two primary controls", () => {
+  const containerStart = documentWorkspaceStyles.indexOf(
+    ".business-document-conversation-context {\n  container: business-document-controls / inline-size;"
+  );
+  const compactStart = documentWorkspaceStyles.indexOf(
+    "@container business-document-controls (max-width: 520px)"
+  );
+  const compactEnd = documentWorkspaceStyles.indexOf(
+    ".business-document-job-context {",
+    compactStart
+  );
+  const compact = documentWorkspaceStyles.slice(compactStart, compactEnd);
+
+  assert.ok(containerStart >= 0);
+  assert.ok(compactStart >= 0 && compactEnd > compactStart);
+  assert.match(
+    compact,
+    /data-app-layout="tablet"\]\[data-app-orientation="landscape"\][\s\S]*data-active-document="quote"/
+  );
+  assert.match(
+    compact,
+    /business-document-control-toolbar[\s\S]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\) 44px;/
+  );
+  assert.match(
+    compact,
+    /business-document-how-it-works[\s\S]*width:\s*44px;[\s\S]*min-width:\s*44px;[\s\S]*height:\s*44px;[\s\S]*min-height:\s*44px;/
+  );
+  assert.match(
+    compact,
+    /business-document-how-it-works-label[\s\S]*display:\s*none;/
+  );
+  assert.doesNotMatch(compact, /font-size:\s*(?:9|8|7|6)px/);
+  assert.doesNotMatch(compact, /data-app-orientation="portrait"/);
+  assert.match(
+    quoteWorkspaceSource,
+    /className="business-document-control-primary"[\s\S]*Let Meetro prefill[\s\S]*className="business-document-control-primary"[\s\S]*Fill form manually/
+  );
+  assert.match(
+    quoteWorkspaceSource,
+    /className="business-document-how-it-works"[\s\S]*aria-label="How it works"[\s\S]*title="How it works"/
+  );
+});
+
+test("split composer stretches through its ancestors without a fixed shell width or centered footer", () => {
+  // Each ancestor keeps normal grid stretching; only accessible controls own
+  // fixed columns. Browser checks separately measure the rendered workspace.
+  const block = (selector) => {
+    const escaped = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const result = documentWorkspaceStyles.match(new RegExp(`^${escaped} \\{([^}]+)\\}`, "m"));
+    assert.ok(result, selector);
+    return result[1];
+  };
+  for (const selector of [
+    ".business-document-chat-shell",
+    ".business-document-composer",
+    ".business-document-composer-row",
+    ".business-document-composer-input-shell",
+  ]) {
+    const declarations = block(selector);
+    assert.match(declarations, /min-width: 0;/);
+    assert.doesNotMatch(declarations, /(?:^|\n)\s*(?:width|inline-size|max-width|max-inline-size):\s*(?:[0-9.]+px|fit-content|max-content)/);
+    assert.doesNotMatch(declarations, /justify-self:\s*(?:center|start|end)|margin(?:-inline)?:[^;]*auto/);
+  }
+  assert.match(block(".business-document-chat-shell"), /display: grid;/);
+  assert.match(block(".business-document-composer"), /max-width: 100%;/);
+  assert.match(block(".business-document-composer-input-shell"), /flex: 1 1 auto;/);
+  const shellStart = quoteWorkspaceSource.indexOf('className="business-document-composer-input-shell"');
+  const micStart = quoteWorkspaceSource.indexOf('className="business-document-composer-microphone"', shellStart);
+  const shell = quoteWorkspaceSource.slice(shellStart, micStart);
+  assert.match(shell, /<textarea[\s\S]*className="business-document-composer-photos"/);
+  assert.match(quoteWorkspaceSource, /Math\.min\(measuredHeight, 112\)/);
 });
 
 test("workspace navigation replaces the phone dock at tablet and desktop widths", () => {

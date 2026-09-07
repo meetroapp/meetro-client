@@ -1,4 +1,5 @@
 import { useRef, useState } from "react";
+import CanonicalVisitScheduleHistory from "./CanonicalVisitScheduleHistory.jsx";
 import {
   activateCanonicalVisitAuthority,
   runCanonicalVisitCommand,
@@ -124,6 +125,7 @@ function locationText(item, language) {
 
 function ScheduleCard({
   item,
+  setPage,
   language,
   running,
   onAction,
@@ -133,6 +135,7 @@ function ScheduleCard({
   shareTruthCurrent,
 }) {
   const visit = item.kind === "visit";
+  const depositRequired = !visit && item.semanticState === "DEPOSIT_REQUIRED";
   const shareable = shareTruthCurrent && isCanonicalScheduleShareable(item);
   return (
     <article style={styles.card} data-schedule-identity={visit ? item.id : `${item.purpose}:${item.jobId}`}>
@@ -143,7 +146,9 @@ function ScheduleCard({
           <p style={styles.jobTitle}>{item.job.title}</p>
         </div>
         <span style={styles.statePill}>
-          {item.semanticState === "WAITING_FOR_CUSTOMER"
+          {depositRequired
+            ? t("professionalScheduleDepositRequired", language)
+            : item.semanticState === "WAITING_FOR_CUSTOMER"
             ? t("professionalScheduleWaitingMessage", language)
             : item.semanticState === "CHANGE_REQUESTED"
               ? "Customer proposed a new time"
@@ -163,6 +168,9 @@ function ScheduleCard({
         </p>
       )}
       <p style={styles.location}>{locationText(item, language)}</p>
+      {depositRequired && (
+        <p style={styles.warning}>{t("professionalScheduleDepositRequiredDetail", language)}</p>
+      )}
       {item.latestCustomerChangeRequest?.reason && (
         <p style={styles.changeNote}>{item.latestCustomerChangeRequest.reason}</p>
       )}
@@ -228,6 +236,14 @@ function ScheduleCard({
           </button>
         )}
       </div>
+      {visit && (
+        <CanonicalVisitScheduleHistory
+          key={`${item.jobId}:${item.id}`}
+          visit={item}
+          language={language}
+          setPage={setPage}
+        />
+      )}
     </article>
   );
 }
@@ -561,6 +577,7 @@ export default function ProfessionalScheduleWorkspace({
   return (
     <section
       ref={workspaceRef}
+      className="professional-schedule-workspace"
       tabIndex={-1}
       aria-labelledby="professional-schedule-title"
       style={styles.workspace}
@@ -610,6 +627,7 @@ export default function ProfessionalScheduleWorkspace({
                 <ScheduleCard
                   key={item.kind === "visit" ? item.id : `${item.purpose}:${item.jobId}`}
                   item={item}
+                  setPage={setPage}
                   language={language}
                   running={running}
                   onAction={runVisitAction}
@@ -641,6 +659,7 @@ export default function ProfessionalScheduleWorkspace({
                   <ScheduleCard
                     key={item.id}
                     item={item}
+                    setPage={setPage}
                     language={language}
                     running={running}
                     onAction={runVisitAction}

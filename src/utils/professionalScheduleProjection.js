@@ -147,16 +147,21 @@ function normalizeOpportunity(value) {
   const customer = normalizeCustomer(source?.customer);
   const location = normalizeLocation(source?.location, "JOB_SERVICE_LOCATION");
   const actions = record(source?.actions);
+  const readyToSchedule = source?.semanticState === "READY_TO_SCHEDULE" &&
+    ["AVAILABLE", "ACTIVE"].includes(authority?.state) &&
+    actions?.canStartScheduling === true;
+  const depositRequired = source?.purpose === "APPROVED_WORK" &&
+    source?.semanticState === "DEPOSIT_REQUIRED" &&
+    authority?.state === "LOCKED" &&
+    actions?.canStartScheduling === false;
   if (
     !source ||
-    source.semanticState !== "READY_TO_SCHEDULE" ||
+    (!readyToSchedule && !depositRequired) ||
     !jobId ||
     !PURPOSES.includes(source.purpose) ||
-    !["AVAILABLE", "ACTIVE"].includes(authority?.state) ||
     !job ||
     !customer ||
     !location ||
-    actions?.canStartScheduling !== true ||
     typeof actions?.canViewJob !== "boolean" ||
     approvalSource === undefined ||
     (source.purpose === "EVALUATION" &&
@@ -194,7 +199,7 @@ function normalizeOpportunity(value) {
     customer,
     location,
     actions: Object.freeze({
-      canStartScheduling: true,
+      canStartScheduling: actions.canStartScheduling,
       canViewJob: actions.canViewJob === true,
     }),
   });

@@ -23,15 +23,15 @@ export default function CompactCurrentJobHeader({
         </div>
 
         <div className="compact-current-job-header__state" aria-label="Job status and next step">
-          <div className="compact-current-job-header__state-item">
+          <div className="compact-current-job-header__state-item compact-current-job-header__state-item--status">
             <span className="compact-current-job-header__label">Job status</span>
             <strong className="compact-current-job-header__pill">{status}</strong>
           </div>
-          <div className="compact-current-job-header__state-item">
+          <div className="compact-current-job-header__state-item compact-current-job-header__state-item--next">
             <span className="compact-current-job-header__label">Next</span>
             <strong>{nextStep}</strong>
           </div>
-          <div className="compact-current-job-header__state-item">
+          <div className="compact-current-job-header__state-item compact-current-job-header__state-item--responsibility">
             <span className="compact-current-job-header__label">Who acts next</span>
             <strong>{responsibility}</strong>
           </div>

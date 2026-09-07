@@ -1316,3 +1316,45 @@ test("presentation language keeps Visit completion separate from lifecycle compl
     assert.match(componentSource, new RegExp(label));
   }
 });
+
+for (const [name, mutate] of [
+  ["unknown event version", (value) => { value.events[0].visitVersion = 2; }],
+  ["unknown previous version", (value) => { value.events[0].previousVisitVersion = 2; }],
+  ["duplicate event identity", (value) => { value.events.push({ ...value.events[0] }); }],
+]) {
+  test(`exact Visit detail rejects ${name} instead of substituting current schedule`, async () => {
+    const current = visit(); const evidence = history(current); mutate(evidence);
+    await assert.rejects(fetchCanonicalVisitDetail({
+      jobId: ids.job, visitId: ids.visit, purpose: "EVALUATION",
+      authFetchImpl: async () => ({ response: { ok: true }, data: { success: true, visit: { ...current, history: evidence } } }),
+    }));
+  });
+}
+
+test("exact history read rejects a different Visit even on the same Job", async () => {
+  const current = visit({ id: ids.event });
+  await assert.rejects(fetchCanonicalVisitDetail({
+    jobId: ids.job, visitId: ids.visit, purpose: "EVALUATION",
+    authFetchImpl: async () => ({ response: { ok: true }, data: { success: true, visit: { ...current, history: history(current) } } }),
+  }));
+});
+
+test("reschedule uses the current version and same Visit endpoint even with earlier history attached", async () => {
+  const current = visit({ currentVersion: 3 });
+  current.history = history(visit());
+  const calls = [];
+  const result = await runCanonicalVisitCommand({
+    jobId: ids.job, command: "reschedule", visit: current,
+    schedule: { scheduledStartAt: startAt, scheduledEndAt: endAt, timeZone: "America/New_York", locationMode: "JOB_SERVICE_LOCATION" },
+    authFetchImpl: async (endpoint, options) => {
+      calls.push({ endpoint, options });
+      return { response: { ok: true }, data: { success: true, visit: visit({ currentVersion: 4 }) } };
+    },
+  });
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].endpoint, `/jobs/${ids.job}/visits/${ids.visit}/reschedule`);
+  assert.equal(JSON.parse(calls[0].options.body).expectedVersion, 3);
+  assert.equal(result.id, ids.visit);
+  assert.equal(current.currentVersion, 3);
+  assert.equal(current.history.versions[0].version, 1);
+});
