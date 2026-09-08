@@ -1,3 +1,4 @@
+import "../styles/homeDashboard.css";
 import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { useEffect, useState } from "react";
 import BottomNav from "../components/BottomNav";
@@ -484,14 +485,14 @@ function BusinessDashboard({ setPage }) {
   const dashboardText = {
     en: {
       dashboard: "Business Dashboard",
-      subtitle: "Handle what matters first.",
+      subtitle: "Keep your business moving forward.",
       online: "Online",
       offline: "Offline",
       available: "Available now",
       notAvailable: "Not accepting jobs",
       messages: "Communication",
       unread: "Unread",
-      todayJobs: "Today's Jobs",
+      todayJobs: "Today's Schedule",
       activeJobs: "Active Jobs",
       pendingQuotes: "Pending Quotes",
       scheduledToday: "Scheduled today",
@@ -536,7 +537,7 @@ function BusinessDashboard({ setPage }) {
       workCenter: "Work Center",
       workSubtitle: "Active jobs, quotes, and work records.",
       openWorkCenter: "Continue Work",
-      newLeads: "Matching Requests",
+      newLeads: "New Leads & Matching Requests",
       viewAllLeads: "Review leads",
     },
     es: {
@@ -775,24 +776,8 @@ function BusinessDashboard({ setPage }) {
           onClick: openBusinessProfile,
         };
   const dashboardQuickAccessItems = [
-    {
-      key: "schedule",
-      icon: "schedule",
-      label: text.quickAccessSchedule,
-      note: text.quickAccessScheduleNote,
-      tone: "#0284c7",
-      toneBg: "rgba(2,132,199,0.13)",
-      onClick: () => openWorkCenterSection("schedule", { filter: "today" }),
-    },
-    {
-      key: "messages",
-      icon: "messages",
-      label: text.quickAccessMessages,
-      note: text.quickAccessMessagesNote,
-      tone: "#1f4d34",
-      toneBg: "rgba(31,77,52,0.12)",
-      onClick: () => setPage("messagesInbox"),
-    },
+
+
     {
       key: "hiring",
       icon: "hiringCenter",
@@ -809,7 +794,6 @@ function BusinessDashboard({ setPage }) {
       note: text.quickAccessQuoteBuilderNote,
       tone: "#d97706",
       toneBg: "rgba(217,119,6,0.13)",
-      desktopDuplicate: true,
       onClick: () => {
         clearGenericNewQuoteContext();
         localStorage.removeItem("selectedQuoteRequest");
@@ -828,18 +812,10 @@ function BusinessDashboard({ setPage }) {
       note: text.quickAccessInvoiceBuilderNote,
       tone: "#16a34a",
       toneBg: "rgba(22,163,74,0.13)",
-      desktopDuplicate: true,
       onClick: () => setPage("invoiceBuilder"),
     },
-    {
-      key: "business-profile",
-      icon: "businessProfile",
-      label: t("businessProfile", language),
-      note: text.quickAccessBusinessProfileNote,
-      tone: "#14351f",
-      toneBg: "rgba(31,77,52,0.13)",
-      onClick: openBusinessProfile,
-    },
+
+    { key: "timesheet", icon: "schedule", label: "Timesheet", note: "Track hours & work time", tone: "#3B82F6", toneBg: "#EFF6FF", onClick: () => setPage("teamOperations?view=timesheets") },
   ];
 
   return (
@@ -937,7 +913,7 @@ function BusinessDashboard({ setPage }) {
             }
 
             .business-dashboard-community-entry {
-              display: none !important;
+              display: block !important;
             }
 
             .business-dashboard-quick-access-grid {
@@ -997,7 +973,7 @@ function BusinessDashboard({ setPage }) {
               }
 
               .business-dashboard-main-grid {
-                grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
+                grid-template-columns: minmax(0, 1fr);
               }
 
               .business-dashboard-tools-row {
@@ -1009,7 +985,7 @@ function BusinessDashboard({ setPage }) {
       </style>
       <div className="business-dashboard-content-lane" style={dashboardContentLane}>
         <section className="business-dashboard-header-section" style={dashboardHeaderSection}>
-          <div style={topBar}>
+          <div className="home-dashboard-topbar" style={topBar}>
             <div style={brandWrap}>
               <span style={brandMain}>Meetro</span>
               <span style={brandBadge}>Business</span>
@@ -1088,7 +1064,8 @@ function BusinessDashboard({ setPage }) {
           <section className="business-dashboard-hero-card" style={heroCard}>
             <div style={heroHeader}>
               <div>
-                <h1 style={heroTitle}>{text.dashboard}</h1>
+                <p className="home-dashboard-greeting">{language === "en" ? "Welcome back" : text.dashboard}, {businessName}</p>
+                <h1 style={heroTitle}>{text.reviewOpportunities}</h1>
 
                 <p style={heroSubtitle}>{text.subtitle}</p>
                 <p style={businessNameLine}>{businessName}</p>
@@ -1144,22 +1121,41 @@ function BusinessDashboard({ setPage }) {
               </button>
             </div>
 
-            <section
-              className="business-dashboard-quick-access"
-              style={quickAccessPanel}
-              aria-label={text.quickAccessTitle}
-            >
-              <div style={quickAccessHeader}>
-                <span>{text.quickAccessTitle}</span>
+
+          </section>
+        </section>
+
+            <section className="business-dashboard-leads-card" style={leadsCard}>
+              <div style={sectionTop}>
+                <h2 style={sectionTitle}>{text.newLeads}</h2>
+
+                <button
+                  style={linkButton}
+                  onClick={() => setPage("businessLeads")}
+                >
+                  {text.viewAllLeads} →
+                </button>
               </div>
 
-              <div className="business-dashboard-quick-access-grid" style={quickAccessGrid}>
-                {dashboardQuickAccessItems.map((item) => (
-                  <DashboardQuickAccessShortcut key={item.key} {...item} />
-                ))}
+              <div style={emptyLeadsState} role={leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE ? "alert" : "status"}>
+                {leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.LOADING ? (
+                  <><strong>Loading matching requests…</strong><p>Meetro is checking the authorized opportunity projection.</p></>
+                ) : leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE ? (
+                  <><strong>Request opportunities unavailable</strong><p>Meetro could not verify eligible requests. Try again from Business Leads.</p></>
+                ) : leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.EMPTY ? (
+                  <><strong>No matching requests are available right now.</strong><p>Authorized request matching is active for your saved services and service area.</p></>
+                ) : (
+                  <><div className="home-dashboard-lead-summary"><strong>{authoritativeLeads.length} matching {authoritativeLeads.length === 1 ? "request" : "requests"}</strong><span>{authoritativeLeads.length} AVAILABLE</span></div>
+                  {authoritativeLeads.slice(0, 1).map((lead) => <div className="home-dashboard-lead" key={lead.request_id}>
+                    <h3>{lead.project_title || lead.title}</h3>
+                    <p>{[lead.city, lead.state].filter(Boolean).join(", ")}</p>
+                    <p>{lead.project_description || lead.description}</p>
+                    <button type="button" onClick={() => setPage("businessLeads")}>Review Lead →</button>
+                  </div>)}</>
+                )}
               </div>
             </section>
-
+        <section className="home-dashboard-glance" aria-labelledby="dashboard-glance-title"><h2 id="dashboard-glance-title">At a Glance</h2>
             <div className="business-dashboard-glance-grid" style={glanceGrid}>
               <div
                 style={
@@ -1170,7 +1166,7 @@ function BusinessDashboard({ setPage }) {
               >
                 <GlanceItem
                   title={text.todayJobs}
-                  value={todayScheduleCount}
+                  value={canonicalScheduleCounts ? todayScheduleCount || "No visits today" : "Schedule unavailable"}
                   note={
                     canonicalScheduleAttentionCount > 0
                       ? (canonicalScheduleCounts?.changeRequested || 0) > 0
@@ -1188,7 +1184,7 @@ function BusinessDashboard({ setPage }) {
 
               <GlanceItem
                 title={text.activeJobs}
-                value={activeProjectsCount}
+                value={activeProjectsCount || "Review active jobs"}
                 note={text.inProgress}
                 onClick={openFirstActiveProjectConversation}
               />
@@ -1202,7 +1198,7 @@ function BusinessDashboard({ setPage }) {
               >
                 <GlanceItem
                   title={text.pendingQuotes}
-                  value={pendingQuotesCount}
+                  value={pendingQuotesCount || "Review quotes"}
                   note={text.awaitingResponse}
                   onClick={() =>
                     openWorkCenterSection("quotes", {
@@ -1212,8 +1208,23 @@ function BusinessDashboard({ setPage }) {
                 />
               </div>
             </div>
-          </section>
         </section>
+            <section
+              className="business-dashboard-quick-access"
+              style={quickAccessPanel}
+              aria-label={text.quickAccessTitle}
+            >
+              <div style={quickAccessHeader}>
+                <span>{text.quickAccessTitle}</span>
+              </div>
+
+              <div className="business-dashboard-quick-access-grid" style={quickAccessGrid}>
+                {dashboardQuickAccessItems.map(({ key, ...item }) => (
+                  <DashboardQuickAccessShortcut key={key} {...item} />
+                ))}
+              </div>
+            </section>
+
 
         <section
           className="business-dashboard-community-entry"
@@ -1297,32 +1308,7 @@ function BusinessDashboard({ setPage }) {
             </section>
           </div>
 
-          <div className="business-dashboard-secondary-column" style={dashboardDesktopFlow}>
-            <section className="business-dashboard-leads-card" style={leadsCard}>
-              <div style={sectionTop}>
-                <h2 style={sectionTitle}>{text.newLeads}</h2>
 
-                <button
-                  style={linkButton}
-                  onClick={() => setPage("businessLeads")}
-                >
-                  {text.viewAllLeads} →
-                </button>
-              </div>
-
-              <div style={emptyLeadsState} role={leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE ? "alert" : "status"}>
-                {leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.LOADING ? (
-                  <><strong>Loading matching requests…</strong><p>Meetro is checking the authorized opportunity projection.</p></>
-                ) : leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE ? (
-                  <><strong>Request opportunities unavailable</strong><p>Meetro could not verify eligible requests. Try again from Business Leads.</p></>
-                ) : leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.EMPTY ? (
-                  <><strong>No matching requests are available right now.</strong><p>Authorized request matching is active for your saved services and service area.</p></>
-                ) : (
-                  <><strong>{authoritativeLeads.length} matching {authoritativeLeads.length === 1 ? "request" : "requests"}</strong><p>Review the authoritative opportunities available to your business.</p></>
-                )}
-              </div>
-            </section>
-          </div>
         </div>
 
         <div className="business-dashboard-tools-row" style={dashboardDesktopFlow}>

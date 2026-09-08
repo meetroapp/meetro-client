@@ -1,3 +1,4 @@
+import useAskMeetroContext from "../hooks/useAskMeetroContext.js";
 import { useCallback, useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
@@ -76,6 +77,9 @@ function CustomerRelationshipsCenter({ setPage }) {
     error: "",
   });
   const activityRequestRef = useRef(0);
+  useAskMeetroContext(workspaceState.status === "ready" && workspaceState.detail
+    ? { businessContactId: workspaceState.detail.contact?.id, relationshipId: workspaceState.detail.relationship?.id, label: workspaceState.detail.contact?.displayName || "" }
+    : {});
 
   const loadActivity = useCallback(async (relationshipId) => {
     if (!relationshipId) return;

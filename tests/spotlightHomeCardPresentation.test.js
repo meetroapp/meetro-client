@@ -170,7 +170,7 @@ test("Spotlight CTA is a full-width bottom action with unchanged routing", () =>
 test("Home help cards preserve behavior in a responsive grounded layout", () => {
   const help = sourceBetween(
     homeSource,
-    '<section style={quickHelpSection}>',
+    '<section className="home-dashboard-help" style={quickHelpSection}>',
     '<section style={messagesCompactSection}>'
   );
 

@@ -1,3 +1,4 @@
+import useAskMeetroContext from "../hooks/useAskMeetroContext.js";
 import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
@@ -384,6 +385,9 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
     Number(localStorage.getItem("meetroViewedOpportunityCount") || "0")
   );
   const [selectedWorkCenterJob, setSelectedWorkCenterJob] = useState(null);
+  useAskMeetroContext(selectedWorkCenterJob && isCanonicalWorkCenterEntry(selectedWorkCenterJob)
+    ? { jobId: selectedWorkCenterJob.jobId, label: selectedWorkCenterJob.title || selectedWorkCenterJob.projectTitle || "" }
+    : {});
   const [workCenterAccordionOpenByKey, setWorkCenterAccordionOpenByKey] =
     useState({});
   const selectedWorkCenterJobIdentity = selectedWorkCenterJob

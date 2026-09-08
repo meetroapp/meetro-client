@@ -159,7 +159,7 @@ test("actual initialized Quote and Invoice workspaces render clean and leave ung
     });
     assert.match(
       editedMarkup,
-      /business-document-save-status[^>]*>Working draft<\/div>/
+      /business-document-save-status[^>]*>Unsaved changes<\/div>/
     );
   } finally {
     await vite.close();

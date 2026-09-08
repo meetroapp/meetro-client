@@ -1,8 +1,9 @@
+import { NativeSpeechRecognition } from "../utils/assistantSpeechRecognition.js";
 import { parseQuoteInvoiceCommand, lookupQuoteInvoiceCommand, quoteInvoiceResolutionMessage, stageQuoteInvoiceInstruction } from "../utils/quoteToInvoice.js";
 import { assistantQuoteContextFromRoute, isAssistantQuoteAction, isExplicitStandaloneNewQuoteIntent, resolveAssistantQuoteNavigation } from "../utils/assistantQuoteNavigation.js";
 import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Capacitor, registerPlugin } from "@capacitor/core";
+import { Capacitor } from "@capacitor/core";
 import { t } from "../utils/language";
 import useLanguage from "../hooks/useLanguage";
 import { getHomeownerLifecycleStage } from "../utils/homeownerLifecycle";
@@ -62,7 +63,7 @@ import {
   isLegacyWorkflowStorageKey,
 } from "../utils/clientWorkflowStoragePolicy";
 
-const NativeSpeechRecognition = registerPlugin("SpeechRecognition");
+
 const ASSISTANT_LAUNCHER_EDGE_MARGIN = 18;
 const ASSISTANT_LAUNCHER_MOBILE_EDGE_MARGIN = 20;
 const ASSISTANT_EXPANDED_CARD_VIEWPORT_MARGIN = 14;
@@ -2472,7 +2473,7 @@ function getAssistantFirstName() {
   return String(storedName || "").trim().split(/\s+/)[0] || "";
 }
 
-function MeetroAssistant({ currentPage = "", setPage }) {
+function MeetroAssistant({ currentPage = "", setPage, onOpenWorkspace }) {
   const appLayoutMetrics = useAppLayoutMetrics();
   const [open, setOpen] = useState(false);
   const [wakeOpen, setWakeOpen] = useState(false);
@@ -2953,6 +2954,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   useEffect(() => {
     function handleAssistantOpen(event) {
       const detail = event?.detail || {};
+      if (onOpenWorkspace) { onOpenWorkspace(detail); return; }
       const initialQuestion = String(detail.initialQuestion || detail.question || "").trim();
 
       if (initialQuestion) {
@@ -2968,7 +2970,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     return () => {
       window.removeEventListener("meetro:assistant:open", handleAssistantOpen);
     };
-  }, [currentPage, assistantContextPage]);
+  }, [currentPage, assistantContextPage, onOpenWorkspace]);
 
   useEffect(() => {
     function handleCompanionIdentityChange() {
@@ -3785,6 +3787,8 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       launcherDragRef.current = null;
       return;
     }
+
+    if (onOpenWorkspace) { onOpenWorkspace(); return; }
 
     if (launcherAction === "open") {
       openAssistantFromLauncher();

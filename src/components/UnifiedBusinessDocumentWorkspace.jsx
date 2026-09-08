@@ -161,6 +161,7 @@ import {
   updateMobileDocumentSelectorVisibility,
 } from "../utils/mobileDocumentSelector.js";
 import "./UnifiedBusinessDocumentWorkspace.css";
+import "./QuoteInvoiceMobileFlow.css";
 
 const NUMBERING_SETUP_PENDING = Symbol("BUSINESS_DOCUMENT_NUMBERING_SETUP_PENDING");
 
@@ -1052,7 +1053,7 @@ function WorkspaceDialog({ titleId, title, children, actions, onClose, openAtTop
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
   }, []);
-  return <>{onClose ? <button type="button" className="business-document-manual-backdrop" aria-label={`Close ${title}`} onClick={onClose} /> : <div className="business-document-manual-backdrop" aria-hidden="true" />}<section ref={dialogRef} className="business-document-confirm" role="dialog" aria-modal="true" aria-labelledby={titleId}><h2 ref={headingRef} id={titleId} tabIndex={openAtTop ? -1 : undefined}>{title}</h2>{children}<footer>{actions.map((action, index) => <button ref={index === 0 ? firstRef : undefined} key={action.label} type="button" className={action.primary ? "business-document-primary" : action.destructive ? "business-document-destructive" : ""} disabled={action.disabled} onClick={action.onClick}>{action.label}</button>)}</footer></section></>;
+  return <>{onClose ? <button type="button" className="business-document-manual-backdrop" aria-label={`Close ${title}`} onClick={onClose} /> : <div className="business-document-manual-backdrop" aria-hidden="true" />}<section ref={dialogRef} className="business-document-confirm" data-dialog-purpose={titleId} role="dialog" aria-modal="true" aria-labelledby={titleId}><h2 ref={headingRef} id={titleId} tabIndex={openAtTop ? -1 : undefined}>{title}</h2>{children}<footer>{actions.map((action, index) => <button ref={index === 0 ? firstRef : undefined} key={action.label} type="button" className={action.primary ? "business-document-primary" : action.destructive ? "business-document-destructive" : ""} disabled={action.disabled} onClick={action.onClick}>{action.label}</button>)}</footer></section></>;
 }
 
 function NewQuoteCustomerSetupDialog({
@@ -1076,6 +1077,10 @@ function NewQuoteCustomerSetupDialog({
     !search || customer.displayName.toLocaleLowerCase().includes(search) ||
       customer.jobs.some((job) => `${job.title} ${job.city || ""} ${job.serviceArea || ""}`.toLocaleLowerCase().includes(search))
   );
+  const externalCustomers = state.externalOptions.filter(({ contact }) =>
+    !search || [businessContactDisplayName(contact), contact.companyName, contact.email, contact.phone]
+      .filter(Boolean).join(" ").toLocaleLowerCase().includes(search)
+  );
   const selectedMeetroCustomer = state.meetroCustomers.find(
     (customer) => customer.customerId === state.selectedMeetroCustomerId
   );
@@ -1096,7 +1101,7 @@ function NewQuoteCustomerSetupDialog({
       actions={actions}
       openAtTop
     >
-      <div className="new-quote-customer-setup">
+      <div className="new-quote-customer-setup" data-customer-step={state.step}>
         {state.step === "CUSTOMER_TYPE" ? <>
           <p className="new-quote-customer-question">Who is this Quote for?</p>
           <button type="button" disabled={state.busy} onClick={() => onCustomerType("MEETRO")}><strong>Meetro Customer</strong><span>Already connected through Meetro</span></button>
@@ -1112,11 +1117,12 @@ function NewQuoteCustomerSetupDialog({
         </> : null}
         {state.step === "EXTERNAL_CHOICE" ? <>
           <button type="button" disabled={state.busy} onClick={() => onExternalChoice("EXISTING")}><strong>Choose Existing Customer</strong><span>Use a saved Customer relationship</span></button>
-          <p>or</p>
+          <p className="new-quote-choice-divider">or</p>
           <button type="button" disabled={state.busy} onClick={() => onExternalChoice("ADD")}><strong>Add New Customer</strong><span>Save a durable Customer contact first</span></button>
         </> : null}
         {state.step === "EXTERNAL_EXISTING" ? <>
-          {state.busy ? <p role="status">Loading saved customers…</p> : state.externalOptions.length ? <div className="new-quote-option-list">{state.externalOptions.map(({ contact, relationship }) => <button type="button" key={relationship.id} disabled={state.busy} onClick={() => onExternalExisting(contact, relationship)}><strong>{businessContactDisplayName(contact)}</strong><span>{[contact.companyName, contact.email, contact.phone].filter(Boolean).join(" · ")}</span></button>)}</div> : <p>No active saved Customer relationship is available.</p>}
+          <label className="new-quote-customer-search">Search customers<input type="search" value={state.search} placeholder="Search customers..." onChange={(event) => onSearch(event.target.value)} /></label>
+          {state.busy ? <p role="status">Loading saved customers…</p> : externalCustomers.length ? <div className="new-quote-option-list new-quote-external-list">{externalCustomers.map(({ contact, relationship }) => <button type="button" key={relationship.id} disabled={state.busy} onClick={() => onExternalExisting(contact, relationship)}><MeetroIcon name="customerRelationships" size={24} decorative /><span className="new-quote-customer-row-copy"><strong>{businessContactDisplayName(contact)}</strong><span>{[contact.companyName, contact.email, contact.phone].filter(Boolean).join(" · ")}</span></span><span className="new-quote-customer-chevron" aria-hidden="true">›</span></button>)}</div> : <p role="status">{state.externalOptions.length ? "No customers match your search." : "No active saved Customer relationship is available."}</p>}
         </> : null}
         {state.step === "EXTERNAL_ADD" ? <form onSubmit={(event) => { event.preventDefault(); onExternalCreate(); }}>
           <label>Customer type<select value={state.form.partyType} disabled={state.busy} onChange={(event) => onExternalForm("partyType", event.target.value)}><option value="PERSON">Person</option><option value="ORGANIZATION">Organization</option></select></label>
@@ -5457,7 +5463,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         </div>
         <div className="business-document-header-actions">
           <button type="button" className="business-document-start-new" disabled={startNewState.busy} aria-busy={startNewState.busy && startNewState.documentType === activeDocument} onClick={() => void startNewDocument(activeDocument)}>{startNewLabel}</button>
-          <div className="business-document-save-status" aria-live="polite">{activeSavePresentation.savedAt ? `Saved · ${new Date(activeSavePresentation.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : activeDocument === "quote" && !activeSaved ? "Working draft" : activeDirty && !(job.customerLinkedFromJob && !activeSaved) ? "Unsaved changes" : "Not saved"}</div>
+          <div className="business-document-save-status" data-dirty={activeDirty && !(job.customerLinkedFromJob && !activeSaved)} aria-live="polite">{activeDirty && !(job.customerLinkedFromJob && !activeSaved) ? "Unsaved changes" : activeSavePresentation.savedAt ? `Saved · ${new Date(activeSavePresentation.savedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}` : activeDocument === "quote" && !activeSaved ? "Working draft" : "Not saved"}</div>
           {startNewState.error && startNewState.documentType === activeDocument ? <p className="business-document-start-new-error" role="alert">{startNewState.error}</p> : null}
           {howItWorksOpen ? <BusinessDocumentWorkflowGuide onClose={closeHowItWorks} /> : null}
         </div>
@@ -5518,6 +5524,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
                   <textarea
                     ref={messageRef}
                     id="business-document-message"
+                    aria-label={`Ask Meetro about this ${activeDocument}`}
                     value={message}
                     rows={1}
                     placeholder={

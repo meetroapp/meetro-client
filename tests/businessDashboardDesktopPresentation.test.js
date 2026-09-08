@@ -11,11 +11,11 @@ test("business dashboard desktop quick access uses explicit generic-new Quote in
   const quickAccessBlock = source.slice(quickAccessStart, quickAccessEnd);
 
   assert.match(quickAccessBlock, /setPage\("hiringCenter"\)/);
-  assert.match(quickAccessBlock, /setPage\("messagesInbox"\)/);
+  assert.doesNotMatch(quickAccessBlock, /setPage\("messagesInbox"\)/);
   assert.match(quickAccessBlock, /setPage\("quoteBuilder\?new=1"\)/);
   assert.match(quickAccessBlock, /setPage\("invoiceBuilder"\)/);
-  assert.match(quickAccessBlock, /openWorkCenterSection\("schedule", \{ filter: "today" \}\)/);
-  assert.match(quickAccessBlock, /onClick: openBusinessProfile/);
+  assert.doesNotMatch(quickAccessBlock, /key: "schedule"/);
+  assert.doesNotMatch(quickAccessBlock, /onClick: openBusinessProfile/);
   assert.match(source, /const openBusinessProfile = \(\) => \{[\s\S]*setPage\("contractorProfile"\);/);
   assert.doesNotMatch(quickAccessBlock, /businessCommandCenter/);
 });
@@ -41,46 +41,19 @@ test("business dashboard desktop presentation begins at the stable tablet breakp
     source,
     /\.business-dashboard-quick-access \{\s*display: grid !important;/
   );
-  assert.match(source, /\.business-dashboard-community-entry \{\s*display: none !important;/);
+  assert.match(source, /\.business-dashboard-community-entry \{\s*display: block !important;/);
   assert.match(source, /\.business-dashboard-content-lane[\s\S]*max-width: 1180px;/);
   assert.match(source, /\.business-dashboard-content-lane[\s\S]*margin: 0;/);
   assert.match(source, /const dashboardContentLane = \{\s*display: "contents",\s*\}/);
   assert.match(source, /const dashboardDesktopFlow = \{\s*display: "contents",\s*\}/);
 });
 
-test("business dashboard desktop Quick Access keeps non-duplicated actions and mobile keeps all actions", () => {
-  assert.match(
-    source,
-    /\.business-dashboard-quick-access \{\s*display: grid !important;/
-  );
-  assert.match(
-    source,
-    /\.business-dashboard-quick-access-item--desktop-duplicate \{\s*display: none !important;/
-  );
-
-  assert.match(source, /key: "schedule"/);
-  assert.match(source, /key: "messages"/);
-  assert.match(source, /key: "hiring"/);
-  assert.match(source, /key: "business-profile"/);
-
-  assert.match(
-    source,
-    /key: "quote-builder"[\s\S]*desktopDuplicate: true/
-  );
-  assert.match(
-    source,
-    /key: "invoice-builder"[\s\S]*desktopDuplicate: true/
-  );
-
-  assert.match(
-    source,
-    /grid-template-columns: repeat\(4, minmax\(0, 1fr\)\) !important;/
-  );
-
-  assert.match(source, /tone: "#0284c7"/);
-  assert.match(source, /tone: "#d97706"/);
-  assert.match(source, /tone: "#16a34a"/);
-  assert.match(source, /toneBg:/);
+test("business dashboard Quick Access uses the four approved tools at every size", () => {
+  const block = source.slice(source.indexOf("const dashboardQuickAccessItems"), source.indexOf("  return (", source.indexOf("const dashboardQuickAccessItems")));
+  for (const key of ["hiring", "quote-builder", "invoice-builder", "timesheet"]) assert.ok(block.includes(`key: "${key}"`));
+  for (const key of ["schedule", "messages", "business-profile"]) assert.ok(!block.includes(`key: "${key}"`));
+  assert.doesNotMatch(block, /desktopDuplicate: true/);
+  assert.match(block, /teamOperations\?view=timesheets/);
 });
 
 test("business dashboard renders a professional mobile Community entry to the shared destination", () => {

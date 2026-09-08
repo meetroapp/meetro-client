@@ -265,7 +265,7 @@ test("desktop layout removes BottomNav reservation without changing mobile safe 
     bottomNavSource,
     /padding-bottom: max\(32px, env\(safe-area-inset-bottom, 0px\)\) !important;/
   );
-  assert.match(indexCssSource, /--meetro-layout-sidebar-width: 284px/);
+  assert.match(indexCssSource, /--meetro-layout-sidebar-width: 240px/);
   assert.match(indexCssSource, /--meetro-sidebar-width: var\(--meetro-layout-sidebar-width\)/);
   assert.match(
     bottomNavSource,
@@ -282,8 +282,8 @@ test("desktop layout removes BottomNav reservation without changing mobile safe 
 });
 
 test("desktop navigation width supports full workspace labels", () => {
-  assert.match(indexCssSource, /--meetro-layout-sidebar-width: 284px/);
-  assert.match(bottomNavSource, /width: "calc\(var\(--meetro-sidebar-width, 284px\) - 36px\)"/);
+  assert.match(indexCssSource, /--meetro-layout-sidebar-width: 240px/);
+  assert.match(bottomNavSource, /width: "var\(--meetro-sidebar-width, 240px\)"/);
   assert.match(bottomNavSource, /label: t\("navigationCommunication", language\)/);
   assert.match(bottomNavSource, /label: "Meetro Moments"/);
   assert.match(bottomNavSource, /label: t\("navigationProfileAccount", language\)/);

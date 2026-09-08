@@ -1,0 +1,80 @@
+@font-face { font-family: Poppins; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/poppins/Poppins-Regular.ttf') format('truetype'); }
+@font-face { font-family: Poppins; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/poppins/Poppins-SemiBold.ttf') format('truetype'); }
+@font-face { font-family: Poppins; font-style: normal; font-weight: 700; font-display: swap; src: url('/fonts/poppins/Poppins-Bold.ttf') format('truetype'); }
+/* Home content stays visually distinct from the persistent navigation shell. */
+.business-dashboard, .homeowner-home-dashboard {
+  background: #FAFAFC !important;
+  font-family: Poppins, system-ui, sans-serif !important;
+  color: #111827;
+}
+.business-dashboard-content-lane { display: flex !important; flex-direction: column; gap: 24px; }
+.business-dashboard-header-section, .business-dashboard-hero-card {
+  background: transparent !important; border: 0 !important; box-shadow: none !important;
+  padding: 0 !important; margin: 0 !important;
+}
+.business-dashboard-hero-card h1, .home-dashboard-welcome h1 { font-size: clamp(26px, 3vw, 32px) !important; line-height: 1.25; margin: 8px 0; }
+.home-dashboard-greeting, .home-dashboard-welcome > p { color: #6B7280; margin: 16px 0 0; }
+.business-dashboard-today-focus { display: none !important; }
+.business-dashboard-primary-action { box-shadow: none !important; }
+.business-dashboard-leads-card {
+  background: #E8F5EE !important; border: 1px solid #79B998 !important;
+  border-radius: 16px !important; padding: 20px !important; margin: 0 !important;
+  box-shadow: none !important;
+}
+.business-dashboard-leads-card > [role] { background: transparent !important; border: 0 !important; text-align: left !important; }
+.home-dashboard-lead-summary { display: flex; justify-content: space-between; gap: 12px; align-items: center; flex-wrap: wrap; }
+.home-dashboard-lead-summary strong { font-size: 24px; color: #063D26; }
+.home-dashboard-lead-summary span { background: #fff; border-radius: 8px; padding: 6px 10px; font-size: 12px; color: #0B5D3B; font-weight: 600; }
+.home-dashboard-lead h3 { font-size: 20px; margin: 16px 0 6px; }
+.home-dashboard-lead p { max-width: 65ch; overflow-wrap: anywhere; }
+.home-dashboard-lead button { background: #0B5D3B; color: #fff; border: 0; border-radius: 12px; padding: 12px 20px; min-height: 48px; font: inherit; font-weight: 600; cursor: pointer; }
+.home-dashboard-glance h2 { font-size: 24px; margin: 0 0 16px; }
+.business-dashboard-glance-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+.business-dashboard-glance-grid button { width: 100%; height: 100%; min-height: 130px; border-radius: 16px !important; border: 1px solid #E5E7EB !important; background: #fff !important; box-shadow: none !important; text-align: left; }
+.business-dashboard-glance-grid strong { font-size: clamp(20px, 2.5vw, 28px) !important; }
+.business-dashboard-quick-access { padding: 0 !important; margin: 0 !important; background: transparent !important; border: 0 !important; }
+.business-dashboard-quick-access-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
+.business-dashboard-quick-access-item { border: 1px solid #E5E7EB !important; background: white !important; border-radius: 16px !important; padding: 16px !important; }
+.business-dashboard-community-entry { display: block !important; margin: 0 !important; }
+.business-dashboard-tools-section > button { background: white !important; color: #111827 !important; border: 1px solid #E5E7EB !important; border-radius: 16px !important; box-shadow: none !important; }
+.business-dashboard-community-entry > button, .business-dashboard-section-card { border-radius: 16px !important; box-shadow: none !important; }
+.homeowner-home-dashboard > section { margin-bottom: 24px !important; }
+.home-dashboard-welcome { margin: 16px 0 28px; }
+.home-dashboard-projects { background: #fff !important; border: 1px solid #E5E7EB !important; border-radius: 16px !important; padding: 20px !important; }
+.homeowner-home-dashboard .home-help-action-card { border-radius: 16px !important; box-shadow: none !important; }
+.business-dashboard *, .homeowner-home-dashboard * { min-width: 0; }
+.business-dashboard button:focus-visible, .homeowner-home-dashboard button:focus-visible { outline: 3px solid #0B5D3B; outline-offset: 3px; }
+@media (min-width: 600px) {
+  .business-dashboard-quick-access-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
+}
+@media (min-width: 768px) {
+  .business-dashboard-glance-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
+}
+@media (min-width: 1200px) {
+  .business-dashboard-quick-access-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; }
+}
+
+/* Override the previous dark hero presentation on the new light Home surface. */
+.business-dashboard .business-dashboard-header-section,
+.business-dashboard .business-dashboard-hero-card { padding: 0 !important; margin-bottom: 0 !important; }
+.business-dashboard .business-dashboard-content-lane { display: flex !important; }
+.business-dashboard .business-dashboard-hero-card h1 { color: #111827 !important; }
+.business-dashboard .business-dashboard-hero-card p { color: #6B7280 !important; }
+.business-dashboard .business-dashboard-status-strip { padding: 4px 0 !important; margin: 0 0 12px !important; }
+.business-dashboard-status-strip button { color: #374151 !important; min-height: 48px; }
+.business-dashboard-status-strip button p { margin: 4px 0; font-size: 12px; }
+.business-dashboard-status-strip button > span { color: #0B5D3B !important; }
+.home-dashboard-topbar > div > span:first-child { color: #0B5D3B !important; }
+.home-dashboard-topbar > div > span:last-child { color: #0B5D3B !important; background: #E8F5EE !important; }
+.home-dashboard-topbar > button { color: #0B5D3B !important; background: #E8F5EE !important; box-shadow: none !important; }
+.home-dashboard-topbar > button span { color: #0B5D3B !important; }
+.business-dashboard-hero-context span { color: #0B5D3B !important; background: #E8F5EE !important; border-color: #D1E7DA !important; }
+.business-dashboard-primary-action { background: #F7F6F2 !important; border-color: #E5E7EB !important; margin-top: 12px; }
+.business-dashboard-primary-action strong { color: #111827 !important; }
+.business-dashboard-primary-action span { color: #0B5D3B !important; }
+.business-dashboard-primary-action button { box-shadow: none !important; color: #0B5D3B !important; }
+@media (min-width: 768px) { .business-dashboard .business-dashboard-glance-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; } }
+@media (min-width: 1200px) { .business-dashboard .business-dashboard-quick-access-grid { grid-template-columns: repeat(4, minmax(0, 1fr)) !important; } }
+
+.business-dashboard .business-dashboard-hero-card, .business-dashboard .business-dashboard-hero-card h1,
+.business-dashboard .business-dashboard-hero-card p, .home-dashboard-glance h2 { text-align: left !important; }

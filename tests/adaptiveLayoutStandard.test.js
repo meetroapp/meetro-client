@@ -29,7 +29,7 @@ test("adaptive layout standard document defines desktop layout contracts", () =>
 
 test("shared adaptive layout tokens remain present in the global stylesheet", () => {
   const requiredTokens = [
-    "--meetro-layout-sidebar-width: 284px",
+    "--meetro-layout-sidebar-width: 240px",
     "--meetro-layout-content-max: 1120px",
     "--meetro-layout-wide-mid-max: 1280px",
     "--meetro-layout-wide-max: 1360px",
@@ -64,7 +64,7 @@ test("adaptive shells use shared width and spacing tokens instead of hard-coded 
 });
 
 test("hosted and companion desktop surfaces use the adaptive layout standard", () => {
-  assert.match(bottomNavSource, /width: "calc\(var\(--meetro-sidebar-width, 284px\) - 36px\)"/);
+  assert.match(bottomNavSource, /width: "var\(--meetro-sidebar-width, 240px\)"/);
   assert.match(bottomNavSource, /width: "min\(var\(--meetro-layout-hosted-width, 414px\), calc\(100vw - 40px\)\)"/);
   assert.match(bottomNavSource, /maxHeight: "min\(82dvh, var\(--meetro-layout-hosted-max-height, 720px\)\)"/);
   assert.match(indexCssSource, /width: min\(var\(--meetro-layout-companion-width\), calc\(100vw - var\(--meetro-sidebar-width, 0px\) - \(var\(--meetro-layout-desktop-gutter\) \* 2\)\)\) !important;/);

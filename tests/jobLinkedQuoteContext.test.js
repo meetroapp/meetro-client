@@ -362,7 +362,7 @@ test("workspace presents Job-linked customer and source context without requirin
   assert.match(workspace, /Save as Customer Contact|businessDocumentCustomerSave/);
   assert.match(
     workspace,
-    /activeDirty && !\(job\.customerLinkedFromJob && !activeSaved\) \? "Unsaved changes" : "Not saved"/
+    /activeDirty && !\(job\.customerLinkedFromJob && !activeSaved\) \? "Unsaved changes" : activeSavePresentation\.savedAt/
   );
 });
 

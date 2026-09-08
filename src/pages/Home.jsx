@@ -1,3 +1,4 @@
+import "../styles/homeDashboard.css";
 import { useCallback, useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import MeetroDetailsButton from "../components/MeetroDetailsButton";
@@ -907,7 +908,7 @@ function Home({ setPage }) {
 
   if (isBusinessMode) {
     return (
-      <div className="app-page meetro-responsive-page" style={pageWrapper}>
+      <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
         <style>{homeLayoutMediaStyles}</style>
 
         <TopBar />
@@ -987,7 +988,7 @@ function Home({ setPage }) {
 
   if (homeView === "activeRequests") {
     return (
-      <div className="app-page meetro-responsive-page" style={pageWrapper}>
+      <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
         <style>{homeLayoutMediaStyles}</style>
         <TopBar />
 
@@ -995,7 +996,7 @@ function Home({ setPage }) {
           ← {t("backToHome", language)}
         </button>
 
-        <section style={homeWorkflowSection}>
+        <section className="home-dashboard-projects" style={homeWorkflowSection}>
           <div style={sectionHeader}>
             <div>
               <p style={sectionEyebrow}>{t("homeWorkflowLabel")}</p>
@@ -1037,7 +1038,7 @@ function Home({ setPage }) {
 
   if (homeView === "serviceHistory") {
     return (
-      <div className="app-page meetro-responsive-page" style={pageWrapper}>
+      <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
         <style>{homeLayoutMediaStyles}</style>
         <TopBar />
 
@@ -1045,7 +1046,7 @@ function Home({ setPage }) {
           ← {t("backToHome", language)}
         </button>
 
-        <section style={homeWorkflowSection}>
+        <section className="home-dashboard-projects" style={homeWorkflowSection}>
           <div style={sectionHeader}>
             <div>
               <p style={sectionEyebrow}>{t("homeHistoryEyebrow")}</p>
@@ -1099,9 +1100,10 @@ function Home({ setPage }) {
   }
 
   return (
-    <div className="app-page meetro-responsive-page" style={pageWrapper}>
+    <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
       <style>{homeLayoutMediaStyles}</style>
       <TopBar />
+      <header className="home-dashboard-welcome"><p>Welcome home</p><h1>Your home, our community.</h1></header>
 
       {activeEmergencyInfo && (
         <div style={activeEmergencyCard}>
@@ -1134,7 +1136,7 @@ function Home({ setPage }) {
         </div>
       )}
 
-      <section style={homeWorkflowSection}>
+      <section className="home-dashboard-projects" style={homeWorkflowSection}>
         <div style={sectionHeader}>
           <div>
             <p style={sectionEyebrow}>{t("homeWorkflowLabel")}</p>
@@ -1143,13 +1145,14 @@ function Home({ setPage }) {
           </div>
         </div>
 
-        <div className="home-my-projects-tabs" style={segmentedControl}>
+        <div className="home-my-projects-tabs" role="group" aria-label={t("homeMyProjects", language)} style={segmentedControl}>
           <button
             type="button"
             style={{
               ...segmentedButton,
               ...(myProjectsTab === "active" ? segmentedButtonActive : {}),
             }}
+            aria-pressed={myProjectsTab === "active"}
             onClick={() => setMyProjectsTab("active")}
           >
             {t("homeMyProjectsActive", language)}
@@ -1160,6 +1163,7 @@ function Home({ setPage }) {
               ...segmentedButton,
               ...(myProjectsTab === "history" ? segmentedButtonActive : {}),
             }}
+            aria-pressed={myProjectsTab === "history"}
             onClick={() => setMyProjectsTab("history")}
           >
             {t("homeMyProjectsHistory", language)}
@@ -1260,7 +1264,7 @@ function Home({ setPage }) {
         </div>
       </section>
 
-      <section style={spotlightSection}>
+      <section className="home-dashboard-spotlight" style={spotlightSection}>
         <div className="home-spotlight-section-header" style={spotlightSectionHeader}>
           <div>
             <p style={sectionEyebrow}>
@@ -1327,7 +1331,7 @@ function Home({ setPage }) {
         </button>
       </section>
 
-      <section style={quickHelpSection}>
+      <section className="home-dashboard-help" style={quickHelpSection}>
         <div className="home-help-section-header" style={helpSectionHeader}>
           <div>
             <p style={sectionEyebrow}>{t("homeownerWorkflowHome")}</p>

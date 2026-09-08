@@ -127,7 +127,7 @@ test("standard workspaces consume the shared desktop shell classes", () => {
   assert.match(projectGallerySource, /className="app-page meetro-responsive-page"/);
   assert.match(contractorProfileSource, /className="app-page business-profile-page meetro-readable-page"/);
   assert.match(profileSource, /: "app-page meetro-readable-page meetro-visual-page"/);
-  assert.match(homeSource, /className="app-page meetro-responsive-page"/);
+  assert.match(homeSource, /className="app-page meetro-responsive-page homeowner-home-dashboard"/);
   assert.match(myRequestsSource, /className="app-page meetro-responsive-page meetro-visual-page"/);
   assert.match(uploadSource, /className="app-page request-help-page upload-page meetro-form-page meetro-visual-page"/);
   assert.match(projectDetailsSource, /className="app-page meetro-readable-page"/);

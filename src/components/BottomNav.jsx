@@ -1118,23 +1118,11 @@ const adaptiveNavigationStyles = `
 `;
 
 const desktopSidebar = {
-  position: "fixed",
-  top: "18px",
-  left: "18px",
-  bottom: "18px",
-  width: "calc(var(--meetro-sidebar-width, 284px) - 36px)",
-  zIndex: 9998,
-  flexDirection: "column",
-  gap: "18px",
-  padding: "16px",
-  boxSizing: "border-box",
-  borderRadius: "28px",
-  background:
-    "linear-gradient(180deg, var(--meetro-surface-paper), var(--meetro-surface-warm))",
-  border: "1px solid var(--meetro-color-line)",
-  boxShadow: "var(--meetro-shadow-lifted)",
-  backdropFilter: "blur(22px)",
-  WebkitBackdropFilter: "blur(22px)",
+  position: "fixed", top: 0, left: 0, bottom: 0,
+  width: "var(--meetro-sidebar-width, 240px)", zIndex: 9998,
+  flexDirection: "column", gap: "18px", padding: "20px 14px",
+  boxSizing: "border-box", borderRadius: 0, background: "#F7F6F2",
+  borderRight: "1px solid #E5E7EB", boxShadow: "2px 0 8px rgba(17,24,39,0.025)",
   overflow: "hidden",
 };
 
@@ -1257,9 +1245,9 @@ const sidebarNavButton = {
 };
 
 const sidebarNavButtonActive = {
-  background: "var(--meetro-surface-sage)",
-  border: "1px solid rgba(31,77,52,0.18)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72), 0 10px 24px rgba(31,77,52,0.08)",
+  background: "#E8F5EE",
+  border: "1px solid transparent",
+  boxShadow: "none",
 };
 
 const sidebarIconWrap = {
@@ -1462,7 +1450,7 @@ const centerIconWrapLandscape = {
 
 const centerIconWrapActive = {
   background: "transparent",
-  color: "#4f2df3",
+  color: "#0B5D3B",
   border: "none",
   boxShadow: "none",
 };
@@ -1569,7 +1557,7 @@ const activeButton = {
   padding: "3px 2px",
   transform: "none",
   background: "rgba(31,77,52,0.12)",
-  color: "#4f2df3",
+  color: "#0B5D3B",
   border: "1px solid transparent",
   boxShadow: "none",
 };
@@ -1603,7 +1591,7 @@ const iconWrapLandscape = {
 
 const activeIconWrap = {
   background: "transparent",
-  color: "#4f2df3",
+  color: "#0B5D3B",
   boxShadow: "none",
 };
 
@@ -1664,7 +1652,7 @@ const subLabelLandscape = {
 };
 
 const activeSubLabel = {
-  color: "#7c5cff",
+  color: "#0B5D3B",
   fontWeight: "800",
 };
 

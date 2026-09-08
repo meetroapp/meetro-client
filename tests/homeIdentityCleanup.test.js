@@ -49,7 +49,7 @@ test("Home prioritizes active emergency state over duplicate emergency shortcut"
   assert.match(homeSource, /const activeEmergencyInfo = getHomeActiveEmergencyInfo\(language\)/);
   assert.match(
     homeSource,
-    /<TopBar \/>\s*\{activeEmergencyInfo && \(/
+    /<TopBar \/>[\s\S]*?\{activeEmergencyInfo && \(/
   );
   assert.doesNotMatch(homeSource, /toggleLanguage/);
   assert.match(homeSource, /activeEmergencyInfo[\s\S]*t\("manageEmergency", language\)[\s\S]*t\("emergencyHelp", language\)/);

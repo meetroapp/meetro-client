@@ -26,7 +26,7 @@ import {
   dismissAppUpdateNotice,
   getCurrentAppBuildId,
 } from "./utils/appStartup";
-import MeetroAssistant from "./components/MeetroAssistant";
+import AskMeetroHost from "./components/AskMeetroHost";
 import GuideOverlay from "./components/GuideOverlay";
 import GlobalInsightLayer from "./components/GlobalInsightLayer";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
@@ -226,6 +226,7 @@ const assistantEnabledPages = new Set([
   "jobsHiring",
   "upload",
   "myRequests",
+  "homeownerRequestDetails",
   "projectDetails",
   "customerQuoteReview",
   "customerInvoiceReview",
@@ -242,6 +243,8 @@ const assistantEnabledPages = new Set([
   "businessLeads",
   "quoteRequests",
   "quoteBuilder",
+  "invoiceBuilder",
+  "customerRelationshipsCenter",
   "depositRequestBuilder",
   "projectGallery",
   "completedJobDetails",
@@ -270,14 +273,11 @@ const SESSION_HYDRATION = Object.freeze({
 
 function withAssistantLayer(component, currentPage, setPage) {
   return withRouteBoundary(
-    <>
+    <AskMeetroHost currentPage={currentPage} setPage={setPage} enabled={assistantEnabledPages.has(currentPage)}>
       {component}
-      {assistantEnabledPages.has(currentPage) && (
-        <MeetroAssistant currentPage={currentPage} setPage={setPage} />
-      )}
       <GlobalInsightLayer currentPage={currentPage} setPage={setPage} />
       <GuideOverlay currentPage={currentPage} setPage={setPage} />
-    </>,
+    </AskMeetroHost>,
     currentPage,
     setPage
   );

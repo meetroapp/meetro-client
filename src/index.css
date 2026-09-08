@@ -1791,7 +1791,7 @@ body {
 :root {
   --meetro-layout-breakpoint-medium: 768px;
   --meetro-layout-breakpoint-desktop: 1180px;
-  --meetro-layout-sidebar-width: 284px;
+  --meetro-layout-sidebar-width: 240px;
   --meetro-sidebar-width: var(--meetro-layout-sidebar-width);
   --meetro-layout-content-max: 1120px;
   --meetro-layout-wide-mid-max: 1280px;
