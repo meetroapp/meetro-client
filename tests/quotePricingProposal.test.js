@@ -329,3 +329,119 @@ test("workspace uses a presentation-only proposal and explicit Apply/Edit/Dismis
   assert.match(quoteBuilder, /paymentTerms: quoteIndependentPaymentTerms\(terms, customerPricing\)/);
   assert.doesNotMatch(quoteBuilder, /paymentTerms:\s*\[terms,\s*quoteDepositTerms/);
 });
+
+
+test("R4-C explicit labor and materials replace a stale project total", () => {
+  const baseline = {
+    ...current,
+    projectTitle: "Window repair",
+    projectDescription: "Window repair",
+    recommendedSolution: "Window repair",
+    totalOverride: "220",
+  };
+
+  for (const instruction of [
+    "Window repair, labor 220, materials 60, 50% deposit.",
+    "Window repair, labor 220, materials 60, 50 percent deposit.",
+  ]) {
+    const result = proposal(instruction, baseline);
+
+    assert.equal(result.patch.laborItems[0].total, "220", instruction);
+    assert.equal(result.patch.materialItems[0].total, "60", instruction);
+
+    assert.equal(
+      result.patch.totalOverride,
+      "",
+      `${instruction} must clear the stale project total`
+    );
+
+    assert.equal(result.patch.depositMode, "PERCENT", instruction);
+    assert.equal(result.patch.depositPercent, "50", instruction);
+
+    assert.equal(result.pricing.total, 280, instruction);
+    assert.equal(result.pricing.deposit.due, 140, instruction);
+    assert.equal(result.pricing.deposit.remaining, 140, instruction);
+
+    const changes = new Map(
+      result.recognizedChanges.map((change) => [
+        change.field,
+        change.value,
+      ])
+    );
+
+    assert.equal(changes.get("laborItems"), 220, instruction);
+    assert.equal(changes.get("materialItems"), 60, instruction);
+    assert.equal(changes.get("calculatedTotal"), 280, instruction);
+    assert.equal(changes.get("depositPercent"), "50%", instruction);
+    assert.equal(changes.get("depositDue"), 140, instruction);
+    assert.equal(changes.get("remainingBalance"), 140, instruction);
+
+    assert.equal(
+      changes.has("totalOverride"),
+      false,
+      "clearing stale authority must not appear as a $0 customer price"
+    );
+  }
+});
+
+
+test("R4-C commercial language keeps pricing out of scope and honors a new explicit total", () => {
+  const baseline = {
+    ...current,
+    projectTitle: "Window repair",
+    projectDescription: "Window repair",
+    recommendedSolution: "Window repair",
+    totalOverride: "220",
+  };
+
+  for (const instruction of [
+    "Window repair, labor 220, materials 60, 50% deposit.",
+    "Window repair, labor 220, materials 60, 50 percent deposit.",
+  ]) {
+    const result = proposal(instruction, baseline);
+
+    assert.equal(result.patch.projectDescription, "Window repair", instruction);
+    assert.equal(result.patch.recommendedSolution, "Window repair", instruction);
+    assert.equal(result.patch.totalOverride, "", instruction);
+    assert.equal(result.patch.laborItems[0].total, "220", instruction);
+    assert.equal(result.patch.materialItems[0].total, "60", instruction);
+    assert.equal(result.patch.depositPercent, "50", instruction);
+    assert.equal(result.pricing.total, 280, instruction);
+    assert.equal(result.pricing.deposit.due, 140, instruction);
+    assert.equal(result.pricing.deposit.remaining, 140, instruction);
+    assert.deepEqual(result.unrecognizedSegments, [], instruction);
+  }
+
+  const explicitTotal = proposal(
+    "Window repair, labor 220, materials 60, final price $300, 50% deposit.",
+    baseline
+  );
+
+  assert.equal(explicitTotal.patch.projectDescription, "Window repair");
+  assert.equal(explicitTotal.patch.recommendedSolution, "Window repair");
+  assert.equal(explicitTotal.patch.laborItems[0].total, "220");
+  assert.equal(explicitTotal.patch.materialItems[0].total, "60");
+  assert.equal(explicitTotal.patch.totalOverride, "300");
+  assert.equal(explicitTotal.patch.depositPercent, "50");
+  assert.equal(explicitTotal.pricing.total, 300);
+  assert.equal(explicitTotal.pricing.deposit.due, 150);
+  assert.equal(explicitTotal.pricing.deposit.remaining, 150);
+  assert.deepEqual(explicitTotal.unrecognizedSegments, []);
+});
+
+test("R4-C component-only edits preserve an existing explicit project total", () => {
+  const baseline = {
+    ...current,
+    totalOverride: "220",
+  };
+
+  const laborOnly = proposal("Labor 250.", baseline);
+  assert.equal(Object.hasOwn(laborOnly.patch, "totalOverride"), false);
+  assert.equal(laborOnly.patch.laborItems[0].total, "250");
+  assert.equal(laborOnly.pricing.total, 220);
+
+  const materialsOnly = proposal("Materials 60.", baseline);
+  assert.equal(Object.hasOwn(materialsOnly.patch, "totalOverride"), false);
+  assert.equal(materialsOnly.patch.materialItems[0].total, "60");
+  assert.equal(materialsOnly.pricing.total, 220);
+});

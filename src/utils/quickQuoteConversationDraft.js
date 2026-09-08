@@ -61,8 +61,8 @@ function explicitFinalPrice(text) {
     /\btotal\s+project\s+price\s*(?:is|to|:)?\s*\$?\s*([\d,.]+)/i,
     /\b(?:make|set|change|update)\s+(?:the\s+)?total\s*(?:is|to|:)?\s*\$?\s*([\d,.]+)/i,
     /\b(?:quote\s+customer|customer\s+quote)\s+\$?\s*([\d,.]+)\s+total\b/i,
-    /(?:^|[.!?;]\s*)(?:(?:set|change|update|revise)\s+(?:the\s+)?)?(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|project\s+price|price|total|amount|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|to|:)?\s*\$?\s*([\d,.]+)/i,
-    /(?:^|[.!?;]\s*)\$\s*([\d,.]+)\s*(?:final|total)/i,
+    /(?:^|[,.!?;]\s*)(?:(?:set|change|update|revise)\s+(?:the\s+)?)?(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|project\s+price|price|total|amount|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|to|:)?\s*\$?\s*([\d,.]+)/i,
+    /(?:^|[,.!?;]\s*)\$\s*([\d,.]+)\s*(?:final|total)/i,
   ]);
   return match ? parseAmount(match[match.length - 1]) : null;
 }
@@ -428,10 +428,11 @@ function cleanScope(text) {
   scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais|labor|labour|installation|tax|subtotal)\s+(?:(?:total)\s+(?:is|are|:)?\s*\$\s*[\d,.]+|\$\s*[\d,.]+\s+total)[.!]?/gi, "");
   scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais|labor|labour|installation)\s+(?:are|is|costs?|to|at|:)\s*\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?[.!]?/gi, "");
   scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais)\s+(?:are|is|costs?|de|a|:)?\s*\$\s*[\d,.]+[.!]?/gi, "");
+  scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais)\s+[\d,.]+\b(?!\s*(?:hours?|hrs?|days?|weeks?))[.!]?/gi, "");
   scope = scope.replace(/\b(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s+(?:is|are|costs?|:)?\s*\$\s*[\d,.]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:estimated\s+)?duration\s+(?:is|:)?\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s*(?:hours?|hrs?|days?|weeks?)[.!]?/gi, "");
   scope = scope.replace(/\b(?:(?:should\s+take|takes?)\s+)?(?:about\s+|around\s+|approximately\s+)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s*(?:hours?|hrs?|days?|weeks?)[.!]?/gi, "");
-  scope = scope.replace(/\b\d{1,3}\s*%\s*(?:deposit|depósito|acompte|entrada|sinal)(?:\s+required)?[.!]?/gi, "");
+  scope = scope.replace(/\b\d{1,3}(?:\.\d+)?\s*(?:%|percent)\s*(?:deposit|down\s+payment|depósito|acompte|entrada|sinal)(?:\s+required)?[.!]?/gi, "");
   scope = scope.replace(/\b(?:final\s+(?:price|selling\s+price|quote)|quote\s+total|project\s+price|price|total|amount|precio\s+final|prix\s+final|preço\s+final)\s*(?:is|es|est|é|to|:)?\s*\$?\s*[\d,.]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:note|condition)\s*:\s*[^.!?]+[.!]?/gi, "");
   scope = scope.replace(/(^|[.!?;,]\s*)(?:the\s+)?[A-Za-z][\w -]{0,38}?\s+(?:costs?|is)\s*\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?[.!]?/gi, "$1");
@@ -608,7 +609,24 @@ export function buildQuickQuoteConversationPatch({
       }
     }
   }
-  if (finalPrice !== null) patch.totalOverride = String(finalPrice);
+  const explicitLaborAndMaterialsPricing =
+    laborAmount !== null && materialAmount !== null;
+
+  if (finalPrice !== null) {
+    patch.totalOverride = String(finalPrice);
+  } else if (
+    explicitLaborAndMaterialsPricing &&
+    cleanText(current.totalOverride)
+  ) {
+    /*
+     * A prior explicit project price must not silently defeat a new
+     * labor + materials pricing instruction. When the professional
+     * supplies both component prices without restating a project total,
+     * those newly supplied components become the pricing authority and
+     * the Quote returns to calculated-total mode.
+     */
+    patch.totalOverride = "";
+  }
   if (materialAmount !== null) patch.materialAmount = String(materialAmount);
   if (laborAmount !== null || laborItems.length) patch.laborItems = laborItems;
   const materialItems = explicitMaterialItems(instruction);
@@ -644,7 +662,7 @@ const RECOGNIZED_QUOTE_INSTRUCTION_PATTERNS = Object.freeze([
   /\bcustomer\s+(?:will\s+)?provide(?:s)?\s+(?:the\s+)?materials?\b/gi,
   /\b(?:labor|labour)\s+and\s+(?:standard\s+)?materials?\s+included\b/gi,
   /\binclude\s+materials?\s+in\s+(?:the\s+)?total\b/gi,
-  /\b(?:scope(?:\s+of\s+work)?\s*(?:is|:)|add\s+.+?\s+to\s+(?:the\s+)?scope|(?:replace|repair|install|rebuild|paint|seal|service|clean)\b[^,.;]*)/gi,
+  /\b(?:scope(?:\s+of\s+work)?\s*(?:is|:)|add\s+.+?\s+to\s+(?:the\s+)?scope|(?:[A-Za-z][\w'’-]*\s+){0,7}(?:replacement|repair|installation|service|painting|rebuild|reconstruction)\b|(?:replace|repair|install|rebuild|paint|seal|service|clean)\b[^,.;]*)/gi,
 ]);
 
 function quoteProposalChanges(patch, current) {
@@ -660,7 +678,16 @@ function quoteProposalChanges(patch, current) {
       : parseAmount(patch.materialAmount);
     add("materialItems", "Materials", value || 0);
   }
-  if (Object.hasOwn(patch, "totalOverride")) add("totalOverride", "Customer project price", parseAmount(patch.totalOverride) || 0);
+  if (
+    Object.hasOwn(patch, "totalOverride") &&
+    cleanText(patch.totalOverride)
+  ) {
+    add(
+      "totalOverride",
+      "Customer project price",
+      parseAmount(patch.totalOverride) || 0
+    );
+  }
   if (patch.estimatedDuration) add("estimatedDuration", "Estimated duration", patch.estimatedDuration);
   if (patch.depositMode === "PERCENT") add("depositPercent", "Deposit", `${patch.depositPercent}%`);
   if (patch.depositMode === "FIXED") add("depositFixedAmount", "Deposit", `$${patch.depositFixedAmount}`);
