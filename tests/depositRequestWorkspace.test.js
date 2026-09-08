@@ -482,3 +482,68 @@ test("Deposit Request iPhone landscape stays selector-owned one-pane with keyboa
     /grid-template-columns:\s*minmax\(0, 2fr\) 1px minmax\(0, 3fr\)/
   );
 });
+
+test("R4 Deposit Request uses live canonical payment state and blocks Invoice until the requirement clears", () => {
+  const source = readFileSync(
+    new URL("../src/components/DepositRequestWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /const authority = deposit;/);
+  assert.match(source, /const invoiceAllowed = Boolean/);
+  assert.match(source, /"NOT_REQUIRED", "SATISFIED"/);
+  assert.match(source, /disabled=\{!invoiceAllowed\}/);
+  assert.match(source, /depositSatisfied: true/);
+  assert.match(source, /Recorded received/);
+  assert.match(source, /Awaiting payment confirmation/);
+  assert.match(source, /Partially paid/);
+  assert.match(source, /Deposit satisfied/);
+});
+
+test("R4 Deposit Request carries service address, approved scope, Quote version, and deposit terms", () => {
+  const source = readFileSync(
+    new URL("../src/components/DepositRequestWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /serviceLocation/);
+  assert.match(source, /projectDescription/);
+  assert.match(source, /recommendedSolution/);
+  assert.match(source, /Quote version/);
+  assert.match(source, /Service address/);
+  assert.match(source, /Approved scope/);
+  assert.match(source, /Deposit terms/);
+  assert.match(source, /partial payment request/);
+  assert.match(source, /not a Final Invoice/);
+});
+
+test("R4 Deposit Request reuses canonical payment confirmation instead of creating another payment ledger", () => {
+  const workspace = readFileSync(
+    new URL("../src/components/DepositRequestWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+
+  const card = readFileSync(
+    new URL("../src/components/ProfessionalDepositCard.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(workspace, /ProfessionalDepositCard/);
+  assert.match(workspace, /showRequestAction=\{false\}/);
+  assert.match(workspace, /onCanonicalChange/);
+  assert.match(card, /showRequestAction = true/);
+  assert.match(card, /confirmProfessionalPreWorkDepositReceived/);
+});
+
+test("R4 visible Quote to Invoice tab routes through Deposit Request when Quote requires a deposit", () => {
+  const source = readFileSync(
+    new URL("../src/components/UnifiedBusinessDocumentWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /function switchDocument\(documentType, options = \{\}\)/);
+  assert.match(source, /quoteCustomerPricingProjection\(quote\)/);
+  assert.match(source, /pricing\.deposit\.mode !== "NONE"/);
+  assert.match(source, /openDepositRequest\(\)/);
+  assert.match(source, /options\.depositSatisfied !== true/);
+});

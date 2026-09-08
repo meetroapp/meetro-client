@@ -303,6 +303,14 @@ export function buildBusinessDocumentSavePayload({
     instructions,
     manualOverrides,
   });
+
+  // Private reminders are workspace metadata, not customer-document content.
+  // Reconciliation above moves them into workspace.privateReminders.
+  // Never serialize privateReminder inside manualOverrides because the
+  // server validates manualOverrides against document-content fields only.
+  const persistedManualOverrides = { ...manualOverrides };
+  delete persistedManualOverrides.privateReminder;
+
   return {
     documentType: type,
     jobId: jobId || null,
@@ -355,7 +363,7 @@ export function buildBusinessDocumentSavePayload({
     workspace: {
       activeDocument: type,
       instructions,
-      manualOverrides: { ...manualOverrides },
+      manualOverrides: persistedManualOverrides,
       privateReminders: reconciliation.privateReminders.map((item) => ({ ...item })),
       ...(String(jobAnalysisSessionId || "").trim()
         ? { jobAnalysisSessionId: String(jobAnalysisSessionId).trim() }

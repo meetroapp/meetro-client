@@ -83,6 +83,7 @@ export default function ProfessionalDepositCard({
   setPage,
   onCanonicalChange,
   requestActionLabel = "Prepare Deposit Request",
+  showRequestAction = true,
 }) {
   const [readState, setReadState] = useState({ status: "loading", read: null, error: "" });
   const [formOpen, setFormOpen] = useState(false);
@@ -430,7 +431,7 @@ export default function ProfessionalDepositCard({
         </p>
       )}
 
-      {canConfirmPayment && (
+      {canConfirmPayment && showRequestAction && (
         <button
           type="button"
           style={styles.secondaryButton}

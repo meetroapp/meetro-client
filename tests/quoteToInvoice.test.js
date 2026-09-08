@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { randomUUID } from "node:crypto";
-import { normalizeSourceQuoteNumber, resolveExactSourceQuote, parseQuoteInvoiceCommand, resolveExactQuoteToInvoice, lookupQuoteInvoiceCommand, parseQuoteInvoiceSourceRoute, loadExactInvoiceSource, projectQuoteToInvoiceWorkingDraft } from "../src/utils/quoteToInvoice.js";
+import { normalizeSourceQuoteNumber, resolveExactSourceQuote, parseQuoteInvoiceCommand, resolveExactQuoteToInvoice, lookupQuoteInvoiceCommand, parseQuoteInvoiceSourceRoute, loadExactInvoiceSource, projectQuoteToInvoiceWorkingDraft, resolveQuoteInvoiceDepositGate } from "../src/utils/quoteToInvoice.js";
 import { buildInvoiceConversationProposal } from "../src/utils/invoiceReviewDraft.js";
 import { buildBusinessDocumentSavePayload } from "../src/utils/businessDocumentPersistence.js";
 
@@ -85,12 +85,115 @@ test("R3 source hydration accepts payments only for the same current effective a
   const canonicalQuote = { id: randomUUID(), jobId: quote.jobId, status: "ISSUED", decisionState: "APPROVED", totalMinor: 68000, currency: "USD", decisionVersion: 4, sourceBusinessDocument: { documentId: quote.id, documentVersion: 3, currentDocumentVersion: 3, currentSnapshotMatchesSource: true } };
   const route = parseQuoteInvoiceSourceRoute(resolveExactQuoteToInvoice({ number: quote.documentNumber, documents: [quote] }).route);
   const ports = { getDocument: async () => quote, getAuthority: async () => ({ canonicalQuote }),
+    getDeposit: async () => ({ deposit: { state: "SATISFIED" } }),
     getInvoiceWorkspace: async () => ({ readyJobs: [{ jobId: quote.jobId, approvedAmount: { totalMinor: 68000, currency: "USD" }, paymentsReceivedMinor: 51000 }] }),
     getEffectiveQuote: async () => ({ quoteId: canonicalQuote.id, quoteVersion: 4 }) };
   const result = await loadExactInvoiceSource(route, ports);
   assert.equal(projectQuoteToInvoiceWorkingDraft({ quoteDocument: result.document, quoteAuthority: result.authority, paymentEvidence: result.paymentEvidence }).invoiceDraft.paidAmount, "510");
   const mismatch = await loadExactInvoiceSource(route, { ...ports, getEffectiveQuote: async () => ({ quoteId: randomUUID(), quoteVersion: 4 }) });
   assert.equal(mismatch.paymentEvidence, null);
+});
+
+test("R4 Quote to Invoice deposit gate blocks due and partially satisfied authority", () => {
+  assert.equal(
+    resolveQuoteInvoiceDepositGate({
+      deposit: { state: "DUE" },
+    }).state,
+    "BLOCKED_DEPOSIT"
+  );
+
+  assert.equal(
+    resolveQuoteInvoiceDepositGate({
+      deposit: { state: "PARTIALLY_SATISFIED" },
+    }).state,
+    "BLOCKED_DEPOSIT"
+  );
+});
+
+test("R4 Quote to Invoice deposit gate allows not-required and satisfied authority only", () => {
+  assert.equal(
+    resolveQuoteInvoiceDepositGate({
+      deposit: { state: "NOT_REQUIRED" },
+    }).state,
+    "READY"
+  );
+
+  assert.equal(
+    resolveQuoteInvoiceDepositGate({
+      deposit: { state: "SATISFIED" },
+    }).state,
+    "READY"
+  );
+
+  assert.equal(
+    resolveQuoteInvoiceDepositGate({
+      deposit: { state: "TERMS_UNVERIFIED" },
+    }).state,
+    "UNVERIFIED"
+  );
+
+  assert.equal(
+    resolveQuoteInvoiceDepositGate({
+      deposit: null,
+    }).state,
+    "UNVERIFIED"
+  );
+});
+
+test("R4 exact approved Quote cannot prepare Invoice while required deposit is due", async () => {
+  const canonicalQuote = {
+    id: randomUUID(),
+    jobId: quote.jobId,
+    status: "ISSUED",
+    decisionState: "APPROVED",
+    totalMinor: 68000,
+    currency: "USD",
+    decisionVersion: 4,
+    sourceBusinessDocument: {
+      documentId: quote.id,
+      documentVersion: quote.version,
+      currentDocumentVersion: quote.version,
+      currentSnapshotMatchesSource: true,
+    },
+  };
+
+  const route = parseQuoteInvoiceSourceRoute(
+    resolveExactQuoteToInvoice({
+      number: quote.documentNumber,
+      documents: [quote],
+    }).route
+  );
+
+  let workspaceReads = 0;
+
+  await assert.rejects(
+    loadExactInvoiceSource(route, {
+      getDocument: async () => quote,
+      getAuthority: async () => ({ canonicalQuote }),
+      getDeposit: async ({ jobId, quoteId }) => {
+        assert.equal(jobId, quote.jobId);
+        assert.equal(quoteId, canonicalQuote.id);
+
+        return {
+          deposit: {
+            state: "DUE",
+            requiredMinor: 34000,
+            appliedMinor: 0,
+            remainingMinor: 34000,
+          },
+        };
+      },
+      getInvoiceWorkspace: async () => {
+        workspaceReads += 1;
+        return { readyJobs: [] };
+      },
+    }),
+    (error) =>
+      error?.code === "QUOTE_TO_INVOICE_DEPOSIT_REQUIRED" &&
+      /required deposit/i.test(error.message)
+  );
+
+  assert.equal(workspaceReads, 0);
 });
 
 test("R3 an old canonical Create completion cannot attach its number to a new Invoice session", async () => {

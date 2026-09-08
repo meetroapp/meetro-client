@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 
 import BottomNav from "./BottomNav.jsx";
+import ProfessionalDepositCard from "./ProfessionalDepositCard.jsx";
 import {
   createBusinessDocumentDraft,
   createBusinessDocumentSaveKey,
@@ -54,7 +55,17 @@ function initialContent(job, quote) {
     customerPhone: quote?.customerPhone || "",
     customerAddress: quote?.customerAddress || job?.customerAddress || "",
     customerLocation: quote?.customerLocation || job?.location || "",
+    serviceLocation:
+      quote?.serviceLocation ||
+      quote?.customerLocation ||
+      job?.location ||
+      "",
     projectTitle: quote?.projectTitle || job?.title || "",
+    projectDescription: quote?.projectDescription || "",
+    recommendedSolution:
+      quote?.recommendedSolution ||
+      quote?.projectDescription ||
+      "",
     quoteReference: quote?.quoteNumber || "",
     dueDate: "",
     notes: "Thank you for approving the work.",
@@ -73,7 +84,10 @@ function quoteCarryoverContent(current, job, quote) {
     customerPhone: source.customerPhone,
     customerAddress: source.customerAddress,
     customerLocation: source.customerLocation,
+    serviceLocation: source.serviceLocation,
     projectTitle: source.projectTitle,
+    projectDescription: source.projectDescription,
+    recommendedSolution: source.recommendedSolution,
     quoteReference: source.quoteReference,
     paymentInstructions:
       String(current?.paymentInstructions || "").trim() ||
@@ -157,11 +171,15 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
   const jobId = job?.id || "";
   const jobLinked = Boolean(job?.customerLinkedFromJob || job?.relationshipId);
   const dirty = JSON.stringify(content) !== JSON.stringify(baseline);
-  const authority = document?.depositRequestAuthority || deposit;
+  const authority = deposit;
   const eligible = Boolean(
     authority && ["DUE", "PARTIALLY_SATISFIED"].includes(authority.state) &&
       authority.remainingMinor > 0
   );
+  const invoiceAllowed = Boolean(
+    authority && ["NOT_REQUIRED", "SATISFIED"].includes(authority.state)
+  );
+  const depositSatisfied = authority?.state === "SATISFIED";
 
   useEffect(() => {
     let active = true;
@@ -226,7 +244,7 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
   }, [jobId, setPage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const money = useMemo(() => {
-    if (!authority || !["DUE", "PARTIALLY_SATISFIED"].includes(authority.state)) return null;
+    if (!authority || !["DUE", "PARTIALLY_SATISFIED", "SATISFIED"].includes(authority.state)) return null;
     return {
       project: formatDepositMoney(authority.quoteTotalMinor, authority.currency),
       requested: formatDepositMoney(authority.requiredMinor, authority.currency),
@@ -525,14 +543,21 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
     <div className="app-page meetro-wide-page business-document-workspace deposit-request-workspace">
       <header className="business-document-header">
         <button type="button" className="business-document-back" onClick={onBack} aria-label="Leave Deposit Request workspace">←</button>
-        <div><div className="business-document-title-row"><h1>{content.projectTitle || "Deposit Request"}</h1><span>{eligible ? "Ready for review" : "Preparation only"}</span></div><p>{content.customerName ? `Customer: ${content.customerName}` : jobId ? "Customer carries forward from Quote" : "Quote not selected"}</p></div>
+        <div><div className="business-document-title-row"><h1>{content.projectTitle || "Deposit Request"}</h1><span>{depositSatisfied ? "Deposit satisfied" : authority?.state === "NOT_REQUIRED" ? "No deposit required" : eligible ? "Ready for review" : "Preparation only"}</span></div><p>{content.customerName ? `Customer: ${content.customerName}` : jobId ? "Customer carries forward from Quote" : "Quote not selected"}</p></div>
         <div className="business-document-header-actions"><span>{document ? `Saved · v${document.version}` : "Not saved"}</span></div>
       </header>
 
       <nav className="business-document-tabs" aria-label="Business documents">
         <button type="button" onClick={() => onDocumentChange("quote")}>Quote</button>
         <button type="button" className="active" aria-current="page">Deposit Request</button>
-        <button type="button" onClick={() => onDocumentChange("invoice")}>Invoice</button>
+        <button
+          type="button"
+          disabled={!invoiceAllowed}
+          title={!invoiceAllowed ? "Record the required deposit before continuing to Invoice." : undefined}
+          onClick={() => onDocumentChange("invoice", { depositSatisfied: true })}
+        >
+          Invoice
+        </button>
       </nav>
 
       <div
@@ -569,7 +594,7 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
         >
           <div className="deposit-request-editor-scroll">
           <h2>Prepare Deposit Request</h2>
-          <p>Review the Deposit Request created from the Quote. Customer, project, Quote reference, deposit amount, and payment terms carry forward automatically.</p>
+          <p>Review the Deposit Request created from the Quote. Customer, project, Quote reference, deposit amount, and payment terms carry forward automatically. Service address and approved scope are also included. This is a partial payment request toward the approved Quote, not a Final Invoice.</p>
           <section
             className="deposit-request-quote-source"
             aria-label="Quote carryover"
@@ -593,6 +618,33 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
               </div>
 
               <div>
+                <dt>Quote version</dt>
+                <dd>{authority?.issuedQuoteVersion ? `Version ${authority.issuedQuoteVersion}` : "Approval pending"}</dd>
+              </div>
+
+              <div>
+                <dt>Service address</dt>
+                <dd>{content.serviceLocation || content.customerLocation || "Not confirmed"}</dd>
+              </div>
+
+              <div>
+                <dt>Approved scope</dt>
+                <dd>{content.recommendedSolution || content.projectDescription || "Not confirmed"}</dd>
+              </div>
+
+              <div>
+                <dt>Deposit terms</dt>
+                <dd>{
+                  authority?.depositRule?.type === "PERCENT" &&
+                  Number.isFinite(Number(authority.depositRule.percentBasisPoints))
+                    ? `${Number(authority.depositRule.percentBasisPoints) / 100}% of approved Quote`
+                    : authority?.depositRule?.type === "FIXED"
+                      ? "Fixed deposit amount"
+                      : "Pending approved Quote"
+                }</dd>
+              </div>
+
+              <div>
                 <dt>Deposit</dt>
                 <dd>{money?.requested || "Pending approved Quote"}</dd>
               </div>
@@ -610,6 +662,24 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
               </small>
             ) : null}
           </section>
+
+          {jobId && authority?.quoteId ? (
+            <ProfessionalDepositCard
+              jobId={jobId}
+              quoteId={authority.quoteId}
+              setPage={setPage}
+              showRequestAction={false}
+              onCanonicalChange={(result) => {
+                setDeposit(result.deposit);
+                setError("");
+                setNotice(
+                  result.deposit.state === "SATISFIED"
+                    ? "Deposit payment recorded and satisfied. The governed deposit gate is cleared."
+                    : "Payment recorded. The remaining deposit is still required."
+                );
+              }}
+            />
+          ) : null}
 
           {proposal ? <div className="deposit-request-proposal" style={styles.proposal}><strong>Review proposed changes</strong>{Object.entries(proposal).map(([key, value]) => <p key={key}><b>{key.replace(/([A-Z])/g, " $1")}:</b> {value}</p>)}<div style={styles.row}><button type="button" onClick={() => setProposal(null)}>Dismiss</button><button type="button" onClick={() => { setContent((current) => ({ ...current, ...proposal })); setProposal(null); setInstruction(""); }}>Apply</button></div></div> : null}
           <details className="deposit-request-customize">
@@ -704,9 +774,12 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
           <dl className="deposit-request-document-summary" style={styles.summary}>
             <div><dt>Customer</dt><dd>{content.customerName || "Linked customer"}</dd></div>
             <div><dt>Project</dt><dd>{content.projectTitle || "Linked Job"}</dd></div>
-            <div><dt>Approved Quote</dt><dd>{document?.depositRequestAuthority?.quoteReference || content.quoteReference || (authority ? "Verified approved Quote" : "Approval pending")}</dd></div>
+            <div><dt>Approved Quote</dt><dd>{authority?.quoteReference || content.quoteReference || (authority ? "Verified approved Quote" : "Approval pending")}</dd></div>
+            <div><dt>Quote version</dt><dd>{authority?.issuedQuoteVersion ? `Version ${authority.issuedQuoteVersion}` : "Approval pending"}</dd></div>
+            <div><dt>Service address</dt><dd>{content.serviceLocation || content.customerLocation || "Not confirmed"}</dd></div>
+            <div><dt>Approved scope</dt><dd>{content.recommendedSolution || content.projectDescription || "Not confirmed"}</dd></div>
           </dl>
-          {money ? <div style={styles.money}><p><span>Project total</span><strong>{money.project}</strong></p><p><span>Deposit requested</span><strong>{money.requested}</strong></p><p><span>Amount remaining after deposit</span><strong>{money.after}</strong></p>{authority.appliedMinor > 0 ? <p><span>Payments received</span><strong>{money.received}</strong></p> : null}<p><span>Amount still needed</span><strong>{money.needed}</strong></p></div> : <div style={styles.preparation} role="status"><strong>Deposit not ready to send</strong><p><span>Requested deposit</span><br />Pending canonical requirement</p><p>{authority?.state === "NOT_REQUIRED" ? "Add a deposit requirement to the approved Quote before sending a Deposit Request." : "An approved Quote with an unpaid deposit requirement is required before sending a Deposit Request."}</p><p>The Quote supplies the customer, project, deposit amount, and payment terms. Save and approve the Quote with a deposit requirement to continue.</p></div>}
+          {money ? <div style={styles.money}><p><span>Project total</span><strong>{money.project}</strong></p><p><span>Deposit requested</span><strong>{money.requested}</strong></p><p><span>Recorded received</span><strong>{money.received}</strong></p><p><span>Amount still needed</span><strong>{money.needed}</strong></p><p><span>Amount remaining after deposit</span><strong>{money.after}</strong></p><p><span>Status</span><strong>{authority.state === "SATISFIED" ? "Deposit satisfied" : authority.state === "PARTIALLY_SATISFIED" ? "Partially paid" : "Awaiting payment confirmation"}</strong></p></div> : <div style={styles.preparation} role="status"><strong>{authority?.state === "NOT_REQUIRED" ? "No deposit required" : "Deposit not ready to send"}</strong><p><span>Requested deposit</span><br />{authority?.state === "NOT_REQUIRED" ? "Not required" : "Pending canonical requirement"}</p><p>{authority?.state === "NOT_REQUIRED" ? "This approved Quote has no pre-work deposit requirement. You can continue without a Deposit Request." : "An approved Quote with an unpaid deposit requirement is required before sending a Deposit Request."}</p><p>The Quote supplies the customer, project, deposit amount, and payment terms. Approved scope and service context carry forward when available.</p></div>}
           {content.dueDate ? <p><strong>Due date</strong><br />{content.dueDate}</p> : null}
           {content.paymentInstructions ? <p><strong>Payment instructions</strong><br />{content.paymentInstructions}</p> : null}
           {content.notes ? <p><strong>Note</strong><br />{content.notes}</p> : null}

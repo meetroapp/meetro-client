@@ -4248,7 +4248,22 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     setLinkedCustomerContacts((current) => ({ ...current, invoice: linkedCustomerContacts.quote }));
   }
 
-  function switchDocument(documentType) {
+  function switchDocument(documentType, options = {}) {
+    if (
+      documentType === "invoice" &&
+      activeDocument === "quote" &&
+      options.depositSatisfied !== true
+    ) {
+      const pricing = quoteCustomerPricingProjection(quote);
+      if (pricing.deposit.mode !== "NONE") {
+        openDepositRequest();
+        setNotice(
+          "This Quote requires a deposit. Review the Deposit Request and record the required payment before continuing to Invoice."
+        );
+        return;
+      }
+    }
+
     setWorkingDocumentIntent((current) => ({ ...current, [documentType]: true }));
     restoreTentativeManualInvoice();
     if (documentType === "invoice") initializeWorkingInvoice();

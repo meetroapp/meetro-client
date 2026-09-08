@@ -1281,3 +1281,53 @@ test("private Job Analysis session identity survives save, reopen, and rebuild w
     false
   );
 });
+
+test("R4 private Invoice reminder persists only as private workspace metadata", () => {
+  const payload = buildBusinessDocumentSavePayload({
+    documentType: "invoice",
+    content: {
+      customerName: "Bob Hamel",
+      projectTitle: "Window repair",
+      lineItems: [
+        {
+          id: "extra-work-trim",
+          description: "Replaced damaged trim",
+          quantity: "1",
+          unitPrice: "75",
+        },
+      ],
+    },
+    turns: [],
+    manualOverrides: {
+      lineItems: [
+        {
+          id: "extra-work-trim",
+          description: "Replaced damaged trim",
+          quantity: "1",
+          unitPrice: "75",
+        },
+      ],
+      privateReminder: "Call him next week",
+    },
+  });
+
+  assert.equal(
+    Object.hasOwn(payload.workspace.manualOverrides, "privateReminder"),
+    false
+  );
+
+  assert.deepEqual(
+    payload.workspace.privateReminders,
+    [
+      {
+        id: "reviewed-private-reminder",
+        text: "Call him next week",
+      },
+    ]
+  );
+
+  assert.equal(
+    payload.workspace.manualOverrides.lineItems[0].unitPrice,
+    "75"
+  );
+});

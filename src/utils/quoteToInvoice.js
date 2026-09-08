@@ -2,6 +2,7 @@ import { fetchProfessionalInvoiceWorkspace } from "./invoicePaymentApi.js";
 import { fetchEffectiveApprovedInvoiceQuote } from "./invoiceReviewDraft.js";
 import { listBusinessDocumentDrafts, getBusinessDocumentDraft } from "./businessDocumentDraftApi.js";
 import { hydrateSavedQuoteAuthority } from "./savedQuoteAuthorityHydration.js";
+import { fetchProfessionalPreWorkDeposit } from "./preWorkDepositApi.js";
 
 const uuid = (value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ""));
 const clean = (value) => String(value || "").replace(/\s+/g, " ").trim();
@@ -97,12 +98,42 @@ export function parseQuoteInvoiceSourceRoute(route) {
   return { valid, id, version, number };
 }
 
+export function resolveQuoteInvoiceDepositGate(read) {
+  const state = read?.deposit?.state || "";
+
+  if (["NOT_REQUIRED", "SATISFIED"].includes(state)) {
+    return Object.freeze({
+      state: "READY",
+      deposit: read.deposit,
+    });
+  }
+
+  if (["DUE", "PARTIALLY_SATISFIED"].includes(state)) {
+    return Object.freeze({
+      state: "BLOCKED_DEPOSIT",
+      deposit: read.deposit,
+    });
+  }
+
+  return Object.freeze({
+    state: "UNVERIFIED",
+    deposit: read?.deposit || null,
+  });
+}
+
 // Transient language is never route authority and never placed in a URL/storage.
 const proposals = new Map();
 export function stageQuoteInvoiceInstruction(route, instruction) { proposals.clear(); proposals.set(route, instruction); }
 export function takeQuoteInvoiceInstruction(route) { const text = proposals.get(route) || ""; proposals.delete(route); return text; }
 
-export async function loadExactInvoiceSource(route, { setPage, getDocument = getBusinessDocumentDraft, getAuthority = hydrateSavedQuoteAuthority, getInvoiceWorkspace = fetchProfessionalInvoiceWorkspace, getEffectiveQuote = fetchEffectiveApprovedInvoiceQuote } = {}) {
+export async function loadExactInvoiceSource(route, {
+  setPage,
+  getDocument = getBusinessDocumentDraft,
+  getAuthority = hydrateSavedQuoteAuthority,
+  getInvoiceWorkspace = fetchProfessionalInvoiceWorkspace,
+  getEffectiveQuote = fetchEffectiveApprovedInvoiceQuote,
+  getDeposit = fetchProfessionalPreWorkDeposit,
+} = {}) {
   if (!route?.valid) throw new Error("Invalid source Quote route.");
   const document = await getDocument({ draftId: route.id, setPage });
   const exact = resolveExactQuoteToInvoice({ number: route.number, documents: [document] });
@@ -111,6 +142,33 @@ export async function loadExactInvoiceSource(route, { setPage, getDocument = get
   if (document.jobId) authority = await getAuthority({ document, setPage });
   let paymentEvidence = null;
   const canonical = authority?.canonicalQuote;
+
+  if (canonical && document.jobId) {
+    const depositRead = await getDeposit({
+      jobId: document.jobId,
+      quoteId: canonical.id,
+      setPage,
+    });
+
+    const depositGate = resolveQuoteInvoiceDepositGate(depositRead);
+
+    if (depositGate.state === "BLOCKED_DEPOSIT") {
+      const error = new Error(
+        "The required deposit must be recorded as satisfied before preparing this Invoice."
+      );
+      error.code = "QUOTE_TO_INVOICE_DEPOSIT_REQUIRED";
+      throw error;
+    }
+
+    if (depositGate.state !== "READY") {
+      const error = new Error(
+        "Meetro could not verify the deposit status for this approved Quote. Invoice preparation remains blocked."
+      );
+      error.code = "QUOTE_TO_INVOICE_DEPOSIT_UNVERIFIED";
+      throw error;
+    }
+  }
+
   if (projectQuoteToInvoiceWorkingDraft({ quoteDocument: document, quoteAuthority: authority }).invoiceDraft.lineItems.length) {
     // A bounded workspace read can supply payment continuity only when its exact
     // Job and current effective approved Quote both agree with this source.

@@ -1,4 +1,5 @@
 import { projectQuoteToInvoiceWorkingDraft } from "../src/utils/quoteToInvoice.js";
+import { quoteCustomerPricingProjection } from "../src/utils/quotePricingPresentation.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -26,7 +27,12 @@ const depositCode = block("function openDepositRequest()", "  return (\n    <>\n
 
 // Execute the production handlers with state setters, without browser storage
 // or network grants. Rendering/physical geometry is covered separately.
-function harness({ canonicalJobId = null, savedInvoice = null, preparation = null } = {}) {
+function harness({
+  canonicalJobId = null,
+  savedInvoice = null,
+  preparation = null,
+  quoteState = bob,
+} = {}) {
   const state = {
     activeDocument: "quote", invoice: {}, invoiceBaseline: {},
     workingDocumentIntent: { quote: true, invoice: false },
@@ -35,15 +41,15 @@ function harness({ canonicalJobId = null, savedInvoice = null, preparation = nul
     documentJobIds: { quote: canonicalJobId, invoice: canonicalJobId },
     customerParties: { quote: party, invoice: null },
     linkedCustomerContacts: { quote: { id: party.businessContactId, displayName: "Bob Hamel" }, invoice: null },
-    hydratedSavedQuotePresentation: bob, invoicePreparation: preparation,
-    quote: bob, job: { id: canonicalJobId, relationshipId: 345, conversationId: 678 },
+    hydratedSavedQuotePresentation: quoteState, invoicePreparation: preparation,
+    quote: quoteState, job: { id: canonicalJobId, relationshipId: 345, conversationId: 678 },
     depositRequestContext: null, depositRequestOpen: false,
     nearNewestRef: { current: false }, turns: [{ text: "Quote conversation" }],
   };
-  function run(action) {
+  function run(action, options = {}) {
     const set = (field) => (value) => { state[field] = typeof value === "function" ? value(state[field]) : value; };
     const scope = {
-      ...state, projectQuoteToInvoiceWorkingDraft, dirty: { quote: false }, persistedQuoteAuthority: { authority: null }, normalizeBusinessDocumentTab, buildNewBusinessDocumentDraftPayload,
+      ...state, projectQuoteToInvoiceWorkingDraft, quoteCustomerPricingProjection, dirty: { quote: false }, persistedQuoteAuthority: { authority: null }, normalizeBusinessDocumentTab, buildNewBusinessDocumentDraftPayload,
       todayLocalIsoDate: () => "2026-09-07", emptyCustomerControl: () => ({}),
       restoreTentativeManualInvoice: () => {},
       setInvoice: set("invoice"), setInvoiceBaseline: set("invoiceBaseline"),
@@ -56,16 +62,62 @@ function harness({ canonicalJobId = null, savedInvoice = null, preparation = nul
     };
     const handlers = new Function(...Object.keys(scope), `${switchCode}\n${depositCode}\nreturn { switchDocument, openDepositRequest };`)(...Object.values(scope));
     if (action === "deposit") handlers.openDepositRequest();
-    else handlers.switchDocument(action);
+    else handlers.switchDocument(action, options);
   }
   return { state, run };
 }
 
-test("Deposit Invoice tab calls the shared switch instead of emitting a malformed Job-only route", () => {
-  assert.match(deposit, /onClick=\{\(\) => onDocumentChange\("invoice"\)\}/);
+test("Deposit Invoice tab uses the shared switch only after canonical deposit authority clears", () => {
+  assert.match(
+    deposit,
+    /onDocumentChange\("invoice", \{ depositSatisfied: true \}\)/
+  );
+  assert.match(deposit, /disabled=\{!invoiceAllowed\}/);
   assert.match(deposit, /onClick=\{\(\) => onDocumentChange\("quote"\)\}/);
   assert.doesNotMatch(deposit, /invoiceBuilder\?jobId=|quoteBuilder\?jobId=/);
   assert.equal(parseInvoiceBuilderRoute("invoiceBuilder?jobId=").valid, false);
+});
+
+test("structured Quote deposit routes through Deposit Request until its payment gate clears", () => {
+  const governedQuote = {
+    ...bob,
+    depositMode: "PERCENT",
+    depositPercent: "75",
+  };
+
+  assert.equal(
+    quoteCustomerPricingProjection(governedQuote).deposit.mode,
+    "PERCENT"
+  );
+
+  const { state, run } = harness({
+    canonicalJobId: jobId,
+    quoteState: governedQuote,
+  });
+
+  run("invoice");
+
+  assert.equal(state.activeDocument, "quote");
+  assert.equal(state.depositRequestOpen, true);
+  assert.deepEqual(
+    state.workingDocumentIntent,
+    { quote: true, invoice: false }
+  );
+  assert.match(state.notice, /requires a deposit/i);
+
+  run("invoice", { depositSatisfied: true });
+
+  assert.equal(state.depositRequestOpen, false);
+  assert.equal(state.activeDocument, "invoice");
+  assert.equal(state.workingDocumentIntent.invoice, true);
+});
+
+test("payment terms text alone never fabricates governed deposit authority", () => {
+  assert.match(bob.paymentTerms, /deposit/i);
+  assert.equal(
+    quoteCustomerPricingProjection(bob).deposit.mode,
+    "NONE"
+  );
 });
 
 for (const canonicalJobId of [null, jobId]) {
