@@ -137,6 +137,7 @@ import {
 import {
   applyBusinessContactToDocumentSnapshot,
   businessContactDisplayName,
+  businessDocumentCustomerSnapshot,
   businessDocumentCustomerState,
   completeBusinessDocumentCustomerWorkflow,
   customerSnapshotFromBusinessContact,
@@ -2007,7 +2008,13 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     (pendingAnalysisMessageVisible ? 1 : 0) +
     (pendingQuoteProposal && activeDocument === "quote" ? 1 : 0) +
     (pendingInvoiceProposal && activeDocument === "invoice" ? 1 : 0);
-  const currentReconciliation = reconcileBusinessDocumentInstructions({ documentType: activeDocument, baseline: activeDocument === "quote" ? quoteBaseline : invoiceBaseline, instructions: currentInstructions, manualOverrides: manualOverrides[activeDocument] });
+  // External selection initializes Quote content separately from instruction history.
+  // Rebuilding that history must retain this local snapshot, including after reopen;
+  // the linked Contact is mutable and is not a presentation fallback.
+  const quoteReconciliationBaseline = customerParties.quote && !documentJobIds.quote
+    ? { ...quoteBaseline, ...businessDocumentCustomerSnapshot(quote) }
+    : quoteBaseline;
+  const currentReconciliation = reconcileBusinessDocumentInstructions({ documentType: activeDocument, baseline: activeDocument === "quote" ? quoteReconciliationBaseline : invoiceBaseline, instructions: currentInstructions, manualOverrides: manualOverrides[activeDocument] });
   const privateReminders = currentReconciliation.privateReminders;
   const quotePayload = useMemo(() => buildBusinessDocumentSavePayload({
     documentType: "quote", content: quote, turns, manualOverrides: manualOverrides.quote,
@@ -3635,7 +3642,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   }
 
   function reconcileDocument(documentType, nextTurns, overrides = manualOverrides[documentType]) {
-    const result = reconcileBusinessDocumentInstructions({ documentType, baseline: documentType === "quote" ? quoteBaseline : invoiceBaseline, instructions: nextTurns.filter((turn) => turn.documentType === documentType && turn.recognized !== false), manualOverrides: overrides });
+    const result = reconcileBusinessDocumentInstructions({ documentType, baseline: documentType === "quote" ? quoteReconciliationBaseline : invoiceBaseline, instructions: nextTurns.filter((turn) => turn.documentType === documentType && turn.recognized !== false), manualOverrides: overrides });
     if (documentType === "quote") onApplyQuotePatch({ ...result.draft, replaceCollections: true });
     else setInvoice(result.draft);
     return result;

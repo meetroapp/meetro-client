@@ -61,7 +61,7 @@ test.before(async () => {
     },
     transform(code, id) {
       if (id.endsWith("/src/pages/QuoteBuilder.jsx")) return code.replace("const unifiedWorkspaceEnabled = true;", "globalThis.__quoteEntrySnapshot = { quote: unifiedQuoteDraft, canonicalJobId, request }; const unifiedWorkspaceEnabled = true;");
-      if (id.endsWith("/src/components/UnifiedBusinessDocumentWorkspace.jsx")) return code.replace("const activeDirty = dirty[activeDocument];", "globalThis.__quoteWorkspaceSnapshot = { invoice, invoiceBaseline, dirty, workingDocumentIntent, savedDocuments, invoiceCreateState, savedDocumentsRef, pendingInvoiceProposal, privateReminders, customerParties, documentJobIds }; const activeDirty = dirty[activeDocument];");
+      if (id.endsWith("/src/components/UnifiedBusinessDocumentWorkspace.jsx")) return code.replace("const activeJobContext = documentJobIds[activeDocument] ? job : {};", "const activeJobContext = documentJobIds[activeDocument] ? job : {}; globalThis.__quoteWorkspaceSnapshot = { invoice, invoiceBaseline, quoteBaseline, activeContent, payloads, dirty, workingDocumentIntent, savedDocuments, invoiceCreateState, savedDocumentsRef, pendingInvoiceProposal, privateReminders, customerParties, documentJobIds };");
     },
   }] });
 });
@@ -79,7 +79,9 @@ test.after(async () => {
   delete globalThis.__quoteWorkspaceSnapshot;
 });
 
-async function mount(t, { route = "quoteBuilder?new=1", stored = {}, initialDocument = "quote", listExtras = [], workspaceProps = null } = {}) {
+async function mount(t, { route = "quoteBuilder?new=1", stored = {}, initialDocument = "quote", listExtras = [], workspaceProps = null, newExternalCustomer = false, currentContact = contact } = {}) {
+  delete globalThis.__quoteEntrySnapshot;
+  delete globalThis.__quoteWorkspaceSnapshot;
   window.history.replaceState({}, "", `#${route}`);
   localStorage.clear();
   localStorage.setItem("activeAccountMode", "business");
@@ -87,6 +89,8 @@ async function mount(t, { route = "quoteBuilder?new=1", stored = {}, initialDocu
   for (const [key, value] of Object.entries(stored)) localStorage.setItem(key, typeof value === "string" ? value : JSON.stringify(value));
   const calls = [], documents = [], navigations = [];
   let numberAllocations = 0;
+  let availableContact = newExternalCustomer ? null : currentContact;
+  let availableRelationship = newExternalCustomer ? null : relationship;
   globalThis.__quoteEntryHttp = async (endpoint, options = {}) => {
     const method = options.method || "GET";
     const url = new URL(endpoint, "http://localhost");
@@ -94,9 +98,24 @@ async function mount(t, { route = "quoteBuilder?new=1", stored = {}, initialDocu
     calls.push({ method, path: url.pathname, type: url.searchParams.get("type"), search: url.searchParams.get("search"), body });
     let data;
     if (url.pathname === "/my-contractor-profile") data = { profile: { id: 7 } };
-    else if (url.pathname === "/business-contacts") data = { contacts: [contact] };
-    else if (url.pathname.startsWith("/business-contacts/")) data = { contact };
-    else if (url.pathname.startsWith("/business-customer-relationships")) data = { relationships: [relationship], relationship };
+    else if (url.pathname === "/business-contacts" && method === "POST") {
+      availableContact = { ...body, id: CONTACT, status: "ACTIVE", roles: [], version: 1 };
+      data = { contact: availableContact };
+    }
+    else if (url.pathname === `/business-contacts/${CONTACT}/roles` && method === "POST") {
+      availableContact = { ...availableContact, roles: [{ role: body.role, active: true }], version: 2 };
+      data = { contact: availableContact };
+    }
+    else if (url.pathname === "/business-contacts") data = { contacts: availableContact ? [availableContact] : [] };
+    else if (url.pathname.startsWith("/business-contacts/")) data = { contact: availableContact };
+    else if (url.pathname === "/business-customer-relationships" && method === "POST") {
+      availableRelationship = { ...relationship, ...body };
+      data = { relationship: availableRelationship };
+    }
+    else if (url.pathname.startsWith("/business-customer-relationships/by-contact/") && !availableRelationship) {
+      return { response: { ok: false, status: 404 }, data: { success: false, code: "BUSINESS_CUSTOMER_RELATIONSHIP_NOT_FOUND" } };
+    }
+    else if (url.pathname.startsWith("/business-customer-relationships")) data = { relationships: availableRelationship ? [availableRelationship] : [], relationship: availableRelationship };
     else if (url.pathname === "/business-document-drafts" && method === "POST") {
       numberAllocations++;
       const document = { ...body, id: randomUUID(), status: "WORKING_DRAFT", reference: "INTERNAL-ONLY", documentNumber: `${body.documentType === "QUOTE" ? "Q" : "INV"}-${String(numberAllocations).padStart(7, "0")}`, version: 1, createdAt: "2026-09-07T12:00:00Z", updatedAt: "2026-09-07T12:00:00Z" };
@@ -193,9 +212,61 @@ test("real generic QuoteBuilder ignores stale request/revision/active Job state 
   assert.equal(w.allocations(), 0);
 });
 
+function assertBobQuotePresentation(w) {
+  assert.equal(w.workspace().customerParties.quote.businessContactId, CONTACT);
+  assert.equal(w.workspace().customerParties.quote.customerRelationshipId, RELATIONSHIP);
+  assert.equal(w.snapshot().quote.customerName, "Bob Hamel");
+  assert.equal(w.workspace().payloads.quote.content.customerName, "Bob Hamel");
+  assert.equal(w.workspace().activeContent.customerName, "Bob Hamel");
+  const customer = [...document.querySelectorAll('[aria-label="Live Quote Preview"] .business-document-meta div')]
+    .find((row) => row.querySelector("dt")?.textContent === "Customer");
+  assert.equal(customer?.querySelector("dd")?.textContent, "Bob Hamel");
+  assert.match(document.querySelector(".business-document-header p")?.textContent, /Customer: Bob Hamel/);
+  assert.match(w.text(), /External customer/);
+  assert.doesNotMatch(w.text(), /Customer not selected/);
+}
+
+function assertCustomerSnapshot(w, expected) {
+  for (const content of [w.snapshot().quote, w.workspace().payloads.quote.content, w.workspace().activeContent]) {
+    for (const key of ["customerName", "customerEmail", "customerPhone", "customerAddress", "customerLocation"]) {
+      assert.equal(content[key], expected[key] || "", key);
+    }
+  }
+}
+
+test("R4-E new external Customer initializes the actual Quote preview without saving a document", async (t) => {
+  const w = await mount(t, { newExternalCustomer: true });
+  await w.click("External Customer");
+  await w.click("Add New Customer");
+  for (const [label, value] of Object.entries({ Name: contact.displayName, Email: contact.email, Phone: contact.phone, Address: contact.address })) {
+    const input = [...document.querySelectorAll(".new-quote-customer-setup label")]
+      .find((item) => item.textContent === label)?.querySelector("input");
+    assert.ok(input, label);
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value").set.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+  await w.click("Save Customer & Start Quote");
+  assertBobQuotePresentation(w);
+  assertCustomerSnapshot(w, { customerName: contact.displayName, customerEmail: contact.email, customerPhone: contact.phone, customerAddress: contact.address, customerLocation: contact.address });
+  assert.deepEqual(w.calls.filter((call) => call.method !== "GET").map(({ method, path }) => ({ method, path })), [
+    { method: "POST", path: "/business-contacts" },
+    { method: "POST", path: `/business-contacts/${CONTACT}/roles` },
+    { method: "POST", path: "/business-customer-relationships" },
+  ]);
+  assert.equal(w.workspace().documentJobIds.quote, null);
+  assert.equal(w.workspace().savedDocuments.quote, null);
+  assert.equal(w.snapshot().quote.quoteNumber, "");
+  assert.equal(w.documents.length, 0);
+  assert.equal(w.allocations(), 0);
+});
+
 test("real External selection populates QuoteBuilder snapshot and creates no document until deliberate Quote Save", async (t) => {
   const w = await mount(t);
   await w.selectCustomer();
+  assertBobQuotePresentation(w);
+  assert.ok(w.calls.every((call) => call.method === "GET"));
   assert.equal(w.snapshot().quote.customerName, contact.displayName);
   assert.equal(w.snapshot().quote.customerEmail, contact.email);
   assert.equal(w.snapshot().quote.customerPhone, contact.phone);
@@ -210,6 +281,7 @@ test("real External selection populates QuoteBuilder snapshot and creates no doc
   assert.deepEqual(w.calls.filter((call) => call.path === "/business-document-drafts").map((call) => call.type).sort(), ["INVOICE", "QUOTE"]);
   await w.click("Close Saved Files");
   await w.edit({ projectTitle: "Repair fence", projectDescription: "Replace damaged panels" });
+  assertBobQuotePresentation(w);
   assert.equal(w.snapshot().quote.projectTitle, "Repair fence");
   assert.equal(w.snapshot().quote.quoteNumber, "");
   assert.equal(w.documents.length, 0);
@@ -412,6 +484,36 @@ function sourceQuote() {
     customerParty: { businessContactId: CONTACT, customerRelationshipId: RELATIONSHIP },
     content: { customerName: "Bob Hamel", customerEmail: "bob@example.test", projectTitle: "Window repair", notes: "Do not copy Quote notes", totalOverride: "9999" } };
 }
+
+for (const mode of ["manual", "prefill"]) test(`R4-E saved external Quote keeps its snapshot through ${mode} without syncing Contact changes`, async (t) => {
+  const saved = sourceQuote();
+  Object.assign(saved.content, { customerPhone: "555-0199", customerAddress: "Original Quote address", customerLocation: "Original work location" });
+  saved.workspace.instructions = [{ id: "scope", text: "Scope: Window repair", recognized: true, documentType: "QUOTE", revisions: 0, revisionHistory: [] }];
+  const original = structuredClone(saved);
+  const w = await mount(t, { route: `quoteBuilder?draftId=${saved.id}`, listExtras: [saved], currentContact: { ...contact, displayName: "Bob changed in Contacts", email: "new@example.test", phone: "555-9999", address: "New Contact address" } });
+  assertBobQuotePresentation(w);
+  assertCustomerSnapshot(w, saved.content);
+  if (mode === "manual") await w.edit({ projectTitle: "Window repair updated" });
+  else await w.click("Let Meetro prefill the form");
+  assertBobQuotePresentation(w);
+  assertCustomerSnapshot(w, saved.content);
+  assert.equal(w.workspace().savedDocuments.quote.documentNumber, "Q-0000049");
+  assert.deepEqual(saved, original, "the saved document is never overwritten by a local edit");
+  assert.equal(w.allocations(), 0);
+  assert.ok(w.calls.every((call) => call.method === "GET"));
+});
+
+test("R4-E a linked Contact cannot invent a missing saved Quote customer snapshot", async (t) => {
+  const saved = sourceQuote();
+  saved.content = { projectTitle: "Window repair" };
+  const w = await mount(t, { route: `quoteBuilder?draftId=${saved.id}`, listExtras: [saved] });
+  await w.edit({ projectTitle: "Window repair updated" });
+  assert.equal(w.workspace().customerParties.quote.businessContactId, CONTACT);
+  assert.equal(w.workspace().activeContent.customerName, "");
+  assert.match(document.querySelector(".business-document-header p").textContent, /Customer not selected/);
+  assert.ok(w.calls.every((call) => call.method === "GET"));
+  assert.equal(w.allocations(), 0);
+});
 
 test("R3 exact source route opens a local Invoice with no stale context or historical Invoice lookup", async (t) => {
   const quote = sourceQuote();
