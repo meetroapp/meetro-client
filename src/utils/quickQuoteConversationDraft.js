@@ -82,6 +82,7 @@ function explicitContractorProjectPrice(text) {
 
 function explicitMaterialAmount(text) {
   const match = firstMatch(text, [
+    /(?:materials?|materiales|matériaux|materiais)\s*,\s*\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)(?!\s*(?:hours?|hrs?|days?|weeks?))/i,
     /(?:use|set|materials?|materiales|matériaux|materiais)\s*(?:(?:are|is|costs?|to|at|de|a)|:)?\s*\$\s*([\d,.]+)/i,
     /(?:materials?|materiales|matériaux|materiais)\s+(?:are|is|costs?|to|at|:)\s*\$?\s*([\d,.]+)(?:\s*(?:dollars?|usd))?\b/i,
     /(?:materials?|materiales|matériaux|materiais)\s+([\d,.]+)\b(?!\s*(?:hours?|hrs?|days?|weeks?))/i,
@@ -92,6 +93,7 @@ function explicitMaterialAmount(text) {
 
 function explicitLaborAmount(text) {
   const match = firstMatch(text, [
+    /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d\'œuvre|mão\s+de\s+obra)\s*,\s*\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)(?!\s*(?:hours?|hrs?|days?|weeks?))/i,
     /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|to|at|:)?\s*\$\s*([\d,.]+)/i,
     /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s+(?:is|are|costs?|to|:)\s*\$?\s*([\d,.]+)(?:\s*(?:dollars?|usd))?\b/i,
     /(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*([\d,.]+)\s*(?:dollars?|usd)\b/i,
@@ -370,6 +372,7 @@ function explicitLaborItems(text) {
     }
   }
   const match = firstMatch(text, [
+    /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*,\s*\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)(?!\s*(?:hours?|hrs?|days?|weeks?))/i,
     /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|to|at|:)?\s*\$\s*([\d,.]+)/i,
     /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s+(?:is|are|costs?|to|:)\s*\$?\s*([\d,.]+)(?:\s*(?:dollars?|usd))?\b/i,
     /\b(labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*(?:is|are|costs?|:)?\s*([\d,.]+)\s*(?:dollars?|usd)\b/i,
@@ -426,6 +429,8 @@ function cleanScope(text) {
   );
   scope = scope.replace(/\b(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s+[\d,.]+\b(?!\s*(?:hours?|hrs?|days?|weeks?))[.!]?/gi, "");
   scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais|labor|labour|installation|tax|subtotal)\s+(?:(?:total)\s+(?:is|are|:)?\s*\$\s*[\d,.]+|\$\s*[\d,.]+\s+total)[.!]?/gi, "");
+  scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais)\s*,\s*\$?\s*\d+(?:,\d{3})*(?:\.\d+)?(?:\s*(?:dollars?|usd))?[.!]?/gi, "");
+  scope = scope.replace(/\b(?:labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*,\s*\$?\s*\d+(?:,\d{3})*(?:\.\d+)?(?:\s*(?:dollars?|usd))?[.!]?/gi, "");
   scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais|labor|labour|installation)\s+(?:are|is|costs?|to|at|:)\s*\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?[.!]?/gi, "");
   scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais)\s+(?:are|is|costs?|de|a|:)?\s*\$\s*[\d,.]+[.!]?/gi, "");
   scope = scope.replace(/\b(?:materials?|materiales|matériaux|materiais)\s+[\d,.]+\b(?!\s*(?:hours?|hrs?|days?|weeks?))[.!]?/gi, "");
@@ -645,6 +650,8 @@ export function buildQuickQuoteConversationPatch({
 }
 
 const RECOGNIZED_QUOTE_INSTRUCTION_PATTERNS = Object.freeze([
+  /\b(?:labor|labour|installation)\s*,\s*\$?\s*\d+(?:,\d{3})*(?:\.\d+)?(?:\s*(?:dollars?|usd))?\b/gi,
+  /\bmaterials?\s*,\s*\$?\s*\d+(?:,\d{3})*(?:\.\d+)?(?:\s*(?:dollars?|usd))?\b/gi,
   /\b(?:labor|labour|installation)\s*(?:is|are|costs?|to|at|:)?\s*\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?\b/gi,
   /\bmaterials?\s*(?:are|is|costs?|to|at|:)?\s*\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?\b/gi,
   /\b(?:make|set|change|update)\s+(?:the\s+)?total\s*(?:is|to|:)?\s*\$?\s*[\d,.]+\b/gi,
@@ -664,6 +671,37 @@ const RECOGNIZED_QUOTE_INSTRUCTION_PATTERNS = Object.freeze([
   /\binclude\s+materials?\s+in\s+(?:the\s+)?total\b/gi,
   /\b(?:scope(?:\s+of\s+work)?\s*(?:is|:)|add\s+.+?\s+to\s+(?:the\s+)?scope|(?:[A-Za-z][\w'’-]*\s+){0,7}(?:replacement|repair|installation|service|painting|rebuild|reconstruction)\b|(?:replace|repair|install|rebuild|paint|seal|service|clean)\b[^,.;]*)/gi,
 ]);
+
+function pricingPunctuationCorrections(text) {
+  const corrections = [];
+  const seen = new Set();
+  const pattern = /\b(materials?|materiales|matériaux|materiais|labor|labour|installation|mano\s+de\s+obra|main[- ]d'œuvre|mão\s+de\s+obra)\s*,\s*\$?\s*(\d+(?:,\d{3})*(?:\.\d+)?)/gi;
+
+  for (const match of String(text || "").matchAll(pattern)) {
+    const rawLabel = cleanText(match[1]);
+    const amount = parseAmount(match[2]);
+    if (amount === null) continue;
+
+    const materials = /^(?:materials?|materiales|matériaux|materiais)$/i.test(rawLabel);
+    const field = materials ? "materials" : "labor";
+    const label = materials ? "Materials" : "Labor";
+    const original = cleanText(match[0]);
+    const key = `${field}:${original.toLowerCase()}`;
+
+    if (seen.has(key)) continue;
+    seen.add(key);
+
+    corrections.push(Object.freeze({
+      code: "PRICING_PUNCTUATION_NORMALIZED",
+      field,
+      original,
+      interpretedAs: `${label} $${amount}`,
+      confidence: "HIGH",
+    }));
+  }
+
+  return Object.freeze(corrections);
+}
 
 function quoteProposalChanges(patch, current) {
   const changes = [];
@@ -741,6 +779,7 @@ export function buildQuickQuoteConversationProposal({
     instruction,
     patch,
     recognizedChanges,
+    corrections: pricingPunctuationCorrections(instruction),
     unrecognizedSegments: unrecognizedQuoteInstructionSegments(instruction),
     baselineFingerprint: quoteConversationProposalFingerprint(current),
     pricing: quoteCustomerPricingProjection({ ...current, ...patch }),

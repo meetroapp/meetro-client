@@ -429,6 +429,74 @@ test("R4-C commercial language keeps pricing out of scope and honors a new expli
   assert.deepEqual(explicitTotal.unrecognizedSegments, []);
 });
 
+
+test("R4-D corrects high-confidence commas between pricing labels and amounts", () => {
+  const baseline = {
+    ...current,
+    projectTitle: "Window repair",
+    projectDescription: "Window repair",
+    recommendedSolution: "Window repair",
+    totalOverride: "220",
+  };
+
+  for (const instruction of [
+    "Window repair, labor 220, materials, 60, 50% deposit.",
+    "Window repair, labor, 220, materials 60, 50% deposit.",
+    "Window repair, labor, 220, materials, 60, 50 percent deposit.",
+    "Window repair, labor, $220, materials, $60, 50% deposit.",
+  ]) {
+    const result = proposal(instruction, baseline);
+
+    assert.equal(result.patch.laborItems[0].total, "220", instruction);
+    assert.equal(result.patch.materialItems[0].total, "60", instruction);
+    assert.equal(result.patch.totalOverride, "", instruction);
+    assert.equal(result.patch.depositMode, "PERCENT", instruction);
+    assert.equal(result.patch.depositPercent, "50", instruction);
+
+    assert.equal(result.pricing.total, 280, instruction);
+    assert.equal(result.pricing.deposit.due, 140, instruction);
+    assert.equal(result.pricing.deposit.remaining, 140, instruction);
+
+    assert.equal(result.patch.projectDescription, "Window repair", instruction);
+    assert.equal(result.patch.recommendedSolution, "Window repair", instruction);
+    assert.deepEqual(result.unrecognizedSegments, [], instruction);
+
+    assert.ok(result.corrections.length >= 1, instruction);
+    for (const correction of result.corrections) {
+      assert.equal(correction.code, "PRICING_PUNCTUATION_NORMALIZED");
+      assert.equal(correction.confidence, "HIGH");
+    }
+  }
+});
+
+test("R4-D keeps unrelated standalone money-like numbers fail-closed", () => {
+  const baseline = {
+    ...current,
+    projectTitle: "Window repair",
+    projectDescription: "Window repair",
+    recommendedSolution: "Window repair",
+    totalOverride: "220",
+  };
+
+  const result = proposal(
+    "Window repair, labor 220, materials, 60, 300, 50% deposit.",
+    baseline
+  );
+
+  assert.equal(result.patch.laborItems[0].total, "220");
+  assert.equal(result.patch.materialItems[0].total, "60");
+  assert.equal(result.patch.totalOverride, "");
+  assert.equal(result.pricing.total, 280);
+  assert.equal(result.pricing.deposit.due, 140);
+  assert.equal(result.pricing.deposit.remaining, 140);
+
+  assert.equal(result.corrections.length, 1);
+  assert.equal(result.corrections[0].field, "materials");
+  assert.equal(result.corrections[0].interpretedAs, "Materials $60");
+
+  assert.deepEqual(result.unrecognizedSegments, ["300"]);
+});
+
 test("R4-C component-only edits preserve an existing explicit project total", () => {
   const baseline = {
     ...current,

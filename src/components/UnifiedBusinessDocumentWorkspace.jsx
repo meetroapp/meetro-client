@@ -929,6 +929,7 @@ function QuoteProposalReview({ proposal, onApply, onDismiss }) {
   return <article className="business-document-proposal" aria-labelledby={`proposal-title-${proposal.id}`}>
     <header><span>Meetro proposal</span><h3 id={`proposal-title-${proposal.id}`}>Proposed Quote changes</h3><p>Nothing changes until you apply.</p></header>
     <blockquote aria-label="Instruction being reviewed">{proposal.instruction}</blockquote>
+    {proposal.corrections?.length ? <aside role="status"><strong>Meetro noticed a formatting issue</strong>{proposal.corrections.map((correction) => <p key={`${correction.code}-${correction.field}-${correction.original}`}>I interpreted “{correction.original}” as “{correction.interpretedAs}”.</p>)}<p>Review the corrected pricing before applying.</p></aside> : null}
     {editing ? <div className="business-document-proposal-editor">
       {patch.laborItems?.length ? <label>Labor<input inputMode="decimal" value={patch.laborItems[0]?.total || ""} onChange={(event) => updateRow("laborItems", "description", event.target.value)} /></label> : null}
       {(patch.materialItems?.length || Object.hasOwn(patch, "materialAmount")) ? <label>Materials<input inputMode="decimal" value={patch.materialItems?.[0]?.total || patch.materialAmount || ""} onChange={(event) => { updateRow("materialItems", "name", event.target.value); update("materialAmount", event.target.value); }} /></label> : null}
