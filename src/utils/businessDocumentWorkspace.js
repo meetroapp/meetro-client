@@ -375,6 +375,7 @@ export function reconcileBusinessDocumentInstructions({
   const photoIntents = [];
 
   instructions.forEach((entry, index) => {
+    if (normalizeBusinessDocumentTab(documentType) === "invoice" && entry?.recognized === false) return;
     const instruction = cleanText(typeof entry === "string" ? entry : entry?.text);
     if (!instruction) return;
     const patch = buildBusinessDocumentConversationPatch({
@@ -388,7 +389,11 @@ export function reconcileBusinessDocumentInstructions({
     draft = mergeBusinessDocumentDraft(draft, documentPatch);
   });
 
-  draft = mergeBusinessDocumentDraft(draft, manualOverrides);
+  const { privateReminder: manualPrivateReminder, ...visibleOverrides } = manualOverrides;
+  if (manualPrivateReminder) {
+    if (!privateReminders.some((item) => item.text === cleanText(manualPrivateReminder))) privateReminders.push({ id: "reviewed-private-reminder", text: cleanText(manualPrivateReminder) });
+  }
+  draft = mergeBusinessDocumentDraft(draft, visibleOverrides);
   for (const key of ["lineItems", "materialItems", "laborItems"]) {
     if (Object.hasOwn(manualOverrides, key)) {
       draft = { ...draft, [key]: (manualOverrides[key] || []).filter(hasRowValue).map((row) => ({ ...row })) };

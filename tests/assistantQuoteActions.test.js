@@ -1,3 +1,5 @@
+import { listBusinessDocumentDrafts } from "../src/utils/businessDocumentDraftApi.js";
+import * as invoiceNavigation from "../src/utils/quoteToInvoice.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -24,7 +26,7 @@ const targetsCode = source.slice(targetsNode.start, targetsNode.end);
 
 // Run the real payload builders and navigation handlers, with only UI/storage
 // and network ports substituted. No navigation logic is reimplemented here.
-function harness({ route = "#businessDashboard", currentPage = "businessDashboard", requestDetail = null, legacy = true, seed = {} } = {}) {
+function harness({ route = "#businessDashboard", currentPage = "businessDashboard", requestDetail = null, legacy = true, seed = {}, invoiceQuotes = [] } = {}) {
   const data = new Map(Object.entries(seed));
   const mutations = [], routes = [], state = { open: true, answer: "" }, network = [];
   const localStorage = {
@@ -34,7 +36,16 @@ function harness({ route = "#businessDashboard", currentPage = "businessDashboar
   };
   const noNetwork = (...args) => { network.push(args); assert.fail("navigation must not create/save documents or allocate numbers"); };
   const scope = {
-    ...navigation, clearGenericNewQuoteContext: () => clearGenericNewQuoteContext(localStorage),
+    ...navigation, ...invoiceNavigation,
+    lookupQuoteInvoiceCommand: (command, options) => invoiceNavigation.lookupQuoteInvoiceCommand(command, {
+      ...options,
+      listDocuments: (args) => listBusinessDocumentDrafts({ ...args, authFetchImpl: async (path, options) => {
+        network.push({ path, method: options.method });
+        assert.equal(options.method, "GET");
+        return { response: { ok: true }, data: { success: true, documents: invoiceQuotes } };
+      } }),
+    }),
+    clearGenericNewQuoteContext: () => clearGenericNewQuoteContext(localStorage),
     localStorage, window: { location: { hash: route } }, currentPage, language: "en",
     readRequestCompanionContext: () => requestDetail, canReadLegacyWorkflowStorage: () => legacy,
     parseUserScheduleTime, getUpcomingAppointments: () => [], getUnreadConversationCount: () => 0,
@@ -265,4 +276,65 @@ test("real evaluation and schedule responders retain precedence for contextual l
     assert.equal(h.data.get("selectedQuoteRequest"), stale.selectedQuoteRequest);
     assert.equal(h.network.length, 0);
   }
+});
+
+
+const invoiceSource = { id: DRAFT, documentType: "QUOTE", status: "WORKING_DRAFT", reference: "WDR-LOCAL", documentNumber: "Q-0000049", version: 1, jobId: null,
+  customerDisplayName: "Bob Hamel", customerParty: null, content: { customerName: "Bob Hamel", projectTitle: "Window repair" },
+  createdAt: "2026-09-07T12:00:00Z", updatedAt: "2026-09-07T12:00:00Z", photos: [],
+  workspace: { activeDocument: "QUOTE", instructions: [], manualOverrides: {}, privateReminders: [] } };
+for (const command of ["Create invoice for Bob Hamel job quote number Q0000049", "Prepare an invoice from Quote Q-0000049", "Crear una factura para Bob Hamel, cotización Q0000049"]) {
+  test(`R3 real getVoiceResponse → handleVoiceAction resolves exact source: ${command}`, async () => {
+    const h = harness({ currentPage: "projectDetails", seed: stale, invoiceQuotes: [invoiceSource] });
+    const response = h.getVoiceResponse(command, "business", "en", {}, "projectDetails");
+    assert.equal(response.intent, "prepare_quote_invoice");
+    await h.handleVoiceAction(response.actions[0]);
+    assert.equal(h.routes.length, 1);
+    assert.equal(invoiceNavigation.parseQuoteInvoiceSourceRoute(h.routes[0]).id, DRAFT);
+    assert.equal(h.network.length, 1);
+    assert.match(h.network[0].path, /search=Q-0000049&type=QUOTE/);
+    assert.equal(h.network[0].method, "GET");
+    assert.equal(h.mutations.length, 0);
+  });
+}
+for (const [command, candidates, expected] of [
+  ["Create invoice for Jane Doe, Quote Q0000049", [invoiceSource], /does not match/],
+  ["Create invoice from Quote Q0000050", [invoiceSource], /not found/],
+  ["Create invoice from Quote Q0000049", [invoiceSource, { ...invoiceSource, id: JOB }], /Conflicting/],
+  ["Create invoice for Bob Hamel", [invoiceSource], /Which exact Quote/],
+]) test(`R3 Assistant blocks unsafe source selection: ${command}`, async () => {
+  const h = harness({ currentPage: "projectDetails", seed: stale, invoiceQuotes: candidates });
+  const response = h.getVoiceResponse(command, "business", "en", {}, "projectDetails");
+  await h.handleVoiceAction(response.actions[0]);
+  assert.deepEqual(h.routes, []);
+  assert.match(h.state.answer, expected);
+  assert.ok(h.network.every((call) => call.method === "GET"));
+  assert.equal(h.mutations.length, 0);
+});
+
+for (const [command, customerName, blocked] of [
+  ["Create invoice for the Bob Hamel job quote number Q0000049", "Bob Hamel", false],
+  ["Create invoice from Quote Q0000049 for Jane Doe", "Jane Doe", true],
+  ["Create invoice from Quote Q0000049 for The Window Company", "The Window Company", false],
+]) test(`R3 natural customer real Assistant chain: ${command}`, async () => {
+  const source = customerName === "The Window Company"
+    ? { ...invoiceSource, customerDisplayName: customerName, content: { ...invoiceSource.content, customerName } }
+    : invoiceSource;
+  const h = harness({ currentPage: "projectDetails", seed: stale, invoiceQuotes: [source] });
+  const response = h.getVoiceResponse(command, "business", "en", {}, "projectDetails");
+  assert.equal(response.actions[0].invoiceCommand.customerName, customerName);
+  const exact = invoiceNavigation.resolveExactQuoteToInvoice({ ...response.actions[0].invoiceCommand, documents: [source] });
+  assert.equal(exact.state, blocked ? "BLOCKED_MISMATCH" : "EXACT_QUOTE_TO_INVOICE");
+  await h.handleVoiceAction(response.actions[0]);
+  if (blocked) {
+    assert.deepEqual(h.routes, []);
+    assert.match(h.state.answer, /does not match/);
+  } else {
+    assert.deepEqual(h.routes, [exact.route]);
+    assert.equal(invoiceNavigation.parseQuoteInvoiceSourceRoute(h.routes[0]).id, DRAFT);
+  }
+  assert.equal(h.network.length, 1);
+  assert.equal(h.network[0].method, "GET");
+  assert.match(h.network[0].path, /search=Q-0000049&type=QUOTE/);
+  assert.equal(h.mutations.length, 0);
 });

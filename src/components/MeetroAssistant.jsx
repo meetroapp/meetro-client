@@ -1,3 +1,4 @@
+import { parseQuoteInvoiceCommand, lookupQuoteInvoiceCommand, quoteInvoiceResolutionMessage, stageQuoteInvoiceInstruction } from "../utils/quoteToInvoice.js";
 import { assistantQuoteContextFromRoute, isAssistantQuoteAction, isExplicitStandaloneNewQuoteIntent, resolveAssistantQuoteNavigation } from "../utils/assistantQuoteNavigation.js";
 import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -1638,6 +1639,12 @@ function getScheduleCreationResponse(question, roleMode, language) {
 }
 
 function detectAssistantActionIntent(question, roleMode, language, context = {}) {
+  const invoiceCommand = roleMode === "business" ? parseQuoteInvoiceCommand(question) : null;
+  if (invoiceCommand) return makeResponse(
+    "prepare_quote_invoice",
+    language === "es" ? "Verificaré la cotización exacta para preparar una factura sin guardar." : "I’ll verify the exact Quote and prepare an unsaved Invoice for review.",
+    [{ label: language === "es" ? "Preparar factura" : "Prepare Invoice", action: "prepare_quote_invoice", invoiceCommand }]
+  );
   const text = String(question || "").toLowerCase();
   const explicitNew = isExplicitStandaloneNewQuoteIntent(question);
   const copy = assistantCopy[language] || assistantCopy.en;
@@ -1856,6 +1863,7 @@ function getEvaluationToQuoteResponse(question, roleMode, language) {
 }
 
 function getVoiceResponse(question, roleMode, language, guide, currentPage = "") {
+  if (roleMode === "business" && parseQuoteInvoiceCommand(question)) return detectAssistantActionIntent(question, roleMode, language);
   // Only strict standalone-new commands precede request/evaluation guidance.
   if (isExplicitStandaloneNewQuoteIntent(question)) {
     return detectAssistantActionIntent(question, roleMode, language);
@@ -3520,8 +3528,20 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     setPage(target);
   }
 
-  function handleVoiceAction(action) {
+  async function handleVoiceAction(action) {
     if (!action) return;
+    if (action.action === "prepare_quote_invoice") {
+      const result = await lookupQuoteInvoiceCommand(action.invoiceCommand, { setPage });
+      if (result.state !== "EXACT_QUOTE_TO_INVOICE") {
+        setVoiceAnswer(quoteInvoiceResolutionMessage(result.state, language));
+        return;
+      }
+      stageQuoteInvoiceInstruction(result.route, action.invoiceCommand.instruction);
+      stopAssistantVoiceResponse();
+      setOpen(false);
+      setPage(result.route);
+      return;
+    }
     // Resolve Quote intent before any legacy request/schedule storage writes.
     if (isAssistantQuoteAction(action)) {
       navigateAssistantQuote(action);

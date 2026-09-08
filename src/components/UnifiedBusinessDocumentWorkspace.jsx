@@ -1,3 +1,4 @@
+import { projectQuoteToInvoiceWorkingDraft, parseQuoteInvoiceCommand, lookupQuoteInvoiceCommand, quoteInvoiceResolutionMessage, stageQuoteInvoiceInstruction } from "../utils/quoteToInvoice.js";
 import { listQuoteInvoiceSavedFiles, quoteInvoiceFileType } from "../utils/quoteInvoiceSavedFiles.js";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
@@ -6,7 +7,6 @@ import DepositRequestWorkspace from "./DepositRequestWorkspace.jsx";
 import MeetroIcon from "./MeetroIcon.jsx";
 import WorkflowMicrophoneInput from "./WorkflowMicrophoneInput.jsx";
 import {
-  createInvoiceContinuityDraft,
   customerVisibleWorkspaceDraft,
   normalizeBusinessDocumentTab,
   reconcileBusinessDocumentInstructions,
@@ -106,7 +106,6 @@ import {
   recoveryPhotoProjection,
   restoreBusinessDocumentConversationTurns,
   restoreBusinessDocumentDraft,
-  validateNewBusinessDocumentDraft,
 } from "../utils/businessDocumentPersistence.js";
 import {
   analyzeQuickQuoteAnalysisSession,
@@ -891,15 +890,20 @@ function InvoiceProposalReview({ proposal, onApply, onDismiss }) {
         <label>Quantity<input inputMode="numeric" value={proposedExtra.quantity || ""} onChange={(event) => updateExtra("quantity", event.target.value)} /></label>
         <label>Price<input inputMode="decimal" value={proposedExtra.unitPrice || ""} onChange={(event) => updateExtra("unitPrice", event.target.value)} /></label>
       </> : null}
+      {Object.hasOwn(patch, "workPerformed") ? <label>Work Completed<textarea value={patch.workPerformed} onChange={(event) => update("workPerformed", event.target.value)} /></label> : null}
+      {Object.hasOwn(patch, "privateReminder") ? <label>Private reminder (business only)<textarea value={patch.privateReminder} onChange={(event) => update("privateReminder", event.target.value)} /></label> : null}
       {Object.hasOwn(patch, "notes") ? <label>Customer notes<textarea value={patch.notes || ""} onChange={(event) => update("notes", event.target.value)} /></label> : null}
       {Object.hasOwn(patch, "paymentTerms") ? <label>Payment terms<input value={patch.paymentTerms || ""} onChange={(event) => update("paymentTerms", event.target.value)} /></label> : null}
       {Object.hasOwn(patch, "dueDate") ? <label>Due date<input type="date" value={patch.dueDate || ""} onChange={(event) => update("dueDate", event.target.value)} /></label> : null}
     </div> : <div className="business-document-proposal-sections">
       {proposedExtra ? <section className="business-document-proposal-section"><h4>Extra work</h4><dl><div><dt>Description</dt><dd>{proposedExtra.description}</dd></div><div><dt>Quantity</dt><dd>{proposedExtra.quantity}</dd></div><div><dt>Price</dt><dd>{money(Number(proposedExtra.unitPrice || 0))}</dd></div></dl></section> : null}
+      {Object.hasOwn(patch, "workPerformed") ? <section><h4>Work Completed</h4><p>{patch.workPerformed}</p></section> : null}
+      {Object.hasOwn(patch, "privateReminder") ? <section><h4>Private reminder · business only</h4><p>{patch.privateReminder}</p></section> : null}
       {Object.hasOwn(patch, "notes") ? <section className="business-document-proposal-section"><h4>Customer notes</h4><p>{patch.notes}</p></section> : null}
       {Object.hasOwn(patch, "paymentTerms") ? <section className="business-document-proposal-section"><h4>Payment terms</h4><p>{patch.paymentTerms}</p></section> : null}
       {Object.hasOwn(patch, "dueDate") ? <section className="business-document-proposal-section"><h4>Due date</h4><p>{patch.dueDate}</p></section> : null}
     </div>}
+    {proposal.typedContext?.length ? <section><h4>Work details · no price inferred</h4>{proposal.typedContext.map((item, index) => <p key={index}>{item.value} {item.unit} ({item.type.toLowerCase()})</p>)}</section> : null}
     <footer><button type="button" className="business-document-primary" onClick={() => onApply(patch)}>Apply</button><button type="button" onClick={() => setEditing((value) => !value)}>{editing ? "Review" : "Edit"}</button><button type="button" onClick={onDismiss}>Dismiss</button></footer>
   </article>;
 }
@@ -1701,7 +1705,11 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   setPage, language = "en", initialDocument = "quote", initialSavedDocumentId = null,
   initialSavedDocument = null, onDurableDocumentOpened, genericNewQuoteIntent = false,
   job = {}, quote,
-  invoicePreparation = null, onCreateCanonicalInvoice,
+  invoicePreparation: initialInvoicePreparation = null,
+  sourceQuoteDocument = null,
+  sourceQuoteAuthority = null,
+  sourceQuotePaymentEvidence = null,
+  sourceQuoteInstruction = "", onCreateCanonicalInvoice,
   onApplyQuotePatch, onAddPhotos, canAddPhotos = true, photos = [], photoBusy = false,
   onDownloadQuote, onPreviewQuote, onBack,
   onRestorePhotos, onEnsurePhotosDurable, onPhotosPersisted, onDiscardTransientPhotos,
@@ -1733,7 +1741,10 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const [pendingQuoteProposal, setPendingQuoteProposal] = useState(null);
   const [pendingInvoiceProposal, setPendingInvoiceProposal] = useState(null);
   const [quoteBaseline, setQuoteBaseline] = useState(() => quote);
-  const [invoiceBaseline, setInvoiceBaseline] = useState(() => ({ ...createInvoiceContinuityDraft({ job, quote }), invoiceNumber: "", invoiceDate: todayLocalIsoDate(), lineItems: [] }));
+  const invoiceSessionEpochRef = useRef(0);
+  const [invoicePreparation, setInvoicePreparation] = useState(initialInvoicePreparation);
+  const [activeInvoiceSource, setActiveInvoiceSource] = useState(sourceQuoteDocument);
+  const [invoiceBaseline, setInvoiceBaseline] = useState(() => ({ ...projectQuoteToInvoiceWorkingDraft({ quoteDocument: sourceQuoteDocument || { content: quote, jobId: job.canonical ? job.id : null }, quoteAuthority: sourceQuoteAuthority, paymentEvidence: sourceQuotePaymentEvidence }).invoiceDraft, invoiceDate: todayLocalIsoDate() }));
   const initialDocumentBaselinesRef = useRef({ quote: quoteBaseline, invoice: invoiceBaseline });
   const [manualOverrides, setManualOverrides] = useState({ quote: {}, invoice: {} });
   const turnIdRef = useRef(0);
@@ -1749,7 +1760,6 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const seenPhotoIdsRef = useRef(new Set());
   const saveAttemptKeysRef = useRef({ quote: "", invoice: "" });
   const saveInFlightRef = useRef({ quote: null, invoice: null });
-  const newDocumentAttemptKeysRef = useRef({ quote: "", invoice: "" });
   const quoteIssueAttemptRef = useRef(null);
   const quoteSafetyContinuationRef = useRef(null);
   const quoteIssueInFlightRef = useRef(false);
@@ -1759,7 +1769,6 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const initialSavedDocumentOpenRef = useRef("");
   const quoteProposalApplyInFlightRef = useRef(false);
   const invoiceProposalApplyInFlightRef = useRef(false);
-  const startNewInFlightRef = useRef(null);
   const pendingStartNewRef = useRef(null);
   const pendingNewQuoteDestinationRef = useRef(null);
   const newQuoteSetupAuthorityRef = useRef(
@@ -1771,7 +1780,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const [savedDocuments, setSavedDocuments] = useState({ quote: null, invoice: null });
   const [documentJobIds, setDocumentJobIds] = useState(() => ({
     quote: job.canonical ? job.id || null : null,
-    invoice: job.canonical ? job.id || null : null,
+    invoice: sourceQuoteDocument?.jobId || (job.canonical ? job.id || null : null),
   }));
   const [jobAnalysisSessionIds, setJobAnalysisSessionIds] = useState({
     quote: null,
@@ -1818,7 +1827,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const [recoveryRecord, setRecoveryRecord] = useState(null);
   const [recovered, setRecovered] = useState(false);
   const [newContentAvailable, setNewContentAvailable] = useState(false);
-  const [customerParties, setCustomerParties] = useState({ quote: null, invoice: null });
+  const [customerParties, setCustomerParties] = useState({ quote: null, invoice: sourceQuoteDocument?.customerParty || null });
   const [linkedCustomerContacts, setLinkedCustomerContacts] = useState({ quote: null, invoice: null });
   const [newQuoteSetup, setNewQuoteSetup] = useState(() => emptyNewQuoteSetup({
     open: genericNewQuoteIntent && initialDocument === "quote",
@@ -2145,12 +2154,12 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     if (!identityKey) return;
     let active = true;
     void loadBusinessDocumentRecovery({ identityKey }).then((record) => {
-      if (active && record && !newQuoteSetupAuthorityRef.current) {
+      if (active && record && !sourceQuoteDocument && !newQuoteSetupAuthorityRef.current) {
         setRecoveryRecord(record);
       }
     });
     return () => { active = false; };
-  }, []);
+  }, [sourceQuoteDocument]);
 
   useEffect(() => {
     const documentId = String(initialSavedDocumentId || "").trim().toLowerCase();
@@ -2632,7 +2641,11 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     const restored = restoreBusinessDocumentDraft(document);
     const type = restored.documentType;
     setWorkingDocumentIntent((current) => ({ ...current, [type]: true }));
-    if (type === "invoice") invoiceVisitedRef.current = true;
+    if (type === "invoice") {
+      invoiceSessionEpochRef.current += 1;
+      invoiceVisitedRef.current = true;
+      setInvoiceCreateState({ busy: false, error: "", invoice: null });
+    }
     const restoredContent = startedNew && type === "quote"
       ? {
           ...restored.content,
@@ -2733,15 +2746,6 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     }
   }
 
-  async function ensureCurrentDocumentSaved(documentType) {
-    if (saveInFlightRef.current[documentType]) {
-      return saveInFlightRef.current[documentType];
-    }
-    const existing = savedDocuments[documentType];
-    if (existing && !dirty[documentType]) return existing;
-    return saveDocument(documentType, { suppressFailureDialog: true });
-  }
-
   function resetNewDocumentTransientState(documentType) {
     setMessage("");
     setManualState(null);
@@ -2771,111 +2775,55 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     nearNewestRef.current = true;
   }
 
-  async function createAndOpenNewDocument(documentType, previousDocument, {
+  function detachInvoiceSession() {
+    invoiceSessionEpochRef.current += 1;
+    const clean = buildNewBusinessDocumentDraftPayload({ documentType: "invoice", documentDate: todayLocalIsoDate() }).content;
+    invoiceVisitedRef.current = false;
+    setInvoicePreparation(null);
+    setActiveInvoiceSource(null);
+    savedDocumentsRef.current.invoice = null;
+    setSavedDocuments((current) => ({ ...current, invoice: null }));
+    setInvoiceCreateState({ busy: false, error: "", invoice: null });
+    setInvoice(clean);
+    setInvoiceBaseline(clean);
+    initialDocumentBaselinesRef.current.invoice = clean;
+    setWorkingDocumentIntent((current) => ({ ...current, invoice: false }));
+    setManualOverrides((current) => ({ ...current, invoice: {} }));
+    setTurns((current) => current.filter((turn) => turn.documentType !== "invoice"));
+    setDocumentJobIds((current) => ({ ...current, invoice: null }));
+    setCustomerParties((current) => ({ ...current, invoice: null }));
+    setLinkedCustomerContacts((current) => ({ ...current, invoice: null }));
+    resetNewDocumentTransientState("invoice");
+  }
+
+  async function createAndOpenNewDocument(documentType, _previousDocument, {
     customerParty = null,
     customerSnapshot = null,
   } = {}) {
-    const labelKey = documentType === "quote"
-      ? "businessDocumentNewQuoteReady"
-      : "businessDocumentNewInvoiceReady";
-    setStartNewState({ busy: true, error: "", documentType });
-    try {
-      const payload = buildNewBusinessDocumentDraftPayload({
-        documentType,
-        documentDate: todayLocalIsoDate(),
-        customerParty,
-        customerSnapshot,
-      });
-      if (documentType === "quote") {
-        // A customer-resolved session is local; CREATE is reserved for Save.
-        resetNewDocumentTransientState(documentType);
-        applyRestoredDocument(payload, {
-          startedNew: true,
-          workingSession: true,
-          noticeMessage: "Working draft · Save Draft to assign a Quote number.",
-        });
-        setSaveState({ busy: false, error: "", lastSavedAt: "", documentType });
-        setStartNewState({ busy: false, error: "", documentType: "" });
-        return payload;
-      }
-      if (!newDocumentAttemptKeysRef.current[documentType]) {
-        newDocumentAttemptKeysRef.current[documentType] = createBusinessDocumentSaveKey();
-      }
-      const document = await createBusinessDocumentDraft({
-        payload,
-        idempotencyKey: newDocumentAttemptKeysRef.current[documentType],
-        setPage,
-      });
-      validateNewBusinessDocumentDraft({
-        documentType,
-        previousDocument,
-        nextDocument: document,
-      });
-      resetNewDocumentTransientState(documentType);
-      applyRestoredDocument(document, {
-        startedNew: true,
-        noticeMessage: t(labelKey, language),
-      });
-      onDurableDocumentOpened?.(document);
-      newDocumentAttemptKeysRef.current[documentType] = "";
-      pendingStartNewRef.current = null;
-      setSaveState({
-        busy: false,
-        error: "",
-        lastSavedAt: document.updatedAt,
-        documentType,
-      });
-      setStartNewState({ busy: false, error: "", documentType: "" });
-      return document;
-    } catch {
-      pendingStartNewRef.current = null;
-      const errorMessage = t("businessDocumentStartNewCreateFailed", language);
-      setStartNewState({ busy: false, error: errorMessage, documentType });
-      setNotice(errorMessage);
-      return false;
-    }
+    const payload = buildNewBusinessDocumentDraftPayload({ documentType, documentDate: todayLocalIsoDate(), customerParty, customerSnapshot });
+    detachInvoiceSession();
+    resetNewDocumentTransientState(documentType);
+    applyRestoredDocument(payload, {
+      startedNew: true, workingSession: true,
+      noticeMessage: `Working draft · Save Draft to assign ${documentType === "quote" ? "a Quote" : "an Invoice"} number.`,
+    });
+    setSaveState({ busy: false, error: "", lastSavedAt: "", documentType });
+    setStartNewState({ busy: false, error: "", documentType: "" });
+    return payload;
   }
 
   async function startNewDocument(documentType = activeDocument) {
     const type = normalizeBusinessDocumentTab(documentType);
-    if (type === "quote") {
-      requestExit(() => {
+    requestExit(() => {
+      if (type === "quote") {
         newQuoteSetupAuthorityRef.current = true;
         setRecoveryRecord(null);
         setNewQuoteSetup(emptyNewQuoteSetup({ open: true, target: "START_NEW" }));
-      });
-      return null;
-    }
-    if (startNewInFlightRef.current) return startNewInFlightRef.current;
-    pendingStartNewRef.current = type;
-    const operation = (async () => {
-      setStartNewState({ busy: true, error: "", documentType: type });
-      setNotice(t(
-        type === "quote"
-          ? "businessDocumentStartingNewQuote"
-          : "businessDocumentStartingNewInvoice",
-        language
-      ));
-      const currentDocument = await ensureCurrentDocumentSaved(type);
-      if (currentDocument === NUMBERING_SETUP_PENDING) {
-        setStartNewState({ busy: false, error: "", documentType: type });
-        return currentDocument;
+      } else {
+        void createAndOpenNewDocument("invoice", null);
       }
-      if (!currentDocument) {
-        const errorMessage = t("businessDocumentStartNewSaveFailed", language);
-        setStartNewState({ busy: false, error: errorMessage, documentType: type });
-        setNotice(errorMessage);
-        setSaveFailureOpen(true);
-        return false;
-      }
-      return createAndOpenNewDocument(type, currentDocument);
-    })();
-    startNewInFlightRef.current = operation;
-    try {
-      return await operation;
-    } finally {
-      if (startNewInFlightRef.current === operation) startNewInFlightRef.current = null;
-    }
+    });
+    return null;
   }
 
   function updateNewQuoteSetup(patch) {
@@ -3942,10 +3890,29 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     }
   }
 
+  const sourceInstructionHandledRef = useRef(false);
+  useEffect(() => {
+    if (!sourceQuoteInstruction || sourceInstructionHandledRef.current) return;
+    sourceInstructionHandledRef.current = true;
+    const proposal = buildInvoiceConversationProposal({ instruction: sourceQuoteInstruction, current: invoice });
+    if (proposal.recognizedChanges.length) setPendingInvoiceProposal({ ...proposal, id: `invoice-proposal-${Date.now()}`, baseline: invoice });
+  }, [sourceQuoteInstruction]); // eslint-disable-line react-hooks/exhaustive-deps
+
   async function submitInstruction(rawInstruction, existingId = null) {
     const instruction = String(rawInstruction || "").trim();
     if (!instruction) return false;
 
+    const sourceCommand = parseQuoteInvoiceCommand(instruction);
+    if (sourceCommand) {
+      const result = await lookupQuoteInvoiceCommand(sourceCommand, { setPage });
+      if (result.state === "EXACT_QUOTE_TO_INVOICE") {
+        requestExit(() => {
+          stageQuoteInvoiceInstruction(result.route, instruction);
+          setPage(result.route);
+        });
+      } else setNotice(quoteInvoiceResolutionMessage(result.state, language));
+      return true;
+    }
     const current = activeDocument === "quote" ? quote : invoice;
     const resolution = resolveBusinessDocumentConversationMessage({
       documentType: activeDocument,
@@ -3964,12 +3931,13 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       return true;
     }
 
-    if (activeDocument === "invoice" && invoicePreparation) {
+    if (activeDocument === "invoice") {
       let proposal = buildInvoiceConversationProposal({
         instruction,
         current,
+        allowWorkPerformed: !invoicePreparation,
       });
-      if (!proposal.recognizedChanges.length && resolution.capability === "DOCUMENT_MUTATION") {
+      if (!proposal.recognizedChanges.length && resolution.capability === "DOCUMENT_MUTATION" && /^(?:notes|payment terms|due date)\s*:/i.test(instruction)) {
         const allowedKeys = new Set(["notes", "paymentTerms", "dueDate", "lineItems"]);
         const allowedPatch = Object.fromEntries(
           Object.entries(resolution.patch).filter(([key]) => allowedKeys.has(key))
@@ -4082,12 +4050,16 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       return;
     }
     invoiceProposalApplyInFlightRef.current = true;
-    const durableKeys = new Set(["notes", "paymentTerms", "dueDate", "lineItems"]);
+    const durableKeys = new Set(["notes", "paymentTerms", "dueDate", "lineItems", "privateReminder", ...(!invoicePreparation ? ["workPerformed"] : [])]);
     const patch = Object.fromEntries(
       Object.entries(editedPatch).filter(([key]) => durableKeys.has(key))
     );
-    const nextInvoice = { ...invoice, ...patch };
+    const visiblePatch = Object.fromEntries(Object.entries(patch).filter(([key]) => key !== "privateReminder"));
+    const nextInvoice = { ...invoice, ...visiblePatch };
     const overrides = { ...manualOverrides.invoice, ...patch };
+    if (patch.privateReminder && manualOverrides.invoice.privateReminder && patch.privateReminder !== manualOverrides.invoice.privateReminder) {
+      overrides.privateReminder = `${manualOverrides.invoice.privateReminder}\n${patch.privateReminder}`;
+    }
     let turnId = proposal.existingId;
     let nextTurns;
     if (turnId) {
@@ -4263,22 +4235,12 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   function initializeWorkingInvoice() {
     if (invoiceVisitedRef.current || savedDocuments.invoice || invoicePreparation) return;
     invoiceVisitedRef.current = true;
-    // Copy customer/Job context on the first visit, never Quote commercial or
-    // payment state. Later tab visits retain the independently edited Invoice.
-    const source = hydratedSavedQuotePresentation;
-    const clean = buildNewBusinessDocumentDraftPayload({
-      documentType: "invoice", documentDate: todayLocalIsoDate(),
-    }).content;
-    const next = {
-      ...clean,
-      customerName: source.customerName || "",
-      customerEmail: source.customerEmail || "",
-      customerPhone: source.customerPhone || "",
-      customerAddress: source.customerAddress || "",
-      customerLocation: source.customerLocation || "",
-      serviceAddress: source.customerLocation || "",
-      projectTitle: source.projectTitle || "",
-    };
+    const { invoiceDraft } = projectQuoteToInvoiceWorkingDraft({
+      quoteDocument: { ...savedDocuments.quote, content: hydratedSavedQuotePresentation, customerParty: customerParties.quote, jobId: documentJobIds.quote },
+      quoteAuthority: dirty.quote ? null : persistedQuoteAuthority.authority,
+      customerContact: linkedCustomerContacts.quote,
+    });
+    const next = { ...invoiceDraft, invoiceDate: todayLocalIsoDate() };
     setInvoice(next);
     setInvoiceBaseline(next);
     setDocumentJobIds((current) => ({ ...current, invoice: documentJobIds.quote }));
@@ -5259,6 +5221,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       });
       return;
     }
+    const sessionEpoch = invoiceSessionEpochRef.current;
     setInvoiceCreateState({ busy: true, error: "", invoice: null });
     try {
       const created = await onCreateCanonicalInvoice({
@@ -5269,9 +5232,11 @@ function QuoteInvoiceBusinessDocumentWorkspace({
           ? { mode: "SPECIFIC_DATE", date: invoice.dueDate }
           : { mode: "DUE_ON_RECEIPT", date: null },
       });
+      if (sessionEpoch !== invoiceSessionEpochRef.current) return;
       setInvoiceCreateState({ busy: false, error: "", invoice: created });
       setNotice("Invoice created. It has not been sent, paid, or used to close the Job.");
     } catch (error) {
+      if (sessionEpoch !== invoiceSessionEpochRef.current) return;
       setInvoiceCreateState({
         busy: false,
         error: error?.message || "The Invoice could not be created. Your review remains open.",
@@ -5490,6 +5455,11 @@ function QuoteInvoiceBusinessDocumentWorkspace({
             <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" className="business-document-control-primary" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} data-assisted-active={invoicePreparation && activeDocument === "invoice" && !manualState ? "true" : undefined} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" className="business-document-control-primary" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} aria-expanded={invoicePreparation && activeDocument === "invoice" ? manualState?.mode === "manual" : undefined} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><BusinessDocumentHowItWorksControl aria-label="How it works" title="How it works" expanded={howItWorksOpen} triggerRef={howItWorksTriggerRef} onToggle={() => setHowItWorksOpen((open) => !open)} /></div>
             {activeDocument === "quote" ? <JobLinkedQuoteContext job={job} /> : null}
             {activeDocument === "invoice" && invoicePreparation ? <CompletedInvoiceReviewIntro /> : null}
+            {activeDocument === "invoice" && activeInvoiceSource && !savedDocuments.invoice ? <section className="business-document-job-context" role="status">
+              <strong>Invoice prepared from Quote {invoice.quoteReference}</strong>
+              <p>Review this working Invoice, then save it when ready. Its number is assigned on first save.</p>
+              {projectQuoteToInvoiceWorkingDraft({ quoteDocument: sourceQuoteDocument, quoteAuthority: sourceQuoteAuthority, paymentEvidence: sourceQuotePaymentEvidence }).warnings.map((warning) => <p key={warning}>{warning}</p>)}
+            </section> : null}
             {manualState ? <ManualEditor activeDocument={activeDocument} quote={quote} invoice={invoice} invoicePreparation={invoicePreparation} documentNumber={activeSaved?.documentNumber || ""} initialFocus={manualState.focus} language={language} mode={manualState.mode} lockedCustomerName={activeDocument === "quote" || invoicePreparation ? jobLinkedCustomerName : ""} onModeChange={changeEditorMode} onPreview={setInvoice} onApply={applyManualDraft} onCancel={cancelManualEditing} /> : null}
           </div>
           <div className="business-document-chat-shell">

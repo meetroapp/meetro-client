@@ -1,3 +1,4 @@
+import { parseQuoteInvoiceSourceRoute, loadExactInvoiceSource, takeQuoteInvoiceInstruction } from "../utils/quoteToInvoice.js";
 import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import ContextualAskMeetro from "../components/ContextualAskMeetro";
@@ -466,9 +467,22 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     localStorage.getItem("invoiceBuilderSource") || "";
   const isUnifiedInvoiceEntry = initialDocument === "invoice";
   const isUnifiedDepositRequestEntry = initialDocument === "depositRequest";
+  const sourceQuoteRouteRef = useRef(parseQuoteInvoiceSourceRoute(window.location.hash));
+  const sourceQuoteRoute = sourceQuoteRouteRef.current;
+  const [sourceQuoteState, setSourceQuoteState] = useState({ status: "loading", document: null, authority: null, instruction: "" });
+  useEffect(() => {
+    if (!sourceQuoteRoute) return;
+    let active = true;
+    void loadExactInvoiceSource(sourceQuoteRoute, { setPage }).then((result) => {
+      if (active) setSourceQuoteState({ ...result, status: "ready", instruction: takeQuoteInvoiceInstruction(window.location.hash.replace(/^#/, "")) });
+    }).catch((error) => {
+      if (active) setSourceQuoteState({ status: "unavailable", error: error.message });
+    });
+    return () => { active = false; };
+  }, [sourceQuoteRoute, setPage]);
   const isGenericNewQuoteIntent =
     initialDocument === "quote" && isGenericNewQuoteRoute(window.location.hash);
-  const activeJobSnapshot = isGenericNewQuoteIntent ? {} : getActiveJobSnapshot();
+  const activeJobSnapshot = isGenericNewQuoteIntent || sourceQuoteRoute ? {} : getActiveJobSnapshot();
   useEffect(() => {
     if (isGenericNewQuoteIntent) clearGenericNewQuoteContext();
   }, [isGenericNewQuoteIntent]);
@@ -490,25 +504,25 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     initialSavedQuoteRouteRef.current = parseSavedQuoteRoute(window.location.hash);
   }
   const savedQuoteRoute = initialSavedQuoteRouteRef.current;
-  const routeCanonicalJobId = savedQuoteRoute.jobId;
-  const routeSavedDocumentId = savedQuoteRoute.draftId;
+  const routeCanonicalJobId = sourceQuoteRoute ? "" : savedQuoteRoute.jobId;
+  const routeSavedDocumentId = sourceQuoteRoute ? "" : savedQuoteRoute.draftId;
 
-  const revisedQuoteContext = isGenericNewQuoteIntent ? null : safeJson(
+  const revisedQuoteContext = isGenericNewQuoteIntent || sourceQuoteRoute ? null : safeJson(
     localStorage.getItem("meetroRevisedQuoteContext")
   );
 
   const isRevisedQuoteFlow =
     revisedQuoteContext?.source === "workflow_change_request";
 
-  const selectedWorkCenterRequest = isUniversalQuickQuote || isGenericNewQuoteIntent
+  const selectedWorkCenterRequest = isUniversalQuickQuote || isGenericNewQuoteIntent || sourceQuoteRoute
     ? null
     : safeJson(localStorage.getItem("selectedWorkCenterRequest"));
 
-  const selectedQuoteRequest = isUniversalQuickQuote || isGenericNewQuoteIntent
+  const selectedQuoteRequest = isUniversalQuickQuote || isGenericNewQuoteIntent || sourceQuoteRoute
     ? null
     : safeJson(localStorage.getItem("selectedQuoteRequest"));
 
-  const selectedHomeownerRequest = isUniversalQuickQuote || isGenericNewQuoteIntent
+  const selectedHomeownerRequest = isUniversalQuickQuote || isGenericNewQuoteIntent || sourceQuoteRoute
     ? null
     : safeJson(localStorage.getItem("selectedHomeownerRequest"));
 
@@ -525,7 +539,7 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
     selectedWorkCenterRequest?.id ||
     "";
 
-  const request = routeCanonicalJobId || routeSavedDocumentId || isUniversalQuickQuote || isGenericNewQuoteIntent
+  const request = routeCanonicalJobId || routeSavedDocumentId || isUniversalQuickQuote || isGenericNewQuoteIntent || sourceQuoteRoute
     ? {}
     : isRevisedQuoteFlow
     ? {
@@ -1363,7 +1377,12 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   }
 
   function persistOpenedQuoteRoute(document) {
-    if (isUnifiedInvoiceEntry && document?.documentType === "INVOICE") return;
+    if (document?.documentType === "INVOICE" && document?.id && document?.status === "WORKING_DRAFT") {
+      const params = new URLSearchParams({ draftId: document.id });
+      if (document.jobId) params.set("jobId", document.jobId);
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}#invoiceBuilder?${params}`);
+      return;
+    }
     if (document?.documentType !== "QUOTE") {
       replaceSavedQuoteRoute({});
       return;
@@ -3324,6 +3343,14 @@ ${businessIdentity.businessName}`;
   const unifiedWorkspaceEnabled = true;
 
   if (unifiedWorkspaceEnabled) {
+    if (sourceQuoteRoute && sourceQuoteState.status !== "ready") {
+      return <div className="app-page business-document-context-gate" role={sourceQuoteState.status === "unavailable" ? "alert" : "status"}>
+        <h1>Prepare Invoice from Quote</h1>
+        <p>{sourceQuoteState.status === "unavailable" ? sourceQuoteState.error : "Verifying the exact source Quote…"}</p>
+        <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
+      </div>;
+    }
+
     if (!savedQuoteRoute.valid) {
       return (
         <div className="app-page meetro-form-page business-document-context-gate" role="alert">
@@ -3454,6 +3481,10 @@ ${businessIdentity.businessName}`;
         <UnifiedBusinessDocumentWorkspace
           setPage={setPage}
           language={language}
+          sourceQuoteDocument={sourceQuoteState.document}
+          sourceQuoteAuthority={sourceQuoteState.authority}
+          sourceQuotePaymentEvidence={sourceQuoteState.paymentEvidence}
+          sourceQuoteInstruction={sourceQuoteState.instruction}
           initialDocument={initialDocument}
           initialSavedDocumentId={
             routeSavedDocumentId ||

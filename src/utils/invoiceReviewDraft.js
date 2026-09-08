@@ -31,8 +31,9 @@ function nextWeekdayIso(weekday, now = new Date()) {
 }
 
 function extraWorkDescription(text) {
+  const workDetails = text.match(/(?:^|[,;]\s*)((?:replace|replaced|repair|repaired|install|installed)\b.+?)(?=,?\s*(?:extra|additional)\s+(?:charge|cost|work)\b|$)/i)?.[1];
   const match = text.match(/\b(?:for|to cover)\s+(?:the\s+)?(.+?)(?:[.!?]|$)/i);
-  const description = cleanText(match?.[1] || "Additional work")
+  const description = cleanText(match?.[1] || workDetails?.replace(/[,;]\s*$/, "") || "Additional work")
     .replace(/^(?:extra|additional)\s+work\s+(?:on|for)\s+/i, "")
     .replace(/^(.)/, (letter) => letter.toUpperCase());
   return description || "Additional work";
@@ -40,6 +41,7 @@ function extraWorkDescription(text) {
 
 export function invoiceReviewFingerprint(invoice = {}) {
   return JSON.stringify({
+    workPerformed: String(invoice.workPerformed || ""),
     notes: String(invoice.notes || ""),
     paymentTerms: String(invoice.paymentTerms || ""),
     dueDate: String(invoice.dueDate || ""),
@@ -47,11 +49,22 @@ export function invoiceReviewFingerprint(invoice = {}) {
   });
 }
 
-export function buildInvoiceConversationProposal({ instruction, current = {}, now = new Date() } = {}) {
-  const text = cleanText(instruction);
+export function buildInvoiceConversationProposal({ instruction, current = {}, now = new Date(), allowWorkPerformed = true } = {}) {
+  const original = cleanText(instruction);
+  const privateMatch = original.match(/(?:remind me privately|privately remind me|private reminder|recu[eé]rdame en privado)\s*(?:to|:)?\s*(.+)$/i);
+  const text = cleanText(privateMatch ? original.slice(0, privateMatch.index).replace(/[,;]?(?:\s+and|\s+y)?\s*$/, "") : original);
   const patch = {};
   const recognizedChanges = [];
   let category = "";
+  if (privateMatch) {
+    patch.privateReminder = cleanText(privateMatch[1]).replace(/[.]$/, "");
+    recognizedChanges.push("Private reminder · business only");
+  }
+  const completed = text.match(/(?:\bwe\s+)?\b(?:completed|finished|completamos|terminamos)\s+(?:the\s+|el\s+|la\s+)?([^,;.!?]+)/i);
+  if (allowWorkPerformed && completed) {
+    patch.workPerformed = `${cleanText(completed[1])} completed`;
+    recognizedChanges.push("Work Completed");
+  }
 
   if (/\b(?:bill(?:ed|ing)?|invoice(?:d|ing)?)\s+separately\b/i.test(text)) {
     category = "CUSTOMER_NOTE";
@@ -61,16 +74,20 @@ export function buildInvoiceConversationProposal({ instruction, current = {}, no
     );
     recognizedChanges.push("Customer notes");
   } else {
-    const extraAmount = text.match(/\b(?:add|charge|include)\s+\$?\s*([\d,.]+)(?:\s*(?:dollars?|usd))?\b/i);
-    if (extraAmount && /\b(?:additional|extra|repair|work|service|labor|material)/i.test(text)) {
-      const unitPrice = moneyText(extraAmount[1]);
+    // Currency is explicit, or a bare amount follows an unambiguous charge verb.
+    // A unit after the number disqualifies a bare monetary interpretation.
+    const extraText = text.split(/[,;](?!\d)/).find((clause) => /\b(?:add|charge|include|extra|additional|agrega|cobrar|adicional)\b/i.test(clause) && /\$|dollars?|usd|d[oó]lares|\b(?:charge|cost|price)\s+\d/i.test(clause)) || "";
+    const extraAmount = extraText.match(/\$\s*([\d,]+(?:\.\d{1,2})?)\b|\b([\d,]+(?:\.\d{1,2})?)\s*(?:dollars?|usd|d[oó]lares)\b/i)
+      || extraText.match(/\b(?:charge|extra charge|cost|price)\s+([\d,]+(?:\.\d{1,2})?)(?![\d.])(?!\s*(?:windows?|inches|hours?|years?|feet|cm|mm|ventanas?|horas?)\b)/i);
+    if (extraAmount && /\b(?:additional|extra|repair|work|service|labor|material|trabajo|reparaci[oó]n)/i.test(text)) {
+      const unitPrice = moneyText(extraAmount[1] || extraAmount[2]);
       if (unitPrice) {
         category = "EXTRA_WORK";
         patch.lineItems = [
           ...(Array.isArray(current.lineItems) ? current.lineItems : []),
           {
             id: `extra-work-${Date.now()}`,
-            description: extraWorkDescription(text),
+            description: cleanText(text.match(/(?:^|[,;])\s*((?:replaced|repaired|installed|replace|reemplazamos|reparamos)\b.+?)\s+(?:for\s+)?(?:an?\s+)?(?:extra|additional|por)\s*\$/i)?.[1] || extraWorkDescription(text)),
             quantity: "1",
             unitPrice,
           },
@@ -96,17 +113,24 @@ export function buildInvoiceConversationProposal({ instruction, current = {}, no
     recognizedChanges.push("Payment terms");
   }
 
-  const dueWeekday = text.match(/\bdue\s+(?:on\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i);
+  const dueWeekday = text.match(/\b(?:due|vence|vencimiento)\s+(?:on\s+|el\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday|lunes|martes|mi[eé]rcoles|jueves|viernes|s[aá]bado|domingo)\b/i);
+  const weekdays = { lunes: "monday", martes: "tuesday", miércoles: "wednesday", miercoles: "wednesday", jueves: "thursday", viernes: "friday", sábado: "saturday", sabado: "saturday", domingo: "sunday" };
   const dueDate = text.match(/\bdue\s+(?:on\s+)?(\d{4}-\d{2}-\d{2})\b/i);
-  const resolvedDueDate = dueDate?.[1] || nextWeekdayIso(dueWeekday?.[1], now);
+  const resolvedDueDate = dueDate?.[1] || nextWeekdayIso(weekdays[dueWeekday?.[1]?.toLowerCase()] || dueWeekday?.[1], now);
   if (resolvedDueDate) {
     category = category || "DUE_DATE";
     patch.dueDate = resolvedDueDate;
     recognizedChanges.push("Due date");
   }
 
+  const typedContext = [
+    ...[...text.matchAll(/\b(\d+)\s+(windows?|doors?|ventanas?|puertas?)\b/gi)].map((match) => ({ type: "COUNT", value: Number(match[1]), unit: match[2] })),
+    ...[...text.matchAll(/\b(\d+(?:\.\d+)?)\s+(inches|feet|cm|mm|pulgadas)\b/gi)].map((match) => ({ type: "MEASUREMENT", value: Number(match[1]), unit: match[2] })),
+    ...[...text.matchAll(/\b(\d+(?:\.\d+)?)\s+(hours?|days?|horas?|d[ií]as?)\b/gi)].map((match) => ({ type: "DURATION", value: Number(match[1]), unit: match[2] })),
+  ];
   return Object.freeze({
-    instruction: text,
+    typedContext: Object.freeze(typedContext),
+    instruction: original,
     category,
     patch: Object.freeze(patch),
     recognizedChanges: Object.freeze(recognizedChanges),

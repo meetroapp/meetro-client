@@ -238,7 +238,7 @@ test("saved open, protected recovery, Saved Files, and local recovery persist du
   assert.match(builder, /onDurableDocumentOpened=\{persistOpenedQuoteRoute\}/);
   assert.match(workspace, /onDurableDocumentOpened\?\.\(document\)/);
   assert.match(workspace, /onOpen=\{\(draftId\) => void openSavedDocument\(draftId\)\}/);
-  assert.ok((workspace.match(/onDurableDocumentOpened\?\.\(document\)/g) || []).length >= 3);
+  assert.ok((workspace.match(/onDurableDocumentOpened\?\.\(document\)/g) || []).length >= 2);
 });
 
 test("opening another saved Quote or starting new replaces the stale route document identity", () => {

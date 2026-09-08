@@ -1,3 +1,4 @@
+import { projectQuoteToInvoiceWorkingDraft } from "../src/utils/quoteToInvoice.js";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
@@ -42,7 +43,7 @@ function harness({ canonicalJobId = null, savedInvoice = null, preparation = nul
   function run(action) {
     const set = (field) => (value) => { state[field] = typeof value === "function" ? value(state[field]) : value; };
     const scope = {
-      ...state, normalizeBusinessDocumentTab, buildNewBusinessDocumentDraftPayload,
+      ...state, projectQuoteToInvoiceWorkingDraft, dirty: { quote: false }, persistedQuoteAuthority: { authority: null }, normalizeBusinessDocumentTab, buildNewBusinessDocumentDraftPayload,
       todayLocalIsoDate: () => "2026-09-07", emptyCustomerControl: () => ({}),
       restoreTentativeManualInvoice: () => {},
       setInvoice: set("invoice"), setInvoiceBaseline: set("invoiceBaseline"),
@@ -160,7 +161,7 @@ test("exact saved working Invoice hydrates its server-owned identity, content, a
     applyRestoredDocument: (value) => restored.push(restoreBusinessDocumentDraft(value)),
     onDurableDocumentOpened: undefined, setNotice: (notice) => notices.push(notice),
   };
-  const openCode = block("async function openSavedDocument(", "async function ensureCurrentDocumentSaved(");
+  const openCode = block("async function openSavedDocument(", "function resetNewDocumentTransientState(");
   const open = new Function(...Object.keys(scope), `${openCode};return openSavedDocument;`)(...Object.values(scope));
   assert.equal(await open(invoiceId, { expectedJobId: jobId, expectedDocumentType: "INVOICE" }), true);
   assert.equal(restored[0].content.notes, document.content.notes);
@@ -174,7 +175,7 @@ test("exact saved working Invoice hydrates its server-owned identity, content, a
 
 test("initial saved Invoice bootstrap expects INVOICE while Quote remains QUOTE", () => {
   assert.match(source, /expectedDocumentType: initialDocument === "invoice" \? "INVOICE" : "QUOTE"/);
-  assert.match(source, /if \(type === "invoice"\) invoiceVisitedRef\.current = true/);
+  assert.match(source, /if \(type === "invoice"\) \{\s*invoiceSessionEpochRef\.current \+= 1;\s*invoiceVisitedRef\.current = true/);
 });
 
 test("completed-Job and exact-Invoice guards remain separate from generic tabs", () => {

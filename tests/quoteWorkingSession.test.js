@@ -12,7 +12,7 @@ const source = readFileSync(new URL("../src/components/UnifiedBusinessDocumentWo
 const ast = parse(source, { sourceType: "module", plugins: ["jsx"] });
 const component = ast.program.body.find((node) => node.type === "FunctionDeclaration" && node.id.name === "QuoteInvoiceBusinessDocumentWorkspace");
 const declarations = [...ast.program.body, ...component.body.body].filter((node) => node.type === "FunctionDeclaration");
-const names = ["emptyCustomerControl", "emptyNewQuoteSetup", "displayDocumentNumber", "todayLocalIsoDate", "currentContent", "documentPayload", "durableSaveInput", "saveDocument", "performSaveDocument", "openNumberingSetup", "submitNumberingSetup", "applyRestoredDocument", "resetNewDocumentTransientState", "createAndOpenNewDocument", "startNewDocument", "updateNewQuoteSetup", "completeResolvedNewQuote", "continueResolvedNewQuote", "resolvedExternalQuoteAuthority", "applyCustomerSnapshot", "persistCustomerLink", "workspaceRecoverySnapshot", "rememberSavedWorkspaceAndExit", "requestExit", "saveAllAndExit", "discardAndExit", "continueRecovery", "keepEditingBeforeExit", "cancelNumberingSetup", "createExternalQuoteCustomer"];
+const names = ["emptyCustomerControl", "emptyNewQuoteSetup", "displayDocumentNumber", "todayLocalIsoDate", "currentContent", "documentPayload", "durableSaveInput", "saveDocument", "performSaveDocument", "openNumberingSetup", "submitNumberingSetup", "applyRestoredDocument", "resetNewDocumentTransientState", "detachInvoiceSession", "createAndOpenNewDocument", "startNewDocument", "updateNewQuoteSetup", "completeResolvedNewQuote", "continueResolvedNewQuote", "resolvedExternalQuoteAuthority", "applyCustomerSnapshot", "persistCustomerLink", "workspaceRecoverySnapshot", "rememberSavedWorkspaceAndExit", "requestExit", "saveAllAndExit", "discardAndExit", "continueRecovery", "keepEditingBeforeExit", "cancelNumberingSetup", "createExternalQuoteCustomer"];
 const functions = names.map((name) => {
   const node = declarations.find((item) => item.id.name === name);
   assert.ok(node, `production handler ${name} exists`);
@@ -102,7 +102,7 @@ function workspace({ initialized = true, failSave = false } = {}) {
     newDocumentAttemptKeysRef: { quote: "", invoice: "" }, savedDocumentsRef: scope.savedDocuments,
     pendingExitRef: null, pendingStartNewRef: null, pendingNewQuoteDestinationRef: null,
     newQuoteSetupAuthorityRef: false, initialDocumentBaselinesRef: { quote: {}, invoice: {} },
-    turnIdRef: 0, invoiceVisitedRef: false, seenPhotoIdsRef: new Set(),
+    invoiceSessionEpochRef: 0, turnIdRef: 0, invoiceVisitedRef: false, seenPhotoIdsRef: new Set(),
     quoteIssueAttemptRef: null, quoteIssueInFlightRef: false, relationshipCommandKeysRef: new Map(), nearNewestRef: true,
   })) scope[name] = { current };
   for (const name of new Set(functions.match(/\bset[A-Z]\w+/g))) {
@@ -250,14 +250,15 @@ test("customer linking on new Quote never saves; existing Quote updates retain e
   assert.equal(w.scope.lastNumber, 3);
 });
 
-test("Invoice new-document helper still performs governed CREATE with a distinct number", async () => {
+test("R3 Invoice new-document helper prepares a local unnumbered session", async () => {
   const w = workspace();
   const invoice = await w.handlers.createAndOpenNewDocument("invoice", null);
   assert.ok(invoice, w.scope.notice);
   assert.equal(invoice.documentType, "INVOICE");
-  assert.equal(invoice.documentNumber, "INV-0000003");
-  assert.equal(w.documents.size, 1);
-  assert.ok(w.events.some(([event]) => event === "opened"));
+  assert.equal(invoice.documentNumber, undefined);
+  assert.equal(w.documents.size, 0);
+  assert.equal(w.scope.lastNumber, 2);
+  assert.equal(w.events.some(([event]) => event === "opened"), false);
 });
 
 test("internal Quote reference is never presented as an official number", () => {

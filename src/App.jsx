@@ -879,7 +879,7 @@ function App() {
     const handleHashChange = () => {
       if (sessionHydration.status === SESSION_HYDRATION.restoring) return;
       const hashRoute = getHashRoute();
-      if (getRoutePage(hashRoute) === "quoteBuilder") {
+      if (["quoteBuilder", "invoiceBuilder"].includes(getRoutePage(hashRoute))) {
         setQuoteRouteIdentity(hashRoute);
       }
       persistRouteContext(hashRoute);
@@ -1150,7 +1150,7 @@ function App() {
 	    const finalRoutePage = getRoutePage(finalPage);
 	    syncAccountModeForPage(finalRoutePage);
 	    window.location.hash = finalPage;
-	    if (finalRoutePage === "quoteBuilder") setQuoteRouteIdentity(finalPage);
+	    if (["quoteBuilder", "invoiceBuilder"].includes(finalRoutePage)) setQuoteRouteIdentity(finalPage);
 	    setPageState(finalRoutePage);
 	  };
 
@@ -1592,7 +1592,7 @@ if (page === "emergencyRequest") {
 }
 
 if (page === "invoiceBuilder") {
-  return withStartupChrome(withGuideLayer(<InvoiceBuilder setPage={setPage} />, page, setPage), updateNotice);
+  return withStartupChrome(withGuideLayer(<InvoiceBuilder key={quoteRouteIdentity} setPage={setPage} />, page, setPage), updateNotice);
 }
 
 if (page === "completionSheet") {

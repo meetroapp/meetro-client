@@ -206,36 +206,16 @@ test("working Invoice receives the same distinct-identity and preservation prote
   assert.equal(next.content.customerName, "");
 });
 
-test("Start New waits for the established save operation before server draft creation", () => {
-  const ensureBlock = workspace.slice(
-    workspace.indexOf("async function ensureCurrentDocumentSaved"),
-    workspace.indexOf("function resetNewDocumentTransientState")
-  );
-  const startBlock = workspace.slice(
-    workspace.indexOf("async function startNewDocument"),
-    workspace.indexOf("function updateCustomerControl")
-  );
-  assert.match(ensureBlock, /saveInFlightRef\.current\[documentType\]/);
-  assert.match(ensureBlock, /existing && !dirty\[documentType\]/);
-  assert.match(ensureBlock, /saveDocument\(documentType, \{ suppressFailureDialog: true \}\)/);
-  assert.ok(startBlock.indexOf("await ensureCurrentDocumentSaved(type)") < startBlock.indexOf("createAndOpenNewDocument(type, currentDocument)"));
-  assert.match(workspace, /if \(saveInFlightRef\.current\[documentType\]\)[\s\S]*return saveInFlightRef\.current\[documentType\]/);
+test("R3 Start New uses the Save/Discard leave guard and never automatically saves", () => {
+  const startBlock = workspace.slice(workspace.indexOf("async function startNewDocument"), workspace.indexOf("function updateNewQuoteSetup"));
+  assert.match(startBlock, /requestExit/);
+  assert.doesNotMatch(startBlock, /saveDocument|createBusinessDocumentDraft|ensureCurrentDocumentSaved/);
 });
 
-test("save failure leaves the current document open and cannot create the next draft", () => {
-  const startBlock = workspace.slice(
-    workspace.indexOf("async function startNewDocument"),
-    workspace.indexOf("function updateCustomerControl")
-  );
-  const failureStart = startBlock.indexOf("if (!currentDocument)");
-  const createStart = startBlock.indexOf("createAndOpenNewDocument(type, currentDocument)");
-  const failureBlock = startBlock.slice(failureStart, createStart);
-  assert.ok(failureStart >= 0 && createStart > failureStart);
-  assert.match(failureBlock, /setSaveFailureOpen\(true\)/);
-  assert.match(failureBlock, /return false/);
-  assert.doesNotMatch(failureBlock, /createBusinessDocumentDraft/);
-  assert.match(workspace, /No new document was created\. The current working document remains open\./);
-  assert.match(workspace, /pendingStartNewRef\.current[\s\S]*startNewDocument\(pendingStartNewRef\.current\)/);
+test("R3 save failure cannot execute the pending new-document destination", () => {
+  const exitBlock = workspace.slice(workspace.indexOf("async function saveAllAndExit"), workspace.indexOf("async function discardAndExit"));
+  assert.match(exitBlock, /if \(!saved\) \{\s*setSaveFailureOpen\(true\);\s*return;/);
+  assert.match(exitBlock, /rememberSavedWorkspaceAndExit/);
 });
 
 test("numbering setup retry failure stays in the non-abandoning Start New recovery path", () => {
@@ -253,15 +233,15 @@ test("numbering setup retry failure stays in the non-abandoning Start New recove
   assert.match(workspace, /startNewSaveFailure \? \[\{ label: "Keep Editing"[\s\S]*\{ label: "Try Again"/);
 });
 
-test("Start New creates only through governed draft authority and never creates customer identity", () => {
+test("R3 Start New prepares locally and never creates document or customer identity", () => {
   const createBlock = workspace.slice(
     workspace.indexOf("async function createAndOpenNewDocument"),
     workspace.indexOf("async function startNewDocument")
   );
   assert.match(createBlock, /buildNewBusinessDocumentDraftPayload/);
-  assert.match(createBlock, /createBusinessDocumentDraft\(/);
-  assert.match(createBlock, /validateNewBusinessDocumentDraft/);
-  assert.match(createBlock, /applyRestoredDocument\(document/);
+  assert.doesNotMatch(createBlock, /createBusinessDocumentDraft|validateNewBusinessDocumentDraft/);
+  assert.match(createBlock, /applyRestoredDocument\(payload/);
+  assert.match(createBlock, /workingSession: true/);
   assert.doesNotMatch(createBlock, /createBusinessContact|assignBusinessContactRole|establishBusinessCustomerRelationship|resolveOrEstablishCustomerRelationship/);
   assert.doesNotMatch(createBlock, /localStorage|sessionStorage/);
 });

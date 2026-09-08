@@ -7,7 +7,7 @@ import { createServer } from "vite";
 
 const CONTACT = "11111111-1111-4111-8111-111111111111";
 const RELATIONSHIP = "22222222-2222-4222-8222-222222222222";
-const contact = { id: CONTACT, displayName: "Bob Rivera", email: "bob@example.test", phone: "555-0101", address: "12 Oak Street", status: "ACTIVE", roles: [{ role: "CUSTOMER", active: true }], version: 1 };
+const contact = { id: CONTACT, displayName: "Bob Hamel", email: "bob@example.test", phone: "555-0101", address: "12 Oak Street", status: "ACTIVE", roles: [{ role: "CUSTOMER", active: true }], version: 1 };
 const relationship = { id: RELATIONSHIP, businessContactId: CONTACT, contractorProfileId: 7, version: 1 };
 
 function savedFile(documentType, projectTitle) {
@@ -61,7 +61,7 @@ test.before(async () => {
     },
     transform(code, id) {
       if (id.endsWith("/src/pages/QuoteBuilder.jsx")) return code.replace("const unifiedWorkspaceEnabled = true;", "globalThis.__quoteEntrySnapshot = { quote: unifiedQuoteDraft, canonicalJobId, request }; const unifiedWorkspaceEnabled = true;");
-      if (id.endsWith("/src/components/UnifiedBusinessDocumentWorkspace.jsx")) return code.replace("const activeDirty = dirty[activeDocument];", "globalThis.__quoteWorkspaceSnapshot = { invoice, invoiceBaseline, dirty, workingDocumentIntent, savedDocuments }; const activeDirty = dirty[activeDocument];");
+      if (id.endsWith("/src/components/UnifiedBusinessDocumentWorkspace.jsx")) return code.replace("const activeDirty = dirty[activeDocument];", "globalThis.__quoteWorkspaceSnapshot = { invoice, invoiceBaseline, dirty, workingDocumentIntent, savedDocuments, invoiceCreateState, savedDocumentsRef, pendingInvoiceProposal, privateReminders, customerParties, documentJobIds }; const activeDirty = dirty[activeDocument];");
     },
   }] });
 });
@@ -79,7 +79,7 @@ test.after(async () => {
   delete globalThis.__quoteWorkspaceSnapshot;
 });
 
-async function mount(t, { route = "quoteBuilder?new=1", stored = {}, initialDocument = "quote", listExtras = [] } = {}) {
+async function mount(t, { route = "quoteBuilder?new=1", stored = {}, initialDocument = "quote", listExtras = [], workspaceProps = null } = {}) {
   window.history.replaceState({}, "", `#${route}`);
   localStorage.clear();
   localStorage.setItem("activeAccountMode", "business");
@@ -91,7 +91,7 @@ async function mount(t, { route = "quoteBuilder?new=1", stored = {}, initialDocu
     const method = options.method || "GET";
     const url = new URL(endpoint, "http://localhost");
     const body = options.body ? JSON.parse(options.body) : null;
-    calls.push({ method, path: url.pathname, type: url.searchParams.get("type"), body });
+    calls.push({ method, path: url.pathname, type: url.searchParams.get("type"), search: url.searchParams.get("search"), body });
     let data;
     if (url.pathname === "/my-contractor-profile") data = { profile: { id: 7 } };
     else if (url.pathname === "/business-contacts") data = { contacts: [contact] };
@@ -109,14 +109,19 @@ async function mount(t, { route = "quoteBuilder?new=1", stored = {}, initialDocu
       document.status = "ARCHIVED";
       data = { deletedDraftId: document.id };
     }
+    else if (/^\/business-document-drafts\/[^/]+$/.test(url.pathname) && method === "GET") {
+      const found = [...documents, ...listExtras].find((doc) => url.pathname.endsWith(`/${doc.id}`));
+      if (!found) return { response: { ok: false, status: 404 }, data: { success: false } };
+      data = { document: found };
+    }
     else if (url.pathname.endsWith("/deliveries")) data = { deliveries: [] };
     else return { response: { ok: false, status: 404 }, data: { success: false, message: `Test has no authority for ${endpoint}` } };
     return { response: { ok: true, status: 200 }, data: { success: true, ...data } };
   };
-  const { default: QuoteBuilder } = await vite.ssrLoadModule("/src/pages/QuoteBuilder.jsx");
+  const { default: QuoteBuilder } = await vite.ssrLoadModule(workspaceProps ? "/src/components/UnifiedBusinessDocumentWorkspace.jsx" : initialDocument === "invoice" ? "/src/pages/InvoiceBuilder.jsx" : "/src/pages/QuoteBuilder.jsx");
   const root = createRoot(document.getElementById("root"));
   t.after(async () => { await act(async () => root.unmount()); });
-  await act(async () => { root.render(React.createElement(QuoteBuilder, { initialDocument, setPage: (page) => navigations.push(page) })); await pause(); });
+  await act(async () => { root.render(React.createElement(QuoteBuilder, { ...(workspaceProps ? { quote: {}, onApplyQuotePatch() {}, ...workspaceProps } : {}), initialDocument, setPage: (page) => navigations.push(page) })); await pause(); });
   const text = () => document.body.textContent;
   async function click(label) {
     const buttons = [...document.querySelectorAll("button")];
@@ -124,6 +129,11 @@ async function mount(t, { route = "quoteBuilder?new=1", stored = {}, initialDocu
     assert.ok(button, `button ${label}: ${buttons.map((button) => button.textContent.trim()).join(" | ")}`);
     assert.equal(button.disabled, false, `${label} enabled`);
     await act(async () => { button.click(); await pause(); });
+    // Saved Files resolves after an effect; wait for its observable loading state.
+    for (let attempt = 0; attempt < 40 && text().includes("Loading saved documents…"); attempt++) {
+      await act(async () => { await pause(); });
+    }
+    assert.doesNotMatch(text(), /Loading saved documents…/, "Saved Files finished loading");
   }
   async function selectCustomer() {
     await click("External Customer");
@@ -145,7 +155,23 @@ async function mount(t, { route = "quoteBuilder?new=1", stored = {}, initialDocu
     }
     await click("Apply changes");
   }
-  return { calls, documents, navigations, click, edit, selectCustomer, text, allocations: () => numberAllocations, snapshot: () => globalThis.__quoteEntrySnapshot, workspace: () => globalThis.__quoteWorkspaceSnapshot };
+  async function instruct(value) {
+    const input = document.querySelector(".business-document-composer textarea");
+    assert.ok(input, "composer exists");
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value").set.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await click("Send message");
+  }
+  async function followNavigation() {
+    const page = navigations.at(-1);
+    assert.ok(page, "a destination was requested");
+    window.history.replaceState({}, "", `#${page}`);
+    const { default: Target } = await vite.ssrLoadModule(page.startsWith("invoiceBuilder") ? "/src/pages/InvoiceBuilder.jsx" : "/src/pages/QuoteBuilder.jsx");
+    await act(async () => { root.render(React.createElement(Target, { key: page, setPage: (next) => navigations.push(next) })); await pause(); });
+  }
+  return { calls, documents, navigations, click, edit, instruct, followNavigation, selectCustomer, text, allocations: () => numberAllocations, snapshot: () => globalThis.__quoteEntrySnapshot, workspace: () => globalThis.__quoteWorkspaceSnapshot };
 }
 
 test("real generic QuoteBuilder ignores stale request/revision/active Job state and starts unnumbered", async (t) => {
@@ -324,4 +350,191 @@ test("archiving a numbered Quote retains its identity and a later save requests 
   assert.notEqual(w.documents[1].documentNumber, original.documentNumber);
   assert.equal(w.allocations(), 2);
   assert.equal(w.calls.filter((call) => /numbering|sequence/.test(call.path)).length, 0);
+});
+
+test("R3 Start New Quote detaches prior saved Invoice authority before its first Invoice visit", async (t) => {
+  const w = await mount(t);
+  await w.selectCustomer();
+  await w.click("Invoice");
+  await w.click("Save Draft");
+  assert.equal(w.documents[0].documentType, "INVOICE");
+  await w.click("Quote");
+  await w.click("+ Start New Quote");
+  await w.click("Discard Changes");
+  await w.selectCustomer();
+  const before = w.calls.length;
+  await w.click("Invoice");
+  assert.equal(w.workspace().savedDocuments.invoice, null);
+  assert.equal(w.workspace().invoiceCreateState.invoice, null);
+  assert.equal(w.workspace().invoice.invoiceNumber, "");
+  assert.equal(w.calls.slice(before).filter((call) => call.method !== "GET").length, 0);
+});
+
+
+test("R3 fresh Quote to Invoice visit is unnumbered and leaving consumes no number", async (t) => {
+  const w = await mount(t);
+  await w.selectCustomer();
+  const before = w.calls.length;
+  await w.click("Invoice");
+  assert.equal(w.workspace().invoice.customerName, "Bob Hamel");
+  assert.equal(w.workspace().invoice.invoiceNumber, "");
+  assert.equal(w.workspace().savedDocuments.invoice, null);
+  assert.equal(w.workspace().savedDocumentsRef.current.invoice, null);
+  assert.equal(w.workspace().invoiceCreateState.invoice, null);
+  assert.match(document.querySelector('[aria-label="Live Invoice Preview"]').textContent, /Assigned on first save/);
+  assert.equal(w.calls.slice(before).filter((call) => call.method !== "GET").length, 0);
+  await w.click("Leave Quote and Invoice workspace");
+  if (w.text().includes("Discard Changes")) await w.click("Discard Changes");
+  assert.equal(w.documents.length, 0);
+  assert.equal(w.allocations(), 0);
+});
+
+test("R3 deliberate Invoice Save allocates once; exact Saved Files reopen restores its number", async (t) => {
+  const w = await mount(t);
+  await w.selectCustomer();
+  await w.click("Invoice");
+  await w.click("Save Draft");
+  assert.equal(w.documents.length, 1);
+  assert.equal(w.documents[0].documentType, "INVOICE");
+  const saved = w.documents[0];
+  assert.equal(w.allocations(), 1);
+  await w.click("Saved Files");
+  const open = [...document.querySelectorAll("button")].find((button) => button.textContent.includes(saved.documentNumber));
+  assert.ok(open, w.text());
+  await act(async () => { open.click(); await pause(); });
+  assert.equal(w.workspace().savedDocuments.invoice.id, saved.id);
+  assert.match(document.querySelector('[aria-label="Live Invoice Preview"]').textContent, new RegExp(saved.documentNumber));
+  assert.equal(w.allocations(), 1);
+});
+
+function sourceQuote() {
+  return { ...savedFile("QUOTE", "Window repair"), documentNumber: "Q-0000049", customerDisplayName: "Bob Hamel",
+    customerParty: { businessContactId: CONTACT, customerRelationshipId: RELATIONSHIP },
+    content: { customerName: "Bob Hamel", customerEmail: "bob@example.test", projectTitle: "Window repair", notes: "Do not copy Quote notes", totalOverride: "9999" } };
+}
+
+test("R3 exact source route opens a local Invoice with no stale context or historical Invoice lookup", async (t) => {
+  const quote = sourceQuote();
+  const route = `invoiceBuilder?sourceQuoteDraftId=${quote.id}&sourceQuoteVersion=1&sourceQuoteNumber=Q-0000049`;
+  const w = await mount(t, { initialDocument: "invoice", route, listExtras: [quote], stored: { activeJobCustomer: "Wrong customer", selectedQuoteRequest: { customerName: "Wrong customer" }, meetroRevisedQuoteContext: { source: "workflow_change_request", projectTitle: "Stale title" } } });
+  assert.match(w.text(), /Live|Window repair/, w.text());
+  assert.equal(w.workspace().invoice.customerName, "Bob Hamel");
+  assert.equal(w.workspace().invoice.quoteReference, "Q-0000049");
+  assert.equal(w.workspace().invoice.invoiceNumber, "");
+  assert.equal(w.workspace().invoice.totalOverride, "");
+  assert.equal(w.workspace().invoice.notes, "");
+  assert.equal(w.workspace().savedDocuments.invoice, null);
+  assert.equal(w.calls.filter((call) => call.method !== "GET").length, 0);
+  assert.equal(w.calls.filter((call) => call.type === "INVOICE").length, 0);
+  assert.equal(w.allocations(), 0);
+});
+
+test("R3 actual composer proposes separate fields, Apply stays local, preview excludes private reminder", async (t) => {
+  const w = await mount(t);
+  await w.selectCustomer();
+  await w.click("Invoice");
+  const instruction = "We completed the window repair, replaced damaged trim for an extra $75, payment is due Friday, remind me privately to call him next week.";
+  await w.instruct(instruction);
+  assert.ok(w.workspace().pendingInvoiceProposal);
+  assert.equal(w.workspace().invoice.workPerformed, "");
+  assert.match(w.text(), /Proposed Invoice changes/);
+  await w.click("Apply");
+  assert.equal(w.workspace().invoice.workPerformed, "window repair completed");
+  assert.equal(w.workspace().invoice.lineItems[0].unitPrice, "75");
+  assert.equal(w.workspace().privateReminders[0].text, "call him next week");
+  assert.doesNotMatch(document.querySelector('[aria-label="Live Invoice Preview"]').textContent, /call him|privately/);
+  assert.equal(w.calls.filter((call) => call.method !== "GET").length, 0);
+  await w.click("Save Draft");
+  assert.doesNotMatch(JSON.stringify(w.documents[0].content), /call him|privately/);
+  assert.equal(w.documents[0].workspace.privateReminders[0].text, "call him next week");
+});
+
+
+test("R3 real Ask composer lookup → guarded navigation → exact Invoice hydration retains an unapplied proposal", async (t) => {
+  const quote = sourceQuote();
+  const w = await mount(t, { listExtras: [quote] });
+  await w.selectCustomer();
+  await w.instruct("Create invoice for Bob Hamel job quote number Q0000049. We completed the window repair, replaced damaged trim for an extra $75, payment is due Friday, remind me privately to call him next week.");
+  await w.click("Discard Changes");
+  assert.match(w.navigations.at(-1), /sourceQuoteDraftId=/);
+  await w.followNavigation();
+  assert.equal(w.workspace().invoice.quoteReference, "Q-0000049");
+  assert.equal(w.workspace().invoice.invoiceNumber, "");
+  assert.equal(w.workspace().invoice.workPerformed, "");
+  assert.ok(w.workspace().pendingInvoiceProposal);
+  assert.equal(w.workspace().pendingInvoiceProposal.patch.lineItems[0].unitPrice, "75");
+  assert.equal(w.workspace().pendingInvoiceProposal.patch.privateReminder, "call him next week");
+  assert.deepEqual(w.calls.filter((call) => call.path === "/business-document-drafts").map(({ method, type, search }) => ({ method, type, search })), [{ method: "GET", type: "QUOTE", search: "Q-0000049" }]);
+  assert.equal(w.calls.filter((call) => call.method !== "GET").length, 0);
+  assert.equal(w.allocations(), 0);
+});
+
+test("R3 a changed exact source is blocked before showing an Invoice editor", async (t) => {
+  const quote = sourceQuote();
+  const w = await mount(t, { initialDocument: "invoice", route: `invoiceBuilder?sourceQuoteDraftId=${quote.id}&sourceQuoteVersion=2&sourceQuoteNumber=Q-0000049`, listExtras: [quote] });
+  assert.match(w.text(), /source Quote changed/);
+  assert.equal(document.querySelector('[aria-label="Live Invoice Preview"]'), null);
+  assert.equal(w.calls.filter((call) => call.method !== "GET").length, 0);
+});
+
+test("R3 Start New Invoice creates only a local session after the leave choice", async (t) => {
+  const w = await mount(t);
+  await w.selectCustomer();
+  await w.click("Invoice");
+  await w.click("Save Draft");
+  await w.click("+ Start New Invoice");
+  if (w.text().includes("Discard Changes")) await w.click("Discard Changes");
+  assert.equal(w.workspace().savedDocuments.invoice, null);
+  assert.equal(w.workspace().invoiceCreateState.invoice, null);
+  assert.equal(w.workspace().invoice.invoiceNumber, "");
+  assert.equal(w.allocations(), 1);
+  assert.equal(w.documents.length, 1);
+});
+
+
+test("R3 approved scope stays separate from Work Completed until an explicit proposal is applied", async (t) => {
+  const quote = { ...sourceQuote(), jobId: randomUUID() };
+  quote.content.recommendedSolution = "Repair the windows";
+  const authority = { canonicalQuote: { id: randomUUID(), jobId: quote.jobId, status: "ISSUED", decisionState: "APPROVED", totalMinor: 68000, currency: "USD", decisionVersion: 4,
+    sourceBusinessDocument: { documentId: quote.id, documentVersion: 1, currentDocumentVersion: 1, currentSnapshotMatchesSource: true } } };
+  // Mount the actual workspace at the parent's already-hydrated source boundary.
+  const w = await mount(t, { route: "invoiceBuilder", initialDocument: "invoice", workspaceProps: { sourceQuoteDocument: quote, sourceQuoteAuthority: authority } });
+  const preview = () => document.querySelector('[aria-label="Live Invoice Preview"]');
+  const completedSection = () => [...preview().querySelectorAll("section")].find((section) => section.querySelector("h3")?.textContent === "Work Completed");
+  assert.equal(w.workspace().invoice.workPerformed, "");
+  assert.equal(w.workspace().invoice.lineItems[0].description, "Repair the windows");
+  assert.equal(w.workspace().invoice.lineItems[0].quantity, "1");
+  assert.equal(w.workspace().invoice.lineItems[0].unitPrice, "680");
+  assert.match(completedSection().textContent, /Completion details have not been confirmed\./);
+  assert.doesNotMatch(completedSection().textContent, /Repair the windows/);
+  await w.instruct("We completed the window repair");
+  assert.equal(w.workspace().pendingInvoiceProposal.patch.workPerformed, "window repair completed");
+  assert.equal(w.workspace().invoice.workPerformed, "");
+  assert.match(completedSection().textContent, /Completion details have not been confirmed\./);
+  await w.click("Apply");
+  assert.equal(w.workspace().invoice.workPerformed, "window repair completed");
+  assert.match(completedSection().textContent, /window repair completed/);
+  assert.equal(w.workspace().invoice.lineItems[0].unitPrice, "680");
+  assert.equal(w.workspace().invoice.invoiceNumber, "");
+  assert.equal(w.workspace().savedDocuments.invoice, null);
+  assert.equal(w.workspace().invoiceCreateState.invoice, null);
+  assert.match(preview().textContent, /Assigned on first save/);
+  assert.equal(w.allocations(), 0);
+  assert.equal(w.documents.length, 0);
+  assert.equal(w.calls.filter((call) => call.method !== "GET").length, 0);
+});
+
+test("R3 separate completed-Job Invoice preparation retains its completion-backed presentation", async (t) => {
+  const preparation = { jobId: randomUUID(), customerName: "Bob Hamel", serviceTitle: "Window repair", completedAt: "2026-09-07T12:00:00Z", completionVersion: 1,
+    approvedWork: [{ description: "Repair the windows", quantity: 1, unitAmountMinor: 68000, lineTotalMinor: 68000 }],
+    approvedAmount: { totalMinor: 68000, currency: "USD" }, paymentsReceivedMinor: 51000, amountStillDueMinor: 17000, quoteReference: "Q-0000049", paymentTerms: "Due on receipt" };
+  const w = await mount(t, { route: "invoiceBuilder", initialDocument: "invoice", workspaceProps: { invoicePreparation: preparation } });
+  const preview = document.querySelector('[aria-label="Live Invoice Preview"]');
+  assert.equal(w.workspace().invoice.workPerformed, "Repair the windows");
+  assert.equal(w.workspace().invoice.paidAmount, "510");
+  assert.equal(w.workspace().invoice.balanceDue, "170");
+  assert.match(preview.textContent, /Work CompletedRepair the windows/);
+  assert.doesNotMatch(preview.textContent, /Completion details have not been confirmed/);
+  assert.equal(w.allocations(), 0);
+  assert.equal(w.calls.filter((call) => call.method !== "GET").length, 0);
 });
