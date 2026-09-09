@@ -42,7 +42,7 @@ for (const [label, options, expected] of [
   assert.equal(f.notices.at(-1), expected); assert.equal(f.states.at(-1), "idle");
   assert.deepEqual(f.transcripts, []); assert.ok(!f.calls.some((call) => Array.isArray(call) && call[0] === "start"));
 });
-for (const [code, expected] of [["SPEECH_RECOGNITION_FAILED", "recognition"], ["SPEECH_INTERRUPTED", "interrupted"], ["SPEECH_PERMISSION_DENIED", "denied"], ["SPEECH_UNAVAILABLE", "unavailable"]]) test(`native ${code} is distinct and permits another attempt`, async () => {
+for (const [code, expected] of [["SPEECH_RECOGNITION_FAILED", "recognition"], ["SPEECH_INTERRUPTED", "interrupted"], ["SPEECH_PERMISSION_DENIED", "denied"], ["SPEECH_UNAVAILABLE", "unavailable"], ["SPEECH_TIMEOUT", "timeout"]]) test(`native ${code} is distinct and permits another attempt`, async () => {
   const f = fixture(); const first = f.voice.start(); await tick();
   f.reject({ code }); await first;
   assert.equal(f.notices.at(-1), ASK_VOICE_NOTICE[expected]);
@@ -71,7 +71,7 @@ test("cancelling during permission does not start a late native recording", asyn
 });
 test("a missing final callback times out and releases recording", async () => {
   const f = fixture({ timeoutMs: 5 }); const started = f.voice.start(); await started;
-  assert.equal(f.states.at(-1), "idle"); assert.equal(f.notices.at(-1), ASK_VOICE_NOTICE.recognition);
+  assert.equal(f.states.at(-1), "idle"); assert.equal(f.notices.at(-1), ASK_VOICE_NOTICE.timeout);
 });
 test("browser path reports permission denial and can retry without using native speech", async () => {
   let recognition;
@@ -98,4 +98,11 @@ test("native bridge, source inclusion and usage descriptions exist without anoth
   const plist = read("../ios/App/App/Info.plist");
   assert.match(plist, /NSMicrophoneUsageDescription/); assert.match(plist, /NSSpeechRecognitionUsageDescription/);
   // Structural/capability tests and an unsigned native build do not certify a physical microphone.
+});
+
+test("native timeout preserves partial transcription and reports its distinct state", async () => {
+  const f = fixture(); const started = f.voice.start(); await tick();
+  f.resolve({ matches: ["Review these words"], reason: "timeout" }); await started;
+  assert.deepEqual(f.transcripts, ["Review these words"]);
+  assert.equal(f.notices.at(-1), ASK_VOICE_NOTICE.timeout);
 });

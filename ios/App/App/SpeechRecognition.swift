@@ -1,6 +1,7 @@
 import AVFoundation
 import Capacitor
 import Speech
+import UIKit
 
 @objc(SpeechRecognition)
 public class SpeechRecognition: CAPPlugin, CAPBridgedPlugin {
@@ -26,6 +27,7 @@ public class SpeechRecognition: CAPPlugin, CAPBridgedPlugin {
     private var generation = 0
     private var timeout: DispatchWorkItem?
     private var interruptionObserver: NSObjectProtocol?
+    private var backgroundObserver: NSObjectProtocol?
 
     @objc public func available(_ call: CAPPluginCall) {
         let locale = Locale(identifier: call.getString("language") ?? "en-US")
@@ -134,12 +136,18 @@ public class SpeechRecognition: CAPPlugin, CAPBridgedPlugin {
                       type == AVAudioSession.InterruptionType.began.rawValue else { return }
                 self.finish(error: "Speech input was interrupted.", code: "SPEECH_INTERRUPTED")
             }
+            backgroundObserver = NotificationCenter.default.addObserver(
+                forName: UIApplication.didEnterBackgroundNotification, object: nil, queue: .main
+            ) { [weak self] _ in
+                guard let self = self, self.generation == currentGeneration else { return }
+                self.finish(error: "Speech input was interrupted when the app entered the background.", code: "SPEECH_INTERRUPTED")
+            }
             engine.prepare()
             try engine.start()
             notifyListeners("listeningState", data: ["status": "started"])
             let deadline = DispatchWorkItem { [weak self] in
                 guard let self = self, self.generation == currentGeneration else { return }
-                self.finish()
+                self.finish(reason: "timeout")
             }
             timeout = deadline
             DispatchQueue.main.asyncAfter(deadline: .now() + 55, execute: deadline)
@@ -164,7 +172,7 @@ public class SpeechRecognition: CAPPlugin, CAPBridgedPlugin {
         call.resolve(["languages": SFSpeechRecognizer.supportedLocales().map { $0.identifier }])
     }
 
-    private func finish(error: String? = nil, code: String? = nil) {
+    private func finish(error: String? = nil, code: String? = nil, reason: String = "stopped") {
         guard let call = activeCall else { return }
         let matches = latestMatches
         activeCall = nil
@@ -173,6 +181,8 @@ public class SpeechRecognition: CAPPlugin, CAPBridgedPlugin {
         timeout = nil
         if let observer = interruptionObserver { NotificationCenter.default.removeObserver(observer) }
         interruptionObserver = nil
+        if let observer = backgroundObserver { NotificationCenter.default.removeObserver(observer) }
+        backgroundObserver = nil
         audioEngine?.stop()
         if inputTapInstalled { audioEngine?.inputNode.removeTap(onBus: 0) }
         inputTapInstalled = false
@@ -186,6 +196,6 @@ public class SpeechRecognition: CAPPlugin, CAPBridgedPlugin {
         try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
         notifyListeners("listeningState", data: ["status": "stopped"])
         if let error = error { call.reject(error, code) }
-        else { call.resolve(["matches": matches]) }
+        else { call.resolve(["matches": matches, "reason": reason]) }
     }
 }

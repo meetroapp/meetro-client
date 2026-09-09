@@ -7,7 +7,9 @@ import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import MeetroIcon from "./MeetroIcon";
 import BottomNav from "./BottomNav";
-import { askMeetroReply, resolveAskMeetroActions } from "../utils/askMeetro.js";
+import { resolveAskMeetroActions } from "../utils/askMeetro.js";
+import { resolveAskMeetroRequest } from "../utils/askMeetroConversation.js";
+import { createIntelligenceKey } from "../utils/contextualIntelligence.js";
 import { reviewAskMeetroCompletion, applyAskMeetroCompletion } from "../utils/askMeetroCompletion.js";
 import "../styles/homeDashboard.css";
 import "./AskMeetroWorkspace.css";
@@ -18,7 +20,7 @@ const suggestions = {
   personal: [["Track my project", "Show me the next step for this project."], ["Continue a conversation", "Open my conversations."], ["Request a service", "Help me describe a new service request."], ["Review a quote", "Help me understand this quote."]],
 };
 
-export default function AskMeetroWorkspace({ context = {}, role = "personal", initialQuestion = "", currentPage = "home", onClose, setPage, session, onSessionChange, resolveActions = resolveAskMeetroActions, completionApi = { review: reviewAskMeetroCompletion, apply: applyAskMeetroCompletion } }) {
+export default function AskMeetroWorkspace({ context = {}, role = "personal", initialQuestion = "", currentPage = "home", onClose, setPage, session, onSessionChange, resolveActions = resolveAskMeetroActions, requestConversation, completionApi = { review: reviewAskMeetroCompletion, apply: applyAskMeetroCompletion } }) {
   const [input, setInput] = useState(initialQuestion);
   const [messages, setMessages] = useState(session?.messages || []);
   const [actions, setActions] = useState(session?.actions || []);
@@ -31,6 +33,7 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
   const listening = voiceState === "listening";
   const [viewport, setViewport] = useState(null);
   const composerRef = useRef(null), attachRef = useRef(null), photoRef = useRef(null), bottomRef = useRef(null), speechRef = useRef(null);
+  const conversationAttempt = useRef(null), requestController = useRef(null);
   const inFlight = useRef(false), mounted = useRef(true), filesRef = useRef([]);
 
   useEffect(() => { onSessionChange?.({ messages, actions, receipts, contextKey: JSON.stringify(context) }); }, [messages, actions, receipts, context, onSessionChange]);
@@ -43,8 +46,12 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
   }, []);
   useEffect(() => {
     mounted.current = true;
+    const cancelWhenHidden = () => { if (document.hidden) void speechRef.current?.cancel(); };
+    document.addEventListener("visibilitychange", cancelWhenHidden);
     return () => {
+      document.removeEventListener("visibilitychange", cancelWhenHidden);
       mounted.current = false;
+      requestController.current?.abort();
       void speechRef.current?.cancel();
       filesRef.current.forEach((file) => { if (file.url) URL.revokeObjectURL(file.url); });
     };
@@ -56,11 +63,27 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
     if (!text || inFlight.current) return;
     inFlight.current = true; setBusy(true); setError("");
     try {
-      const next = await resolveActions(text, { context, role, setPage });
+      if (files.length) throw new Error("Selected attachments have not been sent. This conversation currently supports text only; remove the attachments to send text, or use their governed evidence workspace.");
+      const signature = JSON.stringify({ text, context, messages });
+      if (conversationAttempt.current?.signature !== signature) conversationAttempt.current = { signature, key: null };
+      requestController.current = new AbortController();
+      const result = await resolveAskMeetroRequest(text, { context, role, setPage, messages, resolveActions, requestConversation, signal: requestController.current.signal,
+        locale: localStorage.getItem("language") === "es" ? "es" : "en-US",
+        // Allocate only if the conversation path actually invokes intelligence.
+        get idempotencyKey() { return conversationAttempt.current.key ||= createIntelligenceKey(); },
+      });
+      const next = result.actions;
       if (!mounted.current) return;
-      setMessages((current) => [...current, { role: "user", text }, { role: "assistant", text: next.find((action) => action.blockedReason)?.blockedReason || askMeetroReply(next, text) }]);
+      conversationAttempt.current = null;
+      if (result.route) { setPage?.(result.route); return; }
+      setMessages((current) => [...current, { role: "user", text }, { role: "assistant", text: result.text }]);
       setActions(next.filter((action) => action.status === "PROPOSED" && action.route)); setReview(null); setInput((current) => current.trim() === text && !next.some((action) => action.blockedReason) ? "" : current);
-    } catch { if (mounted.current) { setActions([]); setReview(null); setError("I could not process that request. Your message is still in the composer. Nothing has been changed. Please try again."); } }
+    } catch (failure) {
+      // An uncertain transport outcome reuses its key. A confirmed failed ledger
+      // operation needs a fresh key for a subsequent explicit retry.
+      if (/^INTELLIGENCE_(?:PROVIDER_|RESULT_|OPERATION_FAILED_REPLAY|OPERATION_CONFLICT)/.test(failure?.code || "")) conversationAttempt.current = null;
+      if (mounted.current) { setActions([]); setReview(null); setError(failure?.message || "I could not process that request. Your message is still in the composer. Nothing has been changed. Please try again."); }
+    }
     finally { inFlight.current = false; if (mounted.current) setBusy(false); }
   }
   function attach(event) {

@@ -5,11 +5,13 @@ export const ASK_VOICE_NOTICE = Object.freeze({
   denied: "Microphone or speech access was denied. Enable access for Meetro in Settings, or type your message.",
   interrupted: "Voice input was interrupted. Tap the microphone to try again, or type your message.",
   unavailable: "Speech recognition is temporarily unavailable. Try again, or type your message.",
+  timeout: "Voice input reached its time limit. Review any captured text or tap the microphone to try again.",
   recognition: "Voice could not hear you. Try again or type your message.",
 });
 
 export function classifyAskVoiceError(error = {}) {
   const value = `${error.code || error.error || ""} ${error.message || ""}`.toLowerCase();
+  if (/timeout|timed out/.test(value)) return "timeout";
   if (/denied|permission|not-allowed|restricted/.test(value)) return "denied";
   if (/unimplemented|not implemented|unsupported|not supported/.test(value)) return "unsupported";
   if (/interrupted|aborted|cancel/.test(value)) return "interrupted";
@@ -35,14 +37,14 @@ export function createAskMeetroVoiceInput({ native = false, plugin, pluginAvaila
       try { run.recognition.abort(); } catch { /* already ended */ }
     }
     if (!cancel && text.trim()) onTranscript(text.trim());
-    else if (!cancel && notice) onNotice(notice);
+    if (!cancel && notice && (!text.trim() || notice === ASK_VOICE_NOTICE.timeout)) onNotice(notice);
     closing = false; onState("idle");
   }
   async function start() {
     if (active || closing) return;
     const run = { listeners: [], transcript: "", recognition: null, timer: null };
     active = run; onNotice(""); onState("starting");
-    run.timer = setTimeout(() => { void finish(run, { text: run.transcript, notice: ASK_VOICE_NOTICE.recognition }); }, timeoutMs);
+    run.timer = setTimeout(() => { void finish(run, { text: run.transcript, notice: ASK_VOICE_NOTICE.timeout }); }, timeoutMs);
     try {
       if (native) {
         if (!pluginAvailable) return await finish(run, { notice: ASK_VOICE_NOTICE.unsupported });
@@ -68,7 +70,7 @@ export function createAskMeetroVoiceInput({ native = false, plugin, pluginAvaila
         }
         if (!isCurrent(run)) return;
         const result = await plugin.start({ language, maxResults: 1, partialResults: true, popup: false });
-        await finish(run, { text: String(result.matches?.[0] || run.transcript), notice: ASK_VOICE_NOTICE.recognition });
+        await finish(run, { text: String(result.matches?.[0] || run.transcript), notice: result.reason === "timeout" ? ASK_VOICE_NOTICE.timeout : (!result.matches?.[0] && !run.transcript ? ASK_VOICE_NOTICE.recognition : "") });
       } else {
         if (!Recognition) return await finish(run, { notice: ASK_VOICE_NOTICE.browserUnsupported });
         const recognition = new Recognition(); run.recognition = recognition;

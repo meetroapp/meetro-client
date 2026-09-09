@@ -17,8 +17,8 @@ export function captureAskMeetroContext(route = "", explicit = {}) {
   if (!pages.has(page)) return Object.freeze({ page: "", blocked: true });
   const params = new URLSearchParams(query);
   const context = { page: pages.has(page) ? page : "", label: String(explicit.label || "").slice(0, 160) };
-  for (const key of ["jobId", "draftId", "quoteId", "invoiceId", "visitId", "requestId", "conversationId", "relationshipId", "businessContactId"]) {
-    const normalize = ["jobId", "draftId", "quoteId", "invoiceId", "visitId", "businessContactId"].includes(key) ? uuid : ["requestId", "conversationId"].includes(key) ? numericIdentity : identity;
+  for (const key of ["jobId", "draftId", "quoteId", "invoiceId", "evaluationId", "visitId", "requestId", "conversationId", "relationshipId", "businessContactId"]) {
+    const normalize = ["jobId", "draftId", "quoteId", "invoiceId", "evaluationId", "visitId", "businessContactId"].includes(key) ? uuid : ["requestId", "conversationId"].includes(key) ? numericIdentity : identity;
     const fromRoute = normalize(params.get(key));
     const fromEntry = normalize(explicit[key]);
     if ((params.has(key) && !fromRoute) || params.getAll(key).length > 1 || (fromRoute && fromEntry && fromRoute !== fromEntry) || (explicit[key] && !fromEntry)) return Object.freeze({ page: context.page, blocked: true });
@@ -45,10 +45,10 @@ export function askMeetroRecordRoute(context, kind, role = "personal") {
 }
 
 const commandPrefix = "(?:(?:please|can you|could you|would you|help me|i want to) )?";
-const changeClause = new RegExp(`^${commandPrefix}(?:create|prepare|revise|update|edit|record|mark|complete|finish|schedule|reschedule|approve|accept|cancel|add|attach|upload|crear|preparar|actualizar|registrar|completar|agendar)\\b[\\s\\S]*\\b(?:job|work|quote|invoice|payment|paid|deposit|visit|appointment|consultation|customer|record|photo|trabajo|cotizacion|factura|pago|deposito|visita)\\b`);
-const informationClause = /^(?:(?:please|can you|could you|would you)\s+)?(?:explain|troubleshoot|diagnos(?:e|is)|summari[sz]e|compare|interpret|why|how|what|whether|explica|explicar|diagnosticar|resume|comparar|por que|como|help\b|(?:i\s+)?(?:need|want)\s+(?:help|guidance|advice)|(?:check|review)\s+(?:whether|if|why|how|what))\b/;
+const changeClause = new RegExp(`^${commandPrefix}(?:create|prepare|revise|update|edit|record|mark|complete|finish|schedule|reschedule|approve|accept|cancel|add|attach|upload|continue|make|crear|preparar|actualizar|registrar|completar|agendar)\\b`);
+const informationClause = /^(?:(?:please|can you|could you|would you)\s+)?(?:tell me|show me how|should i|can i|do i|explain|troubleshoot|diagnos(?:e|is)|summari[sz]e|compare|interpret|why|how|what|whether|explica|explicar|diagnosticar|resume|comparar|por que|como|help\b|(?:i\s+)?(?:need|want)\s+(?:help|guidance|advice)|(?:check|review)\s+(?:whether|if|why|how|what))\b/;
 
-function askMeetroIntent(instruction) {
+export function askMeetroIntent(instruction) {
   const text = String(instruction || "").trim().slice(0, 5000).normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
   // Inspect clause heads, not relative clauses such as "with what the customer
   // paid" or "how we discussed" inside an explicit operational instruction.

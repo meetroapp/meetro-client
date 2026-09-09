@@ -44,6 +44,7 @@ async function mount(t, { host = false, context = { page: "workCenter", jobId: J
   const calls = [], routes = [];
   globalThis.__dashboardHttp = async (path, options = {}) => {
     calls.push({ path, ...options });
+    if (path === "/api/companion/ask") return { response: { ok: true, status: 200 }, data: { success: true, code: "INTELLIGENCE_OPERATION_COMPLETED", operation: "companion.converse", result: { schemaVersion: 1, text: "Helpful provider fixture: review the available information before deciding.", authorityClassification: "CONVERSATIONAL_NON_CANONICAL", directMutationAllowed: false } } };
     if (path.endsWith("/completion-review")) return { response: { ok: true }, data: { success: true, completionReview: { contractVersion: 1, jobId: JOB, requestId: 14, relationshipId: 22, currentVersion: 0, state: "ACTIVE", eligible: true, canComplete: true, reasons: [], work: { workstreamCount: 1, completedWorkstreamCount: 1, workItemCount: 1, completedWorkItemCount: 1 }, outstanding: { workstreams: 0, workItems: 0, obligations: 0, findings: 0 }, customerUpdates: { count: 1, status: "UP_TO_DATE" }, completedAt: null } } };
     if (path.endsWith("/complete")) return { response: { ok: true }, data: { success: true, completion: { contractVersion: 1, id: EVIDENCE, jobId: JOB, requestId: 14, relationshipId: 22, currentVersion: 1, status: "COMPLETED", completedAt: "2026-09-08T12:00:00Z", summary: { workstreamCount: 1, workItemCount: 1, customerUpdateCount: 1 }, nextAction: { code: "READY_TO_INVOICE", label: "Ready to Invoice" } } } };
     return { response: { ok: false, status: 503 }, data: { success: false } };
@@ -160,11 +161,11 @@ for (const question of [
 ]) test(`real composer keeps help conversational with no Review: ${question}`, async (t) => {
   const w = await mount(t, { context: { page: "businessDashboard" } });
   await w.send(question);
-  assert.match(w.text(), /Conversational help is not connected yet/);
+  assert.match(w.text(), /Helpful provider fixture/);
   assert.doesNotMatch(w.text(), /Review this record|Choose the exact record|action to review/);
   assert.equal(document.querySelector(".ask-meetro-actions"), null);
   assert.equal(document.querySelector(".ask-meetro-composer textarea").disabled, false);
-  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+  assert.deepEqual(w.calls.map((call) => call.path), ["/api/companion/ask"]); assert.deepEqual(w.routes, []);
 });
 for (const instruction of [
   "Update this invoice with what the customer paid.",
@@ -195,24 +196,26 @@ for (const instruction of [
   assert.equal(document.querySelector(".ask-meetro-actions"), null);
   assert.equal(document.querySelector(".ask-meetro-review"), null);
   assert.equal(document.querySelector(".ask-meetro-receipts"), null);
-  assert.match(w.text(), /have not answered the question or proposed the change/);
+  assert.match(w.text(), /No change has been proposed/);
   assert.equal(document.querySelector(".ask-meetro-composer textarea").disabled, false);
-  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+  assert.deepEqual(w.calls.map((call) => call.path), ["/api/companion/ask"]); assert.deepEqual(w.routes, []);
 });
 test("context-free conversation and existing Customer context do not invent record actions", async (t) => {
   const w = await mount(t, { context: { page: "customerRelationshipsCenter", relationshipId: EVIDENCE } });
   await w.send("Hello, can you compare the options for me?");
   assert.equal(document.querySelector(".ask-meetro-actions"), null);
   assert.match(document.querySelector(".ask-meetro-context").textContent, new RegExp(EVIDENCE));
-  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+  assert.deepEqual(w.calls.map((call) => call.path), ["/api/companion/ask"]); assert.deepEqual(w.routes, []);
 });
 test("a failed proposal lookup preserves typed text and never asks an informational user to choose a record", async (t) => {
   const w = await mount(t);
+  const originalHttp = globalThis.__dashboardHttp;
   globalThis.__dashboardHttp = async () => { throw new Error("lookup unavailable"); };
   await w.send("Create invoice from Quote Q0000049");
   assert.match(w.text(), /The Quote could not be verified/);
   assert.equal(document.querySelector(".ask-meetro-composer textarea").value, "Create invoice from Quote Q0000049");
   assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  globalThis.__dashboardHttp = originalHttp;
   await w.send("Why might an outlet have no power?");
   assert.equal(document.querySelector(".ask-meetro-error"), null);
   assert.equal(document.querySelector(".ask-meetro-actions"), null);
@@ -243,8 +246,54 @@ test("browser transcription fills the editable composer without submitting or ap
  test("parser rejection fails closed without losing the typed request", async (t) => {
   const w = await mount(t, { resolveActions: async () => { throw new Error("parser failure"); } });
   await w.send("Need help resolving an outlet");
-  assert.match(document.querySelector('[role="alert"]').textContent, /I could not process that request/);
+  assert.match(document.querySelector('[role="alert"]').textContent, /parser failure/);
   assert.equal(document.querySelector(".ask-meetro-composer textarea").value, "Need help resolving an outlet");
   assert.equal(document.querySelector(".ask-meetro-actions"), null);
   assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+});
+
+test("uncertain conversation transport retry reuses its key and retains typed text", async (t) => {
+  const w = await mount(t); const original = globalThis.__dashboardHttp; const keys = []; let offline = true;
+  globalThis.__dashboardHttp = async (path, options) => { keys.push(options.headers["Idempotency-Key"]); if (offline) throw new Error("Connection interrupted"); return original(path, options); };
+  await w.send("Explain the options");
+  assert.equal(document.querySelector(".ask-meetro-composer textarea").value, "Explain the options");
+  assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  offline = false; await w.click("Send"); assert.equal(keys.length, 2); assert.equal(keys[0], keys[1]);
+  assert.match(w.text(), /Helpful provider fixture/); assert.deepEqual(w.routes, []);
+});
+test("confirmed failed provider operation permits an explicit retry with a fresh key", async (t) => {
+  const w = await mount(t); const original = globalThis.__dashboardHttp; const keys = []; let failed = true;
+  globalThis.__dashboardHttp = async (path, options) => { keys.push(options.headers["Idempotency-Key"]); return failed ? { response: { ok: false }, data: { code: "INTELLIGENCE_PROVIDER_TIMEOUT" } } : original(path, options); };
+  await w.send("Compare the options");
+  assert.match(document.querySelector('[role="alert"]').textContent, /could not complete/);
+  assert.equal(document.querySelector(".ask-meetro-composer textarea").value, "Compare the options");
+  failed = false; await w.click("Send"); assert.notEqual(keys[0], keys[1]);
+  assert.equal(document.querySelector(".ask-meetro-actions"), null); assert.deepEqual(w.routes, []);
+});
+test("background teardown cannot submit a late browser transcript", async (t) => {
+  let recognition, aborted = false;
+  window.SpeechRecognition = class { constructor() { recognition = this; } start() { this.onstart(); } abort() { aborted = true; } };
+  t.after(() => { delete window.SpeechRecognition; delete document.hidden; });
+  const w = await mount(t); await w.click("Voice");
+  const callback = recognition.onresult;
+  Object.defineProperty(document, "hidden", { configurable: true, value: true });
+  await act(async () => { document.dispatchEvent(new Event("visibilitychange")); await pause(); });
+  const result = [{ transcript: "Complete this job" }]; result.isFinal = true;
+  await act(async () => { callback({ results: [result] }); await pause(); });
+  assert.equal(aborted, true); assert.equal(document.querySelector(".ask-meetro-composer textarea").value, "");
+  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+});
+test("local attachment selection is named, blocks unsupported transport, and never persists evidence", async (t) => {
+  const w = await mount(t);
+  const input = document.querySelector('input[type="file"]');
+  Object.defineProperty(input, "files", { configurable: true, value: [{ name: "notes.pdf", size: 8, type: "application/pdf" }] });
+  await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); await pause(); });
+  assert.match(document.querySelector(".ask-meetro-attachments").textContent, /notes.pdf/);
+  await w.send("Summarize the notes");
+  assert.match(document.querySelector('[role="alert"]').textContent, /attachments have not been sent/);
+  assert.equal(document.querySelector(".ask-meetro-composer textarea").value, "Summarize the notes");
+  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+  await w.click("Remove notes.pdf"); await w.click("Send");
+  assert.equal(w.calls.length, 1); assert.equal(w.calls[0].path, "/api/companion/ask");
+  assert.doesNotMatch(w.calls[0].body, /notes.pdf|attachments|files/);
 });
