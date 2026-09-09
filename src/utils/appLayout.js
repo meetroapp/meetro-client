@@ -138,14 +138,6 @@ function readSafeAreaInsets({ windowObject, documentObject } = {}) {
   });
 }
 
-function readRenderedSidebarWidth(documentObject, fallback) {
-  const sidebar = documentObject?.querySelector?.(".desktop-sidebar");
-  const bounds = sidebar?.getBoundingClientRect?.();
-  if (!bounds || bounds.width <= 0) return fallback;
-
-  return Math.max(0, finite(bounds.right) + 18);
-}
-
 export function getAppLayoutSnapshot({
   windowObject = globalThis.window,
   documentObject = globalThis.document,
@@ -233,10 +225,7 @@ export function getDesktopContentMetrics({
   const sidebarWidth = snapshot.layoutMode !== "mobile"
     ? Math.max(
         0,
-        finite(
-          renderedSidebarWidth,
-          readRenderedSidebarWidth(documentObject, snapshot.sidebarWidth)
-        )
+        finite(renderedSidebarWidth, snapshot.sidebarWidth)
       )
     : 0;
   const usableViewportWidth = Math.min(

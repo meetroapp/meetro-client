@@ -32,7 +32,13 @@
 .business-dashboard-glance-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
 .business-dashboard-glance-grid button { width: 100%; height: 100%; min-height: 130px; border-radius: 16px !important; border: 1px solid #E5E7EB !important; background: #fff !important; box-shadow: none !important; text-align: left; }
 .business-dashboard-glance-grid strong { font-size: clamp(20px, 2.5vw, 28px) !important; }
-.business-dashboard-quick-access { padding: 0 !important; margin: 0 !important; background: transparent !important; border: 0 !important; }
+.business-dashboard-quick-access {
+  padding: 0 !important;
+  margin: 0 !important;
+  overflow: visible !important;
+  background: transparent !important;
+  border: 0 !important;
+}
 .business-dashboard-quick-access-grid { grid-template-columns: 1fr !important; gap: 12px !important; }
 .business-dashboard-quick-access-item { border: 1px solid #E5E7EB !important; background: white !important; border-radius: 16px !important; padding: 16px !important; }
 .business-dashboard-community-entry { display: block !important; margin: 0 !important; }
@@ -84,7 +90,7 @@
 
 /* Physical iPhone parity pass. Keep the approved dashboard composition compact
    while the existing records and handlers continue to supply every value/action. */
-@media (max-width: 767px) and (orientation: portrait) {
+@media (max-width: 767px), (orientation: landscape) and (max-height: 500px) {
   #root[data-app-layout="mobile"] :is(.business-dashboard, .homeowner-home-dashboard) {
     padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px calc(var(--meetro-bottom-nav-height, 74px) + 22px) !important;
   }
@@ -805,9 +811,11 @@
    actions, followed by one compact lead, three metrics, four shortcuts, and
    two supporting rows. Data and destinations continue to come from the
    existing dashboard projections and handlers. */
-@media (max-width: 767px) and (orientation: portrait) {
+@media (max-width: 767px), (orientation: landscape) and (max-height: 500px) {
   #root[data-app-layout="mobile"] .business-dashboard {
-    padding: 0 12px calc(var(--meetro-bottom-nav-height, 74px) + 18px) !important;
+    --business-home-safe-left: max(12px, env(safe-area-inset-left, 0px));
+    --business-home-safe-right: max(12px, env(safe-area-inset-right, 0px));
+    padding: 0 var(--business-home-safe-right) calc(var(--meetro-bottom-nav-height, 74px) + 18px) var(--business-home-safe-left) !important;
     background: #F8FAFC !important;
   }
 
@@ -816,10 +824,10 @@
   }
 
   #root[data-app-layout="mobile"] .business-dashboard-header-section {
-    margin: 0 -12px !important;
-    width: calc(100% + 24px) !important;
+    margin: 0 calc(0px - var(--business-home-safe-right)) 0 calc(0px - var(--business-home-safe-left)) !important;
+    width: calc(100% + var(--business-home-safe-left) + var(--business-home-safe-right)) !important;
     max-width: none !important;
-    padding: calc(env(safe-area-inset-top, 0px) + 10px) 18px 12px !important;
+    padding: calc(env(safe-area-inset-top, 0px) + 10px) max(18px, calc(env(safe-area-inset-right, 0px) + 12px)) 12px max(18px, calc(env(safe-area-inset-left, 0px) + 12px)) !important;
     border-radius: 0 0 24px 24px !important;
     background:
       radial-gradient(circle at 88% 62%, rgba(16, 185, 129, .42), transparent 34%),

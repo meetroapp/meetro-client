@@ -100,8 +100,11 @@ test("Homeowner projects, functional Active/History controls and service entries
 test("dashboard layout protects narrow phones and scales metrics/tools without changing nav destinations", () => {
   const css = readFileSync("src/styles/homeDashboard.css", "utf8");
   assert.match(css, /max-width: 767px/);
+  assert.match(css, /@media \(max-width: 767px\), \(orientation: landscape\) and \(max-height: 500px\)/);
+  assert.doesNotMatch(css, /@media \(max-width: 767px\) and \(orientation: portrait\)/);
   assert.match(css, /business-dashboard-glance-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\) !important/);
   assert.match(css, /business-dashboard-quick-access-grid \{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\) !important/);
+  assert.match(css, /\.business-dashboard-quick-access \{[\s\S]*?overflow: visible !important/);
   assert.match(css, /business-dashboard-header-section \{[\s\S]*safe-area-inset-top/);
   assert.match(css, /home-help-action-grid \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\) !important/);
   assert.match(css, /\.business-dashboard, \.homeowner-home-dashboard\) ~ \.meetro-assistant-launcher/);
@@ -113,13 +116,16 @@ test("dashboard layout protects narrow phones and scales metrics/tools without c
   assert.deepEqual([...personal.matchAll(/page: "([^"]+)"/g)].map((m) => m[1]), ["home", "myRequests", "messagesInbox", "meetroMoments", "discover", "profile"]);
 });
 
-test("Professional iPhone composition stays compact across the approved width matrix", () => {
-  for (const viewportWidth of [375, 390, 393, 428]) {
+test("Professional iPhone composition stays compact across the approved portrait and landscape matrices", () => {
+  for (const [viewportWidth, viewportHeight] of [
+    [375, 812], [390, 844], [393, 852], [428, 926],
+    [812, 375], [844, 390], [852, 393], [926, 428],
+  ]) {
     const contentWidth = viewportWidth - 24;
     const glanceCardWidth = (contentWidth - 12) / 3;
     const shortcutWidth = (contentWidth - 18) / 4;
-    assert.ok(glanceCardWidth >= 113, `${viewportWidth}px keeps three glance cards usable`);
-    assert.ok(shortcutWidth >= 83, `${viewportWidth}px keeps four quick-access tiles usable`);
+    assert.ok(glanceCardWidth >= 113, `${viewportWidth}x${viewportHeight} keeps three glance cards usable`);
+    assert.ok(shortcutWidth >= 83, `${viewportWidth}x${viewportHeight} keeps four quick-access tiles usable`);
   }
 });
 
@@ -140,16 +146,19 @@ test("Professional dashboard reuses one ordered section tree across phone, table
   assert.ok(sharedSections[2].compareDocumentPosition(sharedSections[3]) & Node.DOCUMENT_POSITION_FOLLOWING);
 
   const responsiveTargets = [
-    { name: "iPhone", width: 428, layout: "mobile" },
-    { name: "iPad portrait", width: 1024, layout: "tablet" },
-    { name: "iPad landscape", width: 1366, layout: "tablet" },
-    { name: "desktop 1280", width: 1280, layout: "desktop" },
-    { name: "desktop 1440", width: 1440, layout: "desktop" },
+    ...[[375, 812], [390, 844], [393, 852], [428, 926]].map(([width, height]) => ({ name: `iPhone ${width}x${height}`, width, height, layout: "mobile", orientation: "portrait" })),
+    ...[[812, 375], [844, 390], [852, 393], [926, 428]].map(([width, height]) => ({ name: `iPhone ${width}x${height}`, width, height, layout: "mobile", orientation: "landscape" })),
+    { name: "iPad portrait", width: 1024, height: 1366, layout: "tablet", orientation: "portrait" },
+    { name: "iPad landscape", width: 1366, height: 1024, layout: "desktop", orientation: "landscape" },
+    { name: "desktop 1280", width: 1280, height: 900, layout: "desktop", orientation: "landscape" },
+    { name: "desktop 1440", width: 1440, height: 900, layout: "desktop", orientation: "landscape" },
   ];
 
   for (const target of responsiveTargets) {
     document.getElementById("root").dataset.appLayout = target.layout;
+    document.getElementById("root").dataset.appOrientation = target.orientation;
     Object.defineProperty(window, "innerWidth", { configurable: true, value: target.width });
+    Object.defineProperty(window, "innerHeight", { configurable: true, value: target.height });
     selectors.forEach((selector, index) => {
       assert.equal(document.querySelectorAll(selector).length, 1, `${target.name} has one ${selector}`);
       assert.equal(document.querySelector(selector), sharedSections[index], `${target.name} reuses ${selector}`);
@@ -157,5 +166,22 @@ test("Professional dashboard reuses one ordered section tree across phone, table
     assert.equal(document.querySelectorAll(".business-dashboard-glance-grid button").length, 3);
     assert.equal(document.querySelectorAll(".business-dashboard-quick-access-grid button").length, 4);
     assert.doesNotMatch(document.body.textContent, /My Projects|Today(?:'s)? Spotlight|Request Service/);
+  }
+
+  for (const sequence of [
+    [[390, 844, "portrait"], [844, 390, "landscape"], [390, 844, "portrait"]],
+    [[1024, 1366, "portrait"], [1366, 1024, "landscape"], [1024, 1366, "portrait"]],
+    [[1366, 1024, "landscape"], [1024, 1366, "portrait"], [1366, 1024, "landscape"]],
+  ]) {
+    for (const [width, height, orientation] of sequence) {
+      const root = document.getElementById("root");
+      root.dataset.appLayout = width < 1000 ? "mobile" : width < 1100 ? "tablet" : "desktop";
+      root.dataset.appOrientation = orientation;
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: width });
+      Object.defineProperty(window, "innerHeight", { configurable: true, value: height });
+      selectors.forEach((selector, index) => {
+        assert.equal(document.querySelector(selector), sharedSections[index], `${width}x${height} preserves ${selector}`);
+      });
+    }
   }
 });
