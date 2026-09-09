@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { JSDOM } from "jsdom";
 import React, { act } from "react";
 import { createServer } from "vite";
+import { getProfessionalHomeGreeting } from "../src/utils/professionalHomeGreeting.js";
 
 let dom, vite, createRoot;
 const globals = new Map();
@@ -61,7 +62,8 @@ test("Professional lead priority, useful zero schedule and exact approved shortc
   assert.ok(text.indexOf("At a Glance") < text.indexOf("Quick Access"));
   assert.match(text, /Interior Painting/); assert.match(text, /Cape Coral, FL/);
   assert.match(text, /Today's Schedule0/); assert.match(text, /2 visits need scheduling/);
-  assert.match(document.querySelector(".business-dashboard-header-section").textContent, /Meetro.*Real work\. Real opportunity\..*Good morning, William.*Review opportunities.*Keep your business moving forward\..*Ask Meetro.*Continue Work/s);
+  const expectedGreeting = getProfessionalHomeGreeting({ name: "William Molina" });
+  assert.match(document.querySelector(".business-dashboard-header-section").textContent, new RegExp(`Meetro.*Real work\\. Real opportunity\\..*${expectedGreeting}.*Review opportunities.*Keep your business moving forward\\..*Ask Meetro.*Continue Work`, "s"));
   assert.equal(document.querySelectorAll(".business-dashboard-hero-actions button").length, 2);
   assert.ok(document.querySelector(".home-dashboard-leads-icon"));
   assert.equal(document.querySelector(".home-dashboard-leads-new-badge").textContent, "1 NEW");
@@ -82,6 +84,24 @@ test("Professional lead priority, useful zero schedule and exact approved shortc
   assert.equal(localStorage.getItem("meetroWorkCenterTab"), "schedule");
   assert.ok(document.querySelector(".home-dashboard-notification"));
   assert.ok(w.calls.every((call) => call.method === "GET"));
+});
+
+test("Professional Home greeting follows the local device daypart boundaries", () => {
+  for (const [hour, expected] of [
+    [8, "Good morning, Willy"],
+    [13, "Good afternoon, Willy"],
+    [18, "Good evening, Willy"],
+    [22, "Good evening, Willy"],
+    [2, "Good evening, Willy"],
+  ]) {
+    assert.equal(
+      getProfessionalHomeGreeting({
+        name: "Willy Molina",
+        now: new Date(2026, 8, 8, hour, 0, 0),
+      }),
+      expected
+    );
+  }
 });
 test("Homeowner projects, functional Active/History controls and service entries remain role specific", async (t) => {
   const w = await mount(t, "Home");
@@ -105,6 +125,12 @@ test("dashboard layout protects narrow phones and scales metrics/tools without c
   assert.match(css, /business-dashboard-glance-grid \{\s*grid-template-columns: repeat\(3, minmax\(0, 1fr\)\) !important/);
   assert.match(css, /business-dashboard-quick-access-grid \{\s*grid-template-columns: repeat\(4, minmax\(0, 1fr\)\) !important/);
   assert.match(css, /\.business-dashboard-quick-access \{[\s\S]*?overflow: visible !important/);
+  assert.match(css, /business-dashboard \.business-dashboard-hero-card \{[\s\S]*?overflow: visible !important/);
+  const mobileGreetingRule = css.slice(
+    css.lastIndexOf('#root[data-app-layout="mobile"] .business-dashboard .business-dashboard-hero-card .home-dashboard-greeting'),
+    css.indexOf("}", css.lastIndexOf('#root[data-app-layout="mobile"] .business-dashboard .business-dashboard-hero-card .home-dashboard-greeting')) + 1
+  );
+  assert.doesNotMatch(mobileGreetingRule, /overflow|clip|translate|margin-left|left:/);
   assert.match(css, /business-dashboard-header-section \{[\s\S]*safe-area-inset-top/);
   assert.match(css, /home-help-action-grid \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\) !important/);
   assert.match(css, /\.business-dashboard, \.homeowner-home-dashboard\) ~ \.meetro-assistant-launcher/);

@@ -897,6 +897,7 @@
 
   #root[data-app-layout="mobile"] .business-dashboard .business-dashboard-hero-card {
     padding: 0 !important;
+    overflow: visible !important;
     color: #FFF !important;
     background: transparent !important;
   }

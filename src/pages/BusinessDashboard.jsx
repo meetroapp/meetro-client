@@ -27,6 +27,10 @@ import {
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { PROFESSIONAL_OPPORTUNITY_STATUS } from "../utils/professionalOpportunityState";
 import {
+  getProfessionalHomeDaypart,
+  getProfessionalHomeGreetingRefreshDelay,
+} from "../utils/professionalHomeGreeting.js";
+import {
   PROFESSIONAL_OPPORTUNITY_PHASE,
   requestProfessionalOpportunities,
   subscribeProfessionalOpportunities,
@@ -73,6 +77,9 @@ function BusinessDashboard({ setPage }) {
   const [leadStatus, setLeadStatus] = useState(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
   const [authoritativeLeads, setAuthoritativeLeads] = useState([]);
   const [canonicalSchedule, setCanonicalSchedule] = useState(null);
+  const [professionalHomeDaypart, setProfessionalHomeDaypart] = useState(() =>
+    getProfessionalHomeDaypart()
+  );
   const legacyEmergencyAuthorityEnabled =
     canReadLegacyWorkflowStorage();
 
@@ -145,6 +152,33 @@ function BusinessDashboard({ setPage }) {
       window.removeEventListener("languageChanged", handleLanguageChange);
       window.removeEventListener("meetro-language-change", handleLanguageChange);
       window.removeEventListener("meetroLanguageChanged", handleLanguageChange);
+    };
+  }, []);
+
+  useEffect(() => {
+    let boundaryTimer = 0;
+
+    const refreshLocalDaypart = () => {
+      const now = new Date();
+      setProfessionalHomeDaypart(getProfessionalHomeDaypart(now));
+      window.clearTimeout(boundaryTimer);
+      boundaryTimer = window.setTimeout(
+        refreshLocalDaypart,
+        getProfessionalHomeGreetingRefreshDelay(now)
+      );
+    };
+    const refreshWhenVisible = () => {
+      if (!document.hidden) refreshLocalDaypart();
+    };
+
+    refreshLocalDaypart();
+    window.addEventListener("focus", refreshLocalDaypart);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearTimeout(boundaryTimer);
+      window.removeEventListener("focus", refreshLocalDaypart);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
     };
   }, []);
 
@@ -732,6 +766,9 @@ function BusinessDashboard({ setPage }) {
     },
   };
   const text = dashboardText[language] || dashboardText.en;
+  const professionalHomeGreeting = greetingName
+    ? `${professionalHomeDaypart}, ${greetingName}`
+    : professionalHomeDaypart;
   const openBusinessProfile = () => {
     localStorage.setItem("contractorProfileReturnPage", "businessDashboard");
     setPage("contractorProfile");
@@ -958,11 +995,11 @@ function BusinessDashboard({ setPage }) {
           <section className="business-dashboard-hero-card" style={heroCard}>
             <div style={heroHeader}>
               <div className="business-dashboard-desktop-intro">
-                <h1 style={heroTitle}>{language === "en" ? `Good morning${greetingName ? `, ${greetingName}` : ""}` : text.dashboard}</h1>
+                <h1 style={heroTitle}>{language === "en" ? professionalHomeGreeting : text.dashboard}</h1>
                 <p className="home-dashboard-greeting" style={heroSubtitle}>{language === "en" ? "Handle what matters first." : text.subtitle}</p>
               </div>
               <div className="business-dashboard-mobile-intro">
-                <p className="home-dashboard-greeting" style={heroSubtitle}>{language === "en" ? `Good morning${greetingName ? `, ${greetingName}` : ""}` : text.dashboard}</p>
+                <p className="home-dashboard-greeting" style={heroSubtitle}>{language === "en" ? professionalHomeGreeting : text.dashboard}</p>
                 <h1 style={heroTitle}>{text.reviewOpportunities}</h1>
                 <p className="business-dashboard-hero-support">{text.subtitle}</p>
               </div>
