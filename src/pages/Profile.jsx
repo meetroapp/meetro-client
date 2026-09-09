@@ -2560,7 +2560,7 @@ const avatarCircle = {
 };
 
 const pageTitle = {
-  fontSize: "42px",
+  fontSize: "clamp(28px, 4vw, 34px)",
   margin: "0 0 10px",
   color: "white",
 };

@@ -1,6 +1,3 @@
-@font-face { font-family: Poppins; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/poppins/Poppins-Regular.ttf') format('truetype'); }
-@font-face { font-family: Poppins; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/poppins/Poppins-SemiBold.ttf') format('truetype'); }
-@font-face { font-family: Poppins; font-style: normal; font-weight: 700; font-display: swap; src: url('/fonts/poppins/Poppins-Bold.ttf') format('truetype'); }
 /* Home content stays visually distinct from the persistent navigation shell. */
 .business-dashboard, .homeowner-home-dashboard {
   background: #FAFAFC !important;

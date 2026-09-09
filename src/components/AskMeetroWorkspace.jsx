@@ -124,6 +124,12 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
     if (action.kind === "QUOTE_TO_INVOICE") stageQuoteInvoiceInstruction(action.route, action.instruction);
     setReview(null); setPage(action.route);
   }
+  // Voice fallback is informational; failed actions retain their alert presentation.
+  const isVoiceNotice = [
+    "Voice is unavailable. You can type your message.",
+    "Voice is unavailable in this browser. You can type your message.",
+    "Voice could not hear you. Try again or type your message.",
+  ].includes(error);
   const subject = context.label || context.draftId || context.jobId || context.invoiceId || context.requestId || context.conversationId || context.relationshipId;
   return <div className={`ask-meetro-shell${viewport?.keyboard ? " is-keyboard-open" : ""}`} style={viewport ? { height: viewport.height, top: viewport.top } : undefined}>
     <main className="ask-meetro-workspace" aria-labelledby="ask-meetro-title">
@@ -137,7 +143,7 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
         <div ref={bottomRef} />
       </div>
       <footer className="ask-meetro-footer">
-        {error ? <p className="ask-meetro-error" role="alert">{error}</p> : null}
+        {error ? <p className={isVoiceNotice ? "ask-meetro-notice" : "ask-meetro-error"} role={isVoiceNotice ? "status" : "alert"}>{error}</p> : null}
         {files.length ? <section className="ask-meetro-attachments" aria-label="Local attachments">{files.map((file, index) => <div key={`${file.name}-${index}`}>{file.url ? <img src={file.url} alt={file.name} /> : <MeetroIcon name="requestDetails" size={20} decorative />}<span>{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeFile(index)}>×</button></div>)}<p>Local attachments are not yet saved to a Meetro record. Use the Project Folder's reviewed upload to document them.</p></section> : null}
         <form className="ask-meetro-composer" onSubmit={send}><input ref={attachRef} type="file" multiple hidden onChange={attach} /><input ref={photoRef} type="file" accept="image/*" capture="environment" multiple hidden onChange={attach} /><button type="button" aria-label="Attach" onClick={() => attachRef.current?.click()}><MeetroIcon name="addProject" size={20} decorative /></button><button type="button" aria-label="Photo" onClick={() => photoRef.current?.click()}><MeetroIcon name="portfolio" size={20} decorative /></button><textarea ref={composerRef} aria-label="Ask Meetro anything" placeholder="Ask Meetro anything..." value={input} maxLength={5000} rows={1} onChange={(event) => setInput(event.target.value)} /><button type="button" aria-label={listening ? "Stop voice" : "Voice"} aria-pressed={listening} onClick={voice}><MeetroIcon name="microphone" size={20} decorative /></button><button type="submit" className="ask-meetro-send" aria-label="Send" disabled={!input.trim() || busy}><MeetroIcon name="publishProject" size={20} decorative /></button></form>
         <p className="ask-meetro-principle">Ask Meetro talks. Meetro records.</p>

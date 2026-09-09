@@ -130,3 +130,21 @@ test("account changes dismiss Ask and clear its prior conversation", async (t) =
   assert.ok(document.querySelector(".ask-meetro-welcome"));
   assert.equal(document.querySelector(".ask-meetro-actions"), null);
 });
+
+test("unavailable voice is a calm status and preserves typed input and action authority", async (t) => {
+  const w = await mount(t);
+  const before = w.calls.length;
+  await w.click("Voice");
+  const notice = document.querySelector(".ask-meetro-notice");
+  assert.ok(notice);
+  assert.equal(notice.getAttribute("role"), "status");
+  assert.equal(notice.textContent, "Voice is unavailable in this browser. You can type your message.");
+  assert.equal(document.querySelector(".ask-meetro-error"), null);
+  assert.equal(document.querySelector(".ask-meetro-principle").textContent, "Ask Meetro talks. Meetro records.");
+  assert.equal(w.calls.length, before); assert.deepEqual(w.routes, []);
+  await w.send("Create a new quote");
+  assert.ok(document.querySelector(".ask-meetro-actions"));
+  assert.equal(document.querySelector(".ask-meetro-receipts"), null);
+  assert.ok(w.calls.every((call) => !call.method || call.method === "GET"));
+  assert.deepEqual(w.routes, []);
+});

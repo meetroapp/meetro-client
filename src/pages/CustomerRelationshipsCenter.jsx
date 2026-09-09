@@ -654,8 +654,8 @@ const page = {
   overflowX: "hidden",
   WebkitOverflowScrolling: "touch",
   boxSizing: "border-box",
-  background: "#f8faf7",
-  fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif",
+  background: "var(--meetro-color-background, #FAFAFC)",
+  fontFamily: "var(--meetro-font-family, Poppins, system-ui, sans-serif)",
 };
 
 const workspace = { width: "100%", maxWidth: "980px", minWidth: 0, margin: "24px auto 0" };

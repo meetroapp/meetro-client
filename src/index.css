@@ -1,3 +1,6 @@
+@font-face { font-family: Poppins; font-style: normal; font-weight: 400; font-display: swap; src: url('/fonts/poppins/Poppins-Regular.ttf') format('truetype'); }
+@font-face { font-family: Poppins; font-style: normal; font-weight: 600; font-display: swap; src: url('/fonts/poppins/Poppins-SemiBold.ttf') format('truetype'); }
+@font-face { font-family: Poppins; font-style: normal; font-weight: 700; font-display: swap; src: url('/fonts/poppins/Poppins-Bold.ttf') format('truetype'); }
 
 html,
 body,
@@ -87,7 +90,7 @@ body,
   flex: 0 0 44px;
   border: 1px solid var(--meetro-border-warm, #ded8ca);
   border-radius: 50%;
-  background: #fffdf8;
+  background: var(--meetro-surface-paper);
   color: #173c2b;
   font-size: 24px;
   cursor: pointer;
@@ -542,7 +545,7 @@ body,
   justify-content: center;
   flex: 0 0 auto;
   border-radius: 50%;
-  background: #edf5eb;
+  background: var(--meetro-surface-sage);
   color: #1f5b39;
 }
 
@@ -635,7 +638,7 @@ body,
   border-radius: 8px;
   background: rgba(255, 255, 255, 0.9);
   box-shadow: 0 12px 34px rgba(28, 49, 31, 0.06);
-  color: #172317;
+  color: var(--meetro-color-ink);
   text-align: center;
   box-sizing: border-box;
 }
@@ -677,7 +680,7 @@ body,
   padding: 6px 11px;
   border: 1px solid rgba(31, 77, 52, 0.2);
   border-radius: 999px;
-  background: #edf5eb;
+  background: var(--meetro-surface-sage);
   color: #28552e;
   font-size: 12px;
   font-weight: 850;
@@ -713,7 +716,7 @@ body,
   min-height: 64px;
   padding: 10px 15px;
   box-sizing: border-box;
-  color: #172317;
+  color: var(--meetro-color-ink);
   text-align: left;
 }
 
@@ -744,7 +747,7 @@ body,
   border: 1px solid #d4ddd5;
   border-radius: 8px;
   background: #f4f6f4;
-  color: #172317;
+  color: var(--meetro-color-ink);
   cursor: pointer;
 }
 
@@ -968,7 +971,7 @@ body,
   border: 1px solid #cfd6ca;
   border-radius: 999px;
   padding: 9px 16px;
-  background: #fffdf8;
+  background: var(--meetro-surface-paper);
   color: #31543e;
   font-weight: 750;
 }
@@ -1483,7 +1486,7 @@ body,
   padding: 12px;
   border: 1px solid #ded8ca;
   border-radius: 8px;
-  background: #fffdf8;
+  background: var(--meetro-surface-paper);
 }
 
 .hiring-settings-question > label,
@@ -1633,7 +1636,7 @@ body {
   overflow: hidden;
   border: 1px solid #d9d0bd;
   border-radius: 8px;
-  background: #fffdf8;
+  background: var(--meetro-surface-paper);
   box-shadow: 0 24px 70px rgba(20, 45, 31, 0.24);
   text-align: left;
 }
@@ -1754,7 +1757,7 @@ body {
   padding: 10px 16px;
   border: 1px solid #c8d0c5;
   border-radius: 7px;
-  background: #fffdf8;
+  background: var(--meetro-surface-paper);
   color: #173f2a;
   font-weight: 800;
 }
@@ -1811,33 +1814,39 @@ body {
   --meetro-layout-companion-width: 388px;
   --meetro-layout-companion-max-height: 680px;
   --meetro-layout-desktop-gutter: 32px;
-  --meetro-color-forest: #1f4d34;
-  --meetro-color-forest-deep: #14351f;
-  --meetro-color-sage: #dfe8d8;
-  --meetro-color-sage-soft: #eef4ea;
-  --meetro-color-cream: #fbf6ed;
-  --meetro-color-paper: #fffdf8;
+  --meetro-color-forest: #0B5D3B;
+  --meetro-color-forest-deep: #063D26;
+  --meetro-color-sage: #E8F5EE;
+  --meetro-color-sage-soft: #E8F5EE;
+  --meetro-color-cream: #F7F6F2;
+  --meetro-color-paper: #FFFFFF;
+  --meetro-color-accent: #10B981;
+  --meetro-color-background: #FAFAFC;
+  --meetro-color-danger: #EF4444;
+  --meetro-color-warning: #F59E0B;
+  --meetro-color-info: #3B82F6;
+  --meetro-color-purple: #8B5CF6;
+  --meetro-font-family: Poppins, system-ui, sans-serif;
   --meetro-color-wood: #b7791f;
   --meetro-color-coffee: #4a3428;
-  --meetro-color-ink: #172317;
-  --meetro-color-charcoal: #172317;
-  --meetro-color-charcoal-soft: #273326;
-  --meetro-color-muted: #65705f;
-  --meetro-color-line: rgba(78, 68, 55, 0.12);
+  --meetro-color-ink: #111827;
+  --meetro-color-charcoal: #111827;
+  --meetro-color-charcoal-soft: #374151;
+  --meetro-color-muted: #6B7280;
+  --meetro-color-line: #E5E7EB;
   --meetro-gradient-community-page:
-    radial-gradient(circle at 12% 0%, rgba(183, 121, 31, 0.13), transparent 30%),
-    linear-gradient(180deg, #fffaf1 0%, #fbf6ed 44%, #eef4ea 100%);
+    linear-gradient(180deg, #FAFAFC 0%, #F7F6F2 60%, #E8F5EE 100%);
   --meetro-gradient-community-hero:
-    linear-gradient(135deg, rgba(20, 53, 31, 0.96), rgba(31, 77, 52, 0.9));
+    linear-gradient(135deg, #063D26, #0B5D3B);
   --meetro-gradient-community-action:
-    linear-gradient(135deg, #14351f, #1f4d34);
+    linear-gradient(135deg, #063D26, #0B5D3B);
   --meetro-gradient-selected-control:
-    linear-gradient(135deg, #172317, #273326);
-  --meetro-surface-paper: rgba(255, 253, 248, 0.94);
-  --meetro-surface-warm: rgba(251, 246, 237, 0.92);
-  --meetro-surface-sage: rgba(238, 244, 234, 0.9);
-  --meetro-shadow-soft: 0 16px 38px rgba(49, 35, 20, 0.08);
-  --meetro-shadow-lifted: 0 24px 70px rgba(49, 35, 20, 0.14);
+    linear-gradient(135deg, #111827, #374151);
+  --meetro-surface-paper: #FFFFFF;
+  --meetro-surface-warm: #F7F6F2;
+  --meetro-surface-sage: #E8F5EE;
+  --meetro-shadow-soft: 0 8px 24px rgba(17, 24, 39, 0.06);
+  --meetro-shadow-lifted: 0 16px 40px rgba(17, 24, 39, 0.12);
 }
 
 .meetro-address-workspace {
@@ -2292,7 +2301,7 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   border-radius: 18px;
   background: #fff;
   padding: 14px;
-  color: #172317;
+  color: var(--meetro-color-ink);
   font: inherit;
   font-size: 16px;
   line-height: 1.5;
@@ -2886,7 +2895,7 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   border-radius: 999px;
   padding: 6px 10px;
   background: var(--meetro-color-forest);
-  color: #fffdf8;
+  color: var(--meetro-surface-paper);
   font-size: 11px;
   font-weight: 950;
   line-height: 1;
@@ -2953,13 +2962,13 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
 
 .meetro-visual-hero {
   background: var(--meetro-gradient-community-hero);
-  color: #fffdf8;
+  color: var(--meetro-surface-paper);
   box-shadow: var(--meetro-shadow-lifted);
 }
 
 .meetro-visual-primary-button {
   background: var(--meetro-gradient-community-action);
-  color: #fffdf8;
+  color: var(--meetro-surface-paper);
   border: 1px solid rgba(255, 253, 248, 0.18);
   box-shadow: 0 14px 30px rgba(20, 53, 31, 0.20);
 }
@@ -3246,10 +3255,10 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   }
 }
 :root {
-  --text: #6b6375;
-  --text-h: #08060d;
-  --bg: #fff;
-  --border: #e5e4e7;
+  --text: var(--meetro-color-muted);
+  --text-h: var(--meetro-color-ink);
+  --bg: var(--meetro-color-background);
+  --border: var(--meetro-color-line);
   --code-bg: #f4f3ec;
   --accent: #aa3bff;
   --accent-bg: rgba(170, 59, 255, 0.1);
@@ -3258,13 +3267,13 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   --shadow:
     rgba(0, 0, 0, 0.1) 0 10px 15px -3px, rgba(0, 0, 0, 0.05) 0 4px 6px -2px;
 
-  --sans: system-ui, 'Segoe UI', Roboto, sans-serif;
-  --heading: system-ui, 'Segoe UI', Roboto, sans-serif;
+  --sans: var(--meetro-font-family);
+  --heading: var(--meetro-font-family);
   --mono: ui-monospace, Consolas, monospace;
 
   font: 18px/145% var(--sans);
   letter-spacing: 0.18px;
-  color-scheme: light dark;
+  color-scheme: light;
   color: var(--text);
   background: var(--bg);
   font-synthesis: none;
@@ -3277,26 +3286,8 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   }
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --text: #9ca3af;
-    --text-h: #f3f4f6;
-    --bg: #16171d;
-    --border: #2e303a;
-    --code-bg: #1f2028;
-    --accent: #c084fc;
-    --accent-bg: rgba(192, 132, 252, 0.15);
-    --accent-border: rgba(192, 132, 252, 0.5);
-    --social-bg: rgba(47, 48, 58, 0.5);
-    --shadow:
-      rgba(0, 0, 0, 0.4) 0 10px 15px -3px, rgba(0, 0, 0, 0.25) 0 4px 6px -2px;
-  }
-
-  #social .button-icon {
-    filter: invert(1) brightness(2);
-  }
-}
-
+/* The client uses light surfaces in both device appearance modes.
+   Keep heading tokens dark; a device dark preference must not bleach titles. */
 
 
 :root {
@@ -3799,11 +3790,11 @@ h2 {
 }
 
 h1 {
-  font-size: 56px;
-  letter-spacing: -1.68px;
+  font-size: 40px;
+  letter-spacing: -0.8px;
   margin: 32px 0;
   @media (max-width: 1024px) {
-    font-size: 36px;
+    font-size: 32px;
     margin: 20px 0;
   }
 }
@@ -3838,8 +3829,8 @@ code {
 html,
 body,
 #root {
-  background: #f5f5f7;
-  color: #111;
+  background: var(--meetro-color-background);
+  color: var(--meetro-color-ink);
 }
 
 * {
@@ -4087,7 +4078,7 @@ button {
   padding: clamp(24px, 5vw, 40px);
   border: 1px solid #d9e2d6;
   border-radius: 18px;
-  background: #fffdf8;
+  background: var(--meetro-surface-paper);
   box-shadow: 0 14px 34px rgba(31, 77, 52, 0.08);
   box-sizing: border-box;
   text-align: center;
@@ -4101,14 +4092,14 @@ button {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: #edf5eb;
-  color: #1f4d34;
+  background: var(--meetro-surface-sage);
+  color: var(--meetro-color-forest);
 }
 
 .hiring-truth-card h2,
 .notification-truth-card h2 {
   margin: 16px 0 0;
-  color: #14351f;
+  color: var(--meetro-color-forest-deep);
   font-size: clamp(22px, 4vw, 30px);
   line-height: 1.25;
 }
@@ -4117,7 +4108,7 @@ button {
 .notification-truth-card p {
   max-width: 600px;
   margin: 14px auto 0;
-  color: #5f6f62;
+  color: var(--meetro-color-muted);
   font-size: 16px;
   line-height: 1.6;
 }
@@ -4145,15 +4136,15 @@ button {
 
 .notification-truth-header h1 {
   margin: 0;
-  color: #14351f;
-  font-size: clamp(30px, 6vw, 42px);
+  color: var(--meetro-color-forest-deep);
+  font-size: clamp(28px, 4vw, 34px);
   line-height: 1.1;
 }
 
 .notification-truth-header span {
   display: block;
   margin-top: 8px;
-  color: #5f6f62;
+  color: var(--meetro-color-muted);
   font-size: 16px;
   line-height: 1.5;
 }
@@ -4169,7 +4160,7 @@ button {
   margin-bottom: 18px;
   border: 0;
   background: transparent;
-  color: #1f4d34;
+  color: var(--meetro-color-forest);
   font-weight: 800;
   cursor: pointer;
 }
@@ -4191,7 +4182,7 @@ button {
 .hiring-truth-public-header h1 {
   margin-top: 6px;
   color: #122b1b;
-  font-size: clamp(28px, 5vw, 42px);
+  font-size: clamp(28px, 4vw, 34px);
   line-height: 1.15;
 }
 
@@ -4213,7 +4204,7 @@ button {
     max(16px, env(safe-area-inset-left, 0px));
   overflow-x: hidden;
   box-sizing: border-box;
-  background: #f6f8f5;
+  background: var(--meetro-color-background);
 }
 
 .alert-center-header,
@@ -4249,8 +4240,8 @@ button {
 
 .alert-center-header h1 {
   margin: 0;
-  color: #14351f;
-  font-size: clamp(30px, 6vw, 42px);
+  color: var(--meetro-color-forest-deep);
+  font-size: clamp(28px, 4vw, 34px);
   line-height: 1.1;
   overflow-wrap: anywhere;
 }
@@ -4259,7 +4250,7 @@ button {
   display: block;
   max-width: 640px;
   margin-top: 8px;
-  color: #5f6f62;
+  color: var(--meetro-color-muted);
   font-size: 16px;
   line-height: 1.5;
   overflow-wrap: anywhere;
@@ -4304,7 +4295,7 @@ button {
 .alert-center-filters button.is-selected {
   border-color: #b7cbb8;
   background: #fff;
-  color: #14351f;
+  color: var(--meetro-color-forest-deep);
   box-shadow: 0 3px 10px rgba(31, 77, 52, 0.08);
 }
 
@@ -4318,11 +4309,11 @@ button {
   padding: 11px 16px;
   border: 1px solid #1f4d34;
   background: #fff;
-  color: #1f4d34;
+  color: var(--meetro-color-forest);
 }
 
 .alert-center-button--primary {
-  background: #1f4d34;
+  background: var(--meetro-color-forest);
   color: #fff;
 }
 
@@ -4361,7 +4352,7 @@ button {
 }
 
 .alert-center-read-all strong {
-  color: #14351f;
+  color: var(--meetro-color-forest-deep);
 }
 
 .alert-center-read-all p {
@@ -4444,7 +4435,7 @@ button {
   min-height: 28px;
   padding: 4px 9px;
   border-radius: 999px;
-  background: #edf5eb;
+  background: var(--meetro-surface-sage);
   color: #31533a;
   font-size: 12px;
   font-weight: 800;
@@ -4468,7 +4459,7 @@ button {
 
 .alert-center-card h2 {
   margin: 14px 0 0;
-  color: #14351f;
+  color: var(--meetro-color-forest-deep);
   font-size: clamp(19px, 4vw, 24px);
   line-height: 1.25;
   overflow-wrap: anywhere;
@@ -4491,7 +4482,7 @@ button {
 .alert-center-card__preview {
   padding: 12px;
   border-left: 3px solid #a9bea9;
-  background: #f6f8f5;
+  background: var(--meetro-color-background);
   color: #53645a;
   white-space: pre-wrap;
 }
@@ -4537,7 +4528,7 @@ button {
 
 .alert-center-state-card h2 {
   margin: 14px 0 0;
-  color: #14351f;
+  color: var(--meetro-color-forest-deep);
   font-size: clamp(20px, 4vw, 26px);
   overflow-wrap: anywhere;
 }
@@ -4561,8 +4552,8 @@ button {
   align-items: center;
   justify-content: center;
   border-radius: 50%;
-  background: #edf5eb;
-  color: #1f4d34;
+  background: var(--meetro-surface-sage);
+  color: var(--meetro-color-forest);
 }
 
 @media (min-width: 700px) {
@@ -4949,7 +4940,7 @@ button {
   inline-size: 100%;
   border: 1px solid var(--meetro-color-forest, #1f4d34);
   border-radius: 14px;
-  background: #fffdf8;
+  background: var(--meetro-surface-paper);
   color: var(--meetro-color-forest, #1f4d34);
   padding: 11px 16px;
   font: inherit;

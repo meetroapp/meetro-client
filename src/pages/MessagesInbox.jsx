@@ -7190,7 +7190,7 @@ const messagesHubHeader = {
 const messagesHubTitle = {
   margin: 0,
   color: "#123e29",
-  fontSize: "clamp(32px, 4.2vw, 43px)",
+  fontSize: "clamp(28px, 4vw, 34px)",
   lineHeight: 1.04,
   fontWeight: "900",
   letterSpacing: "-0.035em",
