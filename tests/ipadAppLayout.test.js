@@ -32,6 +32,7 @@ const navSource = readFileSync(new URL("../src/components/BottomNav.jsx", import
 const messagesSource = readFileSync(new URL("../src/pages/MessagesInbox.jsx", import.meta.url), "utf8");
 const homeSource = readFileSync(new URL("../src/pages/Home.jsx", import.meta.url), "utf8");
 const dashboardSource = readFileSync(new URL("../src/pages/BusinessDashboard.jsx", import.meta.url), "utf8");
+const homeDashboardStyles = readFileSync(new URL("../src/styles/homeDashboard.css", import.meta.url), "utf8");
 const profileSource = readFileSync(new URL("../src/pages/ContractorProfile.jsx", import.meta.url), "utf8");
 const companionSource = readFileSync(new URL("../src/components/MeetroAssistant.jsx", import.meta.url), "utf8");
 const viewportSource = readFileSync(new URL("../index.html", import.meta.url), "utf8");
@@ -816,7 +817,9 @@ test("iPad navigation labels and brand copy never split inside words", () => {
 test("major application areas use desktop structure at iPad width", () => {
   assert.match(homeSource, /#root\[data-app-layout="desktop"\] \.home-community-entry/);
   assert.match(messagesSource, /const isSplitPane = communicationLayout\.mode === "desktop"/);
-  assert.match(dashboardSource, /#root\[data-app-layout="desktop"\] \.app-page\.business-dashboard/);
+  assert.match(homeDashboardStyles, /#root\[data-app-layout="tablet"\] \.business-dashboard/);
+  assert.match(homeDashboardStyles, /#root\[data-app-layout="desktop"\] \.business-dashboard/);
+  assert.doesNotMatch(dashboardSource, /@media \(min-width: 1100px\)/);
   assert.match(profileSource, /#root\[data-app-layout="desktop"\] \.app-page\.business-profile-page/);
   assert.match(companionSource, /data-companion-layout=\{companionLayoutMode\}/);
   assert.doesNotMatch(messagesSource, /pointer: fine/);

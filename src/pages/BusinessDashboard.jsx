@@ -377,6 +377,22 @@ function BusinessDashboard({ setPage }) {
   const activeProjectsCount = professionalMetrics.activeWorkCount;
   const pendingQuotesCount = professionalMetrics.pendingQuoteCount;
   const quoteResponseAlertCount = professionalMetrics.quoteResponseAlertCount;
+  const activeWorkPreview = professionalMetrics.activeWorkItems?.[0];
+  const pendingQuotePreview = professionalMetrics.pendingQuotes?.[0];
+  const activeWorkPreviewLabel =
+    activeWorkPreview?.projectTitle ||
+    activeWorkPreview?.project_title ||
+    activeWorkPreview?.jobTitle ||
+    activeWorkPreview?.title ||
+    activeWorkPreview?.service ||
+    "";
+  const pendingQuotePreviewLabel =
+    pendingQuotePreview?.projectTitle ||
+    pendingQuotePreview?.project_title ||
+    pendingQuotePreview?.jobTitle ||
+    pendingQuotePreview?.title ||
+    pendingQuotePreview?.customerName ||
+    "";
 
   const canonicalScheduleAttentionCount = canonicalScheduleCounts
     ? canonicalScheduleCounts.needsScheduling +
@@ -481,6 +497,9 @@ function BusinessDashboard({ setPage }) {
   }
 
   const unreadMessages = liveUnreadCount;
+  const greetingName = String(localStorage.getItem("userName") || "")
+    .trim()
+    .split(/\s+/)[0];
 
   const dashboardText = {
     en: {
@@ -854,157 +873,32 @@ function BusinessDashboard({ setPage }) {
             outline-offset: 2px;
           }
 
-          @media (min-width: 1100px) {
-            #root[data-app-layout="desktop"] .app-page.business-dashboard.meetro-wide-page {
-              --meetro-dashboard-workspace-max: min(var(--meetro-layout-wide-mid-max), var(--meetro-workspace-max-width));
-              --meetro-dashboard-workspace-extra: max(0px, calc((100vw - var(--meetro-sidebar-width) - var(--meetro-dashboard-workspace-max)) / 2));
-              width: min(calc(100vw - var(--meetro-sidebar-width)), var(--meetro-dashboard-workspace-max)) !important;
-              max-width: var(--meetro-dashboard-workspace-max) !important;
-              margin-left: calc(var(--meetro-sidebar-width) + var(--meetro-dashboard-workspace-extra)) !important;
-              margin-right: var(--meetro-dashboard-workspace-extra) !important;
-              padding-top: clamp(24px, 2.8vw, 40px) !important;
-              padding-left: clamp(24px, 3vw, 48px) !important;
-              padding-right: clamp(24px, 3vw, 48px) !important;
-            }
-
-            .business-dashboard-content-lane {
-              display: block !important;
-              width: 100%;
-              max-width: 1180px;
-              margin: 0;
-            }
-
-            .business-dashboard-header-section {
-              padding: 18px !important;
-              margin-bottom: 18px !important;
-              border-radius: 28px !important;
-            }
-
-            .business-dashboard-hero-card {
-              padding: 18px !important;
-              border-radius: 24px !important;
-            }
-
-            .business-dashboard-hero-card h1 {
-              font-size: clamp(24px, 2.1vw, 30px) !important;
-            }
-
-            .business-dashboard-status-strip {
-              margin-bottom: 14px !important;
-            }
-
-            .business-dashboard-today-focus {
-              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-              padding: 10px !important;
-              margin-bottom: 10px !important;
-            }
-
-            .business-dashboard-hero-context,
-            .business-dashboard-primary-action {
-              display: flex !important;
-            }
-
-            .business-dashboard-quick-access {
-              display: grid !important;
-            }
-
-            .business-dashboard-quick-access-item--desktop-duplicate {
-              display: none !important;
-            }
-
-            .business-dashboard-community-entry {
-              display: block !important;
-            }
-
-            .business-dashboard-quick-access-grid {
-              grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-            }
-
-            .business-dashboard-glance-grid {
-              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-              gap: 10px !important;
-            }
-
-            .business-dashboard-main-grid {
-              display: grid !important;
-              grid-template-columns: minmax(0, 1fr);
-              gap: 18px;
-              align-items: start;
-            }
-
-            .business-dashboard-primary-column,
-            .business-dashboard-secondary-column {
-              display: grid !important;
-              gap: 18px;
-              min-width: 0;
-            }
-
-            .business-dashboard-section-card,
-            .business-dashboard-leads-card {
-              margin-bottom: 0 !important;
-              padding: 18px !important;
-              border-radius: 22px !important;
-            }
-
-            .business-dashboard-tools-row {
-              display: grid !important;
-              grid-template-columns: minmax(0, 1fr);
-              gap: 18px;
-              align-items: stretch;
-              margin-top: 18px;
-            }
-
-            .business-dashboard-tools-section {
-              margin-bottom: 0 !important;
-            }
-
-            .business-dashboard-tools-section > button,
-            .business-dashboard-plan-card {
-              min-height: 100%;
-            }
-
-            @media (min-width: 1100px) {
-              .business-dashboard-quick-access-grid {
-                grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
-              }
-
-              .business-dashboard-glance-grid {
-                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-              }
-
-              .business-dashboard-main-grid {
-                grid-template-columns: minmax(0, 1fr);
-              }
-
-              .business-dashboard-tools-row {
-                grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.92fr);
-              }
-            }
-          }
         `}
       </style>
       <div className="business-dashboard-content-lane" style={dashboardContentLane}>
         <section className="business-dashboard-header-section" style={dashboardHeaderSection}>
           <div className="home-dashboard-topbar" style={topBar}>
-            <div style={brandWrap}>
-              <span style={brandMain}>Meetro</span>
-              <span style={brandBadge}>Business</span>
+            <div className="home-dashboard-brand-wrap" style={brandWrap}>
+              <span className="home-dashboard-brand-mark" aria-hidden="true">M</span>
+              <span className="home-dashboard-brand-copy">
+                <strong style={brandMain}>Meetro</strong>
+                <small className="business-dashboard-desktop-brand-badge" style={brandBadge}>Business</small>
+                <small className="business-dashboard-mobile-brand-tagline" style={brandBadge}>Real work. Real opportunity.</small>
+              </span>
             </div>
-
-            <button
-              onClick={() => {
-                openBusinessProfile();
-              }}
-              style={profileMini}
-            >
-              {profile?.image_url ? (
-                <img src={profile.image_url} alt={businessName} style={miniAvatar} />
-              ) : (
-                <span style={profileInitial}>
-                  {String(businessName || "B").charAt(0).toUpperCase()}
-                </span>
-              )}
-            </button>
+            <div className="home-dashboard-topbar-actions">
+              <button className="home-dashboard-notification" type="button" aria-label="Open communications" onClick={() => setPage("messagesInbox")}>
+                <MeetroIcon name="notifications" size={20} decorative />
+                {unreadMessages > 0 ? <span className="home-dashboard-notification-count">{unreadMessages}</span> : null}
+              </button>
+              <button className="home-dashboard-ask-button" type="button" onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}>
+                <MeetroIcon name="aiHelp" size={18} decorative />
+                <span>Ask Meetro</span>
+              </button>
+              <button className="home-dashboard-profile-button" onClick={openBusinessProfile} style={profileMini}>
+                {profile?.image_url ? <img src={profile.image_url} alt={businessName} style={miniAvatar} /> : <span style={profileInitial}>{String(businessName || "B").charAt(0).toUpperCase()}</span>}
+              </button>
+            </div>
           </div>
 
           {hasActiveEmergency && (
@@ -1063,12 +957,14 @@ function BusinessDashboard({ setPage }) {
 
           <section className="business-dashboard-hero-card" style={heroCard}>
             <div style={heroHeader}>
-              <div>
-                <p className="home-dashboard-greeting">{language === "en" ? "Welcome back" : text.dashboard}, {businessName}</p>
+              <div className="business-dashboard-desktop-intro">
+                <h1 style={heroTitle}>{language === "en" ? `Good morning${greetingName ? `, ${greetingName}` : ""}` : text.dashboard}</h1>
+                <p className="home-dashboard-greeting" style={heroSubtitle}>{language === "en" ? "Handle what matters first." : text.subtitle}</p>
+              </div>
+              <div className="business-dashboard-mobile-intro">
+                <p className="home-dashboard-greeting" style={heroSubtitle}>{language === "en" ? `Good morning${greetingName ? `, ${greetingName}` : ""}` : text.dashboard}</p>
                 <h1 style={heroTitle}>{text.reviewOpportunities}</h1>
-
-                <p style={heroSubtitle}>{text.subtitle}</p>
-                <p style={businessNameLine}>{businessName}</p>
+                <p className="business-dashboard-hero-support">{text.subtitle}</p>
               </div>
 
               <div
@@ -1121,19 +1017,57 @@ function BusinessDashboard({ setPage }) {
               </button>
             </div>
 
+            <div className="business-dashboard-hero-actions">
+              <button
+                className="business-dashboard-hero-ask"
+                type="button"
+                onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}
+              >
+                <MeetroIcon name="aiHelp" size={18} decorative />
+                <span>Ask Meetro</span>
+              </button>
+              <button
+                className="business-dashboard-hero-continue"
+                type="button"
+                onClick={dashboardNextAction.onClick}
+              >
+                <span>{text.continueWork}</span>
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+
 
           </section>
         </section>
 
             <section className="business-dashboard-leads-card" style={leadsCard}>
-              <div style={sectionTop}>
-                <h2 style={sectionTitle}>{text.newLeads}</h2>
-
+              <div className="home-dashboard-leads-heading">
+                <span className="home-dashboard-leads-icon" aria-hidden="true">
+                  <MeetroIcon name="leadPerson" size={28} decorative />
+                </span>
+                <div className="home-dashboard-leads-heading-copy">
+                  <div className="home-dashboard-leads-title-row">
+                    {leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.READY ? (
+                      <span className="home-dashboard-leads-new-badge">{authoritativeLeads.length} NEW</span>
+                    ) : null}
+                    <h2 style={sectionTitle}>{text.newLeads}</h2>
+                  </div>
+                  {leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.READY ? (
+                    <>
+                      <strong className="home-dashboard-leads-count">
+                        {authoritativeLeads.length} new {authoritativeLeads.length === 1 ? "lead" : "leads"}
+                      </strong>
+                      <p className="home-dashboard-leads-support">Review the authoritative opportunities available to your business.</p>
+                    </>
+                  ) : null}
+                </div>
                 <button
-                  style={linkButton}
+                  className="home-dashboard-leads-more"
+                  type="button"
+                  aria-label={text.viewAllLeads}
                   onClick={() => setPage("businessLeads")}
                 >
-                  {text.viewAllLeads} →
+                  •••
                 </button>
               </div>
 
@@ -1145,47 +1079,28 @@ function BusinessDashboard({ setPage }) {
                 ) : leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.EMPTY ? (
                   <><strong>No matching requests are available right now.</strong><p>Authorized request matching is active for your saved services and service area.</p></>
                 ) : (
-                  <><div className="home-dashboard-lead-summary"><strong>{authoritativeLeads.length} matching {authoritativeLeads.length === 1 ? "request" : "requests"}</strong><span>{authoritativeLeads.length} AVAILABLE</span></div>
-                  {authoritativeLeads.slice(0, 1).map((lead) => <div className="home-dashboard-lead" key={lead.request_id}>
+                  authoritativeLeads.slice(0, 1).map((lead) => <div className="home-dashboard-lead" key={lead.request_id}>
                     <h3>{lead.project_title || lead.title}</h3>
                     <p>{[lead.city, lead.state].filter(Boolean).join(", ")}</p>
                     <p>{lead.project_description || lead.description}</p>
                     <button type="button" onClick={() => setPage("businessLeads")}>Review Lead →</button>
-                  </div>)}</>
+                  </div>)
                 )}
               </div>
             </section>
-        <section className="home-dashboard-glance" aria-labelledby="dashboard-glance-title"><h2 id="dashboard-glance-title">At a Glance</h2>
+        <section className="home-dashboard-glance" aria-labelledby="dashboard-glance-title">
+          <div className="business-dashboard-section-heading">
+            <h2 id="dashboard-glance-title">At a Glance</h2>
+            <p>Your business at a glance.</p>
+            <button type="button" onClick={() => openWorkCenterSection("active")}>View All →</button>
+          </div>
             <div className="business-dashboard-glance-grid" style={glanceGrid}>
-              <div
-                style={
-                  canonicalScheduleAttentionCount > 0
-                    ? pendingQuoteGlowWrap
-                    : {}
-                }
-              >
-                <GlanceItem
-                  title={text.todayJobs}
-                  value={canonicalScheduleCounts ? todayScheduleCount || "No visits today" : "Schedule unavailable"}
-                  note={
-                    canonicalScheduleAttentionCount > 0
-                      ? (canonicalScheduleCounts?.changeRequested || 0) > 0
-                        ? "Customer proposed a new time"
-                        : (canonicalScheduleCounts?.inProgress || 0) > 0
-                          ? `${canonicalScheduleCounts.inProgress} visit in progress`
-                        : (canonicalScheduleCounts?.needsScheduling || 0) > 0
-                          ? `${canonicalScheduleCounts.needsScheduling} visits need scheduling`
-                          : `${canonicalScheduleCounts?.waiting || 0} visit waiting for customer`
-                      : text.scheduledToday
-                  }
-                  onClick={openFirstScheduledConversation}
-                />
-              </div>
-
               <GlanceItem
+                icon="briefcase"
                 title={text.activeJobs}
-                value={activeProjectsCount || "Review active jobs"}
-                note={text.inProgress}
+                value={activeProjectsCount}
+                note={activeProjectsCount > 0 ? text.inProgress : "No active jobs"}
+                detail={activeWorkPreviewLabel}
                 onClick={openFirstActiveProjectConversation}
               />
 
@@ -1197,14 +1112,47 @@ function BusinessDashboard({ setPage }) {
                 }
               >
                 <GlanceItem
+                  icon="quoteDoc"
                   title={text.pendingQuotes}
-                  value={pendingQuotesCount || "Review quotes"}
-                  note={text.awaitingResponse}
+                  value={pendingQuotesCount}
+                  note={pendingQuotesCount > 0 ? text.awaitingResponse : "No pending quotes"}
+                  detail={pendingQuotePreviewLabel}
                   onClick={() =>
                     openWorkCenterSection("quotes", {
                       quoteStatusFilter: quoteResponseAlertCount > 0 ? "accepted" : undefined,
                     })
                   }
+                />
+              </div>
+
+              <div
+                style={
+                  canonicalScheduleAttentionCount > 0
+                    ? pendingQuoteGlowWrap
+                    : {}
+                }
+              >
+                <GlanceItem
+                  icon="schedule"
+                  title={text.todayJobs}
+                  value={canonicalScheduleCounts ? todayScheduleCount : "—"}
+                  note={
+                    canonicalScheduleAttentionCount > 0
+                      ? (canonicalScheduleCounts?.changeRequested || 0) > 0
+                        ? "Customer proposed a new time"
+                        : (canonicalScheduleCounts?.inProgress || 0) > 0
+                          ? `${canonicalScheduleCounts.inProgress} visit in progress`
+                        : (canonicalScheduleCounts?.needsScheduling || 0) > 0
+                          ? `${canonicalScheduleCounts.needsScheduling} visits need scheduling`
+                          : `${canonicalScheduleCounts?.waiting || 0} visit waiting for customer`
+                      : todayScheduleCount > 0
+                        ? text.scheduledToday
+                        : canonicalScheduleCounts
+                          ? "No visits today"
+                          : "Schedule unavailable"
+                  }
+                  detail={businessSchedule[0]?.title || ""}
+                  onClick={openFirstScheduledConversation}
                 />
               </div>
             </div>
@@ -1214,8 +1162,9 @@ function BusinessDashboard({ setPage }) {
               style={quickAccessPanel}
               aria-label={text.quickAccessTitle}
             >
-              <div style={quickAccessHeader}>
-                <span>{text.quickAccessTitle}</span>
+              <div className="business-dashboard-section-heading" style={quickAccessHeader}>
+                <h2>{text.quickAccessTitle}</h2>
+                <p>Tools to get things done.</p>
               </div>
 
               <div className="business-dashboard-quick-access-grid" style={quickAccessGrid}>
@@ -1235,10 +1184,10 @@ function BusinessDashboard({ setPage }) {
             style={communityEntryCard}
             onClick={() => setPage("discover")}
           >
-            <span style={communityEntryIcon}>
+            <span className="business-dashboard-support-icon" style={communityEntryIcon}>
               <MeetroIcon name="discover" size={24} decorative />
             </span>
-            <span style={communityEntryCopy}>
+            <span className="business-dashboard-support-copy" style={communityEntryCopy}>
               <strong style={communityEntryTitle}>
                 {t("communityEntryTitle", language)}
               </strong>
@@ -1246,7 +1195,7 @@ function BusinessDashboard({ setPage }) {
                 {t("communityEntryBusinessCopy", language)}
               </span>
             </span>
-            <span style={communityEntryAction}>
+            <span className="business-dashboard-support-action" style={communityEntryAction}>
               {t("communityOpenAction", language)} →
             </span>
           </button>
@@ -1314,25 +1263,26 @@ function BusinessDashboard({ setPage }) {
         <div className="business-dashboard-tools-row" style={dashboardDesktopFlow}>
           <section className="business-dashboard-tools-section" style={singleActionSection}>
             <button
+              className="business-dashboard-tools-button"
               style={quoteActionButton}
               onClick={() => setPage("businessCommandCenter")}
             >
-              <div style={quoteActionIcon}>
+              <div className="business-dashboard-support-icon" style={quoteActionIcon}>
                 <MeetroIcon name="businessTools" size={34} decorative />
               </div>
 
-              <div style={quoteActionContent}>
-                <span style={quoteActionEyebrow}>{text.businessToolsSubtitle}</span>
+              <div className="business-dashboard-support-copy" style={quoteActionContent}>
+                <span className="business-dashboard-tools-eyebrow" style={quoteActionEyebrow}>{text.businessToolsSubtitle}</span>
 
                 <strong style={{ fontSize: "18px" }}>
                   {text.businessToolsTitle}
                 </strong>
 
-                <span style={{ opacity: 0.82, lineHeight: "1.5" }}>
+                <span className="business-dashboard-tools-description" style={{ opacity: 0.82, lineHeight: "1.5" }}>
                   {text.businessToolsDescription}
                 </span>
 
-                <div style={businessToolsFeatureList} aria-hidden="true">
+                <div className="business-dashboard-tools-features" style={businessToolsFeatureList} aria-hidden="true">
                   {text.businessToolsFeatures.map((feature) => (
                     <span key={feature} style={businessToolsFeatureChip}>
                       {feature}
@@ -1340,7 +1290,7 @@ function BusinessDashboard({ setPage }) {
                   ))}
                 </div>
 
-                <span style={businessToolsCta}>
+                <span className="business-dashboard-support-action business-dashboard-tools-cta" style={businessToolsCta}>
                   {text.openBusinessTools} →
                 </span>
               </div>
@@ -1359,7 +1309,7 @@ function BusinessDashboard({ setPage }) {
   );
 }
 
-function GlanceItem({ title, value, note, onClick }) {
+function GlanceItem({ icon, title, value, note, detail, onClick }) {
   const Component = onClick ? "button" : "div";
 
   return (
@@ -1371,9 +1321,11 @@ function GlanceItem({ title, value, note, onClick }) {
       }}
       onClick={onClick}
     >
+      <span className="home-dashboard-glance-icon" aria-hidden="true"><MeetroIcon name={icon} size={20} decorative /></span>
       <span style={glanceTitle}>{title}</span>
       <strong style={glanceValue}>{value}</strong>
       <p style={glanceNote}>{note}</p>
+      {detail ? <span className="home-dashboard-glance-record">{detail}</span> : null}
     </Component>
   );
 }
@@ -1732,13 +1684,6 @@ const profileUnavailableButton = {
   color: "#fff",
   fontWeight: 800,
   cursor: "pointer",
-};
-
-const businessNameLine = {
-  margin: "0 0 18px",
-  color: "#e2e8f0",
-  fontSize: "13px",
-  fontWeight: "800",
 };
 
 const todayFocusPanel = {

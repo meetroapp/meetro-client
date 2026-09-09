@@ -4,6 +4,7 @@ import test from "node:test";
 import { t } from "../src/utils/language.js";
 
 const source = fs.readFileSync("src/pages/BusinessDashboard.jsx", "utf8");
+const presentation = fs.readFileSync("src/styles/homeDashboard.css", "utf8");
 
 test("business dashboard desktop quick access uses explicit generic-new Quote intent", () => {
   const quickAccessStart = source.indexOf("const dashboardQuickAccessItems");
@@ -20,30 +21,16 @@ test("business dashboard desktop quick access uses explicit generic-new Quote in
   assert.doesNotMatch(quickAccessBlock, /businessCommandCenter/);
 });
 
-test("business dashboard desktop presentation begins at the stable tablet breakpoint", () => {
+test("business dashboard tablet and desktop presentation reflows the shared iPhone sections", () => {
   assert.match(source, /\.business-dashboard-quick-access \{\s*display: grid;\s*\}/);
   assert.match(source, /\.business-dashboard-community-entry \{\s*display: block;\s*\}/);
-  assert.match(source, /@media \(min-width: 1100px\)/);
-  assert.match(source, /#root\[data-app-layout="desktop"\]/);
-  assert.match(
-    source,
-    /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*--meetro-dashboard-workspace-max: min\(var\(--meetro-layout-wide-mid-max\), var\(--meetro-workspace-max-width\)\);/
-  );
-  assert.match(
-    source,
-    /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*width: min\(calc\(100vw - var\(--meetro-sidebar-width\)\), var\(--meetro-dashboard-workspace-max\)\) !important;/
-  );
-  assert.match(
-    source,
-    /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*margin-left: calc\(var\(--meetro-sidebar-width\) \+ var\(--meetro-dashboard-workspace-extra\)\) !important;/
-  );
-  assert.match(
-    source,
-    /\.business-dashboard-quick-access \{\s*display: grid !important;/
-  );
-  assert.match(source, /\.business-dashboard-community-entry \{\s*display: block !important;/);
-  assert.match(source, /\.business-dashboard-content-lane[\s\S]*max-width: 1180px;/);
-  assert.match(source, /\.business-dashboard-content-lane[\s\S]*margin: 0;/);
+  assert.doesNotMatch(source, /@media \(min-width: 1100px\)/);
+  assert.match(presentation, /Tablet and desktop are a reflow of the approved Professional iPhone Home/);
+  assert.match(presentation, /#root\[data-app-layout="tablet"\] \.business-dashboard/);
+  assert.match(presentation, /#root\[data-app-layout="desktop"\] \.business-dashboard/);
+  assert.match(presentation, /business-dashboard-content-lane[\s\S]*max-width: 1120px/);
+  assert.match(presentation, /business-dashboard-glance-grid[\s\S]*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(presentation, /business-dashboard-quick-access-grid[\s\S]*repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(source, /const dashboardContentLane = \{\s*display: "contents",\s*\}/);
   assert.match(source, /const dashboardDesktopFlow = \{\s*display: "contents",\s*\}/);
 });
@@ -71,12 +58,14 @@ test("business dashboard renders a professional mobile Community entry to the sh
   assert.doesNotMatch(source, /setActiveAccountMode\("personal"\)/);
 });
 
-test("business dashboard hero keeps desktop orientation context separate from mobile", () => {
-  assert.match(source, /\.business-dashboard-hero-context,[\s\S]*\.business-dashboard-primary-action \{\s*display: flex !important;/);
+test("business dashboard hero reuses the approved greeting and action hierarchy across breakpoints", () => {
+  assert.match(presentation, /business-dashboard-desktop-intro[\s\S]*display: none !important/);
+  assert.match(presentation, /business-dashboard-mobile-intro[\s\S]*display: block/);
+  assert.match(presentation, /business-dashboard-hero-actions[\s\S]*display: grid/);
   assert.match(source, /const heroDesktopContext = \{\s*display: "none"/);
   assert.match(source, /const primaryActionPanel = \{\s*display: "none"/);
   assert.match(source, /dashboardNextAction/);
-  assert.match(source, /text\.openNextAction/);
+  assert.match(source, /onClick=\{dashboardNextAction\.onClick\}/);
 });
 
 test("business dashboard quick access language preserves supported locales", () => {

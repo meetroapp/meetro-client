@@ -741,6 +741,10 @@ function Home({ setPage }) {
     getConversationMetrics({ registry: conversationRegistry, role: "business" })
       .unreadConversationCount
   );
+  const homeownerUnreadMessageCount = getConversationMetrics({
+    registry: conversationRegistry,
+    role: "personal",
+  }).unreadConversationCount;
 
   function getConversationEntryForRequest(request = {}) {
     return resolveHomeownerConversationEntry({
@@ -911,7 +915,7 @@ function Home({ setPage }) {
       <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
         <style>{homeLayoutMediaStyles}</style>
 
-        <TopBar />
+        <TopBar setPage={setPage} unreadCount={homeownerUnreadMessageCount} />
 
         <div style={businessHero}>
           <p style={eyebrow}>{t("businessDashboard")}</p>
@@ -990,7 +994,7 @@ function Home({ setPage }) {
     return (
       <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
         <style>{homeLayoutMediaStyles}</style>
-        <TopBar />
+        <TopBar setPage={setPage} unreadCount={homeownerUnreadMessageCount} />
 
         <button style={backHomeButton} onClick={() => setHomeView("landing")}>
           ← {t("backToHome", language)}
@@ -1040,7 +1044,7 @@ function Home({ setPage }) {
     return (
       <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
         <style>{homeLayoutMediaStyles}</style>
-        <TopBar />
+        <TopBar setPage={setPage} unreadCount={homeownerUnreadMessageCount} />
 
         <button style={backHomeButton} onClick={() => setHomeView("landing")}>
           ← {t("backToHome", language)}
@@ -1102,8 +1106,8 @@ function Home({ setPage }) {
   return (
     <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
       <style>{homeLayoutMediaStyles}</style>
-      <TopBar />
-      <header className="home-dashboard-welcome"><p>Welcome home</p><h1>Your home, our community.</h1></header>
+      <TopBar setPage={setPage} unreadCount={homeownerUnreadMessageCount} />
+      <header className="home-dashboard-welcome"><h1>Good morning!</h1><p>Your home, our community.</p></header>
 
       {activeEmergencyInfo && (
         <div style={activeEmergencyCard}>
@@ -1442,12 +1446,25 @@ function Home({ setPage }) {
   );
 }
 
-function TopBar() {
+function TopBar({ setPage, unreadCount = 0 }) {
   return (
     <div className="home-top-bar" style={topBar}>
       <div className="home-brand-wrap" style={brandWrap}>
-        <span className="home-brand-main" style={brandMain}>Meetro</span>
-        <span className="home-brand-badge" style={brandBadge}>Community</span>
+        <span className="home-dashboard-brand-mark" aria-hidden="true">M</span>
+        <span className="home-dashboard-brand-copy">
+          <strong className="home-brand-main" style={brandMain}>Meetro</strong>
+          <small className="home-brand-badge" style={brandBadge}>Community</small>
+        </span>
+      </div>
+      <div className="home-dashboard-topbar-actions">
+        <button className="home-dashboard-notification" type="button" aria-label="Open communications" onClick={() => setPage("messagesInbox")}>
+          <MeetroIcon name="notifications" size={20} decorative />
+          {unreadCount > 0 ? <span className="home-dashboard-notification-count">{unreadCount}</span> : null}
+        </button>
+        <button className="home-dashboard-ask-button" type="button" onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}>
+          <MeetroIcon name="aiHelp" size={18} decorative />
+          <span>Ask Meetro</span>
+        </button>
       </div>
     </div>
   );

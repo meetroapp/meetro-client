@@ -14,6 +14,10 @@ const businessDashboardSource = readFileSync(
   new URL("../src/pages/BusinessDashboard.jsx", import.meta.url),
   "utf8"
 );
+const homeDashboardStyles = readFileSync(
+  new URL("../src/styles/homeDashboard.css", import.meta.url),
+  "utf8"
+);
 const contractorDetailsSource = readFileSync(
   new URL("../src/pages/ContractorDetails.jsx", import.meta.url),
   "utf8"
@@ -136,18 +140,18 @@ test("standard workspaces consume the shared desktop shell classes", () => {
 
 test("Business Dashboard uses the centered shared workspace calculation", () => {
   assert.match(
-    businessDashboardSource,
-    /--meetro-dashboard-workspace-max: min\(var\(--meetro-layout-wide-mid-max\), var\(--meetro-workspace-max-width\)\);/
+    homeDashboardStyles,
+    /business-dashboard-content-lane[\s\S]*width: 100%;[\s\S]*max-width: 1120px;[\s\S]*margin: 0 auto;/
   );
   assert.match(
-    businessDashboardSource,
-    /--meetro-dashboard-workspace-extra: max\(0px, calc\(\(100vw - var\(--meetro-sidebar-width\) - var\(--meetro-dashboard-workspace-max\)\) \/ 2\)\);/
+    homeDashboardStyles,
+    /#root\[data-app-layout="tablet"\] \.business-dashboard/
   );
   assert.match(
-    businessDashboardSource,
-    /margin-left: calc\(var\(--meetro-sidebar-width\) \+ var\(--meetro-dashboard-workspace-extra\)\) !important;/
+    homeDashboardStyles,
+    /#root\[data-app-layout="desktop"\] \.business-dashboard/
   );
-  assert.match(businessDashboardSource, /margin-right: var\(--meetro-dashboard-workspace-extra\) !important;/);
+  assert.doesNotMatch(businessDashboardSource, /--meetro-dashboard-workspace-extra/);
   assert.doesNotMatch(businessDashboardSource, /1228px/);
 });
 

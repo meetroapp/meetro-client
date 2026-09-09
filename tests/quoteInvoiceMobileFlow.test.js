@@ -96,6 +96,7 @@ for (const viewport of MOBILE_VIEWPORTS) test(`mobile portrait ${viewport.width}
   }
   customerSheet("CUSTOMER_TYPE", "New Quote");
   assert.match(w.text(), /Who is this Quote for/);
+  assert.ok(document.querySelector('.new-quote-dialog-icon .meetro-icon'));
   await w.click("External Customer");
   customerSheet("EXTERNAL_CHOICE", "External Customer");
   assert.match(w.text(), /Choose Existing Customer.*Add New Customer/);
@@ -234,5 +235,9 @@ test("mobile redesign stays portrait-scoped and uses existing keyboard viewport 
   assert.match(css, /@media \(max-width: 767px\) and \(orientation: portrait\)/);
   assert.match(css, /#root\[data-app-layout="mobile"\]/);
   assert.match(css, /--meetro-visual-viewport-height/);
-  assert.match(css, /min-height: 48px/); assert.match(css, /border-radius: 24px/); assert.match(css, /grid-template-columns: minmax\(0, 1fr\)/);
+  assert.match(css, /min-height: 48px/); assert.match(css, /border-radius: 24px/);
+  assert.match(css, /:has\(\[data-customer-step="EXTERNAL_EXISTING"\]\)/);
+  assert.match(css, /height: var\(--meetro-visual-viewport-height, 100dvh\)/);
+  assert.match(css, /business-saved-filters \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(css, /business-document-composer-row textarea \{ min-height: 44px; height: 44px/);
 });

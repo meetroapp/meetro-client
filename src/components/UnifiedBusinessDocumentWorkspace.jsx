@@ -1028,7 +1028,7 @@ function SavedFilesDrawer({ currentSavedIds = [], onClose, onDeleted, onOpen, se
   </>;
 }
 
-function WorkspaceDialog({ titleId, title, children, actions, onClose, openAtTop = false }) {
+function WorkspaceDialog({ titleId, title, headingAdornment = null, children, actions, onClose, openAtTop = false }) {
   const firstRef = useRef(null);
   const dialogRef = useRef(null);
   const headingRef = useRef(null);
@@ -1053,7 +1053,7 @@ function WorkspaceDialog({ titleId, title, children, actions, onClose, openAtTop
     document.addEventListener("keydown", escape);
     return () => document.removeEventListener("keydown", escape);
   }, []);
-  return <>{onClose ? <button type="button" className="business-document-manual-backdrop" aria-label={`Close ${title}`} onClick={onClose} /> : <div className="business-document-manual-backdrop" aria-hidden="true" />}<section ref={dialogRef} className="business-document-confirm" data-dialog-purpose={titleId} role="dialog" aria-modal="true" aria-labelledby={titleId}><h2 ref={headingRef} id={titleId} tabIndex={openAtTop ? -1 : undefined}>{title}</h2>{children}<footer>{actions.map((action, index) => <button ref={index === 0 ? firstRef : undefined} key={action.label} type="button" className={action.primary ? "business-document-primary" : action.destructive ? "business-document-destructive" : ""} disabled={action.disabled} onClick={action.onClick}>{action.label}</button>)}</footer></section></>;
+  return <>{onClose ? <button type="button" className="business-document-manual-backdrop" aria-label={`Close ${title}`} onClick={onClose} /> : <div className="business-document-manual-backdrop" aria-hidden="true" />}<section ref={dialogRef} className="business-document-confirm" data-dialog-purpose={titleId} role="dialog" aria-modal="true" aria-labelledby={titleId}>{headingAdornment}<h2 ref={headingRef} id={titleId} tabIndex={openAtTop ? -1 : undefined}>{title}</h2>{children}<footer>{actions.map((action, index) => <button ref={index === 0 ? firstRef : undefined} key={action.label} type="button" className={action.primary ? "business-document-primary" : action.destructive ? "business-document-destructive" : ""} disabled={action.disabled} onClick={action.onClick}>{action.label}</button>)}</footer></section></>;
 }
 
 function NewQuoteCustomerSetupDialog({
@@ -1097,6 +1097,7 @@ function NewQuoteCustomerSetupDialog({
     <WorkspaceDialog
       titleId="new-quote-customer-setup-title"
       title={title}
+      headingAdornment={<span className="new-quote-dialog-icon" aria-hidden="true"><MeetroIcon name={state.step === "CUSTOMER_TYPE" ? "people" : "profile"} size={24} decorative /></span>}
       onClose={state.busy ? undefined : backable ? onBack : onCancel}
       actions={actions}
       openAtTop

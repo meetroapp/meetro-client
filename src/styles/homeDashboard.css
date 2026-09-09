@@ -78,3 +78,1147 @@
 
 .business-dashboard .business-dashboard-hero-card, .business-dashboard .business-dashboard-hero-card h1,
 .business-dashboard .business-dashboard-hero-card p, .home-dashboard-glance h2 { text-align: left !important; }
+.business-dashboard-hero-actions,
+.business-dashboard-mobile-intro,
+.business-dashboard-mobile-brand-tagline { display: none; }
+
+/* Physical iPhone parity pass. Keep the approved dashboard composition compact
+   while the existing records and handlers continue to supply every value/action. */
+@media (max-width: 767px) and (orientation: portrait) {
+  #root[data-app-layout="mobile"] :is(.business-dashboard, .homeowner-home-dashboard) {
+    padding: calc(env(safe-area-inset-top, 0px) + 10px) 12px calc(var(--meetro-bottom-nav-height, 74px) + 22px) !important;
+  }
+
+  #root[data-app-layout="mobile"] :is(.business-dashboard, .homeowner-home-dashboard) ~ .meetro-assistant-launcher {
+    display: none !important;
+  }
+
+  #root[data-app-layout="mobile"] :is(.home-dashboard-topbar, .home-top-bar) {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 80;
+    display: flex !important;
+    min-height: 50px;
+    margin: 0 -4px 12px !important;
+    padding: 5px 4px;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+    border-bottom: 1px solid #E5E7EB;
+    background: rgba(250, 250, 252, .94);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-brand-wrap,
+  #root[data-app-layout="mobile"] .home-brand-wrap { display: flex !important; align-items: center !important; gap: 8px !important; min-width: 0; }
+  #root[data-app-layout="mobile"] .home-dashboard-brand-mark {
+    display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px;
+    border-radius: 11px; color: #FFF; background: linear-gradient(145deg, #10B981, #063D26);
+    font: 700 20px/1 Poppins, system-ui, sans-serif;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-brand-copy { display: grid; gap: 0; min-width: 0; text-align: left; }
+  #root[data-app-layout="mobile"] .home-dashboard-brand-copy > :is(strong, .home-brand-main) {
+    color: #111827 !important; font: 600 15px/18px Poppins, system-ui, sans-serif !important;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-brand-copy > :is(small, .home-brand-badge) {
+    padding: 0 !important; border: 0 !important; border-radius: 0 !important; background: transparent !important;
+    color: #6B7280 !important; font: 600 9px/12px Poppins, system-ui, sans-serif !important; letter-spacing: .08em !important;
+    text-transform: uppercase;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-topbar-actions { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+  #root[data-app-layout="mobile"] :is(.home-dashboard-notification, .home-dashboard-ask-button) {
+    position: relative; display: inline-flex; align-items: center; justify-content: center; min-height: 40px;
+    border: 1px solid #D1E7DA; color: #0B5D3B !important; background: #FFF !important; box-shadow: none !important;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-notification { width: 40px; padding: 0; border-radius: 12px; }
+  #root[data-app-layout="mobile"] .home-dashboard-ask-button { gap: 5px; padding: 8px 10px; border-radius: 999px; font: 600 12px/16px Poppins, system-ui, sans-serif; white-space: nowrap; }
+  #root[data-app-layout="mobile"] .home-dashboard-notification-count {
+    position: absolute; top: -4px; right: -4px; display: grid; place-items: center; min-width: 17px; height: 17px; padding: 0 4px;
+    border: 2px solid #FAFAFC; border-radius: 999px; color: #FFF; background: #EF4444; font: 600 9px/1 Poppins, sans-serif;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-profile-button { display: none !important; }
+
+  #root[data-app-layout="mobile"] .business-dashboard-content-lane { gap: 14px !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-header-section { margin: 0 !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-status-strip { display: none !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-hero-card { padding: 2px 4px 6px !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-hero-card h1 {
+    margin: 0 !important; font-size: clamp(22px, 6.1vw, 26px) !important; line-height: 1.18 !important; letter-spacing: -.02em;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-hero-card .home-dashboard-greeting {
+    margin: 3px 0 0 !important; font: 400 14px/20px Poppins, system-ui, sans-serif !important;
+  }
+  #root[data-app-layout="mobile"] :is(.business-dashboard-hero-context, .business-dashboard-primary-action) { display: none !important; }
+
+  #root[data-app-layout="mobile"] .business-dashboard-leads-card {
+    padding: 14px !important; border-color: #CFE6D8 !important; box-shadow: 0 4px 14px #063D260A !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-leads-card > div:first-child { align-items: center !important; gap: 8px !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-leads-card h2 { font-size: 18px !important; line-height: 24px !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-leads-card > [role] { padding: 10px 0 0 !important; }
+  #root[data-app-layout="mobile"] .home-dashboard-lead-summary { flex-wrap: nowrap; }
+  #root[data-app-layout="mobile"] .home-dashboard-lead-summary strong { font-size: 16px; line-height: 22px; }
+  #root[data-app-layout="mobile"] .home-dashboard-lead-summary span { padding: 4px 7px; font-size: 9px; }
+  #root[data-app-layout="mobile"] .home-dashboard-lead { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 10px; align-items: end; margin-top: 10px; }
+  #root[data-app-layout="mobile"] .home-dashboard-lead h3 { grid-column: 1; margin: 0; font-size: 15px; line-height: 21px; }
+  #root[data-app-layout="mobile"] .home-dashboard-lead p { grid-column: 1; margin: 0; color: #6B7280; font-size: 11px; line-height: 16px; }
+  #root[data-app-layout="mobile"] .home-dashboard-lead button { grid-column: 2; grid-row: 1 / 4; min-height: 40px; padding: 8px 10px; font-size: 11px; align-self: center; }
+
+  #root[data-app-layout="mobile"] .home-dashboard-glance h2 { margin: 0 0 8px; font-size: 18px; line-height: 24px; }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid > div { min-width: 0; height: 100%; }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid button {
+    display: grid; grid-template-columns: 30px minmax(0, 1fr); grid-template-rows: auto auto auto;
+    min-height: 104px !important; padding: 10px !important; gap: 1px 7px; align-content: center;
+    border-radius: 14px !important; box-shadow: 0 3px 10px #11182708 !important;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-glance-icon {
+    grid-column: 1; grid-row: 1 / 3; display: grid; place-items: center; width: 30px; height: 30px;
+    border-radius: 10px; color: #0B5D3B; background: #E8F5EE;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid button > span:not(.home-dashboard-glance-icon) {
+    grid-column: 2; font-size: 11px !important; line-height: 15px !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid button > strong {
+    grid-column: 2; font-size: 16px !important; line-height: 21px !important; overflow-wrap: anywhere;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid button > p {
+    grid-column: 1 / -1; margin: 4px 0 0 !important; font-size: 10px !important; line-height: 14px !important; color: #6B7280 !important;
+  }
+
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access { padding: 0 !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access > div:first-child { margin-bottom: 8px !important; font-size: 18px !important; line-height: 24px; }
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 8px !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access-item {
+    display: grid !important; grid-template-columns: 36px minmax(0, 1fr); min-height: 72px; padding: 10px !important; gap: 8px !important;
+    border-radius: 14px !important; box-shadow: 0 3px 10px #11182708;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access-item > span:first-child { width: 36px !important; height: 36px !important; border-radius: 12px !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access-item strong { font-size: 12px; line-height: 16px; }
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access-item span span { font-size: 10px; line-height: 14px; color: #6B7280; }
+
+  #root[data-app-layout="mobile"] :is(.business-dashboard-community-entry, .business-dashboard-tools-row) { margin: 0 !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-main-grid,
+  #root[data-app-layout="mobile"] .business-dashboard-plan-card { display: none !important; }
+  #root[data-app-layout="mobile"] :is(.business-dashboard-community-entry > button, .business-dashboard-tools-section > button) {
+    min-height: 82px !important; padding: 12px !important; border-radius: 16px !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-tools-section > button > div:first-child { width: 40px !important; height: 40px !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-tools-section [aria-hidden="true"] { display: none !important; }
+
+  #root[data-app-layout="mobile"] .home-dashboard-welcome { margin: 0 4px 14px; text-align: left; }
+  #root[data-app-layout="mobile"] .home-dashboard-welcome h1 { margin: 0 !important; font-size: clamp(22px, 6.1vw, 26px) !important; line-height: 1.18 !important; }
+  #root[data-app-layout="mobile"] .home-dashboard-welcome p { margin: 3px 0 0; color: #6B7280; font: 400 14px/20px Poppins, system-ui, sans-serif; }
+  #root[data-app-layout="mobile"] .homeowner-home-dashboard > section { margin-bottom: 14px !important; }
+  #root[data-app-layout="mobile"] .home-dashboard-projects { padding: 14px !important; border-radius: 16px !important; }
+  #root[data-app-layout="mobile"] .home-dashboard-projects h2,
+  #root[data-app-layout="mobile"] .home-dashboard-spotlight h2,
+  #root[data-app-layout="mobile"] .home-dashboard-help h2 { margin: 0 0 6px !important; font-size: 18px !important; line-height: 24px !important; }
+  #root[data-app-layout="mobile"] .home-dashboard-projects [style*="font-size: 14px"],
+  #root[data-app-layout="mobile"] .home-dashboard-spotlight [style*="font-size: 15px"],
+  #root[data-app-layout="mobile"] .home-dashboard-help [style*="font-size: 14px"] { font-size: 11px !important; line-height: 16px !important; }
+  #root[data-app-layout="mobile"] .home-my-projects-tabs { margin-bottom: 10px !important; padding: 3px !important; border-radius: 14px !important; }
+  #root[data-app-layout="mobile"] .home-my-projects-tabs button { min-height: 40px; padding: 8px !important; border-radius: 11px !important; font-size: 12px !important; }
+  #root[data-app-layout="mobile"] .home-my-projects-portrait > div { gap: 8px !important; padding-bottom: 4px !important; }
+  #root[data-app-layout="mobile"] .home-my-projects-portrait button { padding: 12px !important; border-radius: 14px !important; }
+  #root[data-app-layout="mobile"] .home-dashboard-spotlight [aria-label] { gap: 10px !important; padding-bottom: 6px !important; }
+  #root[data-app-layout="mobile"] .home-spotlight-card { width: min(72vw, 292px) !important; border-radius: 16px !important; }
+  #root[data-app-layout="mobile"] .home-spotlight-hero { height: 178px !important; min-height: 178px !important; }
+  #root[data-app-layout="mobile"] .home-spotlight-content { padding: 10px !important; }
+  #root[data-app-layout="mobile"] .home-community-entry { display: none !important; }
+  #root[data-app-layout="mobile"] .home-dashboard-help { padding: 14px !important; border-radius: 16px !important; }
+  #root[data-app-layout="mobile"] .home-help-section-header { margin-bottom: 10px !important; text-align: left !important; justify-content: flex-start !important; }
+  #root[data-app-layout="mobile"] .home-help-action-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 7px !important; }
+  #root[data-app-layout="mobile"] .home-help-action-card {
+    display: grid !important; grid-template-columns: 1fr !important; justify-items: center; min-height: 82px !important;
+    padding: 9px 5px !important; gap: 5px !important; border-radius: 14px !important; text-align: center !important; font-size: 10px !important;
+  }
+  #root[data-app-layout="mobile"] .home-help-action-icon { width: 34px !important; height: 34px !important; border-radius: 11px !important; }
+  #root[data-app-layout="mobile"] .home-message-focus-card { padding: 12px !important; border-radius: 16px !important; }
+}
+
+/* Tablet and desktop are a reflow of the approved Professional iPhone Home.
+   The navigation shell owns the available page width; this layer keeps one
+   shared dashboard tree and changes only its grid placement. */
+@media (min-width: 768px) {
+  #root[data-app-layout="tablet"] .business-dashboard,
+  #root[data-app-layout="desktop"] .business-dashboard {
+    padding: clamp(18px, 2.4vw, 34px) !important;
+    background: #F8FAFC !important;
+  }
+
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-content-lane,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-content-lane {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: clamp(14px, 1.6vw, 20px) !important;
+    width: 100%;
+    max-width: 1120px;
+    margin: 0 auto;
+  }
+
+  #root[data-app-layout="tablet"] .business-dashboard :is(.business-dashboard-header-section, .business-dashboard-leads-card, .home-dashboard-glance, .business-dashboard-quick-access),
+  #root[data-app-layout="desktop"] .business-dashboard :is(.business-dashboard-header-section, .business-dashboard-leads-card, .home-dashboard-glance, .business-dashboard-quick-access) {
+    grid-column: 1 / -1;
+  }
+
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-header-section,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-header-section {
+    margin: 0 !important;
+    padding: clamp(18px, 2.2vw, 26px) !important;
+    border: 0 !important;
+    border-radius: 24px !important;
+    background:
+      radial-gradient(circle at 88% 62%, rgba(16, 185, 129, .42), transparent 34%),
+      linear-gradient(135deg, #004A31 0%, #063D26 70%, #075B39 100%) !important;
+    box-shadow: 0 12px 28px rgba(6, 61, 38, .15) !important;
+    overflow: hidden;
+  }
+
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-topbar,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-topbar {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    min-height: 48px;
+    margin: 0 0 12px !important;
+    padding: 0 !important;
+    border: 0 !important;
+    background: transparent !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-brand-wrap,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-brand-wrap { gap: 11px !important; }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-brand-mark,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-brand-mark {
+    display: grid;
+    place-items: center;
+    flex: 0 0 44px;
+    width: 44px;
+    height: 44px;
+    color: #10D47B !important;
+    background: transparent !important;
+    font: 700 32px/1 Poppins, system-ui, sans-serif;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-brand-copy,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-brand-copy {
+    display: grid;
+    gap: 0;
+    padding: 0 !important;
+    color: #FFF !important;
+    background: transparent !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-brand-copy > strong,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-brand-copy > strong {
+    color: #FFF !important;
+    font: 700 25px/27px Poppins, system-ui, sans-serif !important;
+    letter-spacing: -.02em;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-desktop-brand-badge,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-desktop-brand-badge,
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-desktop-intro,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-desktop-intro { display: none !important; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-mobile-brand-tagline,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-mobile-brand-tagline {
+    display: block;
+    padding: 0 !important;
+    border: 0 !important;
+    color: rgba(255,255,255,.86) !important;
+    background: transparent !important;
+    font: 400 10px/13px Poppins, system-ui, sans-serif !important;
+    letter-spacing: 0 !important;
+    text-transform: none;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-mobile-intro,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-mobile-intro {
+    display: block;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-topbar-actions,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-ask-button,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-ask-button { display: none !important; }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-notification,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-notification {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 42px;
+    min-height: 42px;
+    padding: 0;
+    border: 1px solid rgba(255,255,255,.16);
+    border-radius: 13px;
+    color: #FFF !important;
+    background: rgba(255,255,255,.07) !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-notification-count,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-notification-count {
+    position: absolute;
+    top: -5px;
+    right: -5px;
+    display: grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    padding: 0 4px;
+    border: 2px solid #075638;
+    border-radius: 999px;
+    color: #FFF;
+    background: #EF4444;
+    font: 600 9px/1 Poppins, system-ui, sans-serif;
+  }
+
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-status-strip,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-status-strip,
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-hero-context,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-hero-context,
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-primary-action,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-primary-action,
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-main-grid,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-main-grid,
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-plan-card,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-plan-card { display: none !important; }
+
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-hero-card,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-hero-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(300px, .72fr);
+    align-items: end;
+    gap: clamp(20px, 4vw, 56px);
+    padding: 0 !important;
+    border-radius: 0 !important;
+    color: #FFF !important;
+    background: transparent !important;
+    overflow: visible;
+    isolation: auto;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-hero-card .home-dashboard-greeting,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-hero-card .home-dashboard-greeting {
+    margin: 0 0 2px !important;
+    color: rgba(255,255,255,.94) !important;
+    font: 400 16px/22px Poppins, system-ui, sans-serif !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-hero-card h1,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-hero-card h1 {
+    margin: 0 !important;
+    color: #FFF !important;
+    font-size: clamp(28px, 3.2vw, 38px) !important;
+    line-height: 1.12 !important;
+    letter-spacing: -.03em;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-hero-support,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-hero-support {
+    margin: 3px 0 0 !important;
+    color: rgba(255,255,255,.88) !important;
+    font: 400 14px/20px Poppins, system-ui, sans-serif !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-hero-actions,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+    margin: 0;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-hero-actions button,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-hero-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 46px;
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 14px;
+    font: 600 13px/18px Poppins, system-ui, sans-serif;
+    cursor: pointer;
+    white-space: nowrap;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-hero-ask,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-hero-ask { color: #063D26; background: #E8F5EE; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-hero-continue,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-hero-continue {
+    color: #FFF;
+    background: #08A95F;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+  }
+
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-leads-card,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-leads-card {
+    display: grid;
+    grid-template-columns: minmax(280px, .82fr) minmax(0, 1.18fr);
+    align-items: center;
+    gap: clamp(14px, 2vw, 24px);
+    margin: 0 !important;
+    padding: clamp(15px, 1.8vw, 20px) !important;
+    border: 1.5px solid #10B981 !important;
+    border-radius: 18px !important;
+    background: linear-gradient(135deg, #F3FFF8, #FFF) !important;
+    box-shadow: 0 6px 18px rgba(6, 61, 38, .07) !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-leads-heading,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-leads-heading {
+    display: grid;
+    grid-template-columns: 52px minmax(0, 1fr) 30px;
+    align-items: start;
+    gap: 11px;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-leads-icon,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-leads-icon {
+    display: grid;
+    place-items: center;
+    width: 52px;
+    height: 52px;
+    border-radius: 50%;
+    color: #FFF;
+    background: linear-gradient(145deg, #10B981, #063D26);
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-leads-title-row,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-leads-title-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-leads-title-row h2,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-leads-title-row h2 {
+    margin: 0 !important;
+    font-size: 14px !important;
+    line-height: 19px !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-leads-new-badge,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-leads-new-badge {
+    flex: 0 0 auto;
+    padding: 4px 8px;
+    border-radius: 999px;
+    color: #FFF;
+    background: #EF4444;
+    font: 700 10px/14px Poppins, system-ui, sans-serif;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-leads-count,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-leads-count {
+    display: block;
+    margin-top: 3px;
+    color: #071225;
+    font: 700 28px/32px Poppins, system-ui, sans-serif;
+    letter-spacing: -.03em;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-leads-support,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-leads-support {
+    max-width: 42ch;
+    margin: 2px 0 0;
+    color: #4B5F7B;
+    font: 400 12px/17px Poppins, system-ui, sans-serif;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-leads-more,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-leads-more {
+    width: 30px;
+    min-height: 30px;
+    padding: 0;
+    border: 0;
+    color: #063D26;
+    background: transparent;
+    font-weight: 700;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-leads-card > [role],
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-leads-card > [role] { padding: 0 !important; }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-lead,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-lead {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 86px;
+    margin: 0;
+    padding: 12px 14px;
+    gap: 2px 14px;
+    align-items: center;
+    border: 1px solid #D6EFE2;
+    border-radius: 14px;
+    background: rgba(255,255,255,.9);
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-lead h3,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-lead h3 { margin: 0; font-size: 15px; line-height: 20px; }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-lead p,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-lead p {
+    grid-column: 1;
+    margin: 0;
+    overflow: hidden;
+    color: #4B5F7B;
+    font-size: 11px;
+    line-height: 15px;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-lead button,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-lead button {
+    grid-column: 2;
+    grid-row: 1 / 4;
+    min-height: 44px;
+    padding: 10px 14px;
+    border-radius: 12px;
+    font-size: 11px;
+    white-space: nowrap;
+  }
+
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-section-heading,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-section-heading {
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 9px !important;
+    margin: 0 0 10px !important;
+    color: #111827 !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-section-heading h2,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-section-heading h2 {
+    margin: 0 !important;
+    color: #111827 !important;
+    font-size: 21px !important;
+    line-height: 28px !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-section-heading p,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-section-heading p {
+    margin: 0 !important;
+    color: #58708F !important;
+    font: 400 11px/16px Poppins, system-ui, sans-serif !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-section-heading button,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-section-heading button {
+    margin-left: auto;
+    padding: 4px 0;
+    border: 0;
+    color: #08663F;
+    background: transparent;
+    font: 600 12px/17px Poppins, system-ui, sans-serif;
+    white-space: nowrap;
+  }
+
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-glance-grid,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-glance-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-glance-grid > div,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-glance-grid > div {
+    height: 100%;
+    padding: 0 !important;
+    animation: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-glance-grid button,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-glance-grid button {
+    display: grid;
+    grid-template-columns: 44px minmax(0, 1fr);
+    grid-template-rows: auto auto auto;
+    align-content: center;
+    min-height: 118px !important;
+    padding: 14px !important;
+    gap: 2px 10px;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 16px !important;
+    overflow: hidden;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-glance-grid > :nth-child(1),
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-glance-grid > :nth-child(1) { background: #EFFBF4 !important; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-glance-grid > :nth-child(2) button,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-glance-grid > :nth-child(2) button { background: #FFF7ED !important; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-glance-grid > :nth-child(3) button,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-glance-grid > :nth-child(3) button { background: #EFF6FF !important; }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-glance-icon,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-glance-icon {
+    grid-column: 1;
+    grid-row: 1 / 3;
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    color: #079455;
+    background: #D9F7E7;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-glance-grid > :nth-child(2) .home-dashboard-glance-icon,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-glance-grid > :nth-child(2) .home-dashboard-glance-icon { color: #F97316; background: #FFEDD5; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-glance-grid > :nth-child(3) .home-dashboard-glance-icon,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-glance-grid > :nth-child(3) .home-dashboard-glance-icon { color: #1675E8; background: #DBEAFE; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-glance-grid button > span:not(.home-dashboard-glance-icon):not(.home-dashboard-glance-record),
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-glance-grid button > span:not(.home-dashboard-glance-icon):not(.home-dashboard-glance-record) {
+    grid-column: 2;
+    color: #111827 !important;
+    font-size: 12px !important;
+    line-height: 16px !important;
+    font-weight: 600;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-glance-grid button > strong,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-glance-grid button > strong {
+    grid-column: 2;
+    margin: 0 !important;
+    color: #071225 !important;
+    font-size: 24px !important;
+    line-height: 28px !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-glance-grid button > p,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-glance-grid button > p {
+    grid-column: 1 / -1;
+    margin: 4px 0 0 !important;
+    color: #58708F !important;
+    font-size: 10px !important;
+    line-height: 14px !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-glance-record,
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-glance-record {
+    grid-column: 1 / -1;
+    overflow: hidden;
+    color: #22304A !important;
+    font-size: 10px !important;
+    line-height: 14px !important;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-quick-access-grid,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-quick-access-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 10px !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-quick-access-item,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-quick-access-item {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 112px;
+    padding: 13px 10px !important;
+    gap: 7px !important;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 16px !important;
+    background: #FFF !important;
+    box-shadow: 0 4px 14px rgba(17,24,39,.05) !important;
+    text-align: center;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-quick-access-item > span:first-child,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-quick-access-item > span:first-child {
+    width: 42px !important;
+    height: 42px !important;
+    border-radius: 14px !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-quick-access-item > span:last-child,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-quick-access-item > span:last-child { display: grid; gap: 2px; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-quick-access-item strong,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-quick-access-item strong { color: #111827; font-size: 12px; line-height: 16px; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-quick-access-item span span,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-quick-access-item span span { color: #58708F; font-size: 10px; line-height: 14px; }
+
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-community-entry,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-community-entry,
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-tools-row,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-tools-row { margin: 0 !important; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-tools-row,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-tools-row { display: block !important; }
+  #root[data-app-layout="tablet"] .business-dashboard :is(.business-dashboard-community-entry > button, .business-dashboard-tools-button),
+  #root[data-app-layout="desktop"] .business-dashboard :is(.business-dashboard-community-entry > button, .business-dashboard-tools-button) {
+    position: relative;
+    display: grid !important;
+    grid-template-columns: 52px minmax(0, 1fr) 20px !important;
+    align-items: center !important;
+    width: 100%;
+    min-height: 92px !important;
+    padding: 15px 16px !important;
+    gap: 13px !important;
+    border: 1px solid #E5E7EB !important;
+    border-radius: 17px !important;
+    color: #111827 !important;
+    background: #FFF !important;
+    box-shadow: 0 4px 14px rgba(17,24,39,.05) !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-support-icon,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-support-icon {
+    grid-column: 1;
+    display: grid;
+    place-items: center;
+    width: 52px !important;
+    height: 52px !important;
+    border-radius: 50% !important;
+    color: #08663F !important;
+    background: #E8F9F0 !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-support-copy,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-support-copy {
+    grid-column: 2;
+    display: grid !important;
+    gap: 3px !important;
+    min-width: 0;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-support-copy > strong,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-support-copy > strong {
+    color: #111827;
+    font-size: 15px !important;
+    line-height: 20px !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-support-copy > span:not(.business-dashboard-support-action),
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-support-copy > span:not(.business-dashboard-support-action) {
+    display: -webkit-box;
+    overflow: hidden;
+    color: #58708F !important;
+    font-size: 11px !important;
+    line-height: 16px !important;
+    font-weight: 400 !important;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-support-action,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-support-action {
+    grid-column: 3 !important;
+    justify-self: end !important;
+    margin: 0 !important;
+    color: #08663F !important;
+    font-size: 0 !important;
+  }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-support-action::after,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-support-action::after { content: "›"; font: 600 28px/1 Poppins, system-ui, sans-serif; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-tools-eyebrow,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-tools-eyebrow,
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-tools-features,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-tools-features { display: none !important; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-tools-button .business-dashboard-support-copy,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-tools-button .business-dashboard-support-copy { padding-right: 14px; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-tools-cta,
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-tools-cta {
+    position: absolute;
+    top: 50%;
+    right: 16px;
+    transform: translateY(-50%);
+  }
+}
+
+@media (min-width: 1200px) {
+  #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-glance { grid-column: 1; }
+  #root[data-app-layout="desktop"] .business-dashboard .business-dashboard-quick-access { grid-column: 2; }
+}
+
+@media (min-width: 768px) and (max-width: 899px) {
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-hero-card { grid-template-columns: minmax(0, 1fr); gap: 14px; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-hero-actions { max-width: 420px; }
+  #root[data-app-layout="tablet"] .business-dashboard .business-dashboard-leads-card { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Professional iPhone Home authority: the hero carries identity and primary
+   actions, followed by one compact lead, three metrics, four shortcuts, and
+   two supporting rows. Data and destinations continue to come from the
+   existing dashboard projections and handlers. */
+@media (max-width: 767px) and (orientation: portrait) {
+  #root[data-app-layout="mobile"] .business-dashboard {
+    padding: 0 12px calc(var(--meetro-bottom-nav-height, 74px) + 18px) !important;
+    background: #F8FAFC !important;
+  }
+
+  #root[data-app-layout="mobile"] .business-dashboard-content-lane {
+    gap: 10px !important;
+  }
+
+  #root[data-app-layout="mobile"] .business-dashboard-header-section {
+    margin: 0 -12px !important;
+    width: calc(100% + 24px) !important;
+    max-width: none !important;
+    padding: calc(env(safe-area-inset-top, 0px) + 10px) 18px 12px !important;
+    border-radius: 0 0 24px 24px !important;
+    background:
+      radial-gradient(circle at 88% 62%, rgba(16, 185, 129, .42), transparent 34%),
+      linear-gradient(135deg, #004A31 0%, #063D26 70%, #075B39 100%) !important;
+    box-shadow: 0 10px 24px rgba(6, 61, 38, .16) !important;
+    overflow: hidden;
+  }
+
+  #root[data-app-layout="mobile"] .business-dashboard .home-dashboard-topbar {
+    position: static;
+    min-height: 48px;
+    margin: 0 0 6px !important;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+
+  #root[data-app-layout="mobile"] .business-dashboard .home-dashboard-brand-wrap { gap: 10px !important; }
+  #root[data-app-layout="mobile"] .business-dashboard .home-dashboard-brand-mark {
+    flex-basis: 42px;
+    width: 42px;
+    height: 42px;
+    border-radius: 0;
+    color: #10D47B !important;
+    background: transparent;
+    font-size: 31px;
+    font-weight: 700;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard .home-dashboard-brand-copy {
+    padding: 0 !important;
+    color: #FFF !important;
+    background: transparent !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard .business-dashboard-desktop-brand-badge,
+  #root[data-app-layout="mobile"] .business-dashboard .business-dashboard-desktop-intro { display: none !important; }
+  #root[data-app-layout="mobile"] .business-dashboard .business-dashboard-mobile-brand-tagline { display: block; }
+  #root[data-app-layout="mobile"] .business-dashboard .business-dashboard-mobile-intro { display: block; }
+  #root[data-app-layout="mobile"] .business-dashboard .home-dashboard-brand-copy > strong {
+    color: #FFF !important;
+    font: 700 24px/25px Poppins, system-ui, sans-serif !important;
+    letter-spacing: -.02em;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard .home-dashboard-brand-copy > small {
+    color: rgba(255,255,255,.88) !important;
+    font: 400 9px/12px Poppins, system-ui, sans-serif !important;
+    letter-spacing: 0 !important;
+    text-transform: none;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard .home-dashboard-ask-button,
+  #root[data-app-layout="mobile"] .business-dashboard .home-dashboard-profile-button { display: none !important; }
+  #root[data-app-layout="mobile"] .business-dashboard .home-dashboard-notification {
+    width: 40px;
+    min-height: 40px;
+    padding: 0;
+    border: 0;
+    border-radius: 12px;
+    color: #FFF !important;
+    background: transparent !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard .home-dashboard-notification-count {
+    top: -3px;
+    right: -2px;
+    border-color: #075638;
+  }
+
+  #root[data-app-layout="mobile"] .business-dashboard .business-dashboard-hero-card {
+    padding: 0 !important;
+    color: #FFF !important;
+    background: transparent !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard .business-dashboard-hero-card .home-dashboard-greeting {
+    margin: 0 0 1px !important;
+    color: rgba(255,255,255,.94) !important;
+    font: 400 15px/20px Poppins, system-ui, sans-serif !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard .business-dashboard-hero-card h1 {
+    margin: 0 !important;
+    color: #FFF !important;
+    font-size: clamp(23px, 6.4vw, 28px) !important;
+    line-height: 1.12 !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard .business-dashboard-hero-support {
+    margin: 2px 0 0 !important;
+    color: rgba(255,255,255,.9) !important;
+    font: 400 13px/18px Poppins, system-ui, sans-serif !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-hero-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 9px;
+    margin-top: 8px;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-hero-actions button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 42px;
+    padding: 9px 10px;
+    border: 0;
+    border-radius: 14px;
+    font: 600 13px/18px Poppins, system-ui, sans-serif;
+    cursor: pointer;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-hero-ask {
+    color: #063D26;
+    background: #E8F5EE;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-hero-continue {
+    color: #FFF;
+    background: #08A95F;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,.18);
+  }
+
+  #root[data-app-layout="mobile"] .business-dashboard-leads-card {
+    padding: 11px !important;
+    border: 1.5px solid #10B981 !important;
+    border-radius: 16px !important;
+    background: linear-gradient(135deg, #F3FFF8, #FFF) !important;
+    box-shadow: 0 5px 16px rgba(6, 61, 38, .07) !important;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-leads-heading {
+    display: grid;
+    grid-template-columns: 48px minmax(0, 1fr) 28px;
+    align-items: start;
+    gap: 10px;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-leads-icon {
+    display: grid;
+    place-items: center;
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    color: #FFF;
+    background: linear-gradient(145deg, #10B981, #063D26);
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-leads-heading-copy { min-width: 0; }
+  #root[data-app-layout="mobile"] .home-dashboard-leads-title-row {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-leads-card .home-dashboard-leads-title-row h2 {
+    margin: 0 !important;
+    font-size: 12px !important;
+    line-height: 16px !important;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-leads-new-badge {
+    flex: 0 0 auto;
+    padding: 3px 7px;
+    border-radius: 999px;
+    color: #FFF;
+    background: #EF4444;
+    font: 700 10px/14px Poppins, system-ui, sans-serif;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-leads-count {
+    display: block;
+    margin-top: 2px;
+    color: #071225;
+    font: 700 25px/28px Poppins, system-ui, sans-serif;
+    letter-spacing: -.03em;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-leads-support {
+    margin: 1px 0 0;
+    color: #4B5F7B;
+    font: 400 11px/15px Poppins, system-ui, sans-serif;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-leads-more {
+    width: 28px;
+    min-height: 28px;
+    padding: 0;
+    border: 0;
+    color: #063D26;
+    background: transparent;
+    font-weight: 700;
+    letter-spacing: 1px;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-leads-card > [role] { padding: 9px 0 0 !important; }
+  #root[data-app-layout="mobile"] .home-dashboard-lead {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    min-height: 64px;
+    margin: 0;
+    padding: 9px;
+    gap: 1px 8px;
+    align-items: center;
+    border: 1px solid #D6EFE2;
+    border-radius: 13px;
+    background: rgba(255,255,255,.86);
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-lead h3 { font-size: 13px; line-height: 17px; }
+  #root[data-app-layout="mobile"] .home-dashboard-lead p {
+    display: -webkit-box;
+    margin: 0;
+    overflow: hidden;
+    color: #4B5F7B;
+    font-size: 10px;
+    line-height: 14px;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 1;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-lead button {
+    grid-row: 1 / 4;
+    min-height: 40px;
+    padding: 8px 10px;
+    border-radius: 11px;
+    font-size: 10px;
+    white-space: nowrap;
+  }
+
+  #root[data-app-layout="mobile"] .business-dashboard-section-heading {
+    display: flex !important;
+    align-items: baseline !important;
+    gap: 7px !important;
+    margin: 0 0 8px !important;
+    color: #111827 !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-section-heading h2 {
+    margin: 0 !important;
+    color: #111827 !important;
+    font-size: 18px !important;
+    line-height: 24px !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-section-heading p {
+    margin: 0 !important;
+    color: #58708F !important;
+    font: 400 10px/14px Poppins, system-ui, sans-serif !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-section-heading button {
+    margin-left: auto;
+    padding: 3px 0;
+    border: 0;
+    color: #08663F;
+    background: transparent;
+    font: 600 11px/16px Poppins, system-ui, sans-serif;
+    white-space: nowrap;
+  }
+
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-glance { margin: 0 !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid > div {
+    height: 100%;
+    padding: 0 !important;
+    animation: none !important;
+    box-shadow: none !important;
+    transform: none !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid button {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    min-height: 128px !important;
+    padding: 9px 8px !important;
+    gap: 2px;
+    border-radius: 14px !important;
+    overflow: hidden;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid > :nth-child(1) { background: #EFFBF4 !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid > :nth-child(2) button { background: #FFF7ED !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid > :nth-child(3) button { background: #EFF6FF !important; }
+  #root[data-app-layout="mobile"] .home-dashboard-glance-icon {
+    display: grid;
+    place-items: center;
+    width: 34px;
+    height: 34px;
+    margin-bottom: 2px;
+    border-radius: 50%;
+    color: #079455;
+    background: #D9F7E7;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid > :nth-child(2) .home-dashboard-glance-icon { color: #F97316; background: #FFEDD5; }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid > :nth-child(3) .home-dashboard-glance-icon { color: #1675E8; background: #DBEAFE; }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid button > span:not(.home-dashboard-glance-icon):not(.home-dashboard-glance-record) {
+    color: #111827 !important;
+    font-size: 10px !important;
+    line-height: 13px !important;
+    font-weight: 600;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid button > strong {
+    margin: 0 !important;
+    color: #071225 !important;
+    font-size: 22px !important;
+    line-height: 25px !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-glance-grid button > p {
+    margin: 0 !important;
+    color: #58708F !important;
+    font-size: 9px !important;
+    line-height: 12px !important;
+  }
+  #root[data-app-layout="mobile"] .home-dashboard-glance-record {
+    display: -webkit-box;
+    width: 100%;
+    margin-top: auto;
+    overflow: hidden;
+    color: #22304A !important;
+    font-size: 9px !important;
+    line-height: 12px !important;
+    font-weight: 600;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+    gap: 6px !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access-item {
+    display: flex !important;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    min-height: 102px;
+    padding: 9px 4px !important;
+    gap: 5px !important;
+    text-align: center;
+    border-radius: 14px !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access-item > span:first-child {
+    width: 38px !important;
+    height: 38px !important;
+    border-radius: 13px !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access-item > span:last-child { display: grid; gap: 2px; }
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access-item strong {
+    color: #111827;
+    font-size: 10px;
+    line-height: 13px;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-quick-access-item span span {
+    color: #58708F;
+    font-size: 9px;
+    line-height: 12px;
+  }
+
+  #root[data-app-layout="mobile"] :is(.business-dashboard-community-entry > button, .business-dashboard-tools-button) {
+    position: relative;
+    display: grid !important;
+    grid-template-columns: 44px minmax(0, 1fr) 18px !important;
+    align-items: center !important;
+    min-height: 64px !important;
+    padding: 8px 12px !important;
+    gap: 10px !important;
+    border-radius: 14px !important;
+    background: #FFF !important;
+    box-shadow: 0 3px 12px rgba(17,24,39,.05) !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-support-icon {
+    grid-column: 1;
+    width: 44px !important;
+    height: 44px !important;
+    border-radius: 50% !important;
+    color: #08663F !important;
+    background: #E8F9F0 !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-support-copy {
+    grid-column: 2;
+    display: grid !important;
+    gap: 1px !important;
+    min-width: 0;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-support-copy > strong {
+    color: #111827;
+    font-size: 13px !important;
+    line-height: 17px !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-support-copy > span:not(.business-dashboard-support-action) {
+    display: -webkit-box;
+    overflow: hidden;
+    color: #58708F !important;
+    font-size: 10px !important;
+    line-height: 14px !important;
+    font-weight: 400 !important;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-support-action {
+    grid-column: 3 !important;
+    justify-self: end !important;
+    margin: 0 !important;
+    color: #08663F !important;
+    font-size: 0 !important;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-support-action::after {
+    content: "›";
+    font: 600 28px/1 Poppins, system-ui, sans-serif;
+  }
+  #root[data-app-layout="mobile"] .business-dashboard-tools-button .business-dashboard-support-copy { padding-right: 14px; }
+  #root[data-app-layout="mobile"] .business-dashboard-tools-eyebrow,
+  #root[data-app-layout="mobile"] .business-dashboard-tools-features { display: none !important; }
+  #root[data-app-layout="mobile"] .business-dashboard-tools-cta {
+    position: absolute;
+    top: 50%;
+    right: 12px;
+    transform: translateY(-50%);
+  }
+}
