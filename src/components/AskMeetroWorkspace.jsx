@@ -1,6 +1,7 @@
 import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { stageQuoteInvoiceInstruction } from "../utils/quoteToInvoice.js";
 import { guardFriendsAndFamilyMediaUpload } from "../utils/mediaDeferral.js";
+import { createAskMeetroVoiceInput, ASK_VOICE_NOTICE } from "../utils/askMeetroVoiceInput.js";
 import { NativeSpeechRecognition } from "../utils/assistantSpeechRecognition.js";
 import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
@@ -17,7 +18,7 @@ const suggestions = {
   personal: [["Track my project", "Show me the next step for this project."], ["Continue a conversation", "Open my conversations."], ["Request a service", "Help me describe a new service request."], ["Review a quote", "Help me understand this quote."]],
 };
 
-export default function AskMeetroWorkspace({ context = {}, role = "personal", initialQuestion = "", currentPage = "home", onClose, setPage, session, onSessionChange, completionApi = { review: reviewAskMeetroCompletion, apply: applyAskMeetroCompletion } }) {
+export default function AskMeetroWorkspace({ context = {}, role = "personal", initialQuestion = "", currentPage = "home", onClose, setPage, session, onSessionChange, resolveActions = resolveAskMeetroActions, completionApi = { review: reviewAskMeetroCompletion, apply: applyAskMeetroCompletion } }) {
   const [input, setInput] = useState(initialQuestion);
   const [messages, setMessages] = useState(session?.messages || []);
   const [actions, setActions] = useState(session?.actions || []);
@@ -26,7 +27,8 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
   const [review, setReview] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [listening, setListening] = useState(false);
+  const [voiceState, setVoiceState] = useState("idle");
+  const listening = voiceState === "listening";
   const [viewport, setViewport] = useState(null);
   const composerRef = useRef(null), attachRef = useRef(null), photoRef = useRef(null), bottomRef = useRef(null), speechRef = useRef(null);
   const inFlight = useRef(false), mounted = useRef(true), filesRef = useRef([]);
@@ -43,8 +45,7 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
     mounted.current = true;
     return () => {
       mounted.current = false;
-      speechRef.current?.abort?.();
-      if (Capacitor.isNativePlatform()) void NativeSpeechRecognition.stop().catch(() => {});
+      void speechRef.current?.cancel();
       filesRef.current.forEach((file) => { if (file.url) URL.revokeObjectURL(file.url); });
     };
   }, []);
@@ -55,11 +56,11 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
     if (!text || inFlight.current) return;
     inFlight.current = true; setBusy(true); setError("");
     try {
-      const next = await resolveAskMeetroActions(text, { context, role, setPage });
+      const next = await resolveActions(text, { context, role, setPage });
       if (!mounted.current) return;
-      setMessages((current) => [...current, { role: "user", text }, { role: "assistant", text: next.find((action) => action.blockedReason)?.blockedReason || askMeetroReply(next) }]);
-      setActions(next); setReview(null); setInput("");
-    } catch { if (mounted.current) setError("The record could not be verified. Try again from the exact record."); }
+      setMessages((current) => [...current, { role: "user", text }, { role: "assistant", text: next.find((action) => action.blockedReason)?.blockedReason || askMeetroReply(next, text) }]);
+      setActions(next.filter((action) => action.status === "PROPOSED" && action.route)); setReview(null); setInput((current) => current.trim() === text && !next.some((action) => action.blockedReason) ? "" : current);
+    } catch { if (mounted.current) { setActions([]); setReview(null); setError("I could not process that request. Your message is still in the composer. Nothing has been changed. Please try again."); } }
     finally { inFlight.current = false; if (mounted.current) setBusy(false); }
   }
   function attach(event) {
@@ -74,23 +75,16 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
     filesRef.current = files.filter((_, i) => i !== index); setFiles(filesRef.current);
   }
   async function voice() {
-    setError("");
-    if (listening) { speechRef.current?.stop?.(); if (Capacitor.isNativePlatform()) await NativeSpeechRecognition.stop(); setListening(false); return; }
-    if (Capacitor.isNativePlatform()) {
-      try {
-        await NativeSpeechRecognition.requestPermissions(); setListening(true);
-        const result = await NativeSpeechRecognition.start({ language: "en-US", maxResults: 1, partialResults: false, popup: true });
-        if (mounted.current) { setInput((previous) => [previous, result.matches?.[0]].filter(Boolean).join(" ")); setListening(false); }
-      } catch { if (mounted.current) { setListening(false); setError("Voice is unavailable. You can type your message."); } }
-      return;
-    }
-    const Recognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-    if (!Recognition) { setError("Voice is unavailable in this browser. You can type your message."); return; }
-    const recognition = new Recognition(); speechRef.current = recognition; recognition.lang = "en-US";
-    recognition.onresult = (event) => { if (mounted.current) setInput((previous) => [previous, event.results[0][0].transcript].filter(Boolean).join(" ")); };
-    recognition.onend = () => { if (mounted.current) setListening(false); };
-    recognition.onerror = () => { if (mounted.current) { setListening(false); setError("Voice could not hear you. Try again or type your message."); } };
-    try { recognition.start(); setListening(true); } catch { setError("Voice is unavailable. You can type your message."); }
+    if (voiceState !== "idle") { await speechRef.current?.stop(); return; }
+    if (!speechRef.current) speechRef.current = createAskMeetroVoiceInput({
+      native: Capacitor.isNativePlatform(), plugin: NativeSpeechRecognition,
+      pluginAvailable: Capacitor.isPluginAvailable("SpeechRecognition"),
+      Recognition: window.SpeechRecognition || window.webkitSpeechRecognition,
+      onState: (state) => { if (mounted.current) setVoiceState(state); },
+      onNotice: (notice) => { if (mounted.current) setError(notice); },
+      onTranscript: (text) => { if (mounted.current) setInput((previous) => [previous, text].filter(Boolean).join(" ")); },
+    });
+    await speechRef.current.start();
   }
   async function openReview(selection) {
     if (inFlight.current) return;
@@ -125,11 +119,7 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
     setReview(null); setPage(action.route);
   }
   // Voice fallback is informational; failed actions retain their alert presentation.
-  const isVoiceNotice = [
-    "Voice is unavailable. You can type your message.",
-    "Voice is unavailable in this browser. You can type your message.",
-    "Voice could not hear you. Try again or type your message.",
-  ].includes(error);
+  const isVoiceNotice = Object.values(ASK_VOICE_NOTICE).includes(error);
   const subject = context.label || context.draftId || context.jobId || context.invoiceId || context.requestId || context.conversationId || context.relationshipId;
   return <div className={`ask-meetro-shell${viewport?.keyboard ? " is-keyboard-open" : ""}`} style={viewport ? { height: viewport.height, top: viewport.top } : undefined}>
     <main className="ask-meetro-workspace" aria-labelledby="ask-meetro-title">
@@ -143,9 +133,10 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
         <div ref={bottomRef} />
       </div>
       <footer className="ask-meetro-footer">
+        {voiceState !== "idle" ? <p className="ask-meetro-notice" role="status">{listening ? "Listening… Tap the microphone to stop." : voiceState === "permission" ? "Waiting for microphone and speech permission…" : "Starting voice input…"}</p> : null}
         {error ? <p className={isVoiceNotice ? "ask-meetro-notice" : "ask-meetro-error"} role={isVoiceNotice ? "status" : "alert"}>{error}</p> : null}
         {files.length ? <section className="ask-meetro-attachments" aria-label="Local attachments">{files.map((file, index) => <div key={`${file.name}-${index}`}>{file.url ? <img src={file.url} alt={file.name} /> : <MeetroIcon name="requestDetails" size={20} decorative />}<span>{file.name}</span><button type="button" aria-label={`Remove ${file.name}`} onClick={() => removeFile(index)}>×</button></div>)}<p>Local attachments are not yet saved to a Meetro record. Use the Project Folder's reviewed upload to document them.</p></section> : null}
-        <form className="ask-meetro-composer" onSubmit={send}><input ref={attachRef} type="file" multiple hidden onChange={attach} /><input ref={photoRef} type="file" accept="image/*" capture="environment" multiple hidden onChange={attach} /><button type="button" aria-label="Attach" onClick={() => attachRef.current?.click()}><MeetroIcon name="addProject" size={20} decorative /></button><button type="button" aria-label="Photo" onClick={() => photoRef.current?.click()}><MeetroIcon name="portfolio" size={20} decorative /></button><textarea ref={composerRef} aria-label="Ask Meetro anything" placeholder="Ask Meetro anything..." value={input} maxLength={5000} rows={1} onChange={(event) => setInput(event.target.value)} /><button type="button" aria-label={listening ? "Stop voice" : "Voice"} aria-pressed={listening} onClick={voice}><MeetroIcon name="microphone" size={20} decorative /></button><button type="submit" className="ask-meetro-send" aria-label="Send" disabled={!input.trim() || busy}><MeetroIcon name="publishProject" size={20} decorative /></button></form>
+        <form className="ask-meetro-composer" onSubmit={send}><input ref={attachRef} type="file" multiple hidden onChange={attach} /><input ref={photoRef} type="file" accept="image/*" capture="environment" multiple hidden onChange={attach} /><button type="button" aria-label="Attach" onClick={() => attachRef.current?.click()}><MeetroIcon name="addProject" size={20} decorative /></button><button type="button" aria-label="Photo" onClick={() => photoRef.current?.click()}><MeetroIcon name="portfolio" size={20} decorative /></button><textarea ref={composerRef} aria-label="Ask Meetro anything" placeholder="Ask Meetro anything..." value={input} maxLength={5000} rows={1} onChange={(event) => setInput(event.target.value)} /><button type="button" aria-label={voiceState !== "idle" ? "Stop voice" : "Voice"} aria-pressed={listening} onClick={voice}><MeetroIcon name="microphone" size={20} decorative /></button><button type="submit" className="ask-meetro-send" aria-label="Send" disabled={!input.trim() || busy}><MeetroIcon name="publishProject" size={20} decorative /></button></form>
         <p className="ask-meetro-principle">Ask Meetro talks. Meetro records.</p>
       </footer>
     </main>

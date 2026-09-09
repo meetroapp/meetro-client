@@ -44,35 +44,61 @@ export function askMeetroRecordRoute(context, kind, role = "personal") {
   return "";
 }
 
+const commandPrefix = "(?:(?:please|can you|could you|would you|help me|i want to) )?";
+const changeClause = new RegExp(`^${commandPrefix}(?:create|prepare|revise|update|edit|record|mark|complete|finish|schedule|reschedule|approve|accept|cancel|add|attach|upload|crear|preparar|actualizar|registrar|completar|agendar)\\b[\\s\\S]*\\b(?:job|work|quote|invoice|payment|paid|deposit|visit|appointment|consultation|customer|record|photo|trabajo|cotizacion|factura|pago|deposito|visita)\\b`);
+const informationClause = /^(?:(?:please|can you|could you|would you)\s+)?(?:explain|troubleshoot|diagnos(?:e|is)|summari[sz]e|compare|interpret|why|how|what|whether|explica|explicar|diagnosticar|resume|comparar|por que|como|help\b|(?:i\s+)?(?:need|want)\s+(?:help|guidance|advice)|(?:check|review)\s+(?:whether|if|why|how|what))\b/;
+
+function askMeetroIntent(instruction) {
+  const text = String(instruction || "").trim().slice(0, 5000).normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
+  // Inspect clause heads, not relative clauses such as "with what the customer
+  // paid" or "how we discussed" inside an explicit operational instruction.
+  const clauses = text.split(/[;!?\n]|\.(?!\d)|,\s+|\b(?:and|but|then|also)\b/).map((part) => part.trim()).filter(Boolean);
+  const information = clauses.some((clause) => informationClause.test(clause));
+  const change = clauses.some((clause) => !informationClause.test(clause) && (changeClause.test(clause) || isExplicitStandaloneNewQuoteIntent(clause)));
+  return { clauses, information, change };
+}
+
+export function isAskMeetroInformationRequest(instruction) {
+  const { information, change } = askMeetroIntent(instruction);
+  return information && !change;
+}
+
 export function planAskMeetroActions(instruction, { context = {}, role = "personal" } = {}) {
   const text = String(instruction || "").trim().slice(0, 5000);
   const normalized = text.normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
   const actions = [];
-  const add = (kind, title, recordKind = kind, extra = {}) => actions.push(Object.freeze({ id: `${actions.length}-${kind}`, kind, title, instruction: text, route: askMeetroRecordRoute(context, recordKind, role), context, status: "PROPOSED", ...extra }));
-  if (!text) return [];
+  const add = (kind, title, recordKind = kind, extra = {}) => {
+    const route = extra.route ?? askMeetroRecordRoute(context, recordKind, role);
+    if (!route) return; // Missing exact authority is a clarification, never a placeholder review.
+    actions.push(Object.freeze({ id: `${actions.length}-${kind}`, kind, title, instruction: text, route, context, status: "PROPOSED", ...extra }));
+  };
+  const intent = askMeetroIntent(text);
+  // Until conversation is connected, hold mixed requests in full. Do not pass
+  // unanswered guidance or conditional instructions into record review/apply.
+  if (!text || intent.information) return [];
   // Uncertain and negative statements do not become affirmative lifecycle proposals.
   if (/\b(not|never|don[’']t|do not|hasn[’']t|haven[’']t|isn[’']t|wasn[’']t|no|nunca|sin|maybe|perhaps|quizas)\b/.test(normalized)) return [];
   if (role === "business" && isExplicitStandaloneNewQuoteIntent(text)) {
     add("NEW_QUOTE", "Prepare a new Quote", "QUOTE", { route: "quoteBuilder?new=1" });
     return actions;
   }
-  const invoiceCommand = role === "business" ? parseQuoteInvoiceCommand(text) : null;
+  // Only explicit command clauses can nominate a change. Merely mentioning a
+  // payment, visit, completion, or Quote does not ask Meetro to change it.
+  const command = (verbs, subject) => intent.clauses.some((clause) => new RegExp(`^${commandPrefix}(?:${verbs})\\b[\\s\\S]*\\b(?:${subject})\\b`).test(clause));
+  const invoiceCommand = role === "business" && command("create|prepare|make|crear|preparar", "invoice|factura") ? parseQuoteInvoiceCommand(text) : null;
   if (invoiceCommand && /\b(?:q\s*-?\s*\d+|quote|cotizacion)\b/.test(normalized)) {
-    add("QUOTE_TO_INVOICE", "Prepare Invoice from exact Quote", "INVOICE", { route: "", invoiceCommand });
-    return actions;
+    // This is a lookup request, not a proposed mutation. Resolution must verify
+    // an exact Quote before the workspace can render its review card.
+    return [Object.freeze({ id: "0-QUOTE_TO_INVOICE", kind: "QUOTE_TO_INVOICE", title: "Prepare Invoice from exact Quote", instruction: text, route: "", invoiceCommand, context, status: "LOOKUP_REQUIRED" })];
   }
-  if (/\b(approved?|accept(?:ed)?|aprobo|aprobada|aprobado)\b/.test(normalized) && /\b(quote|cotizacion)\b/.test(normalized)) add("QUOTE_APPROVAL", "Review customer approval", "QUOTE");
-  if (/\b(paid|payment|deposit|received|pago|deposito)\b/.test(normalized)) add(/\b(deposit|deposito)\b/.test(normalized) ? "DEPOSIT" : "PAYMENT", "Review payment evidence");
-  if (/\b(schedule|reschedule|visit|appointment|programa|agendar|visita)\b/.test(normalized)) add("SCHEDULE", "Review visit date and time");
-  if (/\b(complet(?:e|ed)|finish(?:ed)?|completar|terminado)\b/.test(normalized) && /\b(job|work|trabajo)\b/.test(normalized)) add("COMPLETE_JOB", "Review work completion", "JOB");
-  if (/\b(cancel|cancellation|cancelar)\b/.test(normalized)) add("CANCEL", "Review cancellation", "JOB");
-  if (/\b(photo|photos|picture|pictures|foto|fotos)\b/.test(normalized)) add("PHOTOS", "Review photos for the Project Folder");
-  if (!actions.some((item) => item.kind === "QUOTE_APPROVAL") && /\b(quote|cotizacion)\b/.test(normalized)) add("QUOTE", "Review Quote instructions");
-  if (/\b(invoice|factura)\b/.test(normalized)) add("INVOICE", "Prepare or review Invoice");
-  if (/\b(lead|leads|opportunit(?:y|ies))\b/.test(normalized) && role === "business") add("LEADS", "Find new opportunities", "JOB", { route: "businessLeads" });
-  if (/\b(request|service|servicio)\b/.test(normalized) && role === "personal" && !actions.length) add("REQUEST", "Prepare a service request", "JOB", { route: "assistant" });
-  if (/\b(message|messages|conversation|conversations|chat|mensaje)\b/.test(normalized)) add("CONVERSATION", "Continue the conversation");
-  if (!actions.length && context.page) add("RECORD", "Review this record", context.draftId ? "QUOTE" : "JOB");
+  if (command("approve|accept|record|mark|aprobar|registrar", "quote|cotizacion") && /\b(approv(?:e|al|ed)|accept(?:ed)?|aprobo|aprobada|aprobado)\b/.test(normalized)) add("QUOTE_APPROVAL", "Review customer approval", "QUOTE");
+  if (command("record|add|registrar", "paid|payment|deposit|received|pago|deposito")) add(/\b(deposit|deposito)\b/.test(normalized) ? "DEPOSIT" : "PAYMENT", "Review payment evidence");
+  if (command("schedule|reschedule|programa|agendar", "job|visit|appointment|consultation|trabajo|visita|consulta")) add("SCHEDULE", "Review visit date and time");
+  if (command("mark|complete|finish|completar|terminar", "job|work|trabajo") && /\b(complet(?:e|ed)|finish(?:ed)?|completar|terminar|terminado)\b/.test(normalized)) add("COMPLETE_JOB", "Review work completion", "JOB");
+  if (command("cancel|cancelar", "job|visit|appointment|trabajo|visita")) add("CANCEL", "Review cancellation", "JOB");
+  if (command("add|attach|upload|agregar|subir", "photo|photos|picture|pictures|foto|fotos")) add("PHOTOS", "Review photos for the Project Folder");
+  if (!actions.some((item) => item.kind === "QUOTE_APPROVAL") && command("create|prepare|revise|update|edit|continue|crear|preparar|actualizar", "quote|cotizacion")) add("QUOTE", "Review Quote instructions");
+  if (command("create|prepare|revise|update|edit|crear|preparar|actualizar", "invoice|factura")) add("INVOICE", "Prepare or review Invoice");
   return actions.map((action) => {
     const details = [];
     if (["PAYMENT", "DEPOSIT"].includes(action.kind)) {
@@ -98,14 +124,22 @@ export async function resolveAskMeetroActions(instruction, options = {}) {
   return Promise.all(actions.map(async (action) => {
     if (action.kind !== "QUOTE_TO_INVOICE") return action;
     const result = await lookupQuoteInvoiceCommand(action.invoiceCommand, options);
-    return Object.freeze({ ...action, route: result.state === "EXACT_QUOTE_TO_INVOICE" ? result.route : "", resolution: result.state,
+    return Object.freeze({ ...action, status: result.state === "EXACT_QUOTE_TO_INVOICE" ? "PROPOSED" : "BLOCKED", route: result.state === "EXACT_QUOTE_TO_INVOICE" ? result.route : "", resolution: result.state,
       context: Object.freeze({ page: "quoteBuilder", ...(result.document ? { draftId: result.document.id, label: result.document.customerDisplayName || result.document.content?.customerName || "" } : { blocked: true }) }),
       details: [{ label: "Quote", value: action.invoiceCommand.number || "Exact Quote required" }],
       blockedReason: result.state === "EXACT_QUOTE_TO_INVOICE" ? "" : quoteInvoiceResolutionMessage(result.state) });
   }));
 }
 
-export function askMeetroReply(actions) {
-  if (!actions.length) return "Tell me what you need help with, or open Ask Meetro from a Job, customer conversation, or document to work with that exact record.";
+export function isAskMeetroChangeRequest(instruction) {
+  const { information, change } = askMeetroIntent(instruction);
+  return change && !information;
+}
+
+export function askMeetroReply(actions, instruction = "") {
+  const { information, change } = askMeetroIntent(instruction);
+  if (information && change) return "This message includes a question and a requested change. Conversational help is not connected yet, so I have not answered the question or proposed the change. Send the change separately to review it against its exact record. Nothing has been changed.";
+  if (!actions.length && isAskMeetroChangeRequest(instruction)) return "To make that change, open Ask Meetro from the exact existing record. No action has been proposed or applied.";
+  if (!actions.length) return "Conversational help is not connected yet. Your question does not require a Meetro record. Nothing has been changed.";
   return `I found ${actions.length} ${actions.length === 1 ? "action" : "actions"} to review. Nothing has been changed. Each action stays with its existing Meetro record and review process.`;
 }

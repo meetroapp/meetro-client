@@ -38,7 +38,7 @@ test.after(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT; delete globalThis.__dashboardHttp;
 });
 const JOB = "7e742dc1-e2a2-49c6-a493-11e351c80d54", EVIDENCE = "7a02ee20-7f32-48eb-96dc-a3217bc5dcda";
-async function mount(t, { host = false } = {}) {
+async function mount(t, { host = false, context = { page: "workCenter", jobId: JOB }, completionApi, resolveActions } = {}) {
   localStorage.clear(); localStorage.setItem("activeAccountMode", "business"); localStorage.setItem("language", "en");
   window.history.replaceState({}, "", `#workCenter?jobId=${JOB}&stage=work`);
   const calls = [], routes = [];
@@ -51,7 +51,7 @@ async function mount(t, { host = false } = {}) {
   const { default: Component } = await vite.ssrLoadModule(`/src/components/${host ? "AskMeetroHost" : "AskMeetroWorkspace"}.jsx`);
   const root = createRoot(document.getElementById("root"));
   t.after(async () => { await act(async () => root.unmount()); });
-  const props = { currentPage: "workCenter", role: "business", context: { page: "workCenter", jobId: JOB }, setPage: (route) => routes.push(route), onClose() {} };
+  const props = { currentPage: "workCenter", role: "business", context, ...(resolveActions ? { resolveActions } : {}), ...(completionApi ? { completionApi } : {}), setPage: (route) => routes.push(route), onClose() {} };
   await act(async () => { root.render(React.createElement(Component, props, host ? React.createElement("input", { "aria-label": "Existing unsaved Quote", defaultValue: "Unsaved scope" }) : null)); await pause(); });
   async function click(label) {
     const button = [...document.querySelectorAll("button")].find((item) => item.textContent.trim() === label || item.getAttribute("aria-label") === label);
@@ -70,7 +70,7 @@ test("Ask welcome has role-specific suggestions and functional composer controls
   assert.match(w.text(), /Your assistant for real work/); assert.doesNotMatch(w.text(), /AI assistant/);
   for (const label of ["Attach", "Photo", "Voice", "Send"]) assert.ok(document.querySelector(`[aria-label="${label}"]`));
   assert.equal(document.querySelector('input[capture="environment"]').accept, "image/*");
-  await w.send("Customer approved the kitchen quote and paid the $1,500 deposit today. Schedule the job for next Friday morning.");
+  await w.send("Record customer approval of the kitchen quote and record the $1,500 deposit paid today. Schedule the job for next Friday morning.");
   assert.equal(document.querySelector(".ask-meetro-welcome"), null);
   assert.equal(document.querySelectorAll(".ask-meetro-actions article").length, 3);
   await w.click("Review all");
@@ -147,4 +147,104 @@ test("unavailable voice is a calm status and preserves typed input and action au
   assert.equal(document.querySelector(".ask-meetro-receipts"), null);
   assert.ok(w.calls.every((call) => !call.method || call.method === "GET"));
   assert.deepEqual(w.routes, []);
+});
+
+for (const question of [
+  "Need help resolving a non working outlet",
+  "Help me troubleshoot an outlet that stopped working",
+  "Why might this outlet have no power?",
+  "Explain what I should check first",
+  "How do I schedule a visit?",
+  "Explain this Quote.",
+  "Help me troubleshoot this outlet.",
+]) test(`real composer keeps help conversational with no Review: ${question}`, async (t) => {
+  const w = await mount(t, { context: { page: "businessDashboard" } });
+  await w.send(question);
+  assert.match(w.text(), /Conversational help is not connected yet/);
+  assert.doesNotMatch(w.text(), /Review this record|Choose the exact record|action to review/);
+  assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  assert.equal(document.querySelector(".ask-meetro-composer textarea").disabled, false);
+  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+});
+for (const instruction of [
+  "Update this invoice with what the customer paid.",
+  "Schedule this job how we discussed.",
+  "Record what the customer paid on this exact Invoice.",
+]) test(`real composer proposes exact review for embedded question words: ${instruction}`, async (t) => {
+  const w = await mount(t);
+  await w.send(instruction);
+  assert.equal(document.querySelectorAll(".ask-meetro-actions article").length, 1);
+  assert.match(w.text(), /I found 1 action to review/);
+  assert.doesNotMatch(w.text(), /Conversational help is not connected/);
+  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+  await w.click("Review");
+  assert.ok(document.querySelector(".ask-meetro-review"));
+  assert.equal(document.querySelector(".ask-meetro-receipts"), null);
+  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+});
+for (const instruction of [
+  "Explain this Quote. Update this invoice with what the customer paid.",
+  "Update this invoice and explain what the customer paid.",
+  "Schedule this job, then explain how to prepare.",
+  "Create invoice from Quote Q0000049 and explain the work.",
+]) test(`real composer holds mixed intent and clears previous actions: ${instruction}`, async (t) => {
+  const w = await mount(t);
+  await w.send("Schedule this job Friday");
+  assert.ok(document.querySelector(".ask-meetro-actions"));
+  await w.send(instruction);
+  assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  assert.equal(document.querySelector(".ask-meetro-review"), null);
+  assert.equal(document.querySelector(".ask-meetro-receipts"), null);
+  assert.match(w.text(), /have not answered the question or proposed the change/);
+  assert.equal(document.querySelector(".ask-meetro-composer textarea").disabled, false);
+  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+});
+test("context-free conversation and existing Customer context do not invent record actions", async (t) => {
+  const w = await mount(t, { context: { page: "customerRelationshipsCenter", relationshipId: EVIDENCE } });
+  await w.send("Hello, can you compare the options for me?");
+  assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  assert.match(document.querySelector(".ask-meetro-context").textContent, new RegExp(EVIDENCE));
+  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+});
+test("a failed proposal lookup preserves typed text and never asks an informational user to choose a record", async (t) => {
+  const w = await mount(t);
+  globalThis.__dashboardHttp = async () => { throw new Error("lookup unavailable"); };
+  await w.send("Create invoice from Quote Q0000049");
+  assert.match(w.text(), /The Quote could not be verified/);
+  assert.equal(document.querySelector(".ask-meetro-composer textarea").value, "Create invoice from Quote Q0000049");
+  assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  await w.send("Why might an outlet have no power?");
+  assert.equal(document.querySelector(".ask-meetro-error"), null);
+  assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  assert.deepEqual(w.routes, []);
+});
+test("actual completion review failure remains an alert and cannot Apply", async (t) => {
+  const w = await mount(t, { completionApi: { review: async () => { throw new Error("This Job cannot be completed."); }, apply: () => assert.fail("must not Apply") } });
+  await w.send("Complete this job"); await w.click("Review");
+  assert.match(document.querySelector('[role="alert"]').textContent, /cannot be completed/);
+  assert.ok(![...document.querySelectorAll("button")].some((button) => button.textContent === "Confirm & Apply"));
+  assert.equal(document.querySelector(".ask-meetro-receipts"), null);
+});
+test("browser transcription fills the editable composer without submitting or applying", async (t) => {
+  let recognition;
+  window.SpeechRecognition = class { constructor() { recognition = this; } start() { this.onstart(); } abort() {} };
+  t.after(() => { delete window.SpeechRecognition; });
+  const w = await mount(t);
+  await w.click("Voice");
+  assert.match(w.text(), /Listening/);
+  const result = [{ transcript: "Complete this job" }]; result.isFinal = true;
+  await act(async () => { recognition.onresult({ results: [result] }); await pause(); });
+  assert.equal(document.querySelector(".ask-meetro-composer textarea").value, "Complete this job");
+  assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  assert.equal(document.querySelector(".ask-meetro-receipts"), null);
+  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+});
+
+ test("parser rejection fails closed without losing the typed request", async (t) => {
+  const w = await mount(t, { resolveActions: async () => { throw new Error("parser failure"); } });
+  await w.send("Need help resolving an outlet");
+  assert.match(document.querySelector('[role="alert"]').textContent, /I could not process that request/);
+  assert.equal(document.querySelector(".ask-meetro-composer textarea").value, "Need help resolving an outlet");
+  assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
 });
