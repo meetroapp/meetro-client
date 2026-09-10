@@ -2,10 +2,19 @@ import { authFetch } from "./authFetch.js";
 import { createIntelligenceKey } from "./contextualIntelligence.js";
 import { askMeetroIntent, askMeetroRecordRoute, askMeetroReply, resolveAskMeetroActions } from "./askMeetro.js";
 import { isExplicitStandaloneNewQuoteIntent } from "./assistantQuoteNavigation.js";
+import { resolveExactSourceQuote } from "./quoteToInvoice.js";
+import { listBusinessDocumentDrafts } from "./businessDocumentDraftApi.js";
+import { hydrateSavedQuoteAuthority } from "./savedQuoteAuthorityHydration.js";
 
 export const ASK_CONVERSATION_OPERATION = "companion.converse";
 const SUCCESS = new Set(["INTELLIGENCE_OPERATION_COMPLETED", "INTELLIGENCE_OPERATION_REPLAYED"]);
 const uuid = (value) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+
+const sameUuid = (left, right) =>
+  uuid(left) &&
+  uuid(right) &&
+  String(left).trim().toLowerCase() ===
+    String(right).trim().toLowerCase();
 
 const RETRIEVAL_STATUSES = new Set(["RESOLVED", "AMBIGUOUS", "NOT_FOUND", "SAFE_NOT_FOUND", "NO_RECORD_REQUIRED"]);
 const RETRIEVAL_ANSWER_SOURCES = new Set(["PROVIDER_CONVERSATION", "DETERMINISTIC_RETRIEVAL"]);
@@ -316,6 +325,341 @@ function isVagueResolvedQuoteChange(instruction, resolution) {
   return targets.has(text);
 }
 
+function isSpecificResolvedQuoteChange(instruction, resolution) {
+  if (
+    resolution?.status !== "RESOLVED" ||
+    resolution?.records?.length !== 1
+  ) {
+    return false;
+  }
+
+  const item = resolution.records[0];
+  const record = item?.record;
+  const number = normalizeResolvedQuoteTarget(item?.number)
+    .replace(/\s+/g, "");
+
+  const quoteLike =
+    record?.type === "QUOTE" ||
+    (
+      record?.type === "DOCUMENT_DRAFT" &&
+      /^q\d{1,12}$/.test(number)
+    );
+
+  // Universal in-panel lookup needs the exact authorized Quote number.
+  if (!quoteLike || !/^q\d{1,12}$/.test(number)) {
+    return false;
+  }
+
+  let text = normalizeResolvedQuoteTarget(instruction);
+
+  const command =
+    /^(?:(?:please|can you|could you|would you|help me|i want to)\s+)?(?:update|edit|revise)\s+/;
+
+  if (!command.test(text)) {
+    return false;
+  }
+
+  text = text.replace(command, "").trim();
+
+  const name = normalizeResolvedQuoteTarget(item?.name);
+
+  const targets = new Set([
+    `quote ${number}`,
+  ]);
+
+  if (name) {
+    targets.add(`${name} quote`);
+    targets.add(`customer ${name} quote`);
+    targets.add(`${name} quote ${number}`);
+    targets.add(`customer ${name} quote ${number}`);
+  }
+
+  // Prefer the longest authorized target. Otherwise a complete target such
+  // as "Bob Hamel Quote Q0000049" could match the shorter
+  // "Bob Hamel Quote" prefix and incorrectly treat the Quote number itself
+  // as requested change detail.
+  const target = [...targets]
+    .sort((left, right) => right.length - left.length)
+    .find((candidate) =>
+      text === candidate ||
+      text.startsWith(`${candidate} `)
+    );
+
+  return Boolean(
+    target &&
+    text.slice(target.length).trim()
+  );
+}
+
+export async function resolveAskMeetroHeldQuoteFollowUp(
+  instruction,
+  resolution,
+  {
+    setPage,
+    listDocuments = listBusinessDocumentDrafts,
+    getQuoteAuthority = hydrateSavedQuoteAuthority,
+  } = {}
+) {
+  const priorInstruction =
+    String(resolution?.instruction || "").trim();
+
+  if (
+    !priorInstruction ||
+    !isVagueResolvedQuoteChange(priorInstruction, resolution)
+  ) {
+    return null;
+  }
+
+  const intent = askMeetroIntent(instruction);
+
+  if (!intent.change || intent.information) {
+    return null;
+  }
+
+  const normalizedInstruction =
+    normalizeResolvedQuoteTarget(instruction);
+
+  // A newly supplied Q-number nominates a new target and must go through
+  // normal Universal Retrieval instead of inheriting the previous Quote.
+  if (/\bq\d{1,12}\b/.test(
+    normalizedInstruction.replace(/\s+/g, "")
+  )) {
+    return null;
+  }
+
+  // Do not let an unrelated lifecycle command inherit Quote identity.
+  if (
+    /\b(?:invoice|job|visit|appointment|schedule|complete|completion|cancel|photo|approval|approve|accept)\b/.test(
+      normalizedInstruction
+    )
+  ) {
+    return null;
+  }
+
+  const item = resolution.records?.[0];
+  const record = item?.record;
+
+  const number =
+    String(item?.number || "").trim();
+
+  const normalizedNumber =
+    normalizeResolvedQuoteTarget(number).replace(/\s+/g, "");
+
+  const quoteLike =
+    record?.type === "QUOTE" ||
+    (
+      record?.type === "DOCUMENT_DRAFT" &&
+      /^q\d{1,12}$/.test(normalizedNumber)
+    );
+
+  if (!quoteLike || !/^q\d{1,12}$/.test(normalizedNumber)) {
+    return null;
+  }
+
+  const documents = await listDocuments({
+    search: number,
+    type: "QUOTE",
+    setPage,
+  });
+
+  const exact = resolveExactSourceQuote({
+    number,
+    customerName: String(item?.name || "").trim(),
+    documents,
+  });
+
+  if (exact.state !== "EXACT_QUOTE") {
+    throw Object.assign(
+      new Error(
+        "The previously resolved Quote could not be reverified. Search for the Quote again. Nothing has been changed."
+      ),
+      { code: "ASK_HELD_QUOTE_REVERIFY_FAILED" }
+    );
+  }
+
+  const binding =
+    await verifyAskMeetroResolvedQuoteBinding({
+      item,
+      document: exact.document,
+      setPage,
+      getQuoteAuthority,
+    });
+
+  if (binding.state !== "EXACT_QUOTE") {
+    throw Object.assign(
+      new Error(
+        binding.state === "CANONICAL_MISMATCH"
+          ? "The previously resolved canonical Quote no longer matches this working draft. Search again. Nothing has been changed."
+          : binding.state === "DOCUMENT_DRAFT_MISMATCH"
+            ? "The previously resolved Quote no longer matches the exact working draft. Search again. Nothing has been changed."
+            : "The previously resolved Quote authority could not be reverified. Search again. Nothing has been changed."
+      ),
+      {
+        code:
+          binding.state === "CANONICAL_MISMATCH"
+            ? "ASK_HELD_CANONICAL_QUOTE_MISMATCH"
+            : binding.state === "DOCUMENT_DRAFT_MISMATCH"
+              ? "ASK_HELD_QUOTE_IDENTITY_CHANGED"
+              : "ASK_HELD_QUOTE_AUTHORITY_UNVERIFIED",
+      }
+    );
+  }
+
+  return Object.freeze({
+    context: Object.freeze({
+      page: "quoteBuilder",
+      draftId: exact.document.id,
+      ...(item?.label
+        ? { label: String(item.label).slice(0, 160) }
+        : {}),
+    }),
+    document: exact.document,
+  });
+}
+
+function isBoundResolvedQuoteFollowUp(
+  instruction,
+  resolution,
+  currentContext = {}
+) {
+  const intent = askMeetroIntent(instruction);
+
+  if (
+    !intent.change ||
+    intent.information ||
+    currentContext?.page !== "quoteBuilder" ||
+    !uuid(currentContext?.draftId) ||
+    resolution?.status !== "RESOLVED" ||
+    resolution?.records?.length !== 1
+  ) {
+    return false;
+  }
+
+  const item = resolution.records[0];
+  const record = item?.record;
+  const number =
+    normalizeResolvedQuoteTarget(item?.number)
+      .replace(/\s+/g, "");
+
+  return (
+    record?.type === "DOCUMENT_DRAFT" &&
+    record.id === currentContext.draftId &&
+    /^q\d{1,12}$/.test(number)
+  );
+}
+
+async function verifyAskMeetroResolvedQuoteBinding({
+  item,
+  document,
+  setPage,
+  getQuoteAuthority = hydrateSavedQuoteAuthority,
+} = {}) {
+  const record = item?.record;
+
+  if (!record || !document) {
+    return Object.freeze({ state: "INVALID" });
+  }
+
+  if (record.type === "DOCUMENT_DRAFT") {
+    return Object.freeze({
+      state:
+        sameUuid(document.id, record.id)
+          ? "EXACT_QUOTE"
+          : "DOCUMENT_DRAFT_MISMATCH",
+      document,
+      authority: null,
+    });
+  }
+
+  if (record.type !== "QUOTE") {
+    return Object.freeze({ state: "INVALID" });
+  }
+
+  // A canonical Quote can only transfer editable authority through an
+  // exact saved Job-linked working Quote mapping. Matching number/customer
+  // alone is never sufficient.
+  if (!uuid(document.id) || !uuid(document.jobId)) {
+    return Object.freeze({
+      state: "CANONICAL_UNVERIFIED",
+      document,
+      authority: null,
+    });
+  }
+
+  let authority;
+
+  try {
+    authority = await getQuoteAuthority({
+      document,
+      setPage,
+    });
+  } catch {
+    return Object.freeze({
+      state: "CANONICAL_UNVERIFIED",
+      document,
+      authority: null,
+    });
+  }
+
+  const canonical = authority?.canonicalQuote;
+  const sourceDocument = authority?.sourceDocument;
+
+  const sourceIdentityMatches =
+    sameUuid(sourceDocument?.documentId, document.id) &&
+    Number(sourceDocument?.documentVersion) === Number(document.version) &&
+    sameUuid(sourceDocument?.jobId, document.jobId);
+
+  const canonicalIdentityMatches =
+    sameUuid(canonical?.id, record.id) &&
+    sameUuid(canonical?.jobId, document.jobId) &&
+    sameUuid(
+      canonical?.sourceBusinessDocument?.documentId,
+      document.id
+    );
+
+  if (!sourceIdentityMatches || !canonicalIdentityMatches) {
+    return Object.freeze({
+      state: "CANONICAL_MISMATCH",
+      document,
+      authority,
+    });
+  }
+
+  return Object.freeze({
+    state: "EXACT_QUOTE",
+    document,
+    authority,
+  });
+}
+
+function inlineQuoteResolutionMessage(state) {
+  if (state === "CANONICAL_MISMATCH") {
+    return "The resolved canonical Quote does not match this exact working Quote. Nothing has been opened or changed.";
+  }
+
+  if (state === "CANONICAL_UNVERIFIED") {
+    return "The resolved canonical Quote could not be verified against this exact working Quote. Nothing has been opened or changed.";
+  }
+
+  if (state === "DOCUMENT_DRAFT_MISMATCH") {
+    return "The resolved working Quote identity does not match this exact saved draft. Nothing has been opened or changed.";
+  }
+
+  if (state === "BLOCKED_MISMATCH") {
+    return "The resolved customer does not match the exact working Quote. Nothing has been changed.";
+  }
+
+  if (state === "NOT_FOUND") {
+    return "The exact working Quote could not be opened here. Nothing has been changed.";
+  }
+
+  if (state === "AMBIGUOUS") {
+    return "More than one working Quote matched that identity. Open the exact Quote from Saved Files before editing. Nothing has been changed.";
+  }
+
+  return "The exact working Quote could not be verified for editing. Nothing has been changed.";
+}
+
 function expectedRetrievalAudience(role) {
   return role === "business" ? "professional" : "homeowner";
 }
@@ -353,6 +697,7 @@ async function finalizeAskMeetroConversation({
 
   let actions = [];
   let blockedReason = "";
+  let inlineWorkspace = null;
 
   if (resolution?.reviewRequired === true) {
     if (
@@ -402,6 +747,71 @@ async function finalizeAskMeetroConversation({
     }
   }
 
+  if (
+    resolution?.reviewRequired === true &&
+    resolution.status === "RESOLVED" &&
+    actions.length === 0 &&
+    !blockedReason &&
+    options.role === "business" &&
+    (
+      isSpecificResolvedQuoteChange(instruction, resolution) ||
+      isBoundResolvedQuoteFollowUp(
+        instruction,
+        resolution,
+        options.context || {}
+      )
+    )
+  ) {
+    const item = resolution.records[0];
+    const number = String(item?.number || "").trim();
+    const customerName = String(item?.name || "").trim();
+
+    try {
+      const documents = await (
+        options.listDocuments || listBusinessDocumentDrafts
+      )({
+        search: number,
+        type: "QUOTE",
+        setPage: options.setPage,
+      });
+
+      const exact = resolveExactSourceQuote({
+        number,
+        customerName,
+        documents,
+      });
+
+      if (exact.state === "EXACT_QUOTE") {
+        const binding =
+          await verifyAskMeetroResolvedQuoteBinding({
+            item,
+            document: exact.document,
+            setPage: options.setPage,
+            getQuoteAuthority:
+              options.getQuoteAuthority ||
+              hydrateSavedQuoteAuthority,
+          });
+
+        if (binding.state === "EXACT_QUOTE") {
+          inlineWorkspace = Object.freeze({
+            type: "BUSINESS_DOCUMENT",
+            documentType: "QUOTE",
+            document: exact.document,
+            instruction,
+          });
+        } else {
+          blockedReason =
+            inlineQuoteResolutionMessage(binding.state);
+        }
+      } else {
+        blockedReason = inlineQuoteResolutionMessage(exact.state);
+      }
+    } catch {
+      blockedReason =
+        "The exact working Quote is temporarily unavailable. Nothing has been changed.";
+    }
+  }
+
   const clarificationRequired =
     resolution?.reviewRequired === true &&
     resolution.status === "RESOLVED" &&
@@ -422,7 +832,9 @@ async function finalizeAskMeetroConversation({
   // Legacy string-only mocks do not contain the server's mixed-intent
   // protection, so preserve the old warning only for those callers.
   const finalText =
-    blockedReason ||
+    inlineWorkspace
+      ? `${resolvedLabel ? `I found ${resolvedLabel}` : "I found the Quote"}${resolvedNumber ? `, ${resolvedNumber}` : ""}. The exact working Quote is ready here so you can review or edit the requested change. Nothing has been changed.`
+      : blockedReason ||
     (clarificationRequired
       ? `${resolvedLabel ? `I found ${resolvedLabel}. ` : ""}What would you like to change on this Quote?${resolvedNumber ? ` Include ${resolvedNumber} in your next instruction.` : ""} Nothing has been changed.`
       : !resolution && intent.information && intent.change
@@ -433,6 +845,7 @@ async function finalizeAskMeetroConversation({
     actions,
     text: finalText,
     resolution,
+    ...(inlineWorkspace ? { inlineWorkspace } : {}),
     ...(blockedReason ? { blockedReason } : {}),
   };
 }

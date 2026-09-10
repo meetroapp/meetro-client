@@ -814,3 +814,728 @@ test("resolved vague Quote update asks for the exact change instead of presentin
     null
   );
 });
+
+test("specific Quote edit pulls the exact working form into Ask without leaving the current page", async (t) => {
+  const CANONICAL_QUOTE_ID =
+    "7e742dc1-e2a2-49c6-a493-11e351c80d54";
+  const WORKING_DRAFT_ID =
+    "8b4ba9b7-9c65-4a90-9c25-1d536b82b3ea";
+
+  const sourceDocument = {
+    id: WORKING_DRAFT_ID,
+    version: 7,
+    documentType: "QUOTE",
+    status: "WORKING_DRAFT",
+    reference: "quote-working",
+    documentNumber: "Q-0000049",
+    jobId: null,
+    customerParty: null,
+    customerDisplayName: "Bob Hamel",
+    paymentRequirementId: null,
+    depositRequestAuthority: null,
+    content: {
+      customerName: "Bob Hamel",
+      customerEmail: "",
+      customerPhone: "",
+      customerAddress: "",
+      customerLocation: "",
+      serviceLocation: "",
+      projectTitle: "Window repair",
+      projectDescription: "Window repair",
+      recommendedSolution: "Repair window",
+      laborType: "flat",
+      laborAmount: "250",
+      materials: [],
+      paymentTerms: "",
+      notes: "",
+      depositRequired: false,
+    },
+    workspace: {
+      activeDocument: "QUOTE",
+      instructions: [],
+      manualOverrides: {},
+      privateReminders: [],
+    },
+    photos: [],
+    createdAt: "2026-09-10T10:00:00.000Z",
+    updatedAt: "2026-09-10T10:00:00.000Z",
+  };
+
+  const requestConversation = async () => ({
+    text:
+      "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+    resolution: {
+      version: 1,
+      status: "RESOLVED",
+      audience: "professional",
+      records: [{
+        record: {
+          type: "DOCUMENT_DRAFT",
+          id: WORKING_DRAFT_ID,
+        },
+        name: "Bob Hamel",
+        title: "Window repair",
+        number: "Q-0000049",
+        label: "Bob Hamel — Window repair",
+      }],
+      truncated: false,
+      reviewRequired: true,
+      continuation: {
+        reference: CANONICAL_QUOTE_ID,
+        expiresAfterSeconds: 900,
+      },
+      answerSource: "DETERMINISTIC_RETRIEVAL",
+      providerInvoked: false,
+    },
+  });
+
+  const w = await mount(t, {
+    host: true,
+    context: {},
+  });
+
+  const underlying =
+    document.querySelector('[aria-label="Existing unsaved Quote"]');
+
+  assert.ok(underlying);
+
+  await act(async () => {
+    document.querySelector(".meetro-assistant-launcher").click();
+    await pause();
+  });
+
+  globalThis.__dashboardHttp = async (path, options = {}) => {
+    if (path === "/api/companion/ask") {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          code: "INTELLIGENCE_OPERATION_COMPLETED",
+          operation: "companion.converse",
+          result: {
+            schemaVersion: 1,
+            text:
+              "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+            authorityClassification: "CONVERSATIONAL_NON_CANONICAL",
+            directMutationAllowed: false,
+            resolution: {
+              version: 1,
+              status: "RESOLVED",
+              audience: "professional",
+              records: [{
+                record: {
+                  type: "DOCUMENT_DRAFT",
+                  id: WORKING_DRAFT_ID,
+                },
+                name: "Bob Hamel",
+                title: "Window repair",
+                number: "Q-0000049",
+                label: "Bob Hamel — Window repair",
+              }],
+              truncated: false,
+              reviewRequired: true,
+              continuation: {
+                reference: CANONICAL_QUOTE_ID,
+                expiresAfterSeconds: 900,
+              },
+              answerSource: "DETERMINISTIC_RETRIEVAL",
+              providerInvoked: false,
+            },
+          },
+        },
+      };
+    }
+
+    if (path.startsWith("/business-document-drafts?")) {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          documents: [sourceDocument],
+        },
+      };
+    }
+
+    return {
+      response: { ok: false, status: 503 },
+      data: { success: false },
+    };
+  };
+
+  await w.send("Update Quote Q0000049 labor to $300");
+
+  // Universal Ask must not navigate away.
+  assert.deepEqual(w.routes, []);
+
+  // The page underneath Ask remains mounted with its unsaved state.
+  assert.equal(
+    document.querySelector('[aria-label="Existing unsaved Quote"]'),
+    underlying
+  );
+  assert.equal(underlying.value, "Unsaved scope");
+
+  const inline = document.querySelector(
+    '[data-ask-inline-document="QUOTE"]'
+  );
+
+  assert.ok(inline, "verified Quote form should appear inside Ask Meetro");
+  assert.equal(
+    inline.getAttribute("data-document-id"),
+    WORKING_DRAFT_ID
+  );
+
+  assert.match(inline.textContent, /Bob Hamel/);
+  assert.match(inline.textContent, /Q-0000049/);
+
+  // This must be a real editable form surface, not another navigation card.
+  assert.ok(
+    inline.querySelector("input, textarea, select"),
+    "embedded Quote must expose existing editable form controls"
+  );
+
+  // The existing editor is hosted here, not the entire Quote workspace.
+  assert.equal(inline.querySelector(".business-document-header"), null);
+  assert.equal(inline.querySelector(".business-document-tabs"), null);
+  assert.equal(inline.querySelector(".business-document-chat-shell"), null);
+  assert.equal(inline.querySelector(".business-document-composer"), null);
+  assert.equal(inline.querySelector(".desktop-sidebar"), null);
+  assert.equal(inline.querySelector(".bottom-nav-item"), null);
+
+  assert.doesNotMatch(inline.textContent, /Saved Files/);
+  assert.doesNotMatch(inline.textContent, /Start New Quote/);
+
+  // Ask owns the one conversation/composer.
+  assert.equal(
+    document.querySelectorAll(".ask-meetro-composer").length,
+    1
+  );
+
+  // Ask remains the host rather than replacing the page.
+  assert.ok(document.querySelector(".ask-meetro-workspace"));
+  assert.deepEqual(w.routes, []);
+
+  // Make a real local form change and apply it to the working Quote.
+  const price = inline.querySelector(
+    '[data-quote-safety-field="totalOverride"] input'
+  );
+
+  assert.ok(price, "embedded Quote should expose Customer price");
+
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    ).set.call(price, "300");
+
+    price.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+
+    await pause();
+  });
+
+  await w.click("Apply changes");
+
+  assert.match(
+    inline.textContent,
+    /Unsaved working changes/
+  );
+
+  // Closing an applied-but-unsaved Quote must enter the existing leave guard.
+  await w.click("Close form");
+
+  const exitDialog = document.querySelector(
+    '[data-dialog-purpose="business-document-exit-title"]'
+  );
+
+  assert.ok(
+    exitDialog,
+    "unsaved inline Quote must require Save / Discard / Keep Editing"
+  );
+
+  assert.match(
+    exitDialog.textContent,
+    /Save changes before leaving/
+  );
+
+  // The form must still be mounted while the decision is pending.
+  assert.ok(
+    document.querySelector('[data-ask-inline-document="QUOTE"]')
+  );
+  assert.ok(document.querySelector(".ask-meetro-workspace"));
+  assert.deepEqual(w.routes, []);
+
+  // Keep Editing must return to the exact same in-panel form.
+  await w.click("Keep Editing");
+
+  assert.equal(
+    document.querySelector(
+      '[data-dialog-purpose="business-document-exit-title"]'
+    ),
+    null
+  );
+
+  assert.ok(
+    document.querySelector('[data-ask-inline-document="QUOTE"]')
+  );
+
+  // Discard is an explicit decision; only then may the form close.
+  await w.click("Close form");
+  await w.click("Discard Changes");
+
+  assert.equal(
+    document.querySelector('[data-ask-inline-document="QUOTE"]'),
+    null
+  );
+
+  // Ask itself stays open with the original conversation.
+  assert.ok(document.querySelector(".ask-meetro-workspace"));
+  assert.match(
+    document.querySelector(".ask-meetro-conversation").textContent,
+    /Update Quote Q0000049 labor to \$300/
+  );
+
+  // The page underneath Ask has never been navigated or unmounted.
+  assert.equal(
+    document.querySelector('[aria-label="Existing unsaved Quote"]'),
+    underlying
+  );
+  assert.equal(underlying.value, "Unsaved scope");
+  assert.deepEqual(w.routes, []);
+});
+
+test("vague resolved Quote holds its exact target for the next change without repeating the Quote number", async (t) => {
+  const DRAFT_ID =
+    "8b4ba9b7-9c65-4a90-9c25-1d536b82b3ea";
+  const CONTINUATION_ID =
+    "7e742dc1-e2a2-49c6-a493-11e351c80d54";
+
+  const sourceDocument = {
+    id: DRAFT_ID,
+    version: 7,
+    documentType: "QUOTE",
+    status: "WORKING_DRAFT",
+    reference: "quote-working",
+    documentNumber: "Q-0000049",
+    jobId: null,
+    customerParty: null,
+    customerDisplayName: "Bob Hamel",
+    paymentRequirementId: null,
+    depositRequestAuthority: null,
+    content: {
+      customerName: "Bob Hamel",
+      customerEmail: "",
+      customerPhone: "",
+      customerAddress: "",
+      customerLocation: "",
+      serviceLocation: "",
+      projectTitle: "Window repair",
+      projectDescription: "Window repair",
+      recommendedSolution: "Repair window",
+      totalOverride: "250",
+      lineItems: [],
+      materialItems: [],
+      laborItems: [],
+      pricingDisplayMode: "TOTAL_ONLY",
+      materialsDisplayMode: "INCLUDED_IN_TOTAL",
+      depositMode: "NONE",
+      depositPercent: "",
+      depositFixedAmount: "",
+      terms: "",
+      paymentTerms: "",
+      estimatedDuration: "",
+      notes: "",
+      agreement: { exclusions: [] },
+    },
+    workspace: {
+      activeDocument: "QUOTE",
+      instructions: [],
+      manualOverrides: {},
+      privateReminders: [],
+    },
+    photos: [],
+    createdAt: "2026-09-10T10:00:00.000Z",
+    updatedAt: "2026-09-10T10:00:00.000Z",
+  };
+
+  const conversationCalls = [];
+
+  const requestConversation = async (options) => {
+    conversationCalls.push({
+      instruction: options.instruction,
+      context: options.context,
+    });
+
+    return {
+      text:
+        "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+      resolution: {
+        version: 1,
+        status: "RESOLVED",
+        audience: "professional",
+        records: [{
+          record: {
+            type: "DOCUMENT_DRAFT",
+            id: DRAFT_ID,
+          },
+          name: "Bob Hamel",
+          title: "Window repair",
+          number: "Q-0000049",
+          label: "Bob Hamel — Window repair",
+        }],
+        truncated: false,
+        reviewRequired: true,
+        continuation: {
+          reference: CONTINUATION_ID,
+          expiresAfterSeconds: 900,
+        },
+        answerSource: "DETERMINISTIC_RETRIEVAL",
+        providerInvoked: false,
+      },
+    };
+  };
+
+  const w = await mount(t, {
+    context: {},
+    requestConversation,
+  });
+
+  // mount() installs its own dashboard transport fixture, so install this
+  // exact Saved Files response afterwards. The custom requestConversation
+  // still owns /api/companion/ask for this characterization.
+  globalThis.__dashboardHttp = async (path) => {
+    if (path.startsWith("/business-document-drafts?")) {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          documents: [sourceDocument],
+        },
+      };
+    }
+
+    return {
+      response: { ok: false, status: 503 },
+      data: { success: false },
+    };
+  };
+
+  await w.send("Update Quote Q0000049");
+
+  assert.equal(conversationCalls.length, 1);
+  assert.match(
+    w.text(),
+    /What would you like to change on this Quote/i
+  );
+
+  assert.equal(
+    document.querySelector('[data-ask-inline-document="QUOTE"]'),
+    null
+  );
+
+  // Follow-up deliberately does NOT repeat Q-0000049.
+  await w.send("Change labor to $300");
+
+  assert.equal(conversationCalls.length, 2);
+
+  // The visible/user instruction remains exactly what the user typed.
+  assert.equal(
+    conversationCalls[1].instruction,
+    "Change labor to $300"
+  );
+
+  // Meetro must bind the already verified working Quote as exact context
+  // instead of asking Universal Retrieval to infer the target again.
+  assert.equal(
+    conversationCalls[1].context?.page,
+    "quoteBuilder"
+  );
+
+  assert.equal(
+    conversationCalls[1].context?.draftId,
+    DRAFT_ID
+  );
+
+  const inline = document.querySelector(
+    '[data-ask-inline-document="QUOTE"]'
+  );
+
+  assert.ok(
+    inline,
+    "held exact Quote should open in-panel on the follow-up change"
+  );
+
+  assert.equal(
+    inline.getAttribute("data-document-id"),
+    DRAFT_ID
+  );
+
+  assert.match(inline.textContent, /Bob Hamel/);
+  assert.match(inline.textContent, /Q-0000049/);
+
+  // No navigation was required and no Quote number was inserted into
+  // the user's visible follow-up message.
+  assert.deepEqual(w.routes, []);
+
+  const userMessages = [
+    ...document.querySelectorAll(
+      ".ask-meetro-message.is-user"
+    ),
+  ].map((node) => node.textContent);
+
+  assert.ok(
+    userMessages.some((text) =>
+      text.includes("Change labor to $300")
+    )
+  );
+
+  assert.ok(
+    document.querySelector(".ask-meetro-workspace")
+  );
+});
+
+
+test("embedded Ask Quote save preserves every existing saved photo in the exact draft PATCH", async (t) => {
+  const DRAFT_ID =
+    "8b4ba9b7-9c65-4a90-9c25-1d536b82b3ea";
+  const CONTINUATION_ID =
+    "7e742dc1-e2a2-49c6-a493-11e351c80d54";
+
+  const SAVED_PHOTO = {
+    id: "saved-photo-before-window",
+    media: {
+      public_id: "meetro/quotes/window-before",
+      secure_url:
+        "https://res.cloudinary.com/meetro/image/upload/window-before.jpg",
+    },
+    role: "BEFORE",
+    visibility: "CUSTOMER_VISIBLE",
+  };
+
+  const sourceDocument = {
+    id: DRAFT_ID,
+    version: 7,
+    documentType: "QUOTE",
+    status: "WORKING_DRAFT",
+    reference: "quote-working",
+    documentNumber: "Q-0000049",
+    jobId: null,
+    customerParty: null,
+    customerDisplayName: "Bob Hamel",
+    paymentRequirementId: null,
+    depositRequestAuthority: null,
+    content: {
+      customerName: "Bob Hamel",
+      customerEmail: "",
+      customerPhone: "",
+      customerAddress: "",
+      customerLocation: "",
+      serviceLocation: "",
+      projectTitle: "Window repair",
+      projectDescription: "Window repair",
+      recommendedSolution: "Repair window",
+      laborType: "flat",
+      laborAmount: "250",
+      materials: [],
+      paymentTerms: "",
+      notes: "",
+      depositRequired: false,
+    },
+    workspace: {
+      activeDocument: "QUOTE",
+      instructions: [],
+      manualOverrides: {},
+      privateReminders: [],
+    },
+    photos: [SAVED_PHOTO],
+    createdAt: "2026-09-10T10:00:00.000Z",
+    updatedAt: "2026-09-10T10:00:00.000Z",
+  };
+
+  const requestConversation = async () => ({
+    text:
+      "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+    resolution: {
+      version: 1,
+      status: "RESOLVED",
+      audience: "professional",
+      records: [{
+        record: {
+          type: "DOCUMENT_DRAFT",
+          id: DRAFT_ID,
+        },
+        name: "Bob Hamel",
+        title: "Window repair",
+        number: "Q-0000049",
+        label: "Bob Hamel — Window repair",
+      }],
+      truncated: false,
+      reviewRequired: true,
+      continuation: {
+        reference: CONTINUATION_ID,
+        expiresAfterSeconds: 900,
+      },
+      answerSource: "DETERMINISTIC_RETRIEVAL",
+      providerInvoked: false,
+    },
+  });
+
+  const patchBodies = [];
+
+  const w = await mount(t, {
+    context: {},
+    requestConversation,
+  });
+
+  // mount() owns the default test transport. Replace it afterwards
+  // with the exact Saved Files + PATCH transport for this contract.
+  globalThis.__dashboardHttp = async (path, options = {}) => {
+    if (path.startsWith("/business-document-drafts?")) {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          documents: [sourceDocument],
+        },
+      };
+    }
+
+    if (
+      path === `/business-document-drafts/${DRAFT_ID}` &&
+      options.method === "PATCH"
+    ) {
+      const body = JSON.parse(options.body || "{}");
+      patchBodies.push(body);
+
+      const {
+        expectedVersion,
+        ...payload
+      } = body;
+
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          document: {
+            ...sourceDocument,
+            ...payload,
+            id: DRAFT_ID,
+            version: expectedVersion + 1,
+            documentType: "QUOTE",
+            status: "WORKING_DRAFT",
+            reference: sourceDocument.reference,
+            documentNumber: sourceDocument.documentNumber,
+            customerDisplayName:
+              sourceDocument.customerDisplayName,
+            paymentRequirementId: null,
+            depositRequestAuthority: null,
+            updatedAt: "2026-09-10T12:30:00.000Z",
+          },
+        },
+      };
+    }
+
+    return {
+      response: { ok: false, status: 503 },
+      data: { success: false },
+    };
+  };
+
+  await w.send(
+    "Update Quote Q0000049 labor to $300"
+  );
+
+  const inline = document.querySelector(
+    '[data-ask-inline-document="QUOTE"]'
+  );
+
+  assert.ok(inline);
+  assert.equal(
+    inline.getAttribute("data-document-id"),
+    DRAFT_ID
+  );
+
+  const price = inline.querySelector(
+    '[data-quote-safety-field="totalOverride"] input'
+  );
+
+  assert.ok(
+    price,
+    "embedded Quote should expose Customer price"
+  );
+
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    ).set.call(price, "300");
+
+    price.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+
+    await pause();
+  });
+
+  await w.click("Apply changes");
+
+  assert.match(
+    inline.textContent,
+    /Unsaved working changes/
+  );
+
+  await w.click("Save working Quote");
+
+  assert.equal(
+    patchBodies.length,
+    1,
+    "embedded Quote must save through one exact draft PATCH"
+  );
+
+  const patch = patchBodies[0];
+
+  assert.equal(
+    patch.expectedVersion,
+    7
+  );
+
+  assert.equal(
+    patch.photos.length,
+    1,
+    "editing Quote text/pricing inside Ask must not drop or duplicate saved photos"
+  );
+
+  const [persistedPhoto] = patch.photos;
+
+  assert.equal(
+    persistedPhoto.id,
+    SAVED_PHOTO.id,
+    "saved photo identity must be preserved"
+  );
+
+  assert.deepEqual(
+    persistedPhoto.media,
+    SAVED_PHOTO.media,
+    "saved photo media authority must be preserved"
+  );
+
+  assert.equal(
+    persistedPhoto.role,
+    SAVED_PHOTO.role,
+    "saved photo role must be preserved"
+  );
+
+  assert.equal(
+    persistedPhoto.visibility,
+    SAVED_PHOTO.visibility,
+    "saved photo visibility must be preserved"
+  );
+
+  // The normal business-document persistence projection may enrich an
+  // existing durable photo with document presentation metadata.
+  assert.equal(persistedPhoto.name, "Document photo");
+  assert.equal(persistedPhoto.purpose, "quote-draft-photo");
+
+  assert.deepEqual(w.routes, []);
+  assert.ok(document.querySelector(".ask-meetro-workspace"));
+});

@@ -23,7 +23,7 @@ function block(startMarker, endMarker) {
   return source.slice(start, end);
 }
 const switchCode = block("function initializeWorkingInvoice()", "function applyManualDraft(");
-const depositCode = block("function openDepositRequest()", "  return (\n    <>\n");
+const depositCode = block("function openDepositRequest()", "  if (embeddedAsk) {");
 
 // Execute the production handlers with state setters, without browser storage
 // or network grants. Rendering/physical geometry is covered separately.

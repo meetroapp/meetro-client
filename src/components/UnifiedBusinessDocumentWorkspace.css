@@ -3750,3 +3750,92 @@
   padding-bottom: 0;
 }
 /* END 90452 NATIVE IPHONE LANDSCAPE DOCUMENT CONTAINMENT */
+
+
+/* R4 Ask Meetro embedded business document */
+.business-document-ask-embedded {
+  width: 100%;
+  min-width: 0;
+  max-width: 100%;
+  display: grid;
+  gap: 12px;
+  padding: 12px;
+  border: 1px solid var(--meetro-border, rgba(0, 0, 0, 0.12));
+  border-radius: 18px;
+  overflow: visible;
+}
+
+.business-document-ask-embedded-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.business-document-ask-embedded-header > div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.business-document-ask-embedded-header strong,
+.business-document-ask-embedded-header p {
+  overflow-wrap: anywhere;
+}
+
+.business-document-ask-embedded-status {
+  margin: 0;
+}
+
+.business-document-ask-embedded .business-document-manual.is-inline {
+  position: static;
+  inset: auto;
+  width: 100%;
+  max-width: none;
+  max-height: none;
+  min-width: 0;
+  margin: 0;
+  transform: none;
+  overflow: visible;
+  box-shadow: none;
+}
+
+.business-document-ask-embedded .business-document-manual.is-inline > header {
+  position: static;
+}
+
+.business-document-ask-embedded-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-width: 0;
+}
+
+.business-document-ask-embedded-actions > div {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.business-document-ask-embedded-actions small {
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 767px) {
+  .business-document-ask-embedded {
+    padding: 10px;
+  }
+
+  .business-document-ask-embedded-header,
+  .business-document-ask-embedded-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .business-document-ask-embedded-actions button {
+    width: 100%;
+    min-height: 44px;
+  }
+}

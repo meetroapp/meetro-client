@@ -7,8 +7,12 @@ import { useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import MeetroIcon from "./MeetroIcon";
 import BottomNav from "./BottomNav";
+import UnifiedBusinessDocumentWorkspace from "./UnifiedBusinessDocumentWorkspace.jsx";
 import { resolveAskMeetroActions } from "../utils/askMeetro.js";
-import { resolveAskMeetroRequest } from "../utils/askMeetroConversation.js";
+import {
+  resolveAskMeetroRequest,
+  resolveAskMeetroHeldQuoteFollowUp,
+} from "../utils/askMeetroConversation.js";
 import { createIntelligenceKey } from "../utils/contextualIntelligence.js";
 import { reviewAskMeetroCompletion, applyAskMeetroCompletion } from "../utils/askMeetroCompletion.js";
 import "../styles/homeDashboard.css";
@@ -53,6 +57,7 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
   const [files, setFiles] = useState([]);
   const [review, setReview] = useState(null);
   const [resolution, setResolution] = useState(session?.resolution || null);
+  const [inlineWorkspace, setInlineWorkspace] = useState(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [voiceState, setVoiceState] = useState("idle");
@@ -95,20 +100,79 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
     inFlight.current = true; setBusy(true); setError("");
     try {
       if (files.length) throw new Error("Selected attachments have not been sent. This conversation currently supports text only; remove the attachments to send text, or use their governed evidence workspace.");
-      const signature = JSON.stringify({ text, context, messages });
-      if (conversationAttempt.current?.signature !== signature) conversationAttempt.current = { signature, key: null };
+      const heldQuote = await resolveAskMeetroHeldQuoteFollowUp(
+        text,
+        resolution,
+        { setPage }
+      );
+
+      const effectiveContext =
+        heldQuote?.context || context;
+
+      const signature = JSON.stringify({
+        text,
+        context: effectiveContext,
+        messages,
+      });
+
+      if (conversationAttempt.current?.signature !== signature) {
+        conversationAttempt.current = {
+          signature,
+          key: null,
+        };
+      }
+
       requestController.current = new AbortController();
-      const result = await resolveAskMeetroRequest(text, { context, role, setPage, messages, resolveActions, requestConversation, signal: requestController.current.signal,
-        locale: localStorage.getItem("language") === "es" ? "es" : "en-US",
+
+      const result = await resolveAskMeetroRequest(text, {
+        context: effectiveContext,
+        role,
+        setPage,
+        messages,
+        resolveActions,
+        requestConversation,
+        signal: requestController.current.signal,
+        locale:
+          localStorage.getItem("language") === "es"
+            ? "es"
+            : "en-US",
+
+        // Reuse the same freshly reverified document for the inline
+        // handoff after the server confirms this exact draft context.
+        ...(heldQuote
+          ? {
+              listDocuments: async () => [
+                heldQuote.document,
+              ],
+            }
+          : {}),
+
         // Allocate only if the conversation path actually invokes intelligence.
-        get idempotencyKey() { return conversationAttempt.current.key ||= createIntelligenceKey(); },
+        get idempotencyKey() {
+          return conversationAttempt.current.key ||= createIntelligenceKey();
+        },
       });
       const next = result.actions;
       if (!mounted.current) return;
       conversationAttempt.current = null;
-      if (result.route) { setResolution(null); setPage?.(result.route); return; }
+      if (result.route) {
+        setInlineWorkspace(null);
+        setResolution(null);
+        setPage?.(result.route);
+        return;
+      }
+
       setMessages((current) => [...current, { role: "user", text }, { role: "assistant", text: result.text }]);
       setResolution(result.resolution ? { ...result.resolution, instruction: text } : null);
+
+      if (result.inlineWorkspace?.type === "BUSINESS_DOCUMENT") {
+        setInlineWorkspace({
+          ...result.inlineWorkspace,
+          quote: {
+            ...(result.inlineWorkspace.document?.content || {}),
+          },
+        });
+      }
       const retainComposer =
         Boolean(result.blockedReason) ||
         next.some((action) => action.blockedReason);
@@ -229,6 +293,33 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
     }
   }
 
+  function applyInlineQuotePatch(patch = {}) {
+    setInlineWorkspace((current) => {
+      if (
+        !current ||
+        current.type !== "BUSINESS_DOCUMENT" ||
+        current.documentType !== "QUOTE"
+      ) {
+        return current;
+      }
+
+      const {
+        replaceCollections,
+        ...contentPatch
+      } = patch || {};
+
+      return {
+        ...current,
+        quote: replaceCollections
+          ? { ...contentPatch }
+          : {
+              ...(current.quote || current.document?.content || {}),
+              ...contentPatch,
+            },
+      };
+    });
+  }
+
   function attach(event) {
     if (!guardFriendsAndFamilyMediaUpload({ event, onDeferred: setError })) return;
     const selected = [...event.target.files].filter((file) => file.size <= 20 * 1024 * 1024).slice(0, 10 - filesRef.current.length);
@@ -293,6 +384,43 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
       {subject ? <div className="ask-meetro-context"><MeetroIcon name="workCenter" size={18} decorative /><span>Working with: {subject}</span><small>Exact record context · changes require review</small></div> : null}
       <div className="ask-meetro-conversation" role="region" aria-label="Ask Meetro conversation">
         {!messages.length ? <section className="ask-meetro-welcome"><span className="ask-meetro-welcome-mark" aria-hidden="true">M</span><h2>Your assistant for real work.</h2><p>Tell me what you need. I'll help you take action, find information, and keep your work organized.</p><div className="ask-meetro-capabilities"><span>Understand</span><span>Take Action</span><span>Keep It Organized</span></div><div className="ask-meetro-suggestions">{suggestions[role === "business" ? "business" : "personal"].map(([title, prompt]) => <button key={title} type="button" onClick={() => { setInput(prompt); composerRef.current?.focus(); }}><strong>{title}</strong><span>{prompt}</span><MeetroIcon name="openExternal" size={20} decorative /></button>)}</div></section> : <div role="log" aria-live="polite">{messages.map((message, index) => <article key={index} className={`ask-meetro-message is-${message.role}`}><strong>{message.role === "user" ? "You" : "Meetro"}</strong><p>{message.text}</p></article>)}</div>}
+        {inlineWorkspace?.type === "BUSINESS_DOCUMENT" && inlineWorkspace.documentType === "QUOTE" ? (
+          <UnifiedBusinessDocumentWorkspace
+            hostMode="ask"
+            setPage={setPage}
+            language={localStorage.getItem("language") || "en"}
+            initialDocument="quote"
+            initialSavedDocumentId={inlineWorkspace.document.id}
+            initialSavedDocument={inlineWorkspace.document}
+            job={{
+              id: inlineWorkspace.document.jobId || null,
+              customerName:
+                inlineWorkspace.document.customerDisplayName ||
+                inlineWorkspace.document.content?.customerName ||
+                "",
+              title:
+                inlineWorkspace.document.content?.projectTitle ||
+                "",
+              canonical: Boolean(inlineWorkspace.document.jobId),
+              customerLinkedFromJob: false,
+            }}
+            quote={
+              inlineWorkspace.quote ||
+              inlineWorkspace.document.content
+            }
+            photos={inlineWorkspace.document.photos || []}
+            canAddPhotos={false}
+            onAddPhotos={() =>
+              setError(
+                "Add Quote photos from the governed document photo workflow."
+              )
+            }
+            onApplyQuotePatch={applyInlineQuotePatch}
+            onBack={() => setInlineWorkspace(null)}
+            onEmbeddedClose={() => setInlineWorkspace(null)}
+          />
+        ) : null}
+
         {resolution?.reviewRequired === true && resolution?.status === "RESOLVED" && actions.length > 0 && !review ? <section className="ask-meetro-resolution-review" aria-label="Resolved record requires Review"><span>Resolved · not applied</span><h2>Review required</h2><p>Meetro verified the target record. Continue through its existing governed workflow before anything can change.</p>{resolution.records?.[0]?.label ? <strong>{resolution.records[0].label}</strong> : null}<small>The governed Review action is available below.</small></section> : null}
         {resolution?.status === "AMBIGUOUS" && !review ? <section className="ask-meetro-ambiguity" aria-label="Choose a Meetro record"><h2>Which record do you mean?</h2><div>{resolution.records.map((choice, index) => <button key={`${choice.record.type}-${choice.record.id}`} type="button" disabled={busy} onClick={() => chooseResolvedRecord(index)}><strong>{choice.label || choice.title || choice.name || choice.record.type}</strong>{choice.number ? <span>{choice.number}</span> : null}</button>)}</div>{resolution.truncated ? <p>Narrow the customer, title, or document number if the record is not listed.</p> : null}</section> : null}
         {actions.length > 0 && !review ? <section className="ask-meetro-actions" aria-label="Proposed actions"><div className="ask-meetro-section-heading"><h2>{actions.length} {actions.length === 1 ? "action" : "actions"} to review</h2><button type="button" onClick={() => openReview(actions)}>Review all</button></div>{actions.map((action) => <article key={action.id}><div><span>Proposed · not applied</span><h3>{action.title}</h3><p>{action.blockedReason || (action.route ? "Continue with the exact record and its existing review." : "Choose the exact record in Meetro before applying changes.")}</p><dl>{action.details?.map((detail) => <div key={detail.label}><dt>{detail.label}</dt><dd>{detail.value}</dd></div>)}</dl></div><button type="button" onClick={() => openReview([action])}>Review</button></article>)}</section> : null}

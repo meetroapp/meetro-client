@@ -57,6 +57,7 @@ function workspace({ initialized = true, failSave = false } = {}) {
       return relationship;
     },
     language: "en", t: (key) => key, NUMBERING_SETUP_PENDING: Symbol("setup"),
+    embeddedAsk: false,
     workingDocumentIntent: { quote: true, invoice: false },
     activeDocument: "quote", quote: {}, invoice: {}, photos: [], photoAssignments: {}, turns: [],
     customerParties: { quote: null, invoice: null }, manualOverrides: { quote: {}, invoice: {} },

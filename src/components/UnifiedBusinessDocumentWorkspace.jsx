@@ -711,7 +711,7 @@ function EditableRows({ title, rows, nameField, onChange }) {
   );
 }
 
-function StandardManualEditor({ activeDocument, quote, invoice, documentNumber, initialFocus, language, mode = "manual", lockedCustomerName = "", onApply, onCancel, onModeChange }) {
+function StandardManualEditor({ activeDocument, quote, invoice, documentNumber, initialFocus, language, mode = "manual", lockedCustomerName = "", inline = false, onApply, onCancel, onModeChange }) {
   const source = activeDocument === "quote" ? quote : invoice;
   const initialSourceRef = useRef(null);
   if (!initialSourceRef.current) {
@@ -820,8 +820,15 @@ function StandardManualEditor({ activeDocument, quote, invoice, documentNumber, 
     </section>;
   }
   return (
-    <><button type="button" className="business-document-manual-backdrop" aria-label="Cancel manual edit" onClick={onCancel} />
-      <section ref={editorRef} className="business-document-manual" role="dialog" aria-modal="true" aria-labelledby="business-document-manual-title">
+    <>
+      {!inline ? <button type="button" className="business-document-manual-backdrop" aria-label="Cancel manual edit" onClick={onCancel} /> : null}
+      <section
+        ref={editorRef}
+        className={`business-document-manual${inline ? " is-inline" : ""}`}
+        role={inline ? "region" : "dialog"}
+        aria-modal={inline ? undefined : "true"}
+        aria-labelledby="business-document-manual-title"
+      >
         <header><div><span>Manual entry</span><h2 id="business-document-manual-title">Edit the live {activeDocument}</h2></div><button type="button" onClick={onCancel}>Cancel</button></header>
         <label className="business-document-number-field">{activeDocument === "quote" ? "Quote number" : "Invoice number"}<input value={documentNumber || "Assigned on first save"} readOnly aria-readonly="true" /></label>
         {detailFieldset}
@@ -837,7 +844,7 @@ function StandardManualEditor({ activeDocument, quote, invoice, documentNumber, 
         <fieldset className="business-document-manual-fields"><legend>Payment</legend><div>{paymentFields.map(field)}</div></fieldset>
         <fieldset className="business-document-manual-fields"><legend>Customer notes</legend><div>{field(["notes", "Notes shown to the customer"])}</div></fieldset>
         {activeDocument === "quote" ? <details className="business-document-agreement-editor"><summary>Business terms</summary><div><p>Review, edit, or remove every term before sending. Meetro does not provide legal advice.</p><div className="business-document-agreement-presets"><button type="button" onClick={() => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), additionalWorkTerms: BUSINESS_DOCUMENT_AGREEMENT_PRESETS.additionalWorkTerms } }))}>Use outside-scope protection</button><button type="button" onClick={() => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), hiddenConditionsTerms: BUSINESS_DOCUMENT_AGREEMENT_PRESETS.hiddenConditionsTerms } }))}>Use hidden-condition protection</button><button type="button" onClick={() => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), diagnosticTerms: BUSINESS_DOCUMENT_AGREEMENT_PRESETS.diagnosticTerms } }))}>Use diagnostic terms</button></div><label>Not Included / Exclusions<textarea value={(draft.agreement?.exclusions || []).join("\n")} onChange={(event) => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), exclusions: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) } }))} /></label>{BUSINESS_DOCUMENT_AGREEMENT_FIELDS.map(([key, label]) => <label key={key}>{label}<textarea value={draft.agreement?.[key] || ""} onChange={(event) => setDraft((current) => ({ ...current, agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), [key]: event.target.value } }))} /></label>)}</div></details> : null}
-        <footer><button type="button" onClick={onCancel}>Cancel</button><button type="button" onClick={() => onModeChange("prefill")}>{t("businessDocumentBackToPrefill", language)}</button><button type="button" className="business-document-primary" onClick={() => onApply(draft, originalRef.current)}>{t("businessDocumentApplyChanges", language)}</button></footer>
+        <footer><button type="button" onClick={onCancel}>{inline ? "Close form" : "Cancel"}</button>{!inline ? <button type="button" onClick={() => onModeChange("prefill")}>{t("businessDocumentBackToPrefill", language)}</button> : null}<button type="button" className="business-document-primary" onClick={() => onApply(draft, originalRef.current)}>{t("businessDocumentApplyChanges", language)}</button></footer>
       </section></>
   );
 }
@@ -1713,6 +1720,7 @@ export default function UnifiedBusinessDocumentWorkspace(props) {
 function QuoteInvoiceBusinessDocumentWorkspace({
   setPage, language = "en", initialDocument = "quote", initialSavedDocumentId = null,
   initialSavedDocument = null, onDurableDocumentOpened, genericNewQuoteIntent = false,
+  hostMode = "full", onEmbeddedClose,
   job = {}, quote,
   invoicePreparation: initialInvoicePreparation = null,
   sourceQuoteDocument = null,
@@ -1723,6 +1731,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   onDownloadQuote, onPreviewQuote, onBack,
   onRestorePhotos, onEnsurePhotosDurable, onPhotosPersisted, onDiscardTransientPhotos,
 }) {
+  const embeddedAsk = hostMode === "ask";
   const [activeDocument, setActiveDocument] = useState(() => initialDocument === "invoice" ? "invoice" : "quote");
   const [depositRequestOpen, setDepositRequestOpen] = useState(() => normalizeBusinessDocumentTab(initialDocument) === "depositRequest");
   const [depositRequestContext, setDepositRequestContext] = useState(() =>
@@ -3523,6 +3532,20 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     setRecoveryRecord(null);
     setRecovered(false);
     onDiscardTransientPhotos?.();
+
+    const action = pendingExitRef.current;
+    pendingExitRef.current = null;
+
+    // The full workspace restores its saved document after an explicit
+    // discard because the page remains mounted. Ask Meetro's embedded
+    // workspace is closing immediately, so restoring first would launch
+    // unnecessary authority/delivery hydration against a component that
+    // is about to unmount.
+    if (embeddedAsk) {
+      action?.();
+      return;
+    }
+
     for (const type of ["quote", "invoice"]) {
       if (!dirty[type]) continue;
       const saved = savedDocumentsRef.current[type];
@@ -3536,9 +3559,8 @@ function QuoteInvoiceBusinessDocumentWorkspace({
         }), { startedNew: true, workingSession: true, noticeMessage: "Working draft" });
       }
     }
+
     setActiveDocument(activeDocument);
-    const action = pendingExitRef.current;
-    pendingExitRef.current = null;
     action?.();
   }
 
@@ -5429,6 +5451,170 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     setDepositRequestOpen(true);
     setMobilePane("conversation");
     setNotice("");
+  }
+
+  if (embeddedAsk) {
+    const expectedEmbeddedId = String(initialSavedDocumentId || "").trim().toLowerCase();
+    const exactEmbeddedDocument =
+      activeSaved?.id === expectedEmbeddedId
+        ? activeSaved
+        : null;
+
+    const displayedDocument =
+      exactEmbeddedDocument ||
+      (
+        initialSavedDocument?.id === expectedEmbeddedId
+          ? initialSavedDocument
+          : null
+      );
+
+    const embeddedNumber =
+      displayedDocument?.documentNumber ||
+      "";
+
+    const embeddedCustomer =
+      activeContent?.customerName ||
+      displayedDocument?.customerDisplayName ||
+      displayedDocument?.content?.customerName ||
+      "Customer";
+
+    return (
+      <section
+        className="business-document-ask-embedded"
+        data-ask-inline-document={activeDocument.toUpperCase()}
+        data-document-id={displayedDocument?.id || ""}
+        aria-label={`Edit ${activeDocument} inside Ask Meetro`}
+      >
+        <header className="business-document-ask-embedded-header">
+          <div>
+            <span>Working {activeDocument}</span>
+            <strong>{embeddedNumber || "Verifying Quote…"}</strong>
+          </div>
+          <p>{embeddedCustomer}</p>
+        </header>
+
+        {!exactEmbeddedDocument ? (
+          <p
+            className="business-document-ask-embedded-status"
+            role="status"
+          >
+            Verifying the exact saved working Quote before Save is available.
+          </p>
+        ) : null}
+
+        <ManualEditor
+          activeDocument={activeDocument}
+          quote={quote}
+          invoice={invoice}
+          invoicePreparation={invoicePreparation}
+          documentNumber={embeddedNumber}
+          initialFocus="first"
+          language={language}
+          mode="manual"
+          inline
+          lockedCustomerName={jobLinkedCustomerName}
+          onModeChange={() => {}}
+          onPreview={setInvoice}
+          onApply={applyManualDraft}
+          onCancel={() => requestExit(onEmbeddedClose)}
+        />
+
+        <footer className="business-document-ask-embedded-actions">
+          <div>
+            <strong>
+              {activeDirty ? "Unsaved working changes" : "Exact working Quote"}
+            </strong>
+            <small>
+              Applying form changes does not send, issue, approve, pay, schedule,
+              or complete anything.
+            </small>
+          </div>
+
+          <button
+            type="button"
+            className="business-document-save"
+            disabled={
+              !exactEmbeddedDocument ||
+              saveState.busy ||
+              !activeDirty
+            }
+            onClick={() => void saveDocument(activeDocument)}
+          >
+            {saveState.busy ? "Saving…" : "Save working Quote"}
+          </button>
+        </footer>
+
+        {saveState.error ? (
+          <p className="business-document-notice" role="alert">
+            {saveState.error}
+          </p>
+        ) : notice ? (
+          <p className="business-document-notice" role="status">
+            {notice}
+          </p>
+        ) : null}
+
+        {exitDialogOpen ? (
+          <WorkspaceDialog
+            titleId="business-document-exit-title"
+            title="Save changes before leaving?"
+            onClose={keepEditingBeforeExit}
+            actions={[
+              {
+                label: "Keep Editing",
+                onClick: keepEditingBeforeExit,
+              },
+              {
+                label: "Discard Changes",
+                onClick: discardAndExit,
+              },
+              {
+                label: "Save Draft & Exit",
+                primary: true,
+                onClick: () => void saveAllAndExit(),
+              },
+            ]}
+          >
+            <p>
+              Save keeps this private working document for your business.
+              It does not send or issue anything.
+            </p>
+          </WorkspaceDialog>
+        ) : null}
+
+        {saveFailureOpen ? (
+          <WorkspaceDialog
+            titleId="business-document-save-failure-title"
+            title="We couldn't save your draft right now"
+            onClose={keepEditingAfterSaveFailure}
+            actions={[
+              {
+                label: "Keep Editing",
+                onClick: keepEditingAfterSaveFailure,
+              },
+              {
+                label: "Exit with Recovery",
+                onClick: () => void exitWithRecovery(),
+              },
+              {
+                label: "Try Again",
+                primary: true,
+                onClick: retryFailedSave,
+              },
+            ]}
+          >
+            <p>
+              {saveState.error ||
+                "Your work is still here."}
+            </p>
+            <p>
+              Exit with Recovery stores a temporary noncanonical copy on this
+              device. It will not appear in Saved Files.
+            </p>
+          </WorkspaceDialog>
+        ) : null}
+      </section>
+    );
   }
 
   return (

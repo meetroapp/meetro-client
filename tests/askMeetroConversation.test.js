@@ -337,17 +337,21 @@ for (const [instruction, recordType] of [
 }
 
 test("specific Quote change is not downgraded into vague-change clarification", async () => {
-  const serverText =
-    "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.";
-
   const answer = await resolveAskMeetroRequest(
     "Update Quote Q0000049 labor to $300",
     {
       context: {},
       role: "business",
       resolveActions: async () => [],
+
+      // Exact working-document authority is unavailable in this guard.
+      // A specific supplied change must fail closed rather than becoming
+      // the R3 vague-target clarification.
+      listDocuments: async () => [],
+
       requestConversation: async () => ({
-        text: serverText,
+        text:
+          "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
         resolution: {
           version: 1,
           status: "RESOLVED",
@@ -376,14 +380,391 @@ test("specific Quote change is not downgraded into vague-change clarification", 
   );
 
   assert.deepEqual(answer.actions, []);
+  assert.equal(answer.inlineWorkspace, undefined);
 
   assert.equal(
     answer.text,
-    serverText
+    "The exact working Quote could not be opened here. Nothing has been changed."
   );
 
   assert.doesNotMatch(
     answer.text,
     /What would you like to change on this Quote/i
+  );
+
+  assert.doesNotMatch(
+    answer.text,
+    /Continue through its existing governed operation and Review/
+  );
+});
+
+test("specific resolved Quote edit resolves exact working Quote for inline Ask workspace", async () => {
+  const CANONICAL_QUOTE_ID =
+    "7e742dc1-e2a2-49c6-a493-11e351c80d54";
+  const WORKING_DRAFT_ID =
+    "8b4ba9b7-9c65-4a90-9c25-1d536b82b3ea";
+
+  const sourceDocument = {
+    id: WORKING_DRAFT_ID,
+    version: 7,
+    documentType: "QUOTE",
+    status: "WORKING_DRAFT",
+    reference: "quote-working",
+    documentNumber: "Q-0000049",
+    customerDisplayName: "Bob Hamel",
+    content: {
+      customerName: "Bob Hamel",
+      projectTitle: "Window repair",
+    },
+  };
+
+  const listCalls = [];
+
+  const answer = await resolveAskMeetroRequest(
+    "Update Quote Q0000049 labor to $300",
+    {
+      context: {},
+      role: "business",
+
+      resolveActions: async () => [],
+
+      listDocuments: async (options) => {
+        listCalls.push(options);
+        return [sourceDocument];
+      },
+
+      requestConversation: async () => ({
+        text:
+          "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+        resolution: {
+          version: 1,
+          status: "RESOLVED",
+          audience: "professional",
+          records: [{
+            record: {
+              type: "DOCUMENT_DRAFT",
+              id: WORKING_DRAFT_ID,
+            },
+            name: "Bob Hamel",
+            title: "Window repair",
+            number: "Q-0000049",
+            label: "Bob Hamel — Window repair",
+          }],
+          truncated: false,
+          reviewRequired: true,
+          continuation: {
+            reference: CANONICAL_QUOTE_ID,
+            expiresAfterSeconds: 900,
+          },
+          answerSource: "DETERMINISTIC_RETRIEVAL",
+          providerInvoked: false,
+        },
+      }),
+    }
+  );
+
+  assert.equal(listCalls.length, 1);
+  assert.equal(listCalls[0].search, "Q-0000049");
+  assert.equal(listCalls[0].type, "QUOTE");
+
+  assert.deepEqual(answer.actions, []);
+  assert.equal(answer.route, undefined);
+
+  assert.equal(answer.inlineWorkspace?.type, "BUSINESS_DOCUMENT");
+  assert.equal(answer.inlineWorkspace?.documentType, "QUOTE");
+  assert.equal(
+    answer.inlineWorkspace?.document?.id,
+    WORKING_DRAFT_ID
+  );
+  assert.equal(
+    answer.inlineWorkspace?.document?.version,
+    7
+  );
+  assert.equal(
+    answer.inlineWorkspace?.instruction,
+    "Update Quote Q0000049 labor to $300"
+  );
+
+  // Canonical Quote identity must never become working-draft identity.
+  assert.notEqual(
+    answer.inlineWorkspace?.document?.id,
+    CANONICAL_QUOTE_ID
+  );
+
+  assert.match(
+    answer.text,
+    /Bob Hamel/
+  );
+  assert.match(
+    answer.text,
+    /Q-0000049/
+  );
+  assert.match(
+    answer.text,
+    /review or edit/i
+  );
+  assert.doesNotMatch(
+    answer.text,
+    /Continue through its existing governed operation and Review/
+  );
+});
+
+test("canonical QUOTE retrieval cannot open a matching-number working draft bound to a different canonical Quote", async () => {
+  const RETRIEVED_CANONICAL_QUOTE_ID =
+    "7e742dc1-e2a2-49c6-a493-11e351c80d54";
+
+  const DIFFERENT_CANONICAL_QUOTE_ID =
+    "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+
+  const WORKING_DRAFT_ID =
+    "8b4ba9b7-9c65-4a90-9c25-1d536b82b3ea";
+
+  const JOB_ID =
+    "11111111-1111-4111-8111-111111111111";
+
+  const sourceDocument = {
+    id: WORKING_DRAFT_ID,
+    version: 7,
+    documentType: "QUOTE",
+    status: "WORKING_DRAFT",
+    documentNumber: "Q-0000049",
+    jobId: JOB_ID,
+    customerDisplayName: "Bob Hamel",
+    content: {
+      customerName: "Bob Hamel",
+    },
+  };
+
+  let authorityReads = 0;
+
+  const answer = await resolveAskMeetroRequest(
+    "Update Quote Q0000049 labor to $300",
+    {
+      context: {},
+      role: "business",
+
+      requestConversation: async () => ({
+        text:
+          "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+        resolution: {
+          version: 1,
+          status: "RESOLVED",
+          audience: "professional",
+          records: [{
+            record: {
+              type: "QUOTE",
+              id: RETRIEVED_CANONICAL_QUOTE_ID,
+            },
+            name: "Bob Hamel",
+            title: "Window repair",
+            number: "Q-0000049",
+            label: "Bob Hamel — Window repair",
+          }],
+          truncated: false,
+          reviewRequired: true,
+          continuation: {
+            reference: RETRIEVED_CANONICAL_QUOTE_ID,
+            expiresAfterSeconds: 900,
+          },
+          answerSource: "DETERMINISTIC_RETRIEVAL",
+          providerInvoked: false,
+        },
+      }),
+
+      listDocuments: async ({ search, type }) => {
+        assert.equal(search, "Q-0000049");
+        assert.equal(type, "QUOTE");
+        return [sourceDocument];
+      },
+
+      getQuoteAuthority: async ({ document }) => {
+        authorityReads += 1;
+
+        assert.equal(document.id, WORKING_DRAFT_ID);
+        assert.equal(document.version, 7);
+        assert.equal(document.jobId, JOB_ID);
+
+        return {
+          source: "SAVED_WORKING_QUOTE_AUTHORITY",
+          sourceDocument: {
+            documentId: WORKING_DRAFT_ID,
+            documentVersion: 7,
+            documentNumber: "Q-0000049",
+            jobId: JOB_ID,
+          },
+          canonicalQuote: {
+            id: DIFFERENT_CANONICAL_QUOTE_ID,
+            jobId: JOB_ID,
+            sourceBusinessDocument: {
+              documentId: WORKING_DRAFT_ID,
+              documentVersion: 7,
+              currentDocumentVersion: 7,
+              currentSnapshotMatchesSource: true,
+            },
+          },
+          delivery: null,
+        };
+      },
+    }
+  );
+
+  assert.equal(
+    authorityReads,
+    1,
+    "canonical QUOTE retrieval must verify the working draft through saved Quote authority"
+  );
+
+  assert.equal(
+    answer.inlineWorkspace,
+    undefined,
+    "a different canonical Quote must never inherit the editable working draft"
+  );
+
+  assert.deepEqual(answer.actions, []);
+
+  assert.match(
+    answer.blockedReason || answer.text,
+    /canonical Quote.*does not match|canonical Quote.*could not be verified/i
+  );
+});
+
+test("canonical QUOTE retrieval opens only its exactly bound working draft", async () => {
+  const CANONICAL_QUOTE_ID =
+    "7e742dc1-e2a2-49c6-a493-11e351c80d54";
+
+  const WORKING_DRAFT_ID =
+    "8b4ba9b7-9c65-4a90-9c25-1d536b82b3ea";
+
+  const JOB_ID =
+    "11111111-1111-4111-8111-111111111111";
+
+  const sourceDocument = {
+    id: WORKING_DRAFT_ID,
+    version: 7,
+    documentType: "QUOTE",
+    status: "WORKING_DRAFT",
+    documentNumber: "Q-0000049",
+    jobId: JOB_ID,
+    customerDisplayName: "Bob Hamel",
+    content: {
+      customerName: "Bob Hamel",
+    },
+  };
+
+  let authorityReads = 0;
+
+  const answer = await resolveAskMeetroRequest(
+    "Update Quote Q0000049 labor to $300",
+    {
+      context: {},
+      role: "business",
+
+      requestConversation: async () => ({
+        text:
+          "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+        resolution: {
+          version: 1,
+          status: "RESOLVED",
+          audience: "professional",
+          records: [{
+            record: {
+              type: "QUOTE",
+              id: CANONICAL_QUOTE_ID,
+            },
+            name: "Bob Hamel",
+            title: "Window repair",
+            number: "Q-0000049",
+            label: "Bob Hamel — Window repair",
+          }],
+          truncated: false,
+          reviewRequired: true,
+          continuation: {
+            reference: CANONICAL_QUOTE_ID,
+            expiresAfterSeconds: 900,
+          },
+          answerSource: "DETERMINISTIC_RETRIEVAL",
+          providerInvoked: false,
+        },
+      }),
+
+      listDocuments: async ({ search, type }) => {
+        assert.equal(search, "Q-0000049");
+        assert.equal(type, "QUOTE");
+        return [sourceDocument];
+      },
+
+      getQuoteAuthority: async ({ document }) => {
+        authorityReads += 1;
+
+        assert.equal(document.id, WORKING_DRAFT_ID);
+        assert.equal(document.version, 7);
+        assert.equal(document.jobId, JOB_ID);
+
+        return {
+          source: "SAVED_WORKING_QUOTE_AUTHORITY",
+          sourceDocument: {
+            documentId: WORKING_DRAFT_ID,
+            documentVersion: 7,
+            documentNumber: "Q-0000049",
+            jobId: JOB_ID,
+          },
+          canonicalQuote: {
+            id: CANONICAL_QUOTE_ID,
+            jobId: JOB_ID,
+            sourceBusinessDocument: {
+              documentId: WORKING_DRAFT_ID,
+              documentVersion: 7,
+              currentDocumentVersion: 7,
+              currentSnapshotMatchesSource: true,
+            },
+          },
+          delivery: null,
+        };
+      },
+    }
+  );
+
+  assert.equal(
+    authorityReads,
+    1,
+    "canonical QUOTE retrieval must verify saved Quote authority before opening"
+  );
+
+  assert.deepEqual(answer.actions, []);
+  assert.equal(answer.blockedReason, undefined);
+
+  assert.ok(
+    answer.inlineWorkspace,
+    "exact canonical mapping should permit the existing working Quote form"
+  );
+
+  assert.equal(
+    answer.inlineWorkspace.type,
+    "BUSINESS_DOCUMENT"
+  );
+
+  assert.equal(
+    answer.inlineWorkspace.documentType,
+    "QUOTE"
+  );
+
+  assert.equal(
+    answer.inlineWorkspace.document.id,
+    WORKING_DRAFT_ID
+  );
+
+  assert.equal(
+    answer.inlineWorkspace.document.version,
+    7
+  );
+
+  assert.equal(
+    answer.inlineWorkspace.instruction,
+    "Update Quote Q0000049 labor to $300"
+  );
+
+  assert.match(
+    answer.text,
+    /exact working Quote is ready here/i
   );
 });

@@ -176,6 +176,7 @@ function BottomNav({ setPage, currentPage = "" }) {
   useEffect(() => {
     let showListener;
     let hideListener;
+    let focusOutTimer = null;
 
     const isEditableTarget = (target) => {
       const tag = target?.tagName?.toLowerCase();
@@ -193,7 +194,12 @@ function BottomNav({ setPage, currentPage = "" }) {
     };
 
     const handleFocusOut = () => {
-      setTimeout(() => {
+      if (focusOutTimer !== null) {
+        clearTimeout(focusOutTimer);
+      }
+
+      focusOutTimer = setTimeout(() => {
+        focusOutTimer = null;
         setKeyboardOpen(isEditableTarget(document.activeElement));
       }, 220);
     };
@@ -236,6 +242,12 @@ function BottomNav({ setPage, currentPage = "" }) {
       document.removeEventListener("focusin", handleFocusIn, true);
       document.removeEventListener("focusout", handleFocusOut, true);
       window.visualViewport?.removeEventListener("resize", handleViewportResize);
+
+      if (focusOutTimer !== null) {
+        clearTimeout(focusOutTimer);
+        focusOutTimer = null;
+      }
+
       showListener?.remove?.();
       hideListener?.remove?.();
     };
