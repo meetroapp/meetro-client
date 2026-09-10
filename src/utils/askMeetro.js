@@ -48,13 +48,24 @@ const commandPrefix = "(?:(?:please|can you|could you|would you|help me|i want t
 const changeClause = new RegExp(`^${commandPrefix}(?:create|prepare|revise|update|edit|record|mark|complete|finish|schedule|reschedule|approve|accept|cancel|add|attach|upload|continue|make|crear|preparar|actualizar|registrar|completar|agendar)\\b`);
 const informationClause = /^(?:(?:please|can you|could you|would you)\s+)?(?:tell me|show me how|should i|can i|do i|explain|troubleshoot|diagnos(?:e|is)|summari[sz]e|compare|interpret|why|how|what|whether|explica|explicar|diagnosticar|resume|comparar|por que|como|help\b|(?:i\s+)?(?:need|want)\s+(?:help|guidance|advice)|(?:check|review)\s+(?:whether|if|why|how|what))\b/;
 
+const sourceFirstQuoteToInvoiceClause =
+  /^quote\s+q\s*-?\s*\d{1,12}\s*(?:→|->)\s*(?:(?:please)\s+)?(?:create|prepare|build|draft|make|start)\s+(?:(?:a|an)\s+)?(?:new\s+)?invoice\b/;
+
 export function askMeetroIntent(instruction) {
   const text = String(instruction || "").trim().slice(0, 5000).normalize("NFD").replace(/\p{M}/gu, "").toLowerCase();
   // Inspect clause heads, not relative clauses such as "with what the customer
   // paid" or "how we discussed" inside an explicit operational instruction.
   const clauses = text.split(/[;!?\n]|\.(?!\d)|,\s+|\b(?:and|but|then|also)\b/).map((part) => part.trim()).filter(Boolean);
   const information = clauses.some((clause) => informationClause.test(clause));
-  const change = clauses.some((clause) => !informationClause.test(clause) && (changeClause.test(clause) || isExplicitStandaloneNewQuoteIntent(clause)));
+  const change = clauses.some(
+    (clause) =>
+      !informationClause.test(clause) &&
+      (
+        changeClause.test(clause) ||
+        sourceFirstQuoteToInvoiceClause.test(clause) ||
+        isExplicitStandaloneNewQuoteIntent(clause)
+      )
+  );
   return { clauses, information, change };
 }
 
@@ -85,7 +96,20 @@ export function planAskMeetroActions(instruction, { context = {}, role = "person
   // Only explicit command clauses can nominate a change. Merely mentioning a
   // payment, visit, completion, or Quote does not ask Meetro to change it.
   const command = (verbs, subject) => intent.clauses.some((clause) => new RegExp(`^${commandPrefix}(?:${verbs})\\b[\\s\\S]*\\b(?:${subject})\\b`).test(clause));
-  const invoiceCommand = role === "business" && command("create|prepare|make|crear|preparar", "invoice|factura") ? parseQuoteInvoiceCommand(text) : null;
+  const sourceFirstQuoteToInvoice =
+    role === "business" &&
+    intent.clauses.some((clause) =>
+      sourceFirstQuoteToInvoiceClause.test(clause)
+    );
+
+  const invoiceCommand =
+    role === "business" &&
+    (
+      command("create|prepare|make|crear|preparar", "invoice|factura") ||
+      sourceFirstQuoteToInvoice
+    )
+      ? parseQuoteInvoiceCommand(text)
+      : null;
   if (invoiceCommand && /\b(?:q\s*-?\s*\d+|quote|cotizacion)\b/.test(normalized)) {
     // This is a lookup request, not a proposed mutation. Resolution must verify
     // an exact Quote before the workspace can render its review card.

@@ -249,6 +249,28 @@ export function askMeetroResolvedRecordContext(resolution, currentContext = {}, 
   return null;
 }
 
+function isVagueResolvedQuoteChange(instruction, resolution) {
+  const record = resolution?.records?.[0]?.record;
+
+  if (
+    resolution?.status !== "RESOLVED" ||
+    resolution?.records?.length !== 1 ||
+    record?.type !== "QUOTE"
+  ) {
+    return false;
+  }
+
+  const text = String(instruction || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase();
+
+  return /^(?:(?:please|can you|could you|would you|help me|i want to)\s+)?(?:update|edit|revise)\s+(?:this\s+)?quote(?:\s+q\s*-?\s*\d{1,12})?[.!]?$/.test(
+    text
+  );
+}
+
 function expectedRetrievalAudience(role) {
   return role === "business" ? "professional" : "homeowner";
 }
@@ -335,13 +357,32 @@ async function finalizeAskMeetroConversation({
     }
   }
 
+  const clarificationRequired =
+    resolution?.reviewRequired === true &&
+    resolution.status === "RESOLVED" &&
+    actions.length === 0 &&
+    !blockedReason &&
+    isVagueResolvedQuoteChange(instruction, resolution);
+
+  const resolvedRecord = resolution?.records?.[0] || null;
+  const resolvedLabel =
+    typeof resolvedRecord?.label === "string"
+      ? resolvedRecord.label.trim()
+      : "";
+  const resolvedNumber =
+    typeof resolvedRecord?.number === "string"
+      ? resolvedRecord.number.trim()
+      : "";
+
   // Legacy string-only mocks do not contain the server's mixed-intent
   // protection, so preserve the old warning only for those callers.
   const finalText =
     blockedReason ||
-    (!resolution && intent.information && intent.change
-      ? `${text}\n\nNo change has been proposed. Send the requested change separately for exact-record Review.`
-      : text);
+    (clarificationRequired
+      ? `${resolvedLabel ? `I found ${resolvedLabel}. ` : ""}What would you like to change on this Quote?${resolvedNumber ? ` Include ${resolvedNumber} in your next instruction.` : ""} Nothing has been changed.`
+      : !resolution && intent.information && intent.change
+        ? `${text}\n\nNo change has been proposed. Send the requested change separately for exact-record Review.`
+        : text);
 
   return {
     actions,

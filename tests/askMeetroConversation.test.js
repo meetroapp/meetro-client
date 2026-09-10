@@ -176,3 +176,106 @@ test("session cancellation aborts pending conversation and prevents a late provi
   controller.abort(); await assert.rejects(request, (error) => error.code === "ASK_CONVERSATION_CANCELLED"); assert.equal(transportSignal.aborted, true);
   await assert.rejects(resolveAskMeetroRequest("Help", { signal: controller.signal, requestConversation: () => assert.fail("no request after session teardown") }), /cancelled/);
 });
+
+test("resolved vague Quote update asks for a specific change and creates no Review action", async () => {
+  const answer = await resolveAskMeetroRequest(
+    "Update Quote Q0000049",
+    {
+      context: {},
+      role: "business",
+      resolveActions: async () => [],
+      requestConversation: async () => ({
+        text:
+          "The target record is resolved. Continue through its existing governed operation and Review.",
+        resolution: {
+          version: 1,
+          status: "RESOLVED",
+          audience: "professional",
+          records: [{
+            record: { type: "QUOTE", id: ID },
+            name: "Bob Hamel",
+            title: "Window repair",
+            number: "Q0000049",
+            label: "Bob Hamel — Window repair",
+          }],
+          truncated: false,
+          reviewRequired: true,
+          continuation: {
+            reference: ID,
+            expiresAfterSeconds: 900,
+          },
+          answerSource: "DETERMINISTIC_RETRIEVAL",
+          providerInvoked: false,
+        },
+      }),
+    }
+  );
+
+  assert.deepEqual(answer.actions, []);
+  assert.match(answer.text, /Bob Hamel — Window repair/);
+  assert.match(answer.text, /What would you like to change on this Quote/i);
+  assert.match(answer.text, /Q0000049/);
+  assert.doesNotMatch(
+    answer.text,
+    /Continue through its existing governed operation/
+  );
+});
+
+test("source-first Quote arrow command reaches governed Quote-to-Invoice Review handoff", async () => {
+  let resolverCalls = 0;
+
+  const answer = await resolveAskMeetroRequest(
+    "Quote Q0000049 → Create Invoice",
+    {
+      context: {},
+      role: "business",
+      requestConversation: async () => ({
+        text:
+          "The target record is resolved. Continue through its existing governed operation and Review.",
+        resolution: {
+          version: 1,
+          status: "RESOLVED",
+          audience: "professional",
+          records: [{
+            record: { type: "QUOTE", id: ID },
+            name: "Bob Hamel",
+            title: "Window repair",
+            number: "Q0000049",
+            label: "Bob Hamel — Window repair",
+          }],
+          truncated: false,
+          reviewRequired: true,
+          continuation: {
+            reference: ID,
+            expiresAfterSeconds: 900,
+          },
+          answerSource: "DETERMINISTIC_RETRIEVAL",
+          providerInvoked: false,
+        },
+      }),
+      resolveActions: async (_instruction, options) => {
+        resolverCalls += 1;
+
+        assert.equal(options.context.page, "quoteBuilder");
+        assert.equal(options.context.quoteId, ID);
+
+        return [{
+          id: "0-QUOTE_TO_INVOICE",
+          kind: "QUOTE_TO_INVOICE",
+          title: "Prepare Invoice from exact Quote",
+          instruction: "Quote Q0000049 → Create Invoice",
+          route:
+            "invoiceBuilder?sourceQuoteDraftId=7a02ee20-7f32-48eb-96dc-a3217bc5dcda&sourceQuoteVersion=1&sourceQuoteNumber=Q-0000049",
+          context: options.context,
+          status: "PROPOSED",
+        }];
+      },
+    }
+  );
+
+  assert.equal(resolverCalls, 1);
+  assert.equal(answer.actions.length, 1);
+  assert.equal(answer.actions[0].kind, "QUOTE_TO_INVOICE");
+  assert.equal(answer.actions[0].status, "PROPOSED");
+  assert.match(answer.actions[0].route, /^invoiceBuilder\?/);
+});

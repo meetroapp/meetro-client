@@ -746,3 +746,71 @@ test("voice transcript expands the editable composer but never sends or opens Re
     false
   );
 });
+
+test("resolved vague Quote update asks for the exact change instead of presenting Review without a governed route", async (t) => {
+  const requestConversation = async () => ({
+    text:
+      "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+    resolution: {
+      version: 1,
+      status: "RESOLVED",
+      audience: "professional",
+      records: [{
+        record: {
+          type: "QUOTE",
+          id: EVIDENCE,
+        },
+        name: "Bob Hamel",
+        title: "Window repair",
+        number: "Q0000049",
+        label: "Bob Hamel — Window repair",
+      }],
+      truncated: false,
+      reviewRequired: true,
+      continuation: {
+        reference: "22222222-2222-4222-8222-222222222222",
+        expiresAfterSeconds: 900,
+      },
+      answerSource: "DETERMINISTIC_RETRIEVAL",
+      providerInvoked: false,
+    },
+  });
+
+  const w = await mount(t, {
+    context: { page: "home" },
+    requestConversation,
+    resolveActions: async () => [],
+  });
+
+  await w.send("Update Quote Q0000049");
+
+  assert.match(
+    w.text(),
+    /Bob Hamel — Window repair/
+  );
+
+  assert.equal(
+    document.querySelector(".ask-meetro-resolution-review"),
+    null
+  );
+
+  assert.doesNotMatch(
+    w.text(),
+    /No safe direct Review route/
+  );
+
+  assert.match(
+    w.text(),
+    /what would you like to change/i
+  );
+
+  assert.equal(
+    document.querySelector(".ask-meetro-actions"),
+    null
+  );
+
+  assert.equal(
+    document.querySelector(".ask-meetro-review"),
+    null
+  );
+});
