@@ -42,9 +42,9 @@
 .ask-meetro-review-controls { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 20px; }
 .ask-meetro-shell .ask-meetro-primary, .ask-meetro-shell .ask-meetro-send { background: #0B5D3B; color: white; border-color: #0B5D3B; }
 .ask-meetro-footer { flex: 0 0 auto; padding: 12px 16px 0; background: #FAFAFC; }
-.ask-meetro-composer { display: flex; gap: 3px; align-items: center; padding: 6px 10px; min-height: 56px; border-radius: 28px; background: #FFFFFF; border: 1px solid #E5E7EB; box-shadow: 0 4px 20px #11182708; }
+.ask-meetro-composer { display: flex; gap: 3px; align-items: flex-end; padding: 6px 10px; min-height: 56px; border-radius: 28px; background: #FFFFFF; border: 1px solid #E5E7EB; box-shadow: 0 4px 20px #11182708; }
 .ask-meetro-composer button { padding: 8px; min-width: 40px; min-height: 44px; border: 0; background: transparent; display: grid; place-items: center; border-radius: 50%; }
-.ask-meetro-composer textarea { flex: 1; resize: none; border: 0; background: transparent; font: inherit; font-size: 16px; line-height: 24px; padding: 10px 4px; max-height: 120px; }
+.ask-meetro-composer textarea { flex: 1; min-height: 44px; resize: none; overflow-y: hidden; overflow-x: hidden; border: 0; background: transparent; font: inherit; font-size: 16px; line-height: 24px; padding: 10px 4px; max-height: 144px; }
 .ask-meetro-principle { font-size: 12px; line-height: 1.5; color: #4B5563; text-align: center; margin: 8px 0; }
 .ask-meetro-notice { color: #063D26; background: #E8F5EE; border: 1px solid #C5DFD0; padding: 10px 12px; border-radius: 12px; font-size: 14px; line-height: 1.5; text-align: left; }
 .ask-meetro-error { color: #991B1B; background: #FEF2F2; padding: 10px; border-radius: 12px; font-size: 14px; }
@@ -71,3 +71,80 @@
 /* Keep action labels intact inside narrow iPad review rows. */
 .ask-meetro-actions article > div, .ask-meetro-receipts article > div { flex: 1; min-width: 0; }
 .ask-meetro-actions button, .ask-meetro-receipts button { flex-shrink: 0; min-width: 84px; white-space: nowrap; overflow-wrap: normal; word-break: normal; }
+
+.ask-meetro-ambiguity {
+  padding: 14px;
+  border: 1px solid #D7E3DC;
+  border-radius: 14px;
+  background: #F7FAF8;
+}
+
+.ask-meetro-ambiguity h2 {
+  margin: 0 0 10px;
+  font-size: 16px;
+}
+
+.ask-meetro-ambiguity > div {
+  display: grid;
+  gap: 8px;
+}
+
+.ask-meetro-ambiguity button {
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid #C9D7CF;
+  border-radius: 12px;
+  background: #FFFFFF;
+  color: #172317;
+  text-align: left;
+}
+
+.ask-meetro-ambiguity button strong,
+.ask-meetro-ambiguity button span {
+  display: block;
+}
+
+.ask-meetro-ambiguity button span,
+.ask-meetro-ambiguity p {
+  margin-top: 3px;
+  color: #5B6B61;
+  font-size: 12px;
+}
+
+.ask-meetro-resolution-review {
+  padding: 14px;
+  border: 1px solid #C9D7CF;
+  border-radius: 14px;
+  background: #F7FAF8;
+}
+
+.ask-meetro-resolution-review > span {
+  display: inline-block;
+  margin-bottom: 5px;
+  color: #0B5D3B;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.ask-meetro-resolution-review h2 {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.ask-meetro-resolution-review p {
+  margin: 0 0 8px;
+  color: #415348;
+  font-size: 14px;
+  line-height: 1.45;
+}
+
+.ask-meetro-resolution-review strong,
+.ask-meetro-resolution-review small {
+  display: block;
+}
+
+.ask-meetro-resolution-review small {
+  margin-top: 5px;
+  color: #5B6B61;
+}

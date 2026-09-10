@@ -251,6 +251,31 @@ const assistantEnabledPages = new Set([
   "emergency",
   "completionSheet",
   "profile",
+
+  // Universal Ask Meetro — authenticated access rollout.
+  // Auth/setup/subscription and Field Employee surfaces stay
+  // outside this first access-only pass.
+  "contractors",
+  "contractorDetails",
+  "businessAnalytics",
+  "changeOrderRequest",
+  "businessCommandCenter",
+  "businessAvailability",
+  "hiringCenter",
+  "teamMembers",
+  "assetCenter",
+  "serviceTypesEvaluations",
+  "materialsLibrary",
+  "pricingLibrary",
+  "contractTemplates",
+  "reportsCenter",
+  "permitCenter",
+  "complianceCenter",
+  "businessIntelligence",
+  "jobUpdate",
+  "favorites",
+  "emergencyRequest",
+  "contractorJobAccepted",
 ]);
 
 const publicLegalDocumentRoutes = {
@@ -290,6 +315,20 @@ function withGuideLayer(component, currentPage, setPage) {
       <GlobalInsightLayer currentPage={currentPage} setPage={setPage} />
       <GuideOverlay currentPage={currentPage} setPage={setPage} />
     </>,
+    currentPage,
+    setPage
+  );
+}
+
+function withAssistantAccessOnly(component, currentPage, setPage) {
+  return withRouteBoundary(
+    <AskMeetroHost
+      currentPage={currentPage}
+      setPage={setPage}
+      enabled={assistantEnabledPages.has(currentPage)}
+    >
+      {component}
+    </AskMeetroHost>,
     currentPage,
     setPage
   );
@@ -1312,7 +1351,10 @@ if (page === "meetroStory") {
 }
 
 if (page === "contractorProfile") {
-  return withStartupChrome(withRouteBoundary(<ContractorProfile setPage={setPage} />, page, setPage), updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<ContractorProfile setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "chat") {
@@ -1345,11 +1387,21 @@ if (page === "customerInvoiceReview") {
 
 if (page === "contractors") {
   safeSetStorageItem("activeDiscoverMode", "businessDirectory");
-  return withStartupChrome(withSuspense(<Discover setPage={setPage} />), updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      withSuspense(<Discover setPage={setPage} />),
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "contractorDetails") {
-  return withStartupChrome(<ContractorDetails setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<ContractorDetails setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "quoteRequests") {
@@ -1396,7 +1448,14 @@ if (page === "professionalOnboarding") {
 }
 
 if (page === "businessAnalytics") {
-  return withStartupChrome(<BusinessAnalytics setPage={setPage} currentPage={page} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <BusinessAnalytics setPage={setPage} currentPage={page} />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "businessLeads") {
@@ -1420,11 +1479,17 @@ if (page === "depositRequestBuilder") {
 }
 
 if (page === "changeOrderRequest") {
-  return withStartupChrome(<ChangeOrderRequest setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<ChangeOrderRequest setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "businessCommandCenter") {
-  return withStartupChrome(withGuideLayer(<BusinessCommandCenter setPage={setPage} />, page, setPage), updateNotice);
+  return withStartupChrome(
+    withAssistantLayer(<BusinessCommandCenter setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "professionalSubscription") {
@@ -1438,19 +1503,35 @@ if (page === "professionalSubscription") {
 }
 
 if (page === "businessAvailability") {
-  return withStartupChrome(<BusinessAvailability setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<BusinessAvailability setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "customerRelationshipsCenter") {
-  return withStartupChrome(<CustomerRelationshipsCenter setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <CustomerRelationshipsCenter setPage={setPage} />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "hiringCenter") {
-  return withStartupChrome(<HiringCenter setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<HiringCenter setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "teamMembers") {
-  return withStartupChrome(<TeamMembers setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<TeamMembers setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "employeeJobs") {
@@ -1511,39 +1592,74 @@ if (page === "bookkeeperProfile") {
 }
 
 if (page === "assetCenter") {
-  return withStartupChrome(<AssetCenter setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<AssetCenter setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "serviceTypesEvaluations") {
-  return withStartupChrome(<ServiceTypesEvaluations setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <ServiceTypesEvaluations setPage={setPage} />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "materialsLibrary") {
-  return withStartupChrome(<MaterialsLibrary setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<MaterialsLibrary setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "pricingLibrary") {
-  return withStartupChrome(<PricingLibrary setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<PricingLibrary setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "contractTemplates") {
-  return withStartupChrome(<ContractTemplates setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<ContractTemplates setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "reportsCenter") {
-  return withStartupChrome(<ReportsCenter setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<ReportsCenter setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "permitCenter") {
-  return withStartupChrome(<PermitCenter setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<PermitCenter setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "complianceCenter") {
-  return withStartupChrome(<ComplianceCenter setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<ComplianceCenter setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "businessIntelligence") {
-  return withStartupChrome(<BusinessIntelligencePage setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <BusinessIntelligencePage setPage={setPage} />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "jobsHiring") {
@@ -1551,7 +1667,10 @@ if (page === "jobsHiring") {
 }
 
 if (page === "jobUpdate") {
-  return withStartupChrome(<JobUpdate setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<JobUpdate setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "projectGallery") {
@@ -1575,7 +1694,10 @@ if (page === "notifications") {
 }
 
 if (page === "favorites") {
-  return withStartupChrome(<Favorites setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<Favorites setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "emergency") {
@@ -1583,16 +1705,28 @@ if (page === "emergency") {
 }
 
 if (page === "emergencyRequest") {
-  return withStartupChrome((
-    <EmergencyRequest
-      setPage={setPage}
-      selectedService={safeGetStorageItem("selectedEmergencyService")}
-    />
-  ), updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <EmergencyRequest
+        setPage={setPage}
+        selectedService={safeGetStorageItem("selectedEmergencyService")}
+      />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "invoiceBuilder") {
-  return withStartupChrome(withGuideLayer(<InvoiceBuilder key={quoteRouteIdentity} setPage={setPage} />, page, setPage), updateNotice);
+  return withStartupChrome(
+    withAssistantLayer(
+      <InvoiceBuilder key={quoteRouteIdentity} setPage={setPage} />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "completionSheet") {
@@ -1608,7 +1742,14 @@ if (page === "completedJobDetails") {
 }
 
 if (page === "contractorJobAccepted") {
-  return withStartupChrome(<ContractorJobAccepted setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <ContractorJobAccepted setPage={setPage} />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 return withStartupChrome(withSuspense(<Home setPage={setPage} />), updateNotice);

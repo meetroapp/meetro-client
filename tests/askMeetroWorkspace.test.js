@@ -5,7 +5,7 @@ import { JSDOM } from "jsdom";
 import React, { act } from "react";
 import { createServer } from "vite";
 
-let dom, vite, createRoot;
+let dom, vite, createRoot, askMeetroIntentForTest;
 const globals = new Map();
 const pause = () => new Promise((resolve) => setTimeout(resolve, 25));
 test.before(async () => {
@@ -31,6 +31,9 @@ test.before(async () => {
 
     },
   }] });
+
+  ({ askMeetroIntent: askMeetroIntentForTest } =
+    await vite.ssrLoadModule("/src/utils/askMeetro.js"));
 });
 test.after(async () => {
   await vite?.close(); dom?.window.close();
@@ -38,13 +41,47 @@ test.after(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT; delete globalThis.__dashboardHttp;
 });
 const JOB = "7e742dc1-e2a2-49c6-a493-11e351c80d54", EVIDENCE = "7a02ee20-7f32-48eb-96dc-a3217bc5dcda";
-async function mount(t, { host = false, context = { page: "workCenter", jobId: JOB }, completionApi, resolveActions } = {}) {
+async function mount(t, { host = false, context = { page: "workCenter", jobId: JOB }, completionApi, resolveActions, requestConversation } = {}) {
   localStorage.clear(); localStorage.setItem("activeAccountMode", "business"); localStorage.setItem("language", "en");
   window.history.replaceState({}, "", `#workCenter?jobId=${JOB}&stage=work`);
   const calls = [], routes = [];
   globalThis.__dashboardHttp = async (path, options = {}) => {
     calls.push({ path, ...options });
-    if (path === "/api/companion/ask") return { response: { ok: true, status: 200 }, data: { success: true, code: "INTELLIGENCE_OPERATION_COMPLETED", operation: "companion.converse", result: { schemaVersion: 1, text: "Helpful provider fixture: review the available information before deciding.", authorityClassification: "CONVERSATIONAL_NON_CANONICAL", directMutationAllowed: false } } };
+    if (path === "/api/companion/ask") {
+      const body = JSON.parse(options.body || "{}");
+      const instruction = String(body?.input?.message || "");
+      const intent = askMeetroIntentForTest(instruction);
+
+      const result = {
+        schemaVersion: 1,
+        text:
+          "Helpful provider fixture: review the available information before deciding.",
+        authorityClassification: "CONVERSATIONAL_NON_CANONICAL",
+        directMutationAllowed: false,
+      };
+
+      if (
+        body?.context?.retrieval?.version === 1 &&
+        intent.change &&
+        !intent.information
+      ) {
+        result.text =
+          "The current authorized Job was resolved. Continue through its governed Review.";
+        result.resolution = workspaceResolution({
+          reviewRequired: true,
+        });
+      }
+
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          code: "INTELLIGENCE_OPERATION_COMPLETED",
+          operation: "companion.converse",
+          result,
+        },
+      };
+    }
     if (path.endsWith("/completion-review")) return { response: { ok: true }, data: { success: true, completionReview: { contractVersion: 1, jobId: JOB, requestId: 14, relationshipId: 22, currentVersion: 0, state: "ACTIVE", eligible: true, canComplete: true, reasons: [], work: { workstreamCount: 1, completedWorkstreamCount: 1, workItemCount: 1, completedWorkItemCount: 1 }, outstanding: { workstreams: 0, workItems: 0, obligations: 0, findings: 0 }, customerUpdates: { count: 1, status: "UP_TO_DATE" }, completedAt: null } } };
     if (path.endsWith("/complete")) return { response: { ok: true }, data: { success: true, completion: { contractVersion: 1, id: EVIDENCE, jobId: JOB, requestId: 14, relationshipId: 22, currentVersion: 1, status: "COMPLETED", completedAt: "2026-09-08T12:00:00Z", summary: { workstreamCount: 1, workItemCount: 1, customerUpdateCount: 1 }, nextAction: { code: "READY_TO_INVOICE", label: "Ready to Invoice" } } } };
     return { response: { ok: false, status: 503 }, data: { success: false } };
@@ -52,7 +89,7 @@ async function mount(t, { host = false, context = { page: "workCenter", jobId: J
   const { default: Component } = await vite.ssrLoadModule(`/src/components/${host ? "AskMeetroHost" : "AskMeetroWorkspace"}.jsx`);
   const root = createRoot(document.getElementById("root"));
   t.after(async () => { await act(async () => root.unmount()); });
-  const props = { currentPage: "workCenter", role: "business", context, ...(resolveActions ? { resolveActions } : {}), ...(completionApi ? { completionApi } : {}), setPage: (route) => routes.push(route), onClose() {} };
+  const props = { currentPage: "workCenter", role: "business", context, ...(resolveActions ? { resolveActions } : {}), ...(requestConversation ? { requestConversation } : {}), ...(completionApi ? { completionApi } : {}), setPage: (route) => routes.push(route), onClose() {} };
   await act(async () => { root.render(React.createElement(Component, props, host ? React.createElement("input", { "aria-label": "Existing unsaved Quote", defaultValue: "Unsaved scope" }) : null)); await pause(); });
   async function click(label) {
     const button = [...document.querySelectorAll("button")].find((item) => item.textContent.trim() === label || item.getAttribute("aria-label") === label);
@@ -77,17 +114,41 @@ test("Ask welcome has role-specific suggestions and functional composer controls
   await w.click("Review all");
   assert.match(w.text(), /Review 3 actions/); assert.match(w.text(), /only update information with your confirmation/);
   assert.equal(document.querySelector(".ask-meetro-receipts"), null);
-  assert.ok(w.calls.every((call) => !call.method || call.method === "GET"));
+  assert.deepEqual(
+    w.calls.filter(
+      (call) =>
+        call.method === "POST" &&
+        call.path !== "/api/companion/ask"
+    ),
+    []
+  );
   await w.click("Cancel"); assert.equal(document.querySelector(".ask-meetro-review"), null);
 });
 test("real parser → canonical review → confirmed Apply → authoritative receipt, with no Quote or payment mutation", async (t) => {
   const w = await mount(t);
   await w.send("Mark this job as completed."); await w.click("Review");
-  assert.match(w.text(), /Reviewed Job version/); assert.ok(w.calls.every((call) => !call.method || call.method === "GET"));
+  assert.match(w.text(), /Reviewed Job version/);
+  assert.deepEqual(
+    w.calls.filter(
+      (call) =>
+        call.method === "POST" &&
+        call.path !== "/api/companion/ask"
+    ),
+    []
+  );
   assert.equal(document.querySelector(".ask-meetro-receipts"), null);
   await w.click("Confirm & Apply");
   assert.match(document.querySelector(".ask-meetro-receipts").textContent, /Job completed.*Work completion recorded/s);
-  assert.deepEqual(w.calls.filter((call) => call.method === "POST").map((call) => call.path), [`/professional/jobs/${JOB}/complete`]);
+  assert.deepEqual(
+    w.calls
+      .filter(
+        (call) =>
+          call.method === "POST" &&
+          call.path !== "/api/companion/ask"
+      )
+      .map((call) => call.path),
+    [`/professional/jobs/${JOB}/complete`]
+  );
   await w.click("View"); assert.equal(w.routes.at(-1), `workCenter?jobId=${JOB}&stage=completion`);
 });
 test("persistent launcher opens a dedicated workspace and closes without unmounting an unsaved page", async (t) => {
@@ -175,13 +236,21 @@ for (const instruction of [
   const w = await mount(t);
   await w.send(instruction);
   assert.equal(document.querySelectorAll(".ask-meetro-actions article").length, 1);
-  assert.match(w.text(), /I found 1 action to review/);
+  assert.match(w.text(), /1 action to review/);
   assert.doesNotMatch(w.text(), /Conversational help is not connected/);
-  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+  assert.deepEqual(
+    w.calls.map((call) => call.path),
+    ["/api/companion/ask"]
+  );
+  assert.deepEqual(w.routes, []);
   await w.click("Review");
   assert.ok(document.querySelector(".ask-meetro-review"));
   assert.equal(document.querySelector(".ask-meetro-receipts"), null);
-  assert.deepEqual(w.calls, []); assert.deepEqual(w.routes, []);
+  assert.deepEqual(
+    w.calls.map((call) => call.path),
+    ["/api/companion/ask"]
+  );
+  assert.deepEqual(w.routes, []);
 });
 for (const instruction of [
   "Explain this Quote. Update this invoice with what the customer paid.",
@@ -198,7 +267,11 @@ for (const instruction of [
   assert.equal(document.querySelector(".ask-meetro-receipts"), null);
   assert.match(w.text(), /No change has been proposed/);
   assert.equal(document.querySelector(".ask-meetro-composer textarea").disabled, false);
-  assert.deepEqual(w.calls.map((call) => call.path), ["/api/companion/ask"]); assert.deepEqual(w.routes, []);
+  assert.deepEqual(
+    w.calls.map((call) => call.path),
+    ["/api/companion/ask", "/api/companion/ask"]
+  );
+  assert.deepEqual(w.routes, []);
 });
 test("context-free conversation and existing Customer context do not invent record actions", async (t) => {
   const w = await mount(t, { context: { page: "customerRelationshipsCenter", relationshipId: EVIDENCE } });
@@ -208,7 +281,30 @@ test("context-free conversation and existing Customer context do not invent reco
   assert.deepEqual(w.calls.map((call) => call.path), ["/api/companion/ask"]); assert.deepEqual(w.routes, []);
 });
 test("a failed proposal lookup preserves typed text and never asks an informational user to choose a record", async (t) => {
-  const w = await mount(t);
+  const w = await mount(t, {
+    requestConversation: async ({ instruction }) => {
+      if (instruction === "Create invoice from Quote Q0000049") {
+        return {
+          text:
+            "The authorized Job was resolved. Continue through its governed Quote lookup.",
+          resolution: workspaceResolution({
+            records: [
+              {
+                record: { type: "QUOTE", id: EVIDENCE },
+                name: "Bob Hamel",
+                title: "Kitchen Quote",
+                number: "Q-0000049",
+                label: "Bob Hamel — Q-0000049",
+              },
+            ],
+            reviewRequired: true,
+          }),
+        };
+      }
+
+      return "Helpful provider fixture: review the available information before deciding.";
+    },
+  });
   const originalHttp = globalThis.__dashboardHttp;
   globalThis.__dashboardHttp = async () => { throw new Error("lookup unavailable"); };
   await w.send("Create invoice from Quote Q0000049");
@@ -296,4 +392,357 @@ test("local attachment selection is named, blocks unsupported transport, and nev
   await w.click("Remove notes.pdf"); await w.click("Send");
   assert.equal(w.calls.length, 1); assert.equal(w.calls[0].path, "/api/companion/ask");
   assert.doesNotMatch(w.calls[0].body, /notes.pdf|attachments|files/);
+});
+
+
+const SECOND_JOB = "4cc72db2-2f01-4dd7-96ef-92bc58cbc4d9";
+const RETRIEVAL_OPERATION = "69c69a0a-e00f-46bb-87f2-944bf19de374";
+
+function workspaceRecord(id, name, title) {
+  return {
+    record: { type: "JOB", id },
+    name,
+    title,
+    number: "",
+    label: `${name} — ${title}`,
+  };
+}
+
+function workspaceResolution(overrides = {}) {
+  return {
+    version: 1,
+    status: "RESOLVED",
+    audience: "professional",
+    records: [
+      workspaceRecord(JOB, "Anthony Guzman", "Cabinet repair"),
+    ],
+    truncated: false,
+    reviewRequired: false,
+    continuation: {
+      reference: RETRIEVAL_OPERATION,
+      expiresAfterSeconds: 900,
+    },
+    answerSource: "DETERMINISTIC_RETRIEVAL",
+    providerInvoked: false,
+    ...overrides,
+  };
+}
+
+test("Universal ambiguity shows every bounded choice and continues only the selected record", async (t) => {
+  const first = workspaceRecord(JOB, "John Smith", "Bathroom");
+  const second = workspaceRecord(SECOND_JOB, "John Rivera", "AC");
+  const requests = [];
+
+  const w = await mount(t, {
+    context: { page: "businessDashboard" },
+    resolveActions: async () => [],
+    requestConversation: async (options) => {
+      requests.push(options);
+
+      if (!options.continuation) {
+        return {
+          text: "I found multiple possible records. Which one do you mean?",
+          resolution: workspaceResolution({
+            status: "AMBIGUOUS",
+            records: [first, second],
+            reviewRequired: false,
+          }),
+        };
+      }
+
+      assert.deepEqual(options.continuation, {
+        reference: RETRIEVAL_OPERATION,
+        index: 1,
+      });
+
+      return {
+        text: "John Rivera's confirmed Job was selected.",
+        resolution: workspaceResolution({
+          records: [second],
+        }),
+      };
+    },
+  });
+
+  await w.send("When is John's job?");
+
+  const choices = [
+    ...document.querySelectorAll(".ask-meetro-ambiguity button"),
+  ];
+
+  assert.equal(choices.length, 2);
+  assert.equal(choices[0].textContent.trim(), "John Smith — Bathroom");
+  assert.equal(choices[1].textContent.trim(), "John Rivera — AC");
+
+  assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  assert.equal(document.querySelector(".ask-meetro-review"), null);
+
+  await w.click("John Rivera — AC");
+
+  assert.equal(requests.length, 2);
+  assert.equal(document.querySelector(".ask-meetro-ambiguity"), null);
+  assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  assert.equal(document.querySelector(".ask-meetro-review"), null);
+  assert.match(w.text(), /Use John Rivera — AC\./);
+  assert.match(w.text(), /confirmed Job was selected/);
+  assert.deepEqual(w.routes, []);
+});
+
+test("Universal ambiguity uncertain retry reuses the same continuation idempotency key", async (t) => {
+  const first = workspaceRecord(JOB, "John Smith", "Bathroom");
+  const second = workspaceRecord(SECOND_JOB, "John Rivera", "AC");
+  const continuationKeys = [];
+  let continuationAttempts = 0;
+
+  const w = await mount(t, {
+    context: { page: "businessDashboard" },
+    resolveActions: async () => [],
+    requestConversation: async (options) => {
+      if (!options.continuation) {
+        return {
+          text: "I found multiple possible records. Which one do you mean?",
+          resolution: workspaceResolution({
+            status: "AMBIGUOUS",
+            records: [first, second],
+          }),
+        };
+      }
+
+      continuationAttempts += 1;
+      continuationKeys.push(options.idempotencyKey);
+
+      assert.deepEqual(options.continuation, {
+        reference: RETRIEVAL_OPERATION,
+        index: 0,
+      });
+
+      if (continuationAttempts === 1) {
+        throw Object.assign(
+          new Error("Selection timed out. Try again."),
+          { code: "ASK_CONVERSATION_TIMEOUT" }
+        );
+      }
+
+      return {
+        text: "John Smith's Job was verified.",
+        resolution: workspaceResolution({
+          records: [first],
+        }),
+      };
+    },
+  });
+
+  await w.send("When is John's job?");
+
+  await w.click("John Smith — Bathroom");
+
+  assert.match(
+    document.querySelector('[role="alert"]').textContent,
+    /Selection timed out/
+  );
+  assert.ok(document.querySelector(".ask-meetro-ambiguity"));
+
+  await w.click("John Smith — Bathroom");
+
+  assert.equal(continuationKeys.length, 2);
+  assert.ok(continuationKeys[0]);
+  assert.equal(continuationKeys[0], continuationKeys[1]);
+  assert.equal(document.querySelector(".ask-meetro-ambiguity"), null);
+  assert.match(w.text(), /Job was verified/);
+});
+
+test("resolved operational retrieval is visibly not applied and enters only governed Review", async (t) => {
+  const instruction = "Complete Anthony Guzman's job";
+
+  const w = await mount(t, {
+    context: { page: "businessDashboard" },
+
+    resolveActions: async (_text, options) => {
+      if (options.context?.jobId !== JOB) return [];
+
+      return [
+        {
+          id: "resolved-completion-review",
+          kind: "COMPLETE_JOB",
+          title: "Review work completion",
+          instruction,
+          route: `workCenter?jobId=${JOB}&stage=work`,
+          context: options.context,
+          status: "PROPOSED",
+          details: [],
+        },
+      ];
+    },
+
+    requestConversation: async () => ({
+      text:
+        "The target record is resolved. Continue through its existing governed operation and Review.",
+      resolution: workspaceResolution({
+        reviewRequired: true,
+      }),
+    }),
+  });
+
+  await w.send(instruction);
+
+  const resolutionCard = document.querySelector(
+    ".ask-meetro-resolution-review"
+  );
+
+  assert.ok(resolutionCard);
+  assert.match(resolutionCard.textContent, /Resolved · not applied/);
+  assert.match(resolutionCard.textContent, /Review required/);
+  assert.match(resolutionCard.textContent, /Anthony Guzman/);
+
+  assert.equal(
+    document.querySelectorAll(".ask-meetro-actions article").length,
+    1
+  );
+
+  assert.equal(document.querySelector(".ask-meetro-review"), null);
+  assert.equal(document.querySelector(".ask-meetro-receipts"), null);
+
+  assert.ok(
+    ![...document.querySelectorAll("button")].some(
+      (button) => button.textContent.trim() === "Confirm & Apply"
+    )
+  );
+
+  await w.click("Review");
+
+  assert.ok(document.querySelector(".ask-meetro-review"));
+
+  assert.ok(
+    ![...document.querySelectorAll("button")].some(
+      (button) => button.textContent.trim() === "Confirm & Apply"
+    )
+  );
+
+  await w.click("Open record to review");
+
+  assert.deepEqual(w.routes, [
+    `workCenter?jobId=${JOB}&stage=work`,
+  ]);
+  assert.equal(document.querySelector(".ask-meetro-receipts"), null);
+});
+
+test("Ask Meetro composer grows, caps at 144px, scrolls internally, and shrinks again", async (t) => {
+  await mount(t);
+
+  const input = document.querySelector(
+    ".ask-meetro-composer textarea"
+  );
+
+  let measuredScrollHeight = 44;
+
+  Object.defineProperty(input, "scrollHeight", {
+    configurable: true,
+    get: () => measuredScrollHeight,
+  });
+
+  async function setComposer(value, scrollHeight) {
+    measuredScrollHeight = scrollHeight;
+
+    await act(async () => {
+      Object.getOwnPropertyDescriptor(
+        HTMLTextAreaElement.prototype,
+        "value"
+      ).set.call(input, value);
+
+      input.dispatchEvent(
+        new Event("input", { bubbles: true })
+      );
+
+      await pause();
+    });
+  }
+
+  await setComposer("Short", 44);
+  assert.equal(input.style.height, "44px");
+  assert.equal(input.style.overflowY, "hidden");
+  assert.equal(input.style.overflowX, "hidden");
+
+  await setComposer("Line one\nLine two\nLine three", 96);
+  assert.equal(input.style.height, "96px");
+  assert.equal(input.style.overflowY, "hidden");
+
+  await setComposer(
+    "One\nTwo\nThree\nFour\nFive\nSix\nSeven\nEight",
+    220
+  );
+
+  assert.equal(input.style.height, "144px");
+  assert.equal(input.style.overflowY, "auto");
+  assert.equal(input.style.overflowX, "hidden");
+
+  await setComposer("Short again", 44);
+
+  assert.equal(input.style.height, "44px");
+  assert.equal(input.style.overflowY, "hidden");
+});
+
+test("voice transcript expands the editable composer but never sends or opens Review automatically", async (t) => {
+  let recognition;
+
+  window.SpeechRecognition = class {
+    constructor() {
+      recognition = this;
+    }
+
+    start() {
+      this.onstart();
+    }
+
+    abort() {}
+  };
+
+  t.after(() => {
+    delete window.SpeechRecognition;
+  });
+
+  const w = await mount(t);
+
+  const input = document.querySelector(
+    ".ask-meetro-composer textarea"
+  );
+
+  let measuredScrollHeight = 44;
+
+  Object.defineProperty(input, "scrollHeight", {
+    configurable: true,
+    get: () => measuredScrollHeight,
+  });
+
+  await w.click("Voice");
+
+  assert.equal(input.style.height, "44px");
+
+  measuredScrollHeight = 120;
+
+  const result = [{
+    transcript:
+      "Complete this job after reviewing all of the work that was documented today",
+  }];
+
+  result.isFinal = true;
+
+  await act(async () => {
+    recognition.onresult({ results: [result] });
+    await pause();
+  });
+
+  assert.match(input.value, /Complete this job/);
+  assert.equal(input.style.height, "120px");
+
+  // Voice produces only an editable draft.
+  assert.equal(w.calls.length, 0);
+  assert.deepEqual(w.routes, []);
+  assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  assert.equal(document.querySelector(".ask-meetro-review"), null);
+  assert.equal(document.querySelector(".ask-meetro-receipts"), null);
+
+  assert.equal(
+    document.querySelector('[aria-label="Send"]').disabled,
+    false
+  );
 });
