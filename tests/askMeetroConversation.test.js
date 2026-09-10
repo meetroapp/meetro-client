@@ -279,3 +279,111 @@ test("source-first Quote arrow command reaches governed Quote-to-Invoice Review 
   assert.equal(answer.actions[0].status, "PROPOSED");
   assert.match(answer.actions[0].route, /^invoiceBuilder\?/);
 });
+
+for (const [instruction, recordType] of [
+  ["Update Quote Q0000049", "DOCUMENT_DRAFT"],
+  ["Update Bob Hamel Quote Q0000049", "QUOTE"],
+  ["Update customer Bob Hamel, Quote Q0000049", "QUOTE"],
+]) {
+  test(`vague resolved Quote target asks what to change: ${instruction} [${recordType}]`, async () => {
+    const answer = await resolveAskMeetroRequest(
+      instruction,
+      {
+        context: {},
+        role: "business",
+        resolveActions: async () => [],
+        requestConversation: async () => ({
+          text:
+            "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+          resolution: {
+            version: 1,
+            status: "RESOLVED",
+            audience: "professional",
+            records: [{
+              record: {
+                type: recordType,
+                id: ID,
+              },
+              name: "Bob Hamel",
+              title: "Window repair",
+              number: "Q0000049",
+              label: "Bob Hamel — Window repair",
+            }],
+            truncated: false,
+            reviewRequired: true,
+            continuation: {
+              reference: ID,
+              expiresAfterSeconds: 900,
+            },
+            answerSource: "DETERMINISTIC_RETRIEVAL",
+            providerInvoked: false,
+          },
+        }),
+      }
+    );
+
+    assert.deepEqual(answer.actions, []);
+    assert.match(answer.text, /Bob Hamel — Window repair/);
+    assert.match(
+      answer.text,
+      /What would you like to change on this Quote/i
+    );
+    assert.match(answer.text, /Q0000049/);
+    assert.doesNotMatch(
+      answer.text,
+      /Continue through its existing governed operation and Review/
+    );
+  });
+}
+
+test("specific Quote change is not downgraded into vague-change clarification", async () => {
+  const serverText =
+    "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.";
+
+  const answer = await resolveAskMeetroRequest(
+    "Update Quote Q0000049 labor to $300",
+    {
+      context: {},
+      role: "business",
+      resolveActions: async () => [],
+      requestConversation: async () => ({
+        text: serverText,
+        resolution: {
+          version: 1,
+          status: "RESOLVED",
+          audience: "professional",
+          records: [{
+            record: {
+              type: "QUOTE",
+              id: ID,
+            },
+            name: "Bob Hamel",
+            title: "Window repair",
+            number: "Q0000049",
+            label: "Bob Hamel — Window repair",
+          }],
+          truncated: false,
+          reviewRequired: true,
+          continuation: {
+            reference: ID,
+            expiresAfterSeconds: 900,
+          },
+          answerSource: "DETERMINISTIC_RETRIEVAL",
+          providerInvoked: false,
+        },
+      }),
+    }
+  );
+
+  assert.deepEqual(answer.actions, []);
+
+  assert.equal(
+    answer.text,
+    serverText
+  );
+
+  assert.doesNotMatch(
+    answer.text,
+    /What would you like to change on this Quote/i
+  );
+});

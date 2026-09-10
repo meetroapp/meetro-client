@@ -249,26 +249,71 @@ export function askMeetroResolvedRecordContext(resolution, currentContext = {}, 
   return null;
 }
 
-function isVagueResolvedQuoteChange(instruction, resolution) {
-  const record = resolution?.records?.[0]?.record;
+function normalizeResolvedQuoteTarget(value) {
+  return String(value || "")
+    .trim()
+    .normalize("NFD")
+    .replace(/\p{M}/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim()
+    .replace(/\s+/g, " ")
+    .replace(/\bq\s+(\d{1,12})\b/g, "q$1");
+}
 
+function isVagueResolvedQuoteChange(instruction, resolution) {
   if (
     resolution?.status !== "RESOLVED" ||
-    resolution?.records?.length !== 1 ||
-    record?.type !== "QUOTE"
+    resolution?.records?.length !== 1
   ) {
     return false;
   }
 
-  const text = String(instruction || "")
-    .trim()
-    .normalize("NFD")
-    .replace(/\p{M}/gu, "")
-    .toLowerCase();
+  const item = resolution.records[0];
+  const record = item?.record;
+  const number = normalizeResolvedQuoteTarget(item?.number)
+    .replace(/\s+/g, "");
 
-  return /^(?:(?:please|can you|could you|would you|help me|i want to)\s+)?(?:update|edit|revise)\s+(?:this\s+)?quote(?:\s+q\s*-?\s*\d{1,12})?[.!]?$/.test(
-    text
-  );
+  // Universal Retrieval may resolve a professional Quote search either to
+  // canonical Quote authority or to an unattached working Quote document.
+  // A working document is Quote-like here only when its authorized returned
+  // document number is explicitly a Q-number. This affects clarification
+  // wording only; it does not create route or mutation authority.
+  const quoteLike =
+    record?.type === "QUOTE" ||
+    (
+      record?.type === "DOCUMENT_DRAFT" &&
+      /^q\d{1,12}$/.test(number)
+    );
+
+  if (!quoteLike) return false;
+
+  let text = normalizeResolvedQuoteTarget(instruction);
+
+  const command =
+    /^(?:(?:please|can you|could you|would you|help me|i want to)\s+)?(?:update|edit|revise)\s+/;
+
+  if (!command.test(text)) return false;
+  text = text.replace(command, "").trim();
+
+  const name = normalizeResolvedQuoteTarget(item?.name);
+  const targets = new Set(["quote"]);
+
+  if (number) {
+    targets.add(`quote ${number}`);
+  }
+
+  if (name) {
+    targets.add(`${name} quote`);
+    targets.add(`customer ${name} quote`);
+
+    if (number) {
+      targets.add(`${name} quote ${number}`);
+      targets.add(`customer ${name} quote ${number}`);
+    }
+  }
+
+  return targets.has(text);
 }
 
 function expectedRetrievalAudience(role) {
