@@ -1001,6 +1001,7 @@
 .business-document-actions .business-document-save:disabled { color: #24563f; border-color: #cddbcf; background: #e9f2e9; cursor: default; }
 .business-document-delivery { position: relative; }
 .business-document-delivery-menu { position: absolute; z-index: 8; top: calc(100% + 4px); left: 0; min-width: 140px; padding: 5px; border: 1px solid #dbe3dc; border-radius: 10px; background: #fff; box-shadow: 0 12px 25px rgba(30,50,38,.16); }
+.business-document-delivery-menu.opens-up { top: auto; bottom: calc(100% + 4px); }
 .business-document-delivery-menu button { display: block; width: 100%; border: 0; border-radius: 8px; color: #274437; background: #fff; text-align: left; padding: 8px 10px; font-size: 11px; }
 .business-document-delivery-menu button:hover { background: #eff6ef; }
 .business-document-notice { margin: 10px 0 0; padding: 10px; border-radius: 10px; color: #634d20; background: #fff8e7; font-size: 11px; text-align: center; }

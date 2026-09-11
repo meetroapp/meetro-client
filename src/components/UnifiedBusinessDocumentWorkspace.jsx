@@ -1,8 +1,18 @@
 import { projectQuoteToInvoiceWorkingDraft, parseQuoteInvoiceCommand, lookupQuoteInvoiceCommand, quoteInvoiceResolutionMessage, stageQuoteInvoiceInstruction } from "../utils/quoteToInvoice.js";
 import { listQuoteInvoiceSavedFiles, quoteInvoiceFileType } from "../utils/quoteInvoiceSavedFiles.js";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import BottomNav from "./BottomNav.jsx";
+import {
+  resolveBusinessDocumentDeliveryMenuPlacement,
+} from "../utils/businessDocumentDeliveryMenuPlacement.js";
 import DepositRequestWorkspace from "./DepositRequestWorkspace.jsx";
 import MeetroIcon from "./MeetroIcon.jsx";
 import WorkflowMicrophoneInput from "./WorkflowMicrophoneInput.jsx";
@@ -491,11 +501,184 @@ function DeliveryMenu({
   allowMeetroMessage = true,
 }) {
   const [open, setOpen] = useState(false);
+  const [placement, setPlacement] = useState("down");
+  const wrapperRef = useRef(null);
+  const triggerRef = useRef(null);
+  const menuRef = useRef(null);
   const label = kind === "quote" ? "Send Quote" : "Send Invoice";
+
+  const updatePlacement = useCallback(() => {
+    if (!open) return;
+
+    const trigger = triggerRef.current;
+    const menu = menuRef.current;
+
+    if (!trigger || !menu || typeof window === "undefined") {
+      setPlacement("down");
+      return;
+    }
+
+    const triggerRect = trigger.getBoundingClientRect();
+    const menuRect = menu.getBoundingClientRect();
+
+    const visualViewport = window.visualViewport;
+    const viewportTop =
+      Number.isFinite(visualViewport?.offsetTop)
+        ? visualViewport.offsetTop
+        : 0;
+    const viewportHeight =
+      Number.isFinite(visualViewport?.height) &&
+      visualViewport.height > 0
+        ? visualViewport.height
+        : window.innerHeight;
+    const viewportBottom = viewportTop + viewportHeight;
+
+    const preview =
+      wrapperRef.current?.closest(".business-document-preview");
+    const previewRect = preview?.getBoundingClientRect();
+
+    const boundaryRect = previewRect
+      ? {
+          top: Math.max(viewportTop, previewRect.top),
+          bottom: Math.min(viewportBottom, previewRect.bottom),
+        }
+      : {
+          top: viewportTop,
+          bottom: viewportBottom,
+        };
+
+    setPlacement(
+      resolveBusinessDocumentDeliveryMenuPlacement({
+        triggerRect,
+        menuHeight: menuRect.height,
+        boundaryRect,
+        gap: 4,
+      })
+    );
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) {
+      setPlacement("down");
+      return;
+    }
+
+    updatePlacement();
+  }, [open, updatePlacement]);
+
+  useEffect(() => {
+    if (!open || typeof window === "undefined") {
+      return undefined;
+    }
+
+    const preview =
+      wrapperRef.current?.closest(".business-document-preview");
+    const visualViewport = window.visualViewport;
+
+    const handleGeometryChange = () => {
+      updatePlacement();
+    };
+
+    preview?.addEventListener(
+      "scroll",
+      handleGeometryChange,
+      { passive: true }
+    );
+    window.addEventListener(
+      "resize",
+      handleGeometryChange
+    );
+    visualViewport?.addEventListener(
+      "resize",
+      handleGeometryChange
+    );
+    visualViewport?.addEventListener(
+      "scroll",
+      handleGeometryChange
+    );
+
+    return () => {
+      preview?.removeEventListener(
+        "scroll",
+        handleGeometryChange
+      );
+      window.removeEventListener(
+        "resize",
+        handleGeometryChange
+      );
+      visualViewport?.removeEventListener(
+        "resize",
+        handleGeometryChange
+      );
+      visualViewport?.removeEventListener(
+        "scroll",
+        handleGeometryChange
+      );
+    };
+  }, [open, updatePlacement]);
+
   return (
-    <div className="business-document-delivery">
-      <button type="button" className="business-document-primary" disabled={disabled} aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen((current) => !current)}>{label} <span aria-hidden="true">⌄</span></button>
-      {open ? <div role="menu" className="business-document-delivery-menu"><button type="button" role="menuitem" onClick={() => { setOpen(false); onSelect("EMAIL"); }}>Email with Meetro</button>{allowMeetroMessage ? <button type="button" role="menuitem" onClick={() => { setOpen(false); onSelect("MEETRO_MESSAGE"); }}>Meetro Message</button> : null}<button type="button" role="menuitem" onClick={() => { setOpen(false); onSelect("DEVICE_SHARE"); }}>Share with device…</button></div> : null}
+    <div
+      ref={wrapperRef}
+      className="business-document-delivery"
+      data-delivery-menu-placement={placement}
+    >
+      <button
+        ref={triggerRef}
+        type="button"
+        className="business-document-primary"
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen((current) => !current)}
+      >
+        {label} <span aria-hidden="true">⌄</span>
+      </button>
+
+      {open ? (
+        <div
+          ref={menuRef}
+          role="menu"
+          className={`business-document-delivery-menu${
+            placement === "up" ? " opens-up" : ""
+          }`}
+        >
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onSelect("EMAIL");
+            }}
+          >
+            Email with Meetro
+          </button>
+
+          {allowMeetroMessage ? (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                setOpen(false);
+                onSelect("MEETRO_MESSAGE");
+              }}
+            >
+              Meetro Message
+            </button>
+          ) : null}
+
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              setOpen(false);
+              onSelect("DEVICE_SHARE");
+            }}
+          >
+            Share with device…
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }
