@@ -974,7 +974,7 @@ test("specific Quote edit pulls the exact working form into Ask without leaving 
   );
   assert.equal(underlying.value, "Unsaved scope");
 
-  const inline = document.querySelector(
+  let inline = document.querySelector(
     '[data-ask-inline-document="QUOTE"]'
   );
 
@@ -1013,6 +1013,62 @@ test("specific Quote edit pulls the exact working form into Ask without leaving 
   // Ask remains the host rather than replacing the page.
   assert.ok(document.querySelector(".ask-meetro-workspace"));
   assert.deepEqual(w.routes, []);
+
+  // R4.1 continuity:
+  // Closing the entire Ask panel must preserve this same-context
+  // verified working-Quote handoff. The conversation and form
+  // must return together when Ask is reopened.
+  await w.click("Close Ask Meetro");
+
+  assert.equal(
+    document.querySelector(".ask-meetro-workspace"),
+    null
+  );
+
+  assert.equal(
+    document.querySelector(
+      '[aria-label="Existing unsaved Quote"]'
+    ),
+    underlying
+  );
+
+  await act(async () => {
+    document
+      .querySelector(".meetro-assistant-launcher")
+      .click();
+    await pause();
+  });
+
+  assert.ok(
+    document.querySelector(".ask-meetro-workspace"),
+    "Ask Meetro should reopen"
+  );
+
+  assert.match(
+    w.text(),
+    /exact working Quote is ready here/i,
+    "the resolved Ask conversation should remain"
+  );
+
+  inline = document.querySelector(
+    '[data-ask-inline-document="QUOTE"]'
+  );
+
+  assert.ok(
+    inline,
+    "the verified working Quote form must return with the same Ask session"
+  );
+
+  assert.equal(
+    inline.getAttribute("data-document-id"),
+    WORKING_DRAFT_ID
+  );
+
+  assert.deepEqual(
+    w.routes,
+    [],
+    "same-context Ask reopen must not navigate"
+  );
 
   // Make a real local form change and apply it to the working Quote.
   const price = inline.querySelector(
@@ -1093,6 +1149,42 @@ test("specific Quote edit pulls the exact working form into Ask without leaving 
   assert.match(
     document.querySelector(".ask-meetro-conversation").textContent,
     /Update Quote Q0000049 labor to \$300/
+  );
+
+  // Explicitly discarding the embedded form must also clear the
+  // same-context Ask session handoff. Reopening Ask may restore
+  // the conversation, but it must not resurrect a dismissed form.
+  await w.click("Close Ask Meetro");
+
+  assert.equal(
+    document.querySelector(".ask-meetro-workspace"),
+    null
+  );
+
+  await act(async () => {
+    document
+      .querySelector(".meetro-assistant-launcher")
+      .click();
+    await pause();
+  });
+
+  assert.ok(
+    document.querySelector(".ask-meetro-workspace"),
+    "Ask Meetro should reopen after explicit form dismissal"
+  );
+
+  assert.match(
+    document.querySelector(".ask-meetro-conversation").textContent,
+    /Update Quote Q0000049 labor to \$300/,
+    "the Ask conversation should remain"
+  );
+
+  assert.equal(
+    document.querySelector(
+      '[data-ask-inline-document="QUOTE"]'
+    ),
+    null,
+    "a deliberately discarded embedded Quote form must not return"
   );
 
   // The page underneath Ask has never been navigated or unmounted.

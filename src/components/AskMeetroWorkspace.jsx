@@ -57,7 +57,9 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
   const [files, setFiles] = useState([]);
   const [review, setReview] = useState(null);
   const [resolution, setResolution] = useState(session?.resolution || null);
-  const [inlineWorkspace, setInlineWorkspace] = useState(null);
+  const [inlineWorkspace, setInlineWorkspace] = useState(
+    session?.inlineWorkspace || null
+  );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [voiceState, setVoiceState] = useState("idle");
@@ -67,7 +69,24 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
   const conversationAttempt = useRef(null), selectionAttempt = useRef(null), requestController = useRef(null);
   const inFlight = useRef(false), mounted = useRef(true), filesRef = useRef([]);
 
-  useEffect(() => { onSessionChange?.({ messages, actions, receipts, resolution, contextKey: JSON.stringify(context) }); }, [messages, actions, receipts, resolution, context, onSessionChange]);
+  useEffect(() => {
+    onSessionChange?.({
+      messages,
+      actions,
+      receipts,
+      resolution,
+      inlineWorkspace,
+      contextKey: JSON.stringify(context),
+    });
+  }, [
+    messages,
+    actions,
+    receipts,
+    resolution,
+    inlineWorkspace,
+    context,
+    onSessionChange,
+  ]);
   useEffect(() => { if (messages.length || actions.length || receipts.length) bottomRef.current?.scrollIntoView({ block: "nearest" }); }, [messages, actions, receipts]);
   useEffect(() => {
     const vv = window.visualViewport;
