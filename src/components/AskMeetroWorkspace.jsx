@@ -187,9 +187,13 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
       if (result.inlineWorkspace?.type === "BUSINESS_DOCUMENT") {
         setInlineWorkspace({
           ...result.inlineWorkspace,
-          quote: {
-            ...(result.inlineWorkspace.document?.content || {}),
-          },
+          ...(result.inlineWorkspace.documentType === "QUOTE"
+            ? {
+                quote: {
+                  ...(result.inlineWorkspace.document?.content || {}),
+                },
+              }
+            : {}),
         });
       }
       const retainComposer =
@@ -339,6 +343,34 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
     });
   }
 
+  function handleInlineDocumentSaved(document) {
+    if (!document?.id) return;
+
+    setInlineWorkspace((current) => {
+      if (
+        !current ||
+        current.type !== "BUSINESS_DOCUMENT" ||
+        String(current.document?.id || "").toLowerCase() !==
+          String(document.id).toLowerCase()
+      ) {
+        return current;
+      }
+
+      return {
+        ...current,
+        document,
+        quote:
+          current.documentType === "QUOTE"
+            ? { ...(document.content || {}) }
+            : current.quote,
+
+        // The requested change has now reached durable document truth.
+        // Do not replay the original instruction on a later Ask reopen.
+        instruction: "",
+      };
+    });
+  }
+
   function attach(event) {
     if (!guardFriendsAndFamilyMediaUpload({ event, onDeferred: setError })) return;
     const selected = [...event.target.files].filter((file) => file.size <= 20 * 1024 * 1024).slice(0, 10 - filesRef.current.length);
@@ -403,14 +435,19 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
       {subject ? <div className="ask-meetro-context"><MeetroIcon name="workCenter" size={18} decorative /><span>Working with: {subject}</span><small>Exact record context · changes require review</small></div> : null}
       <div className="ask-meetro-conversation" role="region" aria-label="Ask Meetro conversation">
         {!messages.length ? <section className="ask-meetro-welcome"><span className="ask-meetro-welcome-mark" aria-hidden="true">M</span><h2>Your assistant for real work.</h2><p>Tell me what you need. I'll help you take action, find information, and keep your work organized.</p><div className="ask-meetro-capabilities"><span>Understand</span><span>Take Action</span><span>Keep It Organized</span></div><div className="ask-meetro-suggestions">{suggestions[role === "business" ? "business" : "personal"].map(([title, prompt]) => <button key={title} type="button" onClick={() => { setInput(prompt); composerRef.current?.focus(); }}><strong>{title}</strong><span>{prompt}</span><MeetroIcon name="openExternal" size={20} decorative /></button>)}</div></section> : <div role="log" aria-live="polite">{messages.map((message, index) => <article key={index} className={`ask-meetro-message is-${message.role}`}><strong>{message.role === "user" ? "You" : "Meetro"}</strong><p>{message.text}</p></article>)}</div>}
-        {inlineWorkspace?.type === "BUSINESS_DOCUMENT" && inlineWorkspace.documentType === "QUOTE" ? (
+        {inlineWorkspace?.type === "BUSINESS_DOCUMENT" && ["QUOTE", "INVOICE"].includes(inlineWorkspace.documentType) ? (
           <UnifiedBusinessDocumentWorkspace
             hostMode="ask"
             setPage={setPage}
             language={localStorage.getItem("language") || "en"}
-            initialDocument="quote"
+            initialDocument={
+              inlineWorkspace.documentType === "INVOICE"
+                ? "invoice"
+                : "quote"
+            }
             initialSavedDocumentId={inlineWorkspace.document.id}
             initialSavedDocument={inlineWorkspace.document}
+            hostedInstruction={inlineWorkspace.instruction || ""}
             job={{
               id: inlineWorkspace.document.jobId || null,
               customerName:
@@ -424,17 +461,22 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
               customerLinkedFromJob: false,
             }}
             quote={
-              inlineWorkspace.quote ||
-              inlineWorkspace.document.content
+              inlineWorkspace.documentType === "QUOTE"
+                ? (
+                    inlineWorkspace.quote ||
+                    inlineWorkspace.document.content
+                  )
+                : {}
             }
             photos={inlineWorkspace.document.photos || []}
             canAddPhotos={false}
             onAddPhotos={() =>
               setError(
-                "Add Quote photos from the governed document photo workflow."
+                "Add document photos from the governed document photo workflow."
               )
             }
             onApplyQuotePatch={applyInlineQuotePatch}
+            onHostedDocumentSaved={handleInlineDocumentSaved}
             onBack={() => setInlineWorkspace(null)}
             onEmbeddedClose={() => setInlineWorkspace(null)}
           />

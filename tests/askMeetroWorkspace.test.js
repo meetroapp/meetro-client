@@ -1014,6 +1014,57 @@ test("specific Quote edit pulls the exact working form into Ask without leaving 
   assert.ok(document.querySelector(".ask-meetro-workspace"));
   assert.deepEqual(w.routes, []);
 
+  // R4.2A:
+  // Ask is only the conversational entry point. Once the exact Quote
+  // is resolved, the original instruction must enter the existing
+  // Quote proposal engine exactly as if the professional typed it in
+  // the normal Quote workspace.
+  let quoteProposal = inline.querySelector(
+    ".business-document-proposal"
+  );
+
+  assert.ok(
+    quoteProposal,
+    "Ask instruction must enter the existing Quote proposal review"
+  );
+
+  assert.match(
+    quoteProposal.textContent,
+    /Proposed Quote changes/i
+  );
+
+  assert.match(
+    quoteProposal.textContent,
+    /labor/i
+  );
+
+  assert.match(
+    quoteProposal.textContent,
+    /300/,
+    "the requested $300 labor value must be proposed before any manual edit"
+  );
+
+  // Nothing is applied merely because Ask resolved the command.
+  assert.doesNotMatch(
+    inline.textContent,
+    /Unsaved working changes/i
+  );
+
+  // Hosted Quote must retain the real owning-workspace capabilities,
+  // not a reduced Ask-only manual editor.
+  for (const label of [
+    "Preview PDF",
+    "Download PDF",
+    "Send Quote",
+  ]) {
+    assert.ok(
+      [...inline.querySelectorAll("button")].some(
+        (button) => button.textContent.trim().startsWith(label)
+      ),
+      `hosted Quote must retain ${label}`
+    );
+  }
+
   // R4.1 continuity:
   // Closing the entire Ask panel must preserve this same-context
   // verified working-Quote handoff. The conversation and form
@@ -1070,32 +1121,86 @@ test("specific Quote edit pulls the exact working form into Ask without leaving 
     "same-context Ask reopen must not navigate"
   );
 
-  // Make a real local form change and apply it to the working Quote.
-  const price = inline.querySelector(
-    '[data-quote-safety-field="totalOverride"] input'
+  // The same held Ask instruction must rebuild the existing Quote
+  // proposal after a normal Ask close/reopen.
+  quoteProposal = inline.querySelector(
+    ".business-document-proposal"
   );
 
-  assert.ok(price, "embedded Quote should expose Customer price");
+  assert.ok(
+    quoteProposal,
+    "verified Quote proposal must return with the hosted workspace"
+  );
 
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
-      "value"
-    ).set.call(price, "300");
+  assert.match(quoteProposal.textContent, /labor/i);
+  assert.match(quoteProposal.textContent, /300/);
 
-    price.dispatchEvent(
-      new Event("input", { bubbles: true })
-    );
-
-    await pause();
-  });
-
-  await w.click("Apply changes");
+  // Explicit professional Apply is still required.
+  await w.click("Apply");
 
   assert.match(
     inline.textContent,
     /Unsaved working changes/
   );
+
+  // R4.2A:
+  // A hosted Quote must continue through the SAME governed delivery
+  // workflow as the normal Quote panel. Ask must not create a shortcut
+  // that silently saves, issues, or sends anything.
+  const hostedSendQuote = [
+    ...inline.querySelectorAll("button"),
+  ].find((button) =>
+    button.textContent.trim().startsWith("Send Quote")
+  );
+
+  assert.ok(
+    hostedSendQuote,
+    "hosted Quote must expose the owning workspace Send Quote action"
+  );
+
+  await act(async () => {
+    hostedSendQuote.click();
+    await pause();
+  });
+
+  await w.click("Email with Meetro");
+
+  // Because the Quote has applied-but-unsaved changes, the owning
+  // workspace must stop delivery and show either its exact save-before-send
+  // gate or Quote Safety gate. No delivery may bypass those controls.
+  const governedSendDialog =
+    document.querySelector(
+      '[data-dialog-purpose="business-document-delivery-save-title"]'
+    ) ||
+    document.querySelector(
+      '[data-dialog-purpose="business-document-quote-safety-title"]'
+    );
+
+  assert.ok(
+    governedSendDialog,
+    "hosted Quote Send must render the existing governed save/safety dialog"
+  );
+
+  assert.match(
+    governedSendDialog.textContent,
+    /Save changes before sending|Review Quote before sending|Quote needs attention/i
+  );
+
+  // Cancel the send attempt so the existing leave-guard assertions below
+  // continue testing the same applied-but-unsaved Quote.
+  const cancelHostedSend = [
+    ...governedSendDialog.querySelectorAll("button"),
+  ].find((button) => button.textContent.trim() === "Cancel");
+
+  assert.ok(
+    cancelHostedSend,
+    "governed hosted send dialog must remain cancellable"
+  );
+
+  await act(async () => {
+    cancelHostedSend.click();
+    await pause();
+  });
 
   // Closing an applied-but-unsaved Quote must enter the existing leave guard.
   await w.click("Close form");
@@ -1395,6 +1500,8 @@ test("embedded Ask Quote save preserves every existing saved photo in the exact 
 
   const SAVED_PHOTO = {
     id: "saved-photo-before-window",
+    name: "Document photo",
+    purpose: "quote-draft-photo",
     media: {
       public_id: "meetro/quotes/window-before",
       secure_url:
@@ -1547,36 +1654,38 @@ test("embedded Ask Quote save preserves every existing saved photo in the exact 
     DRAFT_ID
   );
 
-  const price = inline.querySelector(
-    '[data-quote-safety-field="totalOverride"] input'
+  const proposal = inline.querySelector(
+    ".business-document-proposal"
   );
 
   assert.ok(
-    price,
-    "embedded Quote should expose Customer price"
+    proposal,
+    "Ask instruction must create the real Quote proposal before Save"
   );
 
-  await act(async () => {
-    Object.getOwnPropertyDescriptor(
-      window.HTMLInputElement.prototype,
-      "value"
-    ).set.call(price, "300");
+  assert.match(proposal.textContent, /labor/i);
+  assert.match(proposal.textContent, /300/);
 
-    price.dispatchEvent(
-      new Event("input", { bubbles: true })
-    );
-
-    await pause();
-  });
-
-  await w.click("Apply changes");
+  await w.click("Apply");
 
   assert.match(
     inline.textContent,
     /Unsaved working changes/
   );
 
-  await w.click("Save working Quote");
+  const saveButton = inline.querySelector(
+    ".business-document-save"
+  );
+
+  assert.ok(
+    saveButton,
+    "hosted Quote must expose the owning workspace Save action"
+  );
+
+  await act(async () => {
+    saveButton.click();
+    await pause();
+  });
 
   assert.equal(
     patchBodies.length,
@@ -1584,11 +1693,39 @@ test("embedded Ask Quote save preserves every existing saved photo in the exact 
     "embedded Quote must save through one exact draft PATCH"
   );
 
+  assert.equal(
+    document.querySelector(
+      '[data-dialog-purpose="business-document-save-failure-title"]'
+    ),
+    null,
+    "the exact returned saved Quote must pass workspace fingerprint verification"
+  );
+
+  assert.doesNotMatch(
+    inline.textContent,
+    /Unsaved working changes/,
+    "successful Save must leave the hosted Quote clean"
+  );
+
+  assert.match(
+    inline.textContent,
+    /Exact working Quote/,
+    "hosted workspace must recognize the newly saved exact Quote"
+  );
+
   const patch = patchBodies[0];
 
   assert.equal(
     patch.expectedVersion,
     7
+  );
+
+  assert.equal(
+    String(
+      patch.content?.laborItems?.[0]?.total ?? ""
+    ),
+    "300",
+    "saved Quote must persist the labor value requested through Ask Meetro"
   );
 
   assert.equal(
@@ -1628,6 +1765,1679 @@ test("embedded Ask Quote save preserves every existing saved photo in the exact 
   assert.equal(persistedPhoto.name, "Document photo");
   assert.equal(persistedPhoto.purpose, "quote-draft-photo");
 
+  // R4.2A:
+  // Now that the requested $300 labor change is durably saved,
+  // the hosted Quote must behave exactly like the owning Quote
+  // workspace for PDF/delivery review.
+  const savedInline = document.querySelector(
+    '[data-ask-inline-document="QUOTE"]'
+  );
+
+  assert.ok(
+    savedInline,
+    "saved hosted Quote must remain open inside Ask"
+  );
+
+  const sendQuote = [
+    ...savedInline.querySelectorAll("button"),
+  ].find((button) =>
+    button.textContent.trim().startsWith("Send Quote")
+  );
+
+  assert.ok(
+    sendQuote,
+    "saved hosted Quote must retain Send Quote"
+  );
+
+  await act(async () => {
+    sendQuote.click();
+    await pause();
+  });
+
+  await w.click("Email with Meetro");
+
+  // The exact saved Quote is commercially valid but intentionally
+  // lacks payment terms and duration, so the existing Quote Safety
+  // advisory gate must appear.
+  const quoteSafety = document.querySelector(
+    '[data-dialog-purpose="business-document-quote-safety-title"]'
+  );
+
+
+  assert.ok(
+    quoteSafety,
+    "saved hosted Quote must preserve Quote Safety"
+  );
+
+  assert.match(
+    quoteSafety.textContent,
+    /Review Quote before sending/i
+  );
+
+  assert.doesNotMatch(
+    quoteSafety.textContent,
+    /Must correct/i,
+    "the durably saved $300 Quote must not have blocking send errors"
+  );
+
+  assert.match(
+    quoteSafety.textContent,
+    /payment terms/i
+  );
+
+  assert.match(
+    quoteSafety.textContent,
+    /estimated duration/i
+  );
+
+  await w.click("Send Anyway");
+
+  const deliveryReview = document.querySelector(
+    '[data-dialog-purpose="business-document-delivery-review-title"]'
+  );
+
+  assert.ok(
+    deliveryReview,
+    "Quote Safety acknowledgement must continue into Delivery Review"
+  );
+
+  assert.match(
+    deliveryReview.textContent,
+    /Review Quote Email/i
+  );
+
+  assert.match(
+    deliveryReview.textContent,
+    /Exact saved version/i
+  );
+
+  assert.match(
+    deliveryReview.textContent,
+    /8/,
+    "delivery review must use the newly saved v8 Quote"
+  );
+
+  assert.match(
+    deliveryReview.textContent,
+    /PDF included/i
+  );
+
+  const recipient = deliveryReview.querySelector(
+    'input[type="email"]'
+  );
+
+  assert.ok(
+    recipient,
+    "real Delivery Review recipient control must remain available"
+  );
+
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(
+      window.HTMLInputElement.prototype,
+      "value"
+    ).set.call(recipient, "bob@example.com");
+
+    recipient.dispatchEvent(
+      new Event("input", { bubbles: true })
+    );
+
+    await pause();
+  });
+
+  // Review still is not transport authority.
+  await w.click("Send Email");
+
+  const finalSend = document.querySelector(
+    '[data-dialog-purpose="business-document-quote-final-send-title"]'
+  );
+
+  assert.ok(
+    finalSend,
+    "hosted Quote must require final Send this Quote confirmation"
+  );
+
+  assert.match(
+    finalSend.textContent,
+    /Send this Quote\?/i
+  );
+
+  assert.match(
+    finalSend.textContent,
+    /Bob Hamel/i
+  );
+
+  assert.match(
+    finalSend.textContent,
+    /Q-0000049/i
+  );
+
+  assert.match(
+    finalSend.textContent,
+    /300/,
+    "final customer-facing confirmation must reflect the saved $300 Quote"
+  );
+
+  assert.match(
+    finalSend.textContent,
+    /This will send this saved Quote to the customer/i
+  );
+
+  // Stop before transport.
+  const cancelFinal = [
+    ...finalSend.querySelectorAll("button"),
+  ].find((button) =>
+    button.textContent.trim() === "Cancel"
+  );
+
+  assert.ok(cancelFinal);
+
+  await act(async () => {
+    cancelFinal.click();
+    await pause();
+  });
+
+  assert.equal(
+    document.querySelector(
+      '[data-dialog-purpose="business-document-quote-final-send-title"]'
+    ),
+    null
+  );
+
+  // Final-confirm Cancel intentionally returns to the existing
+  // Delivery Review instead of discarding its recipient/message.
+  assert.ok(
+    document.querySelector(
+      '[data-dialog-purpose="business-document-delivery-review-title"]'
+    )
+  );
+
+  await w.click("Cancel");
+
+  assert.equal(
+    document.querySelector(
+      '[data-dialog-purpose="business-document-delivery-review-title"]'
+    ),
+    null
+  );
+
   assert.deepEqual(w.routes, []);
   assert.ok(document.querySelector(".ask-meetro-workspace"));
+});
+
+
+test("Job-linked Quote inside Ask uses exact governed Review & Send authority before any canonical mutation", async (t) => {
+  const DRAFT_ID =
+    "9c6cbac8-7e6d-4f98-a80a-9b8f5fd42901";
+
+  const CANONICAL_QUOTE_ID =
+    "33333333-3333-4333-8333-333333333333";
+
+  const ISSUER_PARTICIPANT_ID =
+    "44444444-4444-4444-8444-444444444444";
+
+  let canonicalState = null;
+  let deliveryEvidence = null;
+
+  let durableDocument = {
+    id: DRAFT_ID,
+    version: 7,
+    documentType: "QUOTE",
+    status: "WORKING_DRAFT",
+    reference: "job-linked-quote-working",
+    documentNumber: "Q-0000050",
+    jobId: JOB,
+    customerParty: null,
+    customerDisplayName: "Bob Hamel",
+    paymentRequirementId: null,
+    depositRequestAuthority: null,
+    content: {
+      customerName: "Bob Hamel",
+      customerEmail: "",
+      customerPhone: "",
+      customerAddress: "",
+      customerLocation: "",
+      serviceLocation: "",
+      projectTitle: "Window repair",
+      projectDescription: "Window repair",
+      recommendedSolution: "Repair window",
+      workPerformed: "",
+      totalOverride: "",
+      terms: "",
+      paymentTerms: "Due upon completion",
+      pricingDisplayMode: "",
+      materialsDisplayMode: "INCLUDED_IN_TOTAL",
+      depositMode: "NONE",
+      depositPercent: "",
+      depositFixedAmount: "",
+      estimatedDuration: "1 day",
+      dueDate: "",
+      notes: "",
+      quoteReference: "",
+      quoteNumber: "",
+      invoiceNumber: "",
+      quoteDate: "",
+      invoiceDate: "",
+      currency: "USD",
+      agreement: {
+        exclusions: [],
+      },
+      lineItems: [],
+      materialItems: [],
+      laborItems: [
+        {
+          description: "Window repair labor",
+          total: "250",
+        },
+      ],
+    },
+    workspace: {
+      activeDocument: "QUOTE",
+      instructions: [],
+      manualOverrides: {},
+      privateReminders: [],
+    },
+    photos: [],
+    createdAt: "2026-09-10T10:00:00.000Z",
+    updatedAt: "2026-09-10T10:00:00.000Z",
+  };
+
+  const requestConversation = async () => ({
+    text:
+      "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+    resolution: {
+      version: 1,
+      status: "RESOLVED",
+      audience: "professional",
+      records: [{
+        record: {
+          type: "DOCUMENT_DRAFT",
+          id: DRAFT_ID,
+        },
+        name: "Bob Hamel",
+        title: "Window repair",
+        number: "Q-0000050",
+        label: "Bob Hamel — Window repair",
+      }],
+      truncated: false,
+      reviewRequired: true,
+      continuation: {
+        reference:
+          "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+        expiresAfterSeconds: 900,
+      },
+      answerSource: "DETERMINISTIC_RETRIEVAL",
+      providerInvoked: false,
+    },
+  });
+
+  const transportCalls = [];
+  const patchBodies = [];
+
+  const w = await mount(t, {
+    context: {},
+    requestConversation,
+  });
+
+  globalThis.__dashboardHttp = async (path, options = {}) => {
+    transportCalls.push({
+      path,
+      method: options.method || "GET",
+      body: options.body || "",
+    });
+
+    if (path.startsWith("/business-document-drafts?")) {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          documents: [durableDocument],
+        },
+      };
+    }
+
+    // Existing saved-Quote authority hydration.
+    // Before confirmed Send there is no canonical mapping.
+    // After issuance the same authenticated read returns the exact
+    // server-owned canonical Quote.
+    if (path === `/jobs/${JOB}/quotes`) {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          code: "JOB_DRAFT_QUOTES_FOUND",
+          quotes: canonicalState ? [canonicalState] : [],
+        },
+      };
+    }
+
+    if (
+      path === `/business-document-drafts/${DRAFT_ID}` &&
+      options.method === "PATCH"
+    ) {
+      const body = JSON.parse(options.body || "{}");
+      patchBodies.push(body);
+
+      const {
+        expectedVersion,
+        ...payload
+      } = body;
+
+      assert.equal(
+        expectedVersion,
+        7,
+        "Ask must save against the exact reviewed v7 Quote"
+      );
+
+      durableDocument = {
+        ...durableDocument,
+        ...payload,
+        id: DRAFT_ID,
+        version: 8,
+        documentType: "QUOTE",
+        status: "WORKING_DRAFT",
+        jobId: JOB,
+        documentNumber: "Q-0000050",
+        customerDisplayName: "Bob Hamel",
+        updatedAt: "2026-09-10T12:30:00.000Z",
+      };
+
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          document: durableDocument,
+        },
+      };
+    }
+
+    // Governed review must independently re-read the exact saved v8.
+    if (
+      path === `/business-document-drafts/${DRAFT_ID}` &&
+      (!options.method || options.method === "GET")
+    ) {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          document: durableDocument,
+        },
+      };
+    }
+
+    if (
+      path ===
+        `/business-document-drafts/${DRAFT_ID}/quote-review?version=8`
+    ) {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          review: {
+            documentId: DRAFT_ID,
+            documentVersion: 8,
+            jobId: JOB,
+            requestId: 23,
+            relationshipId: 345,
+            customerName: "Bob Hamel",
+            projectTitle: "Window repair",
+            quoteSafety: {
+              ready: true,
+              blockingErrors: [],
+              warnings: [],
+            },
+          },
+        },
+      };
+    }
+
+    // Final-confirmed governed path:
+    // exact Working Quote -> canonical Draft.
+    if (
+      path ===
+        `/business-document-drafts/${DRAFT_ID}/canonical-quote` &&
+      options.method === "POST"
+    ) {
+      const body = JSON.parse(options.body || "{}");
+
+      assert.deepEqual(body, {
+        expectedDocumentVersion: 8,
+      });
+
+      assert.match(
+        String(options.headers?.["Idempotency-Key"] || ""),
+        /^working-quote-bridge-/
+      );
+
+      canonicalState = {
+        id: CANONICAL_QUOTE_ID,
+        jobId: JOB,
+        requestId: 23,
+        relationshipId: 345,
+        issuerParticipantId: ISSUER_PARTICIPANT_ID,
+        status: "DRAFT",
+        issuedAt: null,
+        currency: "USD",
+        currentVersion: 1,
+        totalMinor: 30000,
+        decisionState: null,
+        decisionVersion: null,
+        decidedAt: null,
+        documentNumber: "Q-0000050",
+        sourceBusinessDocument: {
+          documentId: DRAFT_ID,
+          documentVersion: 8,
+        },
+        versions: [{
+          version: 1,
+          status: "DRAFT",
+          totalMinor: 30000,
+          integrityHash: "a".repeat(64),
+        }],
+      };
+
+      return {
+        response: { ok: true, status: 201 },
+        data: {
+          success: true,
+          quote: canonicalState,
+        },
+      };
+    }
+
+    // Exact canonical Draft -> exact issued version.
+    if (
+      path === `/quotes/${CANONICAL_QUOTE_ID}/issue` &&
+      options.method === "POST"
+    ) {
+      const body = JSON.parse(options.body || "{}");
+
+      assert.deepEqual(body, {
+        expectedVersion: 1,
+      });
+
+      assert.match(
+        String(options.headers?.["Idempotency-Key"] || ""),
+        /^working-quote-issue-/
+      );
+
+      canonicalState = {
+        ...canonicalState,
+        status: "ISSUED",
+        issuedAt: "2026-09-11T11:15:00.000Z",
+        currentVersion: 2,
+        versions: [{
+          version: 2,
+          status: "ISSUED",
+          totalMinor: 30000,
+          integrityHash: "b".repeat(64),
+        }],
+      };
+
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          quote: canonicalState,
+        },
+      };
+    }
+
+    // Exact issued Quote -> governed delivery authority.
+    if (
+      path ===
+        `/professional/quotes/${CANONICAL_QUOTE_ID}/delivery` &&
+      (!options.method || options.method === "GET")
+    ) {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          code: "PROFESSIONAL_QUOTE_DELIVERY_LOADED",
+          delivery: {
+            quoteId: CANONICAL_QUOTE_ID,
+            jobId: JOB,
+            expectedIssuedVersion: 2,
+            messageType: "QUOTE_SHARED",
+            snapshot: {
+              schemaVersion: 1,
+              quoteId: CANONICAL_QUOTE_ID,
+              jobId: JOB,
+              quoteNumber: "Q-0000050",
+              lineageLabel: "Original",
+              businessStatus: "WAITING_ON_CUSTOMER",
+              totalMinor: 30000,
+              currency: "USD",
+              scopeItems: [{
+                description: "Window repair labor",
+                quantity: 1,
+                amountMinor: 30000,
+              }],
+              conditions: [],
+              exclusions: [],
+              issuedAt: "2026-09-11T11:15:00.000Z",
+              decidedAt: null,
+              business: {
+                displayName: "Meetro Test Business",
+              },
+              job: {
+                title: "Window repair",
+                service: null,
+              },
+            },
+            actions: {
+              canSendInMeetro: true,
+            },
+            conversation: {
+              id: 341,
+            },
+            existingDelivery: deliveryEvidence,
+          },
+        },
+      };
+    }
+
+    // Final governed Meetro delivery.
+    if (
+      path ===
+        `/professional/quotes/${CANONICAL_QUOTE_ID}/send-in-meetro` &&
+      options.method === "POST"
+    ) {
+      const body = JSON.parse(options.body || "{}");
+
+      assert.deepEqual(body, {
+        expectedIssuedVersion: 2,
+        deliveryIntent: "INITIAL",
+      });
+
+      assert.match(
+        String(options.headers?.["Idempotency-Key"] || ""),
+        /^working-quote-delivery-/
+      );
+
+      deliveryEvidence = {
+        messageId: 71,
+        conversationId: 341,
+        quoteId: CANONICAL_QUOTE_ID,
+        jobId: JOB,
+        messageType: "QUOTE_SHARED",
+        state: "SENT_IN_MEETRO",
+        sentAt: "2026-09-11T11:16:00.000Z",
+        replayed: false,
+      };
+
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          code: "QUOTE_SENT_IN_MEETRO",
+          delivery: deliveryEvidence,
+        },
+      };
+    }
+
+    // Delivery-history reads are non-authoritative for this contract.
+    if (
+      path.includes(`/business-document-drafts/${DRAFT_ID}`) &&
+      path.includes("deliver")
+    ) {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          deliveries: [],
+        },
+      };
+    }
+
+    return {
+      response: { ok: false, status: 503 },
+      data: {
+        success: false,
+        code: "UNEXPECTED_TEST_ENDPOINT",
+      },
+    };
+  };
+
+  await w.send(
+    "Update Quote Q0000050 labor to $300"
+  );
+
+  let inline = document.querySelector(
+    '[data-ask-inline-document="QUOTE"]'
+  );
+
+  assert.ok(
+    inline,
+    "exact Job-linked Quote must open inside Ask"
+  );
+
+  assert.equal(
+    inline.getAttribute("data-document-id"),
+    DRAFT_ID
+  );
+
+  const proposal = inline.querySelector(
+    ".business-document-proposal"
+  );
+
+  assert.ok(
+    proposal,
+    "Ask instruction must enter the real Quote proposal engine"
+  );
+
+  assert.match(proposal.textContent, /labor/i);
+  assert.match(proposal.textContent, /300/);
+
+  await w.click("Apply");
+
+  assert.match(
+    inline.textContent,
+    /Unsaved working changes/
+  );
+
+  const save = inline.querySelector(
+    ".business-document-save"
+  );
+
+  assert.ok(save);
+
+  await act(async () => {
+    save.click();
+    await pause();
+  });
+
+  assert.equal(patchBodies.length, 1);
+  assert.equal(
+    patchBodies[0].content?.laborItems?.[0]?.total,
+    "300"
+  );
+
+  assert.equal(
+    document.querySelector(
+      '[data-dialog-purpose="business-document-save-failure-title"]'
+    ),
+    null
+  );
+
+  // Allow the normal saved-Quote authority hydration to settle.
+  let governedAction = null;
+
+  for (let i = 0; i < 20; i += 1) {
+    inline = document.querySelector(
+      '[data-ask-inline-document="QUOTE"]'
+    );
+
+    governedAction = [
+      ...inline.querySelectorAll("button"),
+    ].find((button) =>
+      button.textContent.trim() ===
+        "Send Quote to Customer"
+    );
+
+    if (governedAction && !governedAction.disabled) break;
+
+    await act(async () => {
+      await pause();
+    });
+  }
+
+  assert.ok(
+    governedAction,
+    "Job-linked hosted Quote must expose the owning governed send action"
+  );
+
+  assert.equal(
+    governedAction.disabled,
+    false,
+    "governed send must be available only after saved authority hydration"
+  );
+
+  // Nothing canonical may have been mutated by opening/saving/editing.
+  assert.deepEqual(
+    transportCalls.filter((call) =>
+      call.method === "POST"
+    ),
+    []
+  );
+
+  await act(async () => {
+    governedAction.click();
+    await pause();
+  });
+
+  // beginGovernedQuoteIssue performs exact saved-document + review reads.
+  let issueReview = null;
+
+  for (let i = 0; i < 20; i += 1) {
+    issueReview = document.querySelector(
+      '[data-dialog-purpose="business-document-quote-issue-title"]'
+    );
+
+    if (issueReview) break;
+
+    await act(async () => {
+      await pause();
+    });
+  }
+
+  assert.ok(
+    issueReview,
+    "Job-linked Quote must enter the existing governed Quote issue review"
+  );
+
+  assert.match(
+    issueReview.textContent,
+    /Review & Send Quote/i
+  );
+
+  assert.match(issueReview.textContent, /Bob Hamel/i);
+  assert.match(issueReview.textContent, /Window repair/i);
+  assert.match(issueReview.textContent, /Q-0000050/i);
+  assert.match(issueReview.textContent, /8/);
+  assert.match(issueReview.textContent, /300/);
+
+  assert.ok(
+    transportCalls.some((call) =>
+      call.method === "GET" &&
+      call.path === `/business-document-drafts/${DRAFT_ID}`
+    ),
+    "governed review must re-read the exact saved Quote"
+  );
+
+  assert.ok(
+    transportCalls.some((call) =>
+      call.method === "GET" &&
+      call.path ===
+        `/business-document-drafts/${DRAFT_ID}/quote-review?version=8`
+    ),
+    "governed review must load exact-version server authority"
+  );
+
+  // Review itself still has zero canonical mutation authority.
+  assert.deepEqual(
+    transportCalls.filter((call) =>
+      call.method === "POST"
+    ),
+    []
+  );
+
+  const reviewSend = [
+    ...issueReview.querySelectorAll("button"),
+  ].find((button) =>
+    button.textContent.trim() ===
+      "Send Quote to Customer"
+  );
+
+  assert.ok(reviewSend);
+  assert.equal(reviewSend.disabled, false);
+
+  await act(async () => {
+    reviewSend.click();
+    await pause();
+  });
+
+  const finalSend = document.querySelector(
+    '[data-dialog-purpose="business-document-quote-final-send-title"]'
+  );
+
+  assert.ok(
+    finalSend,
+    "governed Job-linked Quote must require final Send this Quote confirmation"
+  );
+
+  assert.match(
+    finalSend.textContent,
+    /Send this Quote\?/i
+  );
+
+  assert.match(finalSend.textContent, /Bob Hamel/i);
+  assert.match(finalSend.textContent, /Q-0000050/i);
+  assert.match(finalSend.textContent, /300/);
+  assert.match(finalSend.textContent, /Meetro Message/i);
+
+  // Even reaching final confirmation must not bridge, issue, or deliver.
+  assert.deepEqual(
+    transportCalls.filter((call) =>
+      call.method === "POST"
+    ),
+    []
+  );
+
+  // R4.2A confirmed-send boundary:
+  // Only the user's explicit final Send Quote may authorize the canonical
+  // bridge → issue → governed Meetro delivery chain.
+  const finalConfirm = [
+    ...finalSend.querySelectorAll("button"),
+  ].find((button) =>
+    button.textContent.trim() === "Send Quote"
+  );
+
+  assert.ok(finalConfirm);
+  assert.equal(finalConfirm.disabled, false);
+
+  await act(async () => {
+    finalConfirm.click();
+    await pause();
+  });
+
+  // Final confirmation is now the sole gateway into the canonical chain.
+  let successReview = null;
+
+  for (let i = 0; i < 40; i += 1) {
+    successReview = document.querySelector(
+      '[data-dialog-purpose="business-document-quote-issue-title"]'
+    );
+
+    if (
+      successReview &&
+      /Quote sent to customer/i.test(successReview.textContent)
+    ) {
+      break;
+    }
+
+    await act(async () => {
+      await pause();
+    });
+  }
+
+  assert.ok(
+    successReview,
+    "confirmed governed Send must retain the owning Quote result dialog"
+  );
+
+  assert.match(
+    successReview.textContent,
+    /Quote sent to customer/i
+  );
+
+  assert.match(
+    successReview.textContent,
+    /Q-0000050/i
+  );
+
+  assert.match(
+    successReview.textContent,
+    /Bob Hamel/i
+  );
+
+  assert.ok(
+    deliveryEvidence,
+    "successful UI completion requires authoritative delivery evidence"
+  );
+
+  assert.equal(deliveryEvidence.messageId, 71);
+  assert.equal(deliveryEvidence.conversationId, 341);
+  assert.equal(
+    deliveryEvidence.quoteId,
+    CANONICAL_QUOTE_ID
+  );
+  assert.equal(deliveryEvidence.jobId, JOB);
+  assert.equal(deliveryEvidence.replayed, false);
+
+  const canonicalPosts = transportCalls.filter((call) =>
+    call.method === "POST"
+  );
+
+  assert.deepEqual(
+    canonicalPosts.map((call) => call.path),
+    [
+      `/business-document-drafts/${DRAFT_ID}/canonical-quote`,
+      `/quotes/${CANONICAL_QUOTE_ID}/issue`,
+      `/professional/quotes/${CANONICAL_QUOTE_ID}/send-in-meetro`,
+    ],
+    "one final confirmation must produce exactly one bridge, one issue, and one governed delivery"
+  );
+
+  const bridgeBody = JSON.parse(
+    canonicalPosts[0].body || "{}"
+  );
+
+  const issueBody = JSON.parse(
+    canonicalPosts[1].body || "{}"
+  );
+
+  const deliveryBody = JSON.parse(
+    canonicalPosts[2].body || "{}"
+  );
+
+  assert.deepEqual(bridgeBody, {
+    expectedDocumentVersion: 8,
+  });
+
+  assert.deepEqual(issueBody, {
+    expectedVersion: 1,
+  });
+
+  assert.deepEqual(deliveryBody, {
+    expectedIssuedVersion: 2,
+    deliveryIntent: "INITIAL",
+  });
+
+  assert.equal(
+    document.querySelector(
+      '[data-dialog-purpose="business-document-quote-final-send-title"]'
+    ),
+    null,
+    "successful governed transport must close final confirmation"
+  );
+
+  assert.match(
+    document.body.textContent,
+    /Customer acceptance is still pending/i,
+    "delivery must never fabricate customer acceptance"
+  );
+
+  // No unrelated lifecycle authority may have been invoked.
+  assert.equal(
+    transportCalls.some((call) =>
+      /approve|decline|payment|schedule|invoice|complete/i.test(
+        call.path
+      )
+    ),
+    false
+  );
+
+  const closeSuccess = [
+    ...successReview.querySelectorAll("button"),
+  ].find((button) =>
+    button.textContent.trim() === "Close"
+  );
+
+  assert.ok(closeSuccess);
+
+  await act(async () => {
+    closeSuccess.click();
+    await pause();
+  });
+
+  assert.deepEqual(w.routes, []);
+  assert.ok(
+    document.querySelector(".ask-meetro-workspace")
+  );
+});
+
+
+test("specific working Invoice edit hosts the exact owning Invoice workspace inside Ask", async (t) => {
+  const DRAFT_ID =
+    "55a5d4de-c95c-47ae-bca0-e10830f34211";
+
+  const CONTINUATION_ID =
+    "f7c84a3d-4446-477b-8f7f-e6f08a99a211";
+
+  const sourceDocument = {
+    id: DRAFT_ID,
+    version: 4,
+    documentType: "INVOICE",
+    status: "WORKING_DRAFT",
+    reference: "invoice-working",
+    documentNumber: "INV-0000012",
+    jobId: null,
+    customerParty: null,
+    customerDisplayName: "Bob Hamel",
+    paymentRequirementId: null,
+    depositRequestAuthority: null,
+    content: {
+      customerName: "Bob Hamel",
+      customerEmail: "bob@example.com",
+      customerPhone: "",
+      customerAddress: "",
+      customerLocation: "",
+      serviceLocation: "",
+      projectTitle: "Window repair",
+      projectDescription: "Window repair",
+      recommendedSolution: "",
+      workPerformed: "Window repair",
+      totalOverride: "",
+      terms: "",
+      paymentTerms: "Due on receipt",
+      pricingDisplayMode: "",
+      materialsDisplayMode: "",
+      depositMode: "",
+      depositPercent: "",
+      depositFixedAmount: "",
+      estimatedDuration: "",
+      dueDate: "",
+      notes: "Original Invoice note",
+      quoteReference: "",
+      quoteNumber: "",
+      invoiceNumber: "",
+      quoteDate: "",
+      invoiceDate: "2026-09-11",
+      currency: "USD",
+      agreement: {
+        exclusions: [],
+      },
+      lineItems: [{
+        description: "Window repair",
+        quantity: "1",
+        unitPrice: "380",
+      }],
+      materialItems: [],
+      laborItems: [],
+    },
+    workspace: {
+      activeDocument: "INVOICE",
+      instructions: [],
+      manualOverrides: {},
+      privateReminders: [],
+    },
+    photos: [],
+    createdAt: "2026-09-10T12:00:00.000Z",
+    updatedAt: "2026-09-10T12:00:00.000Z",
+  };
+
+  const requestConversation = async () => ({
+    text:
+      "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+    resolution: {
+      version: 1,
+      status: "RESOLVED",
+      audience: "professional",
+      records: [{
+        record: {
+          type: "DOCUMENT_DRAFT",
+          id: DRAFT_ID,
+        },
+        name: "Bob Hamel",
+        title: "Window repair",
+        number: "INV-0000012",
+        label: "Bob Hamel — Window repair",
+      }],
+      truncated: false,
+      reviewRequired: true,
+      continuation: {
+        reference: CONTINUATION_ID,
+        expiresAfterSeconds: 900,
+      },
+      answerSource: "DETERMINISTIC_RETRIEVAL",
+      providerInvoked: false,
+    },
+  });
+
+  const w = await mount(t, {
+    context: {},
+    requestConversation,
+  });
+
+  // The resolver must independently re-read the exact working Invoice.
+  // Once the host mounts, the owning workspace may also consume this
+  // provided durable document without navigating away.
+  const patchBodies = [];
+  const pdfReads = [];
+  const deliveryPosts = [];
+  let deliveryEvidence = null;
+
+  globalThis.__dashboardHttp = async (path, options = {}) => {
+    if (path.startsWith("/business-document-drafts?")) {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          documents: [sourceDocument],
+        },
+      };
+    }
+
+    if (
+      path === `/business-document-drafts/${DRAFT_ID}` &&
+      options.method === "PATCH"
+    ) {
+      const body = JSON.parse(options.body || "{}");
+      patchBodies.push(body);
+
+      const {
+        expectedVersion,
+        ...payload
+      } = body;
+
+      assert.equal(
+        expectedVersion,
+        4,
+        "hosted Invoice must save against the exact opened v4"
+      );
+
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          document: {
+            ...sourceDocument,
+            ...payload,
+            id: DRAFT_ID,
+            version: 5,
+            documentType: "INVOICE",
+            status: "WORKING_DRAFT",
+            documentNumber: "INV-0000012",
+            customerDisplayName: "Bob Hamel",
+            updatedAt: "2026-09-11T12:15:00.000Z",
+          },
+        },
+      };
+    }
+
+    // Exact saved Invoice PDF authority.
+    if (
+      path ===
+        `/business-document-drafts/${DRAFT_ID}/customer-pdf?version=5`
+    ) {
+      pdfReads.push({
+        path,
+        responseType: options.responseType,
+      });
+
+      return {
+        response: {
+          ok: true,
+          status: 200,
+          headers: {
+            get(name) {
+              const key = String(name || "").toLowerCase();
+
+              if (key === "content-type") {
+                return "application/pdf";
+              }
+
+              if (key === "content-disposition") {
+                return 'inline; filename="invoice-INV-0000012-v5.pdf"';
+              }
+
+              return null;
+            },
+          },
+        },
+        data: new Blob(
+          ["%PDF-1.4 Meetro hosted Invoice v5"],
+          { type: "application/pdf" }
+        ),
+      };
+    }
+
+    // Reopening the durable Invoice refreshes delivery history.
+    if (
+      path === `/business-document-drafts/${DRAFT_ID}/deliveries` &&
+      (!options.method || options.method === "GET")
+    ) {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          deliveries: deliveryEvidence
+            ? [deliveryEvidence]
+            : [],
+        },
+      };
+    }
+
+    // Existing Invoice Delivery Review owns the only customer-send command.
+    if (
+      path === `/business-document-drafts/${DRAFT_ID}/deliveries` &&
+      options.method === "POST"
+    ) {
+      const body = JSON.parse(options.body || "{}");
+
+      deliveryPosts.push({
+        path,
+        body,
+        idempotencyKey:
+          options.headers?.["Idempotency-Key"] || "",
+      });
+
+      assert.deepEqual(
+        body,
+        {
+          expectedVersion: 5,
+          channel: "EMAIL",
+          recipientEmail: "bob@example.com",
+          subject: "Invoice INV-0000012",
+          customerMessage:
+            "Please review the attached customer document.",
+        },
+        "Invoice delivery must bind the exact newly saved v5 package"
+      );
+
+      assert.ok(
+        options.headers?.["Idempotency-Key"],
+        "Invoice delivery must retain the existing idempotency authority"
+      );
+
+      deliveryEvidence = {
+        id: "44444444-4444-4444-8444-444444444444",
+        documentId: DRAFT_ID,
+        documentType: "INVOICE",
+        documentReference: "invoice-working",
+        documentNumber: "INV-0000012",
+        documentVersion: 5,
+        channel: "EMAIL",
+        state: "DELIVERY_REQUESTED",
+        recipientEmail: "bob@example.com",
+        requestedAt: "2026-09-11T12:20:00.000Z",
+      };
+
+      return {
+        response: { ok: true, status: 202 },
+        data: {
+          success: true,
+          delivery: deliveryEvidence,
+        },
+      };
+    }
+
+    return {
+      response: { ok: false, status: 503 },
+      data: { success: false },
+    };
+  };
+
+  await w.send(
+    "Update Invoice INV0000012 payment terms to Net 15"
+  );
+
+  assert.deepEqual(
+    w.routes,
+    [],
+    "Ask must host the Invoice instead of navigating to Invoice Builder"
+  );
+
+  const inline = document.querySelector(
+    '[data-ask-inline-document="INVOICE"]'
+  );
+
+  assert.ok(
+    inline,
+    "verified working Invoice must appear inside Ask Meetro"
+  );
+
+  assert.equal(
+    inline.getAttribute("data-document-id"),
+    DRAFT_ID
+  );
+
+  assert.match(inline.textContent, /Bob Hamel/);
+  assert.match(inline.textContent, /INV-0000012/);
+
+  // It is the owning editable Invoice form, not a navigation card.
+  assert.ok(
+    inline.querySelector("input, textarea, select"),
+    "hosted Invoice must expose existing editable form controls"
+  );
+
+  // Ask owns navigation and conversation chrome.
+  assert.equal(
+    inline.querySelector(".business-document-header"),
+    null
+  );
+
+  assert.equal(
+    inline.querySelector(".business-document-tabs"),
+    null
+  );
+
+  assert.equal(
+    inline.querySelector(".business-document-chat-shell"),
+    null
+  );
+
+  assert.equal(
+    inline.querySelector(".business-document-composer"),
+    null
+  );
+
+  assert.equal(
+    inline.querySelector(".desktop-sidebar"),
+    null
+  );
+
+  assert.equal(
+    inline.querySelector(".bottom-nav-item"),
+    null
+  );
+
+  assert.equal(
+    document.querySelectorAll(".ask-meetro-composer").length,
+    1
+  );
+
+  // The normal owning Invoice actions must be available in Ask.
+  const labels = [
+    ...inline.querySelectorAll("button"),
+  ].map((button) => button.textContent.trim());
+
+  assert.ok(
+    labels.includes("Preview PDF"),
+    "hosted Invoice must preserve Preview PDF"
+  );
+
+  assert.ok(
+    labels.includes("Download PDF"),
+    "hosted Invoice must preserve Download PDF"
+  );
+
+  assert.ok(
+    labels.some((label) =>
+      label.startsWith("Send Invoice")
+    ),
+    "hosted Invoice must preserve the existing Send Invoice menu"
+  );
+
+  assert.ok(
+    labels.includes("Save working Invoice"),
+    "hosted Invoice must preserve the owning Save action"
+  );
+
+  // The original Ask instruction must enter the SAME Invoice proposal
+  // engine used by the normal Unified workspace. Resolution alone cannot
+  // silently edit the Invoice.
+  const proposal = inline.querySelector(
+    ".business-document-proposal"
+  );
+
+  assert.ok(
+    proposal,
+    "hosted Invoice instruction must create the existing Invoice proposal review"
+  );
+
+  assert.match(
+    proposal.textContent,
+    /payment terms/i
+  );
+
+  assert.match(
+    proposal.textContent,
+    /Net 15/i
+  );
+
+  assert.equal(
+    patchBodies.length,
+    0,
+    "retrieval and proposal review must not save anything"
+  );
+
+  await w.click("Apply");
+
+  assert.match(
+    inline.textContent,
+    /Unsaved working changes/
+  );
+
+  assert.equal(
+    patchBodies.length,
+    0,
+    "Apply changes the unsaved working Invoice only"
+  );
+
+  const save = inline.querySelector(
+    ".business-document-save"
+  );
+
+  assert.ok(save);
+  assert.equal(save.disabled, false);
+
+  await act(async () => {
+    save.click();
+    await pause();
+  });
+
+  assert.equal(
+    patchBodies.length,
+    1,
+    "explicit Save must perform exactly one durable Invoice PATCH"
+  );
+
+  assert.equal(
+    patchBodies[0].documentType,
+    "INVOICE"
+  );
+
+  assert.equal(
+    patchBodies[0].content?.paymentTerms,
+    "Net 15",
+    "durable Invoice must contain the explicitly applied proposal"
+  );
+
+  assert.equal(
+    document.querySelector(
+      '[data-dialog-purpose="business-document-save-failure-title"]'
+    ),
+    null,
+    "exact saved response must pass durable fingerprint verification"
+  );
+
+  assert.doesNotMatch(
+    inline.textContent,
+    /Unsaved working changes/
+  );
+
+  const savedLabels = [
+    ...inline.querySelectorAll("button"),
+  ].map((button) => button.textContent.trim());
+
+  assert.ok(savedLabels.includes("Preview PDF"));
+  assert.ok(savedLabels.includes("Download PDF"));
+
+  assert.ok(
+    savedLabels.some((label) =>
+      label.startsWith("Send Invoice")
+    )
+  );
+
+  // ==========================================================
+  // R4.2A HOSTED INVOICE DELIVERY PARITY
+  // Preview / Download are exact-version reads only.
+  // ==========================================================
+
+  await w.click("Preview PDF");
+  await w.click("Download PDF");
+
+  assert.equal(
+    pdfReads.length,
+    2,
+    "Preview and Download must each request the exact saved Invoice PDF"
+  );
+
+  assert.ok(
+    pdfReads.every(
+      (read) =>
+        read.path ===
+          `/business-document-drafts/${DRAFT_ID}/customer-pdf?version=5` &&
+        read.responseType === "blob"
+    ),
+    "both PDF actions must bind exact durable Invoice v5"
+  );
+
+  assert.equal(
+    deliveryPosts.length,
+    0,
+    "Preview and Download must never create delivery evidence"
+  );
+
+  // Open the real owner DeliveryMenu without relying on glyph matching.
+  const sendInvoiceMenu = [
+    ...inline.querySelectorAll("button"),
+  ].find((button) =>
+    button.textContent.trim().startsWith("Send Invoice")
+  );
+
+  assert.ok(
+    sendInvoiceMenu,
+    "hosted Invoice must retain the normal Send Invoice menu"
+  );
+
+  await act(async () => {
+    sendInvoiceMenu.click();
+    await pause();
+  });
+
+  await w.click("Email with Meetro");
+
+  const deliveryReview = document.querySelector(
+    '[data-dialog-purpose="business-document-delivery-review-title"]'
+  );
+
+  assert.ok(
+    deliveryReview,
+    "hosted Invoice must open the existing Delivery Review"
+  );
+
+  assert.match(
+    deliveryReview.textContent,
+    /Review Invoice Email/i
+  );
+
+  assert.match(
+    deliveryReview.textContent,
+    /INV-0000012/
+  );
+
+  assert.match(
+    deliveryReview.textContent,
+    /Exact saved version/
+  );
+
+  assert.match(
+    deliveryReview.textContent,
+    /5/
+  );
+
+  assert.match(
+    deliveryReview.textContent,
+    /PDF included/
+  );
+
+  assert.match(
+    deliveryReview.textContent,
+    /Due terms/
+  );
+
+  assert.match(
+    deliveryReview.textContent,
+    /Included/
+  );
+
+  const recipient = deliveryReview.querySelector(
+    'input[type="email"]'
+  );
+
+  assert.ok(recipient);
+
+  assert.equal(
+    recipient.value,
+    "bob@example.com"
+  );
+
+  assert.equal(
+    deliveryPosts.length,
+    0,
+    "opening Delivery Review cannot send the Invoice"
+  );
+
+  assert.equal(
+    document.querySelector(
+      '[data-dialog-purpose="business-document-quote-final-send-title"]'
+    ),
+    null,
+    "Invoice must not inherit the Quote-only final-send confirmation"
+  );
+
+  await w.click("Send Email");
+
+  for (
+    let attempt = 0;
+    attempt < 40 && deliveryPosts.length === 0;
+    attempt += 1
+  ) {
+    await act(async () => {
+      await pause();
+    });
+  }
+
+  assert.equal(
+    deliveryPosts.length,
+    1,
+    "explicit Send Email must create exactly one Invoice delivery command"
+  );
+
+  assert.equal(
+    deliveryPosts[0].path,
+    `/business-document-drafts/${DRAFT_ID}/deliveries`
+  );
+
+  assert.ok(
+    deliveryPosts[0].idempotencyKey
+  );
+
+  assert.deepEqual(
+    deliveryPosts[0].body,
+    {
+      expectedVersion: 5,
+      channel: "EMAIL",
+      recipientEmail: "bob@example.com",
+      subject: "Invoice INV-0000012",
+      customerMessage:
+        "Please review the attached customer document.",
+    }
+  );
+
+  assert.equal(
+    deliveryEvidence?.documentId,
+    DRAFT_ID
+  );
+
+  assert.equal(
+    deliveryEvidence?.documentVersion,
+    5
+  );
+
+  assert.equal(
+    deliveryEvidence?.documentType,
+    "INVOICE"
+  );
+
+  assert.equal(
+    deliveryEvidence?.state,
+    "DELIVERY_REQUESTED"
+  );
+
+  assert.equal(
+    document.querySelector(
+      '[data-dialog-purpose="business-document-delivery-review-title"]'
+    ),
+    null,
+    "successful Invoice delivery closes its existing review"
+  );
+
+  assert.equal(
+    document.querySelector(
+      '[data-dialog-purpose="business-document-quote-final-send-title"]'
+    ),
+    null
+  );
+
+  assert.match(
+    w.text(),
+    /Email delivery requested for the exact saved document version/i
+  );
+
+  assert.match(
+    w.text(),
+    /No acceptance or payment was inferred/i
+  );
+
+  // The only POST allowed by this Invoice parity contract is delivery.
+  // The earlier durable edit is a PATCH, not a lifecycle POST.
+  assert.deepEqual(
+    deliveryPosts.map((call) => call.path),
+    [
+      `/business-document-drafts/${DRAFT_ID}/deliveries`,
+    ]
+  );
+
+  assert.ok(
+    document.querySelector(".ask-meetro-workspace")
+  );
+
+  assert.deepEqual(
+    w.routes,
+    [],
+    "PDF and Invoice delivery must remain inside the hosted owning workspace"
+  );
 });

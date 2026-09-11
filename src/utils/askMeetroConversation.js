@@ -325,6 +325,77 @@ function isVagueResolvedQuoteChange(instruction, resolution) {
   return targets.has(text);
 }
 
+function isSpecificResolvedInvoiceChange(instruction, resolution) {
+  if (
+    resolution?.status !== "RESOLVED" ||
+    resolution?.records?.length !== 1
+  ) {
+    return false;
+  }
+
+  const item = resolution.records[0];
+  const record = item?.record;
+
+  // R4.2A Invoice hosting is intentionally limited to the exact
+  // working DOCUMENT_DRAFT returned by Universal Retrieval.
+  // A canonical INVOICE pointer does not imply editable draft authority.
+  if (record?.type !== "DOCUMENT_DRAFT") {
+    return false;
+  }
+
+  let text = normalizeResolvedQuoteTarget(instruction);
+
+  const command =
+    /^(?:(?:please|can you|could you|would you|help me|i want to)\s+)?(?:update|edit|revise)\s+/;
+
+  if (!command.test(text)) {
+    return false;
+  }
+
+  text = text.replace(command, "").trim();
+
+  const name = normalizeResolvedQuoteTarget(item?.name);
+  const number = normalizeResolvedQuoteTarget(item?.number);
+  const compactNumber = number.replace(/\s+/g, "");
+
+  const targets = new Set(["invoice"]);
+
+  if (number) {
+    targets.add(`invoice ${number}`);
+
+    if (compactNumber && compactNumber !== number) {
+      targets.add(`invoice ${compactNumber}`);
+    }
+  }
+
+  if (name) {
+    targets.add(`${name} invoice`);
+    targets.add(`customer ${name} invoice`);
+
+    if (number) {
+      targets.add(`${name} invoice ${number}`);
+      targets.add(`customer ${name} invoice ${number}`);
+
+      if (compactNumber && compactNumber !== number) {
+        targets.add(`${name} invoice ${compactNumber}`);
+        targets.add(`customer ${name} invoice ${compactNumber}`);
+      }
+    }
+  }
+
+  const target = [...targets]
+    .sort((left, right) => right.length - left.length)
+    .find((candidate) =>
+      text === candidate ||
+      text.startsWith(`${candidate} `)
+    );
+
+  return Boolean(
+    target &&
+    text.slice(target.length).trim()
+  );
+}
+
 function isSpecificResolvedQuoteChange(instruction, resolution) {
   if (
     resolution?.status !== "RESOLVED" ||
@@ -812,6 +883,57 @@ async function finalizeAskMeetroConversation({
     }
   }
 
+  if (
+    resolution?.reviewRequired === true &&
+    resolution.status === "RESOLVED" &&
+    actions.length === 0 &&
+    !blockedReason &&
+    options.role === "business" &&
+    isSpecificResolvedInvoiceChange(
+      instruction,
+      resolution
+    )
+  ) {
+    const item = resolution.records[0];
+    const record = item?.record;
+    const number = String(item?.number || "").trim();
+
+    try {
+      const documents = await (
+        options.listDocuments || listBusinessDocumentDrafts
+      )({
+        search: number,
+        type: "INVOICE",
+        setPage: options.setPage,
+      });
+
+      const exact = (documents || []).filter(
+        (document) =>
+          sameUuid(document?.id, record?.id) &&
+          String(document?.documentType || "").toUpperCase() ===
+            "INVOICE"
+      );
+
+      if (exact.length === 1) {
+        inlineWorkspace = Object.freeze({
+          type: "BUSINESS_DOCUMENT",
+          documentType: "INVOICE",
+          document: exact[0],
+          instruction,
+        });
+      } else if (exact.length > 1) {
+        blockedReason =
+          "More than one saved Invoice returned the same exact working identity. Open the Invoice from Saved Files before editing. Nothing has been changed.";
+      } else {
+        blockedReason =
+          "The exact working Invoice could not be reopened from Saved Files. Nothing has been changed.";
+      }
+    } catch {
+      blockedReason =
+        "The exact working Invoice is temporarily unavailable. Nothing has been changed.";
+    }
+  }
+
   const clarificationRequired =
     resolution?.reviewRequired === true &&
     resolution.status === "RESOLVED" &&
@@ -831,9 +953,14 @@ async function finalizeAskMeetroConversation({
 
   // Legacy string-only mocks do not contain the server's mixed-intent
   // protection, so preserve the old warning only for those callers.
+  const inlineDocumentLabel =
+    inlineWorkspace?.documentType === "INVOICE"
+      ? "Invoice"
+      : "Quote";
+
   const finalText =
     inlineWorkspace
-      ? `${resolvedLabel ? `I found ${resolvedLabel}` : "I found the Quote"}${resolvedNumber ? `, ${resolvedNumber}` : ""}. The exact working Quote is ready here so you can review or edit the requested change. Nothing has been changed.`
+      ? `${resolvedLabel ? `I found ${resolvedLabel}` : `I found the ${inlineDocumentLabel}`}${resolvedNumber ? `, ${resolvedNumber}` : ""}. The exact working ${inlineDocumentLabel} is ready here so you can review or edit the requested change. Nothing has been changed.`
       : blockedReason ||
     (clarificationRequired
       ? `${resolvedLabel ? `I found ${resolvedLabel}. ` : ""}What would you like to change on this Quote?${resolvedNumber ? ` Include ${resolvedNumber} in your next instruction.` : ""} Nothing has been changed.`

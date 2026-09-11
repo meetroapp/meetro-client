@@ -1721,6 +1721,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   setPage, language = "en", initialDocument = "quote", initialSavedDocumentId = null,
   initialSavedDocument = null, onDurableDocumentOpened, genericNewQuoteIntent = false,
   hostMode = "full", onEmbeddedClose,
+  hostedInstruction = "", onHostedDocumentSaved,
   job = {}, quote,
   invoicePreparation: initialInvoicePreparation = null,
   sourceQuoteDocument = null,
@@ -2355,6 +2356,12 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       if (identityKey) await deleteBusinessDocumentRecovery({ identityKey });
       setNotice(`Saved · ${new Date(document.updatedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`);
       if (documentType === "quote") void hydratePersistedQuoteAuthority(document);
+
+      // A hosted workspace still owns persistence. Ask only receives
+      // the confirmed durable result so its same-context session does
+      // not keep an obsolete document version/content snapshot.
+      onHostedDocumentSaved?.(document);
+
       return document;
     } catch (error) {
       const errorMessage = error?.message || "We couldn't save your draft right now. Your work is still here.";
@@ -4066,6 +4073,61 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     return true;
   }
 
+  const hostedInstructionHandledRef = useRef("");
+
+  useEffect(() => {
+    const instruction = String(hostedInstruction || "").trim();
+
+    if (!embeddedAsk || !instruction) return;
+
+    const expectedId =
+      String(initialSavedDocumentId || "")
+        .trim()
+        .toLowerCase();
+
+    // Hosted instructions must wait for the independently opened
+    // durable document to be committed into React state. The ref is
+    // updated synchronously during restore and can become authoritative
+    // one render before the live Quote / Invoice state has committed,
+    // which would create a proposal against stale pre-restore content.
+    const currentDocument =
+      savedDocuments[activeDocument];
+
+    const currentId =
+      String(currentDocument?.id || "")
+        .trim()
+        .toLowerCase();
+
+    // Universal Ask can request the operation, but it cannot grant
+    // document authority. Wait until this workspace has independently
+    // opened the exact verified durable document.
+    if (!expectedId || currentId !== expectedId) return;
+
+    const operationKey =
+      `${activeDocument}:${currentId}:${instruction}`;
+
+    if (
+      hostedInstructionHandledRef.current ===
+      operationKey
+    ) {
+      return;
+    }
+
+    hostedInstructionHandledRef.current =
+      operationKey;
+
+    // This is the SAME instruction path used by the normal
+    // Quote / Invoice workspace. It proposes; it does not silently
+    // apply, save, issue, or send.
+    void submitInstruction(instruction);
+  }, [
+    embeddedAsk,
+    hostedInstruction,
+    initialSavedDocumentId,
+    activeDocument,
+    savedDocuments,
+  ]); // submitInstruction deliberately remains the owning workflow
+
   function dismissQuoteProposal() {
     quoteProposalApplyInFlightRef.current = false;
     setPendingQuoteProposal(null);
@@ -5502,6 +5564,24 @@ function QuoteInvoiceBusinessDocumentWorkspace({
           </p>
         ) : null}
 
+        {pendingQuoteProposal && activeDocument === "quote" ? (
+          <QuoteProposalReview
+            key={pendingQuoteProposal.id}
+            proposal={pendingQuoteProposal}
+            onApply={applyQuoteProposal}
+            onDismiss={dismissQuoteProposal}
+          />
+        ) : null}
+
+        {pendingInvoiceProposal && activeDocument === "invoice" ? (
+          <InvoiceProposalReview
+            key={pendingInvoiceProposal.id}
+            proposal={pendingInvoiceProposal}
+            onApply={applyInvoiceProposal}
+            onDismiss={dismissInvoiceProposal}
+          />
+        ) : null}
+
         <ManualEditor
           activeDocument={activeDocument}
           quote={quote}
@@ -5540,8 +5620,75 @@ function QuoteInvoiceBusinessDocumentWorkspace({
             }
             onClick={() => void saveDocument(activeDocument)}
           >
-            {saveState.busy ? "Saving…" : "Save working Quote"}
+            {saveState.busy
+              ? "Saving…"
+              : activeDocument === "quote"
+                ? "Save working Quote"
+                : "Save working Invoice"}
           </button>
+
+          <button
+            type="button"
+            onClick={() => void previewActivePdf()}
+          >
+            Preview PDF
+          </button>
+
+          <button
+            type="button"
+            onClick={() => void downloadActivePdf()}
+          >
+            Download PDF
+          </button>
+
+          {activeDocument === "quote" && documentJobIds.quote ? (
+            activeExternalIssuedQuote ? (
+              <>
+                <DeliveryMenu
+                  kind="quote"
+                  onSelect={beginDelivery}
+                  disabled={
+                    deliveryState?.busy ||
+                    deliveryState?.stage === "sharing"
+                  }
+                  allowMeetroMessage={false}
+                />
+
+                {activeIssuedQuote.approval?.source !==
+                "EXTERNAL_EVIDENCE" ? (
+                  <button
+                    type="button"
+                    onClick={openExternalQuoteApproval}
+                  >
+                    Record Customer Approval
+                  </button>
+                ) : null}
+              </>
+            ) : (
+              <button
+                type="button"
+                className="business-document-primary"
+                disabled={
+                  quoteIssueState?.busy ||
+                  activeQuoteAuthorityPresentation.actionDisabled
+                }
+                onClick={() => void beginGovernedQuoteIssue()}
+              >
+                {quoteIssueState?.busy
+                  ? "Preparing…"
+                  : activeQuoteAuthorityPresentation.actionLabel}
+              </button>
+            )
+          ) : (
+            <DeliveryMenu
+              kind={activeDocument}
+              onSelect={beginDelivery}
+              disabled={
+                deliveryState?.busy ||
+                deliveryState?.stage === "sharing"
+              }
+            />
+          )}
         </footer>
 
         {saveState.error ? (
@@ -5552,6 +5699,253 @@ function QuoteInvoiceBusinessDocumentWorkspace({
           <p className="business-document-notice" role="status">
             {notice}
           </p>
+        ) : null}
+
+        {deliveryState?.stage === "saveRequired" ? (
+          <WorkspaceDialog
+            titleId="business-document-delivery-save-title"
+            title={
+              deliveryState.channel === "DEVICE_SHARE"
+                ? "Save changes before sharing"
+                : "Save changes before sending"
+            }
+            onClose={
+              deliveryState.busy
+                ? undefined
+                : () => setDeliveryState(null)
+            }
+            actions={[
+              {
+                label: "Cancel",
+                disabled: deliveryState.busy,
+                onClick: () => setDeliveryState(null),
+              },
+              {
+                label: deliveryState.busy
+                  ? "Saving…"
+                  : deliveryState.channel === "DEVICE_SHARE"
+                    ? "Save & Continue to Share"
+                    : "Save & Continue to Send",
+                primary: true,
+                disabled: deliveryState.busy,
+                onClick: () => void saveAndContinueDelivery(),
+              },
+            ]}
+          >
+            <p>
+              The customer can receive only an exact durable document
+              version. Saving does not send, share, issue, accept,
+              approve, pay, or close anything.
+            </p>
+            {deliveryState.error ? (
+              <p role="alert">{deliveryState.error}</p>
+            ) : null}
+          </WorkspaceDialog>
+        ) : null}
+
+        {deliveryState?.stage === "shareFallback" ? (
+          <WorkspaceDialog
+            titleId="business-document-share-fallback-title"
+            title="Share this saved PDF"
+            onClose={() => setDeliveryState(null)}
+            actions={[
+              {
+                label: "Close",
+                onClick: () => setDeliveryState(null),
+              },
+              {
+                label: "Download PDF",
+                primary: true,
+                onClick: () => {
+                  downloadBusinessDocumentPdfArtifact(
+                    deliveryState.artifact
+                  );
+                  setNotice(
+                    "PDF downloaded. No delivery has been confirmed."
+                  );
+                },
+              },
+            ]}
+          >
+            <p>
+              System file sharing is unavailable in this browser.
+              Download the exact saved PDF, copy the customer message,
+              or open an email draft.
+            </p>
+
+            <div className="business-document-share-fallback">
+              <button
+                type="button"
+                onClick={() =>
+                  void copyBusinessDocumentShareMessage(
+                    deliveryState.customerMessage
+                  ).then((copied) =>
+                    setNotice(
+                      copied
+                        ? "Customer message copied. No document was sent."
+                        : "Clipboard access is unavailable."
+                    )
+                  )
+                }
+              >
+                Copy customer message
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  openBusinessDocumentEmailDraft({
+                    recipient: deliveryState.recipientEmail,
+                    subject: deliveryState.subject,
+                    message: deliveryState.customerMessage,
+                  })
+                }
+              >
+                Open email draft
+              </button>
+            </div>
+
+            <p className="business-document-delivery-truth">
+              The email draft cannot attach the PDF automatically.
+              Attach the downloaded PDF before sending. Meetro cannot
+              confirm external delivery.
+            </p>
+          </WorkspaceDialog>
+        ) : null}
+
+        {deliveryState?.stage === "review" &&
+        !quoteFinalSendState ? (
+          <DeliveryReviewDialog
+            state={deliveryState}
+            onChange={(field, value) =>
+              setDeliveryState((current) => ({
+                ...current,
+                [field]: value,
+              }))
+            }
+            onCancel={() => setDeliveryState(null)}
+            onSend={requestDeliverySend}
+          />
+        ) : null}
+
+        {quoteSafetyState ? (
+          <WorkspaceDialog
+            titleId="business-document-quote-safety-title"
+            title={
+              quoteSafetyState.blockingErrors.length
+                ? "Quote needs attention"
+                : "Review Quote before sending"
+            }
+            onClose={cancelQuoteSafety}
+            actions={[
+              {
+                label: "Cancel",
+                onClick: cancelQuoteSafety,
+              },
+              {
+                label: "Go Back & Edit Quote",
+                primary:
+                  quoteSafetyState.blockingErrors.length > 0,
+                onClick:
+                  quoteSafetyState.blockingErrors[0]?.field ===
+                  "deposit"
+                    ? returnToQuoteDeposit
+                    : returnToQuoteSafetyEdit,
+              },
+              ...(quoteSafetyState.canSendAnyway
+                ? [{
+                    label: "Send Anyway",
+                    primary: true,
+                    onClick: acknowledgeQuoteSafetyWarnings,
+                  }]
+                : []),
+            ]}
+          >
+            {quoteSafetyState.blockingErrors.length ? (
+              <section>
+                <h3>Must correct</h3>
+                <ul>
+                  {quoteSafetyState.blockingErrors.map(
+                    (problem) => (
+                      <li key={problem.code}>
+                        {problem.message}
+                      </li>
+                    )
+                  )}
+                </ul>
+              </section>
+            ) : null}
+
+            {quoteSafetyState.warnings.length ? (
+              <section>
+                <h3>Review before sending</h3>
+                <ul>
+                  {quoteSafetyState.warnings.map(
+                    (problem) => (
+                      <li key={problem.code}>
+                        {problem.message}
+                      </li>
+                    )
+                  )}
+                </ul>
+              </section>
+            ) : null}
+
+            <p>
+              Nothing was sent. Your working Quote remains available
+              to edit.
+            </p>
+          </WorkspaceDialog>
+        ) : null}
+
+        {quoteIssueState &&
+        !["hydrating", "settled"].includes(
+          quoteIssueState.stage
+        ) &&
+        !quoteFinalSendState ? (
+          <QuoteIssueReviewDialog
+            state={quoteIssueState}
+            onCancel={closeQuoteIssueReview}
+            onConfirm={requestGovernedQuoteSend}
+          />
+        ) : null}
+
+        {quoteFinalSendState ? (
+          <QuoteFinalSendConfirmationDialog
+            state={quoteFinalSendState}
+            onCancel={cancelQuoteFinalSend}
+            onConfirm={() =>
+              void confirmQuoteFinalSend()
+            }
+          />
+        ) : null}
+
+        {externalApprovalState ? (
+          <ExternalQuoteApprovalDialog
+            state={externalApprovalState}
+            onChange={(name, value) =>
+              setExternalApprovalState((current) =>
+                current
+                  ? {
+                      ...current,
+                      error: "",
+                      form: {
+                        ...current.form,
+                        [name]: value,
+                      },
+                    }
+                  : current
+              )
+            }
+            onCancel={() => {
+              if (!externalApprovalState.busy) {
+                setExternalApprovalState(null);
+              }
+            }}
+            onConfirm={() =>
+              void confirmExternalQuoteApproval()
+            }
+          />
         ) : null}
 
         {exitDialogOpen ? (

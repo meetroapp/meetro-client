@@ -768,3 +768,218 @@ test("canonical QUOTE retrieval opens only its exactly bound working draft", asy
     /exact working Quote is ready here/i
   );
 });
+
+
+test("specific resolved working Invoice edit resolves exact working Invoice for inline Ask workspace", async () => {
+  const INVOICE_DRAFT_ID =
+    "55a5d4de-c95c-47ae-bca0-e10830f34211";
+
+  const document = {
+    id: INVOICE_DRAFT_ID,
+    version: 4,
+    documentType: "INVOICE",
+    status: "WORKING_DRAFT",
+    documentNumber: "INV-0000012",
+    jobId: null,
+    customerDisplayName: "Bob Hamel",
+    customerParty: null,
+    content: {
+      customerName: "Bob Hamel",
+      projectTitle: "Window repair",
+      notes: "Original Invoice note",
+      paymentTerms: "Due on receipt",
+      dueDate: "",
+      lineItems: [{
+        description: "Window repair",
+        quantity: "1",
+        unitPrice: "380",
+      }],
+    },
+    workspace: {
+      activeDocument: "INVOICE",
+      instructions: [],
+      manualOverrides: {},
+      privateReminders: [],
+    },
+    photos: [],
+    createdAt: "2026-09-10T12:00:00.000Z",
+    updatedAt: "2026-09-10T12:00:00.000Z",
+  };
+
+  const listCalls = [];
+
+  const answer = await resolveAskMeetroRequest(
+    "Update Invoice INV0000012 notes to include paid by check",
+    {
+      context: {},
+      role: "business",
+
+      requestConversation: async () => ({
+        text:
+          "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+        resolution: {
+          version: 1,
+          status: "RESOLVED",
+          audience: "professional",
+          records: [{
+            record: {
+              type: "DOCUMENT_DRAFT",
+              id: INVOICE_DRAFT_ID,
+            },
+            name: "Bob Hamel",
+            title: "Window repair",
+            number: "INV-0000012",
+            label: "Bob Hamel — Window repair",
+          }],
+          truncated: false,
+          reviewRequired: true,
+          continuation: null,
+          answerSource: "DETERMINISTIC_RETRIEVAL",
+          providerInvoked: false,
+        },
+      }),
+
+      resolveActions: async () => [],
+
+      listDocuments: async (options) => {
+        listCalls.push(options);
+        return [document];
+      },
+    }
+  );
+
+  assert.equal(
+    listCalls.length,
+    1,
+    "working Invoice must be independently re-read before inline hosting"
+  );
+
+  assert.equal(
+    listCalls[0].type,
+    "INVOICE",
+    "Invoice resolution must query only saved Invoice documents"
+  );
+
+  assert.ok(
+    answer.inlineWorkspace,
+    "exact working Invoice should enter the existing inline business-document host"
+  );
+
+  assert.equal(
+    answer.inlineWorkspace.type,
+    "BUSINESS_DOCUMENT"
+  );
+
+  assert.equal(
+    answer.inlineWorkspace.documentType,
+    "INVOICE"
+  );
+
+  assert.equal(
+    answer.inlineWorkspace.document.id,
+    INVOICE_DRAFT_ID
+  );
+
+  assert.equal(
+    answer.inlineWorkspace.document.version,
+    4
+  );
+
+  assert.equal(
+    answer.inlineWorkspace.instruction,
+    "Update Invoice INV0000012 notes to include paid by check"
+  );
+
+  assert.match(
+    answer.text,
+    /exact working Invoice is ready here/i
+  );
+
+  assert.doesNotMatch(
+    answer.text,
+    /exact working Quote is ready here/i
+  );
+
+  assert.deepEqual(answer.actions, []);
+  assert.equal(answer.blockedReason, undefined);
+});
+
+
+test("canonical INVOICE retrieval cannot borrow a same-number working Invoice", async () => {
+  const CANONICAL_INVOICE_ID =
+    "f7c84a3d-4446-477b-8f7f-e6f08a99a211";
+
+  let workingDocumentReads = 0;
+
+  const answer = await resolveAskMeetroRequest(
+    "Update Invoice INV0000012 notes to include paid by check",
+    {
+      context: {},
+      role: "business",
+
+      requestConversation: async () => ({
+        text:
+          "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
+        resolution: {
+          version: 1,
+          status: "RESOLVED",
+          audience: "professional",
+          records: [{
+            record: {
+              type: "INVOICE",
+              id: CANONICAL_INVOICE_ID,
+            },
+            name: "Bob Hamel",
+            title: "Window repair",
+            number: "INV-0000012",
+            label: "Bob Hamel — Window repair",
+          }],
+          truncated: false,
+          reviewRequired: true,
+          continuation: null,
+          answerSource: "DETERMINISTIC_RETRIEVAL",
+          providerInvoked: false,
+        },
+      }),
+
+      resolveActions: async () => [],
+
+      listDocuments: async () => {
+        workingDocumentReads += 1;
+
+        return [{
+          id: "55a5d4de-c95c-47ae-bca0-e10830f34211",
+          version: 4,
+          documentType: "INVOICE",
+          status: "WORKING_DRAFT",
+          documentNumber: "INV-0000012",
+          customerDisplayName: "Bob Hamel",
+          content: {
+            customerName: "Bob Hamel",
+            projectTitle: "Window repair",
+          },
+          workspace: {
+            activeDocument: "INVOICE",
+            instructions: [],
+            manualOverrides: {},
+            privateReminders: [],
+          },
+          photos: [],
+        }];
+      },
+    }
+  );
+
+  assert.equal(
+    workingDocumentReads,
+    0,
+    "canonical Invoice identity must never be converted to working-draft authority by number"
+  );
+
+  assert.equal(
+    answer.inlineWorkspace,
+    undefined
+  );
+
+  assert.deepEqual(answer.actions, []);
+});
