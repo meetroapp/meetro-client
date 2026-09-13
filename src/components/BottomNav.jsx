@@ -474,8 +474,8 @@ function BottomNav({ setPage, currentPage = "" }) {
       page: "customerRelationshipsCenter",
       aliases: ["customerRelationshipsCenter"],
       icon: "people",
-      label: t("navigationRelationships", language),
-      sub: t("navigationCustomers", language),
+      label: t("navigationCustomers", language),
+      sub: t("navigationHistoryRecords", language),
     },
     {
       page: "discover",

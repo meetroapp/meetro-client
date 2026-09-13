@@ -1,3 +1,4 @@
+import { authorityKeys, validJobAuthority, jobAuthorityFields } from "./businessJobAuthority.js";
 import { authFetch } from "./authFetch.js";
 
 const UUID_PATTERN =
@@ -67,7 +68,7 @@ export function validateJobCompletionReview(value, { jobId } = {}) {
     "state", "eligible", "canComplete", "reasons", "work", "outstanding",
     "customerUpdates", "completedAt",
   ];
-  if (!exact(value, keys) || !Array.isArray(value.reasons) || value.reasons.length > 20) {
+  if (!exact(value, authorityKeys(value, keys)) || !Array.isArray(value.reasons) || value.reasons.length > 20) {
     return null;
   }
   const countKeys = ["workstreamCount", "completedWorkstreamCount", "workItemCount", "completedWorkItemCount"];
@@ -77,6 +78,7 @@ export function validateJobCompletionReview(value, { jobId } = {}) {
   const normalized = {
     contractVersion: integer(value.contractVersion),
     jobId: uuid(value.jobId),
+    ...jobAuthorityFields(value),
     requestId: integer(value.requestId),
     relationshipId: integer(value.relationshipId),
     currentVersion: integer(value.currentVersion, { zero: true }),
@@ -95,8 +97,7 @@ export function validateJobCompletionReview(value, { jobId } = {}) {
   if (
     normalized.contractVersion !== 1 ||
     normalized.jobId !== uuid(jobId) ||
-    !normalized.requestId ||
-    !normalized.relationshipId ||
+    !validJobAuthority(value) ||
     normalized.currentVersion == null ||
     !normalized.state ||
     normalized.eligible == null ||
@@ -117,11 +118,12 @@ export function validateJobCompletion(value, { jobId } = {}) {
     "contractVersion", "id", "jobId", "requestId", "relationshipId",
     "currentVersion", "status", "completedAt", "summary", "nextAction",
   ];
-  if (!exact(value, keys)) return null;
+  if (!exact(value, authorityKeys(value, keys))) return null;
   const normalized = {
     contractVersion: integer(value.contractVersion),
     id: uuid(value.id),
     jobId: uuid(value.jobId),
+    ...jobAuthorityFields(value),
     requestId: integer(value.requestId),
     relationshipId: integer(value.relationshipId),
     currentVersion: integer(value.currentVersion),
@@ -131,8 +133,7 @@ export function validateJobCompletion(value, { jobId } = {}) {
     nextAction: validateNextAction(value.nextAction),
   };
   return normalized.contractVersion === 1 && normalized.id &&
-    normalized.jobId === uuid(jobId) && normalized.requestId &&
-    normalized.relationshipId && normalized.currentVersion === 1 &&
+    normalized.jobId === uuid(jobId) && validJobAuthority(value) && normalized.currentVersion === 1 &&
     normalized.status && normalized.completedAt && normalized.summary &&
     normalized.nextAction ? normalized : null;
 }
@@ -153,12 +154,13 @@ export function validateJobHistorySummary(value) {
     "customerName", "professionalName", "serviceTitle", "status", "completedAt",
     "approvedQuote", "completionSummary", "nextAction",
   ];
-  if (!exact(value, keys)) return null;
+  if (!exact(value, authorityKeys(value, keys))) return null;
   const approvedQuote = validateApprovedQuote(value.approvedQuote);
   if (approvedQuote === false) return null;
   const normalized = {
     contractVersion: integer(value.contractVersion),
     jobId: uuid(value.jobId),
+    ...jobAuthorityFields(value),
     requestId: integer(value.requestId),
     relationshipId: integer(value.relationshipId),
     conversationId: value.conversationId == null ? null : integer(value.conversationId),
@@ -171,8 +173,7 @@ export function validateJobHistorySummary(value) {
     completionSummary: validateCompletionSummary(value.completionSummary),
     nextAction: validateNextAction(value.nextAction),
   };
-  return normalized.contractVersion === 1 && normalized.jobId && normalized.requestId &&
-    normalized.relationshipId && normalized.customerName && normalized.professionalName &&
+  return normalized.contractVersion === 1 && normalized.jobId && validJobAuthority(value) && normalized.customerName && normalized.professionalName &&
     normalized.serviceTitle && normalized.status && normalized.completedAt &&
     normalized.completionSummary && normalized.nextAction ? normalized : null;
 }
@@ -207,8 +208,8 @@ export function validateJobHistoryDetail(value, { jobId, audience } = {}) {
     "approvedQuote", "completionSummary", "nextAction",
   ];
   const keys = [...summaryKeys, "audience", "originalRequest", "preservedRecords", "actions"];
-  if (!exact(value, keys)) return null;
-  const summary = validateJobHistorySummary(Object.fromEntries(summaryKeys.map((key) => [key, value[key]])));
+  if (!exact(value, authorityKeys(value, keys))) return null;
+  const summary = validateJobHistorySummary(Object.fromEntries(authorityKeys(value, summaryKeys).map((key) => [key, value[key]])));
   const originalRequest = value.originalRequest == null ? null : (() => {
     if (!exact(value.originalRequest, ["concern", "reportedAt"])) return false;
     const concern = text(value.originalRequest.concern, 5000);

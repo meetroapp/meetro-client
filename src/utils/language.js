@@ -1,3 +1,4 @@
+import { workCenterPresentationLanguage } from "./workCenterPresentationLanguage.js";
 import { isDeferredTranslationKey } from "./localizationContract.js";
 import { coreWorkflowLanguage } from "./coreWorkflowLanguage.js";
 import { messagesWorkflowLanguage } from "./messagesWorkflowLanguage.js";
@@ -1023,7 +1024,7 @@ noDescriptionAdded:
   "No description added.",
 businessCommandCenter: "Business Tools",
 commandCenterSubtitle:
-  "Manage business setup, visibility, support tools, and safe shortcuts into customer relationship areas.",
+  "Manage business setup, visibility, support tools, and safe shortcuts into Customer History.",
 correctWorkflow: "Correct workflow",
 correctWorkflowText:
   "Business Dashboard → Command Center → Select/Create Project Folder → Save project data inside that folder.",
@@ -2525,7 +2526,7 @@ noDescriptionAdded:
   "No se agregó descripción.",
 businessCommandCenter: "Herramientas del Negocio",
 commandCenterSubtitle:
-  "Administra configuracion del negocio, visibilidad, soporte y accesos seguros a relaciones con clientes.",
+  "Administra la configuración del negocio, la visibilidad, el soporte y los accesos seguros al historial del cliente.",
 correctWorkflow: "Flujo correcto",
 correctWorkflowText:
   "Panel del Negocio → Centro de Control → Seleccionar/Crear Carpeta de Proyecto → Guardar la información dentro de esa carpeta.",
@@ -13807,6 +13808,7 @@ const sharedInterfaceLanguage = {
     navigationRecords: "Records",
     navigationRelationships: "Relationships",
     navigationCustomers: "Customers",
+    navigationHistoryRecords: "History & records",
     navigationProfileAccount: "Profile / Account",
     desktopBusinessShortcuts: "Shortcuts",
     desktopQuickQuote: "Quick Quote",
@@ -13904,6 +13906,7 @@ const sharedInterfaceLanguage = {
     navigationRecords: "Registros",
     navigationRelationships: "Relaciones",
     navigationCustomers: "Clientes",
+    navigationHistoryRecords: "Historial y registros",
     navigationProfileAccount: "Perfil / Cuenta",
     desktopBusinessShortcuts: "Accesos rápidos",
     desktopQuickQuote: "Cotización rápida",
@@ -14001,6 +14004,7 @@ const sharedInterfaceLanguage = {
     navigationRecords: "Dossiers",
     navigationRelationships: "Relations",
     navigationCustomers: "Clients",
+    navigationHistoryRecords: "Historique et dossiers",
     navigationProfileAccount: "Profil / Compte",
     desktopBusinessShortcuts: "Raccourcis",
     desktopQuickQuote: "Devis rapide",
@@ -14098,6 +14102,7 @@ const sharedInterfaceLanguage = {
     navigationRecords: "Registros",
     navigationRelationships: "Relacionamentos",
     navigationCustomers: "Clientes",
+    navigationHistoryRecords: "Histórico e registros",
     navigationProfileAccount: "Perfil / Conta",
     desktopBusinessShortcuts: "Atalhos",
     desktopQuickQuote: "Orçamento rápido",
@@ -14202,6 +14207,8 @@ Object.entries(personalProfileMediaLanguage).forEach(([language, labels]) => {
 Object.entries(sharedInterfaceLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
+
+Object.entries(workCenterPresentationLanguage).forEach(([language, labels]) => { Object.assign(translations[language], labels); });
 
 Object.entries(coreWorkflowLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);

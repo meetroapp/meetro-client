@@ -90,9 +90,10 @@ test("workspace exposes explicit prepare, review, send, retry, resend, history, 
   assert.match(source, /does not record payment or satisfy the deposit/);
   assert.match(source, /Project total/);
   assert.match(source, /Deposit requested/);
-  assert.match(source, /Amount remaining after deposit/);
-  assert.match(source, /The Quote supplies the customer, project, deposit amount, and payment terms/);
-  assert.match(source, /Send is disabled until an approved Quote creates an unpaid canonical deposit requirement/);
+  assert.match(source, /Remaining project balance/);
+  assert.match(source, /Deposit already received/);
+  assert.match(source, /No Deposit Request needs to be sent/);
+  assert.match(source, /t\("wc52depositSendLocked"\)/);
   assert.match(source, /Carried from Quote/);
   assert.match(source, /quoteCarryoverContent/);
   assert.match(
@@ -112,7 +113,9 @@ test("workspace exposes explicit prepare, review, send, retry, resend, history, 
     />Create external customer</
   );
   assert.match(source, /customerParty: customerParty \|\| null/);
-  assert.match(source, /disabled=\{!eligible \|\| busy/);
+  assert.match(source, /\{eligible \? \(/);
+  assert.match(source, /if \(!deposit\?\.obligationId \|\| !eligible\)/);
+  assert.match(source, /if \(!eligible\) \{/);
 });
 
 test("business document order is Quote, Deposit Request, Invoice", () => {
@@ -343,10 +346,10 @@ test("Deposit Request iPad composer occupies a viewport-owned row above the keyb
 
   assert.ok(composerStart >= 0);
   assert.ok(keyboardStart > composerStart);
-  assert.match(
-    source,
-    /className="deposit-request-composer"[\s\S]*?<textarea rows=\{4\}[\s\S]*?Propose Change[\s\S]*?<\/div>/
-  );
+  assert.match(source, /\{!depositSatisfied \? \(/);
+  assert.match(source, /className="deposit-request-composer"/);
+  assert.match(source, /rows=\{4\}/);
+  assert.match(source, /Propose Change/);
   assert.match(source, /className="deposit-request-editor-scroll"/);
   assert.match(editorStyles, /grid-template-rows:\s*minmax\(0, 1fr\) auto/);
   assert.match(editorStyles, /\.deposit-request-editor-scroll\s*\{[\s\S]*overflow-y:\s*auto/);
@@ -494,8 +497,8 @@ test("R4 Deposit Request uses live canonical payment state and blocks Invoice un
   assert.match(source, /"NOT_REQUIRED", "SATISFIED"/);
   assert.match(source, /disabled=\{!invoiceAllowed\}/);
   assert.match(source, /depositSatisfied: true/);
-  assert.match(source, /Recorded received/);
-  assert.match(source, /Awaiting payment confirmation/);
+  assert.match(source, /<span>Received<\/span>/);
+  assert.match(source, /Payment needed/);
   assert.match(source, /Partially paid/);
   assert.match(source, /Deposit satisfied/);
 });
@@ -546,4 +549,240 @@ test("R4 visible Quote to Invoice tab routes through Deposit Request when Quote 
   assert.match(source, /pricing\.deposit\.mode !== "NONE"/);
   assert.match(source, /openDepositRequest\(\)/);
   assert.match(source, /options\.depositSatisfied !== true/);
+});
+
+test("Deposit Request wide desktop owns two independently scrollable panes", () => {
+  const styles = readFileSync(
+    new URL("../src/components/UnifiedBusinessDocumentWorkspace.css", import.meta.url),
+    "utf8"
+  );
+  const desktopStart = styles.indexOf("@media (min-width: 1024px)");
+  assert.notEqual(desktopStart, -1, "desktop workspace media block must exist");
+  const desktop = styles.slice(desktopStart);
+
+  assert.match(
+    desktop,
+    /\.deposit-request-workspace\s*\{[^}]*grid-template-rows:\s*auto auto minmax\(0,\s*1fr\)[^}]*block-size:\s*100dvh[^}]*overflow:\s*hidden/
+  );
+
+  assert.match(
+    desktop,
+    /\.deposit-request-main\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\)[^}]*min-height:\s*0[^}]*overflow:\s*hidden/
+  );
+
+  assert.match(
+    desktop,
+    /\.deposit-request-editor\s*\{[^}]*grid-template-rows:\s*minmax\(0,\s*1fr\) auto[^}]*overflow:\s*hidden/
+  );
+
+  assert.match(
+    desktop,
+    /\.deposit-request-editor-scroll\s*\{[^}]*display:\s*grid[^}]*min-height:\s*0[^}]*overflow-y:\s*auto/
+  );
+
+  assert.match(
+    desktop,
+    /\.deposit-request-preview\s*\{[^}]*min-height:\s*0[^}]*overflow-y:\s*auto/
+  );
+});
+
+test("Deposit Request wide preview gives long Quote metadata readable width", () => {
+  const styles = readFileSync(
+    new URL("../src/components/UnifiedBusinessDocumentWorkspace.css", import.meta.url),
+    "utf8"
+  );
+  const desktopStart = styles.indexOf("@media (min-width: 1024px)");
+  assert.notEqual(desktopStart, -1, "desktop workspace media block must exist");
+  const desktop = styles.slice(desktopStart);
+
+  assert.match(
+    desktop,
+    /\.deposit-request-document-summary\s*\{[^}]*grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)\s*!important/
+  );
+
+  assert.match(
+    desktop,
+    /\.deposit-request-document-summary\s*>\s*div:nth-child\(5\),[\s\S]*div:nth-child\(6\)[^{]*\{[^}]*grid-column:\s*1\s*\/\s*-1/
+  );
+
+  assert.match(
+    desktop,
+    /\.deposit-request-document-summary dd\s*\{[^}]*overflow-wrap:\s*normal[^}]*word-break:\s*normal/
+  );
+});
+
+
+test("Deposit Request preview separates status identity money scope and customer-facing details", () => {
+  const source = readFileSync(
+    new URL("../src/components/DepositRequestWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /className="deposit-request-status-banner/);
+  assert.match(
+    source,
+    /className="deposit-request-preview-section deposit-request-preview-identity"/
+  );
+  assert.match(source, /className="deposit-request-money-grid"/);
+  assert.match(
+    source,
+    /className="deposit-request-preview-section deposit-request-preview-scope"/
+  );
+  assert.match(
+    source,
+    /className="deposit-request-preview-section deposit-request-preview-message"/
+  );
+
+  assert.match(source, /Deposit already received/);
+  assert.match(source, /No Deposit Request needs to be sent/);
+});
+
+test("Deposit Request keeps long approved scope outside the compact identity summary", () => {
+  const source = readFileSync(
+    new URL("../src/components/DepositRequestWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+
+  const start = source.indexOf(
+    '<dl className="deposit-request-document-summary"'
+  );
+  assert.notEqual(start, -1);
+
+  const end = source.indexOf("</dl>", start);
+  assert.notEqual(end, -1);
+
+  const identitySummary = source.slice(start, end);
+
+  assert.doesNotMatch(identitySummary, /Approved scope/);
+
+  const afterSummary = source.slice(end);
+  assert.match(
+    afterSummary,
+    /deposit-request-preview-section deposit-request-preview-scope/
+  );
+});
+
+test("Deposit Request preview uses scan-friendly status and financial cards", () => {
+  const styles = readFileSync(
+    new URL("../src/components/UnifiedBusinessDocumentWorkspace.css", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(
+    styles,
+    /\.deposit-request-status-banner\s*\{[^}]*display:\s*grid/
+  );
+
+  assert.match(
+    styles,
+    /\.deposit-request-money-grid\s*\{[^}]*display:\s*grid/
+  );
+
+  assert.match(
+    styles,
+    /\.deposit-request-money-card\s*\{[^}]*min-width:\s*0/
+  );
+
+  assert.match(
+    styles,
+    /\.deposit-request-preview-scope\s*\{[^}]*min-width:\s*0/
+  );
+});
+
+
+test("Deposit Request preview status is customer-source neutral for Meetro and external customers", () => {
+  const source = readFileSync(
+    new URL("../src/components/DepositRequestWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+
+  const statusStart = source.indexOf("const depositPreviewStatus =");
+  const statusEnd = source.indexOf(
+    "const customerState = businessDocumentCustomerState",
+    statusStart
+  );
+
+  assert.notEqual(statusStart, -1);
+  assert.notEqual(statusEnd, -1);
+
+  const statusModel = source.slice(statusStart, statusEnd);
+
+  // Payment/readiness presentation comes only from canonical deposit authority.
+  assert.match(statusModel, /depositSatisfied/);
+  assert.match(statusModel, /authority\?\.state/);
+  assert.match(statusModel, /money\.received/);
+  assert.match(statusModel, /money\.needed/);
+
+  // It must not fork the Deposit preview by customer source.
+  assert.doesNotMatch(statusModel, /customerParty/);
+  assert.doesNotMatch(statusModel, /customerState/);
+  assert.doesNotMatch(statusModel, /businessContactId/);
+  assert.doesNotMatch(statusModel, /customerDecisionId/);
+
+  // External-customer support remains present in the shared owner.
+  assert.match(source, /External customer linked to this Deposit Request/);
+  assert.match(source, /External customer created/);
+
+  // Both customer sources therefore use the same Deposit status presentation.
+  assert.match(source, /Deposit already received/);
+  assert.match(source, /Deposit partially received/);
+  assert.match(source, /Deposit payment required/);
+  assert.match(source, /No pre-work deposit required/);
+});
+
+
+test("Satisfied Deposit Request stops requesting payment and exposes the governed next step", () => {
+  const source = readFileSync(
+    new URL("../src/components/DepositRequestWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /className="deposit-request-satisfied-editor-state"/);
+  assert.match(source, /Deposit received in full/);
+  assert.match(source, /No additional Deposit Request is needed/);
+
+  assert.match(source, /className="deposit-request-next-step"/);
+  assert.match(source, /Next step/);
+  assert.match(source, /Continue to Invoice/);
+  assert.match(
+    source,
+    /onDocumentChange\("invoice", \{ depositSatisfied: true \}\)/
+  );
+});
+
+test("Satisfied Deposit Request marks old customer request wording as historical instead of active", () => {
+  const source = readFileSync(
+    new URL("../src/components/DepositRequestWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /Payment status/);
+  assert.match(source, /Deposit received in full/);
+  assert.match(source, /Original request message/);
+  assert.match(source, /Historical wording · no longer active/);
+});
+
+test("Satisfied Deposit Request cleanup is customer-source neutral", () => {
+  const source = readFileSync(
+    new URL("../src/components/DepositRequestWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+
+  const start = source.indexOf(
+    'className="deposit-request-satisfied-editor-state"'
+  );
+  const end = source.indexOf(
+    'aria-label="Live Deposit Request Preview"',
+    start
+  );
+
+  assert.notEqual(start, -1);
+  assert.notEqual(end, -1);
+
+  const satisfiedExperience = source.slice(start, end);
+
+  assert.match(satisfiedExperience, /depositSatisfied/);
+  assert.doesNotMatch(satisfiedExperience, /customerParty/);
+  assert.doesNotMatch(satisfiedExperience, /customerState/);
+  assert.doesNotMatch(satisfiedExperience, /businessContactId/);
 });

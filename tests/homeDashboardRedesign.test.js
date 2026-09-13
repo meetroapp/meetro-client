@@ -73,8 +73,14 @@ test("Professional lead priority, useful zero schedule and exact approved shortc
   assert.deepEqual(shortcuts.map((button) => button.querySelector("strong").textContent), ["Hiring", "Quote Builder", "Invoice Builder", "Timesheet"]);
   await act(async () => shortcuts[1].click()); assert.equal(w.routes.at(-1), "quoteBuilder?new=1");
   await act(async () => shortcuts[3].click()); assert.equal(w.routes.at(-1), "teamOperations?view=timesheets");
-  assert.equal(document.querySelectorAll(".business-dashboard-glance-grid button").length, 3);
+  assert.equal(document.querySelectorAll(".business-dashboard-glance-grid button").length, 4);
   assert.match(document.querySelector(".business-dashboard-glance-grid").textContent, /Active Jobs.*Pending Quotes.*Today's Schedule/);
+  const revenue = [...document.querySelectorAll(".business-dashboard-glance-grid button")].find(button=>button.textContent.includes("View Revenue"));
+  assert.ok(revenue);
+  assert.doesNotMatch(revenue.textContent, /\$|\d/);
+  await act(async () => revenue.click());
+  assert.equal(w.routes.at(-1), "contractorDashboard");
+  assert.equal(localStorage.getItem("meetroWorkCenterTab"), "revenue");
   let askOpened = false;
   window.addEventListener("meetro:assistant:open", () => { askOpened = true; }, { once: true });
   await act(async () => document.querySelector(".business-dashboard-hero-ask").click());
@@ -189,7 +195,7 @@ test("Professional dashboard reuses one ordered section tree across phone, table
       assert.equal(document.querySelectorAll(selector).length, 1, `${target.name} has one ${selector}`);
       assert.equal(document.querySelector(selector), sharedSections[index], `${target.name} reuses ${selector}`);
     });
-    assert.equal(document.querySelectorAll(".business-dashboard-glance-grid button").length, 3);
+    assert.equal(document.querySelectorAll(".business-dashboard-glance-grid button").length, 4);
     assert.equal(document.querySelectorAll(".business-dashboard-quick-access-grid button").length, 4);
     assert.doesNotMatch(document.body.textContent, /My Projects|Today(?:'s)? Spotlight|Request Service/);
   }

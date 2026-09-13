@@ -102,10 +102,10 @@ function BusinessCommandCenter({ setPage }) {
     customers: {
       id: "customers",
       icon: "customerRelationships",
-      title: isSpanish ? "Relaciones con clientes" : "Customer Relationships",
+      title: isSpanish ? "Historial del cliente" : "Customer History",
       desc: isSpanish
-        ? "Consulta personas, comunicacion e historial de relacion."
-        : "View people, communication, and relationship history.",
+        ? "Consulta clientes, comunicación y su historial de trabajo."
+        : "View customers, communication, and their work history.",
       badge: statusLabel("customers"),
     },
     serviceEvaluations: {

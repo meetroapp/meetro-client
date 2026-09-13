@@ -61,7 +61,7 @@ export function buildProfessionalWorkCenterRoute({
     query.set("stage", canonicalStage);
   }
 
-  if (returnPage === "notifications") {
+  if (["notifications", "customerRelationshipsCenter"].includes(returnPage)) {
     query.set("returnPage", returnPage);
   }
 
@@ -92,10 +92,11 @@ export function parseProfessionalWorkCenterRoute(value) {
   const quoteId = uuid(params.get("quoteId"));
   const visitId = uuid(params.get("visitId"));
   const canonicalStage = stage(params.get("stage"));
-  const returnPage =
-    params.get("returnPage") === "notifications"
-      ? "notifications"
-      : "";
+  const returnPage = ["notifications", "customerRelationshipsCenter"].includes(
+    params.get("returnPage")
+  )
+    ? params.get("returnPage")
+    : "";
 
   if (
     !jobId ||

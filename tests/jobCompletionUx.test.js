@@ -16,8 +16,10 @@ const dashboard = source("src/pages/ContractorDashboard.jsx");
 const projectDetails = source("src/pages/ProjectDetails.jsx");
 const api = source("src/utils/jobCompletionApi.js");
 
-test("legacy Job completion remains server-gated but is not presented as atomic Work completion", () => {
-  assert.doesNotMatch(workPlan, /ProfessionalCompletionReview|completeCanonicalJob/);
+test("Job completion remains server-gated and is independent of customer authority kind", () => {
+  assert.doesNotMatch(workPlan, /completeCanonicalJob/);
+  assert.doesNotMatch(workPlan, /authority\?\.kind/);
+  assert.match(dashboard, /completeJobLifecycle\.state === "current"[\s\S]*<ProfessionalCompletionReview/);
   assert.match(workPlan, /WORK_LEVEL_AUTHORITY_GAPS/);
   assert.match(workPlan, /Start Work is temporarily unavailable/);
   assert.match(completionReview, /fetchJobCompletionReview/);

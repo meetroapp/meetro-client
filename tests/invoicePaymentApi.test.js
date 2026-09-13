@@ -252,3 +252,37 @@ test("professional Job History Invoice read is exact-Job scoped", async () => {
   assert.equal(endpoint, `/professional/jobs/${JOB_ID}/invoice`);
   assert.equal(result.jobId, JOB_ID);
 });
+
+test('external Invoice requires exact business customer authority and keeps marketplace strict',()=>{
+ const customerParty={contractorProfileId:10,businessContactId:'77777777-7777-4777-8777-777777777777',customerRelationshipId:'88888888-8888-4888-8888-888888888888'};
+ const external=invoice('professional',{requestId:null,relationshipId:null,conversationId:null,customerParty,authority:{kind:'BUSINESS_CUSTOMER',...customerParty}});
+ assert.ok(validateInvoice(external,{audience:'professional'}));
+ assert.equal(validateInvoice({...external,authority:undefined},{audience:'professional'}),null);
+ assert.equal(validateInvoice({...external,customerParty:{...customerParty,contractorProfileId:11}},{audience:'professional'}),null);
+ assert.equal(validateInvoice({...external,requestId:14},{audience:'professional'}),null);
+ assert.ok(validateInvoice(invoice(),{audience:'professional'}));
+});
+
+test('external Invoice issuance uses the canonical version and never supplies marketplace authority',async()=>{
+ const {issueCanonicalInvoiceExternally}=await import('../src/utils/invoicePaymentApi.js');
+ const party={contractorProfileId:10,businessContactId:'77777777-7777-4777-8777-777777777777',customerRelationshipId:'88888888-8888-4888-8888-888888888888'};
+ const external=invoice('professional',{requestId:null,relationshipId:null,conversationId:null,customerParty:party,authority:{kind:'BUSINESS_CUSTOMER',...party}});
+ let call;
+ const result=await issueCanonicalInvoiceExternally({invoiceId:INVOICE_ID,expectedVersion:1,idempotencyKey:'external-issue',authFetchImpl:async(path,options)=>{
+   call={path,body:JSON.parse(options.body)};return {response:{ok:true,status:201},data:{success:true,invoice:external}};
+ }});
+ assert.equal(call.path,`/professional/invoices/${INVOICE_ID}/issue-external`);
+ assert.deepEqual(call.body,{expectedVersion:1});assert.equal(result.invoice.invoiceId,INVOICE_ID);
+});
+
+test('external email and reminder transport reject a mismatched receipt and do not carry payment commands',async()=>{
+ const {emailCanonicalInvoice}=await import('../src/utils/invoicePaymentApi.js');
+ for(const purpose of ['INVOICE','REMINDER']) {
+  let call;
+  const delivery={id:PAYMENT_ID,invoiceId:INVOICE_ID,jobId:JOB_ID,invoiceVersion:2,purpose,recipientEmail:'external@example.test',state:'DELIVERY_REQUESTED'};
+  const result=await emailCanonicalInvoice({invoiceId:INVOICE_ID,expectedVersion:2,purpose,idempotencyKey:'email-key',authFetchImpl:async(path,options)=>{call={path,body:JSON.parse(options.body)};return {response:{ok:true,status:202},data:{success:true,delivery}};}});
+  assert.equal(call.path,`/professional/invoices/${INVOICE_ID}/external-email`);
+  assert.deepEqual(call.body,{expectedVersion:2,purpose,messageText:null});assert.equal(result.delivery.state,'DELIVERY_REQUESTED');
+  await assert.rejects(emailCanonicalInvoice({invoiceId:INVOICE_ID,expectedVersion:2,purpose,idempotencyKey:'email-key',authFetchImpl:async()=>({response:{ok:true,status:202},data:{success:true,delivery:{...delivery,invoiceId:QUOTE_ID}}})}),{code:'UNSAFE_INVOICE_EMAIL_RESPONSE'});
+ }
+});

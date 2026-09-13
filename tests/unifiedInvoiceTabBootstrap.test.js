@@ -23,7 +23,7 @@ function block(startMarker, endMarker) {
   return source.slice(start, end);
 }
 const switchCode = block("function initializeWorkingInvoice()", "function applyManualDraft(");
-const depositCode = block("function openDepositRequest()", "  if (embeddedAsk) {");
+const depositCode = block("function openDepositRequest()", "  const invoiceCompletionDialog =");
 
 // Execute the production handlers with state setters, without browser storage
 // or network grants. Rendering/physical geometry is covered separately.
@@ -44,8 +44,11 @@ function harness({
     hydratedSavedQuotePresentation: quoteState, invoicePreparation: preparation,
     quote: quoteState, job: { id: canonicalJobId, relationshipId: 345, conversationId: 678 },
     depositRequestContext: null, depositRequestOpen: false,
+    depositRequestSourceQuoteDocument: null,
     nearNewestRef: { current: false }, turns: [{ text: "Quote conversation" }],
   };
+
+  state.savedDocumentsRef = { current: state.savedDocuments };
   function run(action, options = {}) {
     const set = (field) => (value) => { state[field] = typeof value === "function" ? value(state[field]) : value; };
     const scope = {
@@ -238,4 +241,47 @@ test("completed-Job and exact-Invoice guards remain separate from generic tabs",
   assert.equal(parseInvoiceBuilderRoute("invoiceBuilder").intent, "STANDALONE");
   assert.equal(parseInvoiceBuilderRoute(`invoiceBuilder?jobId=${jobId}`).intent, "JOB_PREPARATION");
   assert.equal(parseInvoiceBuilderRoute(`invoiceBuilder?invoiceId=${invoiceId}`).valid, false);
+});
+
+
+test("Deposit-specific Invoice continuation owns exact Quote authority while shared switching stays pure", () => {
+  assert.match(
+    builder,
+    /depositRequestSourceQuoteDocument=\{[\s\S]*isUnifiedDepositRequestEntry[\s\S]*depositRequestSourceQuoteDocument/
+  );
+
+  assert.match(
+    source,
+    /depositRequestSourceQuoteDocument = null/
+  );
+
+  assert.match(
+    source,
+    /sourceQuoteDocument:\s*depositRequestSourceQuoteDocument/
+  );
+
+  assert.match(
+    source,
+    /async function handleDepositDocumentChange/
+  );
+
+  assert.match(
+    source,
+    /depositRequestContext\?\.sourceQuoteDocument/
+  );
+
+  assert.match(
+    source,
+    /onDocumentChange=\{handleDepositDocumentChange\}/
+  );
+
+  assert.doesNotMatch(
+    switchCode,
+    /loadExactInvoiceSource|initializeSatisfiedDepositInvoice/
+  );
+
+  assert.match(
+    source,
+    /initializeSatisfiedDepositInvoice\(sourceDocument\)/
+  );
 });

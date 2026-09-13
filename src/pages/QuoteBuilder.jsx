@@ -3522,6 +3522,11 @@ ${businessIdentity.businessName}`;
               ? unifiedDepositRequestQuote
               : unifiedQuoteDraft
           }
+          depositRequestSourceQuoteDocument={
+            isUnifiedDepositRequestEntry
+              ? depositRequestSourceQuoteDocument
+              : null
+          }
           invoicePreparation={invoicePreparation.status === "ready" ? invoicePreparation.job : null}
           onCreateCanonicalInvoice={createReviewedCompletedJobInvoice}
           onApplyQuotePatch={applyUnifiedQuotePatch}
@@ -4049,6 +4054,7 @@ ${businessIdentity.businessName}`;
             <ContextualAskMeetro
               language={language}
               contextLabel="estimate-and-quote"
+              context={{ jobId: canonicalJobId }}
               voiceContextLabel="estimate"
               contextName={projectTitle || getAskMeetroWorkflowCopy(language).estimate}
               actions={[

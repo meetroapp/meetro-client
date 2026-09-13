@@ -185,3 +185,9 @@ test("clear record commands require exact authority before a review is proposed"
     assert.ok(planAskMeetroActions(instruction, { context, role: "business" }).every((action) => action.route && action.status === "PROPOSED"));
   }
 });
+test('Send this Invoice proposes the existing owner and never sends from Ask',async()=>{
+ const invoiceContext={page:'workCenter',jobId:JOB,invoiceId:DRAFT};
+ const actions=await resolveAskMeetroActions('Send this Invoice',{context:invoiceContext,role:'business'});
+ assert.equal(actions.length,1);assert.equal(actions[0].kind,'INVOICE');assert.match(actions[0].route,new RegExp(DRAFT));assert.equal(actions[0].status,'PROPOSED');
+ assert.deepEqual(planAskMeetroActions('Send this Invoice',{context:{},role:'business'}),[]);
+});

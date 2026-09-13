@@ -1,3 +1,4 @@
+import {authorityKeys,validJobAuthority,jobAuthorityFields} from "./businessJobAuthority.js";
 import { authFetch } from "./authFetch.js";
 import {
   validateCanonicalActivityProjection,
@@ -239,7 +240,7 @@ export function validateProfessionalWorkPlan(value, { jobId } = {}) {
     "workstreams",
   ];
   if (
-    !exact(value, keys) ||
+    !exact(value, authorityKeys(value,keys)) ||
     !Array.isArray(value.approvedQuotes) ||
     !Array.isArray(value.workstreams) ||
     value.approvedQuotes.length > 100 ||
@@ -255,6 +256,7 @@ export function validateProfessionalWorkPlan(value, { jobId } = {}) {
   const normalized = {
     contractVersion: integer(value.contractVersion),
     jobId: uuid(value.jobId),
+    ...jobAuthorityFields(value),
     requestId: integer(value.requestId),
     relationshipId: integer(value.relationshipId),
     approvedQuotes,
@@ -265,8 +267,7 @@ export function validateProfessionalWorkPlan(value, { jobId } = {}) {
     normalized.contractVersion !== 1 ||
     !expectedJobId ||
     normalized.jobId !== expectedJobId ||
-    !normalized.requestId ||
-    !normalized.relationshipId ||
+    !validJobAuthority(value) ||
     !normalized.summary ||
     approvedQuotes.some((item) => !item) ||
     workstreams.some((item) => !item) ||

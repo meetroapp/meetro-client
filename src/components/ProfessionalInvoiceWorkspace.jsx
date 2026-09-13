@@ -1,7 +1,11 @@
+import { issueCanonicalInvoiceExternally, emailCanonicalInvoice } from "../utils/invoicePaymentApi.js";
+import UniversalAskMeetroEntry from "./UniversalAskMeetroEntry.jsx";
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import CanonicalInvoiceDetail from "./CanonicalInvoiceDetail.jsx";
-import ContextualAskMeetro from "./ContextualAskMeetro.jsx";
+import { fetchJobCompletionReview } from "../utils/jobCompletionApi.js";
+import InvoiceCompletionNotice from "./InvoiceCompletionNotice.jsx";
+import useAskMeetroContext from "../hooks/useAskMeetroContext.js";
 import WorkCenterBackButton from "./WorkCenterBackButton.jsx";
 import {
   WorkCenterEmptyState,
@@ -14,6 +18,7 @@ import {
   fetchProfessionalInvoice,
   fetchProfessionalInvoiceWorkspace,
   recordCanonicalPayment,
+  issueCanonicalInvoice,
 } from "../utils/invoicePaymentApi.js";
 import {
   createPaymentReminderKey,
@@ -24,15 +29,9 @@ import {
   CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
 } from "../utils/canonicalConversationMessaging.js";
 import { getInvoiceCopy } from "../utils/invoicePaymentLanguage.js";
-import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage.js";
-import {
-  INTELLIGENCE_OPERATION,
-  recordWorkflowReview,
-  requestWorkflowIntelligence,
-} from "../utils/contextualIntelligence.js";
 import { getWorkCenterWorkspaceCopy } from "../utils/workCenterWorkspaceLanguage.js";
-import { getBusinessIdentityProjection } from "../utils/businessIdentity.js";
 import {
+  buildInvoiceSharePresentation,
   buildInvoiceEmailUrl,
   copyInvoiceDetails,
   downloadInvoicePdf,
@@ -50,6 +49,10 @@ function dollarsToMinor(value) {
   return Number.isSafeInteger(amount) && amount > 0 ? amount : null;
 }
 
+function emptyPaymentDraft() {
+  return { amount: "", method: "CHECK", receivedDate: today(), reference: "" };
+}
+
 export default function ProfessionalInvoiceWorkspace({
   language = "en",
   setPage,
@@ -58,9 +61,6 @@ export default function ProfessionalInvoiceWorkspace({
   expectedJobId = "",
 }) {
   const copy = getInvoiceCopy(language);
-  const branding = getBusinessIdentityProjection({}, {
-    fallbackName: "Meetro Professional",
-  });
   const workspaceCopy = getWorkCenterWorkspaceCopy(language);
   const [workspace, setWorkspace] = useState(null);
   const [workspacePhase, setWorkspacePhase] = useState("idle");
@@ -69,14 +69,15 @@ export default function ProfessionalInvoiceWorkspace({
   const [busy, setBusy] = useState("");
   const [notice, setNotice] = useState("");
   const [confirmIssue, setConfirmIssue] = useState(false);
+  const [completionNotice, setCompletionNotice] = useState(false);
+  const deliveryAttemptRef = useRef({ signature: "", key: "" });
   const [showPayment, setShowPayment] = useState(false);
   const [showReminder, setShowReminder] = useState(false);
   const [reminderDraft, setReminderDraft] = useState("");
-  const [paymentDraft, setPaymentDraft] = useState({
-    amount: "", method: "CHECK", receivedDate: today(), reference: "",
-  });
+  const [paymentDraft, setPaymentDraft] = useState(emptyPaymentDraft);
+  const selectedInvoiceIdRef = useRef("");
   const reminderAttemptRef = useRef({ signature: "", key: "" });
-  const [assistant, setAssistant] = useState({ busy: false, error: "", notice: "", result: null });
+  useAskMeetroContext({ invoiceId: selected?.invoiceId, jobId: selected?.jobId, conversationId: selected?.conversationId, label: selected?.invoiceNumber });
 
   const loadWorkspace = useCallback(async () => {
     const value = await fetchProfessionalInvoiceWorkspace({ limit: 50, setPage });
@@ -84,6 +85,20 @@ export default function ProfessionalInvoiceWorkspace({
     setWorkspacePhase("ready");
     return value;
   }, [setPage]);
+
+  const resetPaymentInteraction = useCallback(() => {
+    setShowPayment(false);
+    setPaymentDraft(emptyPaymentDraft());
+  }, []);
+
+  const acceptCanonicalInvoice = useCallback((invoice) => {
+    const previousInvoiceId = selectedInvoiceIdRef.current;
+    selectedInvoiceIdRef.current = invoice.invoiceId;
+    setSelected(invoice);
+    if (previousInvoiceId && previousInvoiceId !== invoice.invoiceId) {
+      resetPaymentInteraction();
+    }
+  }, [resetPaymentInteraction]);
 
   useEffect(() => {
     if (initialInvoiceId) {
@@ -107,7 +122,8 @@ export default function ProfessionalInvoiceWorkspace({
     let active = true;
     queueMicrotask(() => {
       if (!active) return;
-      setInvoicePhase("loading");
+      const isSameInvoiceRefresh = selectedInvoiceIdRef.current === initialInvoiceId;
+      if (!isSameInvoiceRefresh) setInvoicePhase("loading");
       setNotice("");
       void fetchProfessionalInvoice({ invoiceId: initialInvoiceId, setPage })
         .then((invoice) => {
@@ -117,10 +133,9 @@ export default function ProfessionalInvoiceWorkspace({
             setInvoicePhase("error");
             return;
           }
-          setSelected(invoice);
+          acceptCanonicalInvoice(invoice);
           setInvoicePhase("ready");
           setConfirmIssue(false);
-          setShowPayment(false);
           setShowReminder(false);
           setReminderDraft("");
           reminderAttemptRef.current = { signature: "", key: "" };
@@ -132,20 +147,20 @@ export default function ProfessionalInvoiceWorkspace({
         })
     });
     return () => { active = false; };
-  }, [copy.unavailable, expectedJobId, initialInvoiceId, setPage]);
+  }, [acceptCanonicalInvoice, copy.unavailable, expectedJobId, initialInvoiceId, setPage]);
 
   const money = useCallback((minor, currency = workspace?.summary.currency || "USD") =>
     formatLocaleCurrency((Number(minor) || 0) / 100, currency || "USD", {}, language),
   [language, workspace]);
 
   async function openInvoice(invoiceId) {
-    setInvoicePhase("loading");
+    const isSameInvoiceRefresh = selectedInvoiceIdRef.current === invoiceId;
+    if (!isSameInvoiceRefresh) setInvoicePhase("loading");
     setNotice("");
     try {
-      setSelected(await fetchProfessionalInvoice({ invoiceId, setPage }));
+      acceptCanonicalInvoice(await fetchProfessionalInvoice({ invoiceId, setPage }));
       setInvoicePhase("ready");
       setConfirmIssue(false);
-      setShowPayment(false);
       setShowReminder(false);
       setReminderDraft("");
       reminderAttemptRef.current = { signature: "", key: "" };
@@ -155,13 +170,40 @@ export default function ProfessionalInvoiceWorkspace({
     }
   }
 
-  function handleIssue() {
-    if (!selected?.actions.canIssue || !selected.conversationId) return;
+  async function verifyCompletion() {
+    try {
+      const review = await fetchJobCompletionReview({ jobId: selected.jobId, setPage });
+      if (review.state === "COMPLETED") return true;
+    } catch { /* The send boundary fails closed. */ }
     setConfirmIssue(false);
-    setPage(buildCanonicalConversationRoute(selected.conversationId, "workCenter", {
-      shell: CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
-      invoiceId: selected.invoiceId,
-    }));
+    setCompletionNotice(true);
+    return false;
+  }
+
+  async function beginIssue() {
+    if (busy || (!selected?.conversationId && !(selected?.authority?.kind === "BUSINESS_CUSTOMER" && selected.status === "DRAFT"))) return;
+    setBusy("delivery-review");
+    try { if (await verifyCompletion()) setConfirmIssue(true); }
+    finally { setBusy(""); }
+  }
+
+  async function handleIssue() {
+    if (busy || (!selected?.conversationId && !(selected?.authority?.kind === "BUSINESS_CUSTOMER" && selected.status === "DRAFT"))) return;
+    setBusy("delivery"); setNotice("");
+    try {
+      if (!await verifyCompletion()) return;
+      const command = { invoiceId: selected.invoiceId, expectedVersion: selected.currentVersion, messageText: `Please review Invoice ${selected.invoiceNumber}. The exact Invoice and its PDF are available here.` };
+      const signature = JSON.stringify(command);
+      if (deliveryAttemptRef.current.signature !== signature) deliveryAttemptRef.current = { signature, key: createInvoiceCommandKey("invoice-delivery") };
+      const issue = selected.conversationId ? issueCanonicalInvoice : issueCanonicalInvoiceExternally;
+      const result = await issue({ ...command, idempotencyKey: deliveryAttemptRef.current.key, setPage });
+      setSelected(result.invoice); setConfirmIssue(false);
+      deliveryAttemptRef.current = { signature: "", key: "" };
+      if (result.invoice.conversationId) setPage(buildCanonicalConversationRoute(result.invoice.conversationId, "workCenter", {
+        shell: CANONICAL_CONVERSATION_COMMUNICATION_SHELL, invoiceId: result.invoice.invoiceId,
+      }));
+    } catch (error) { setNotice(error?.message || copy.unavailable); }
+    finally { setBusy(""); }
   }
 
   const canSendInvoiceReminder = Boolean(
@@ -170,13 +212,12 @@ export default function ProfessionalInvoiceWorkspace({
       Number.isSafeInteger(selected.balanceMinor) &&
       selected.balanceMinor > 0 &&
       Number.isSafeInteger(selected.currentVersion) &&
-      selected.currentVersion > 0 &&
-      selected.conversationId
+      selected.currentVersion > 0
   );
 
   function openReminder() {
     if (!canSendInvoiceReminder) return;
-    setReminderDraft("");
+    setReminderDraft(selected.conversationId ? "" : `Payment reminder: Invoice ${selected.invoiceNumber} has a remaining balance of ${money(selected.balanceMinor, selected.currency)}. ${buildInvoiceSharePresentation(selected)?.text || ""}`);
     setNotice("");
     setShowPayment(false);
     setShowReminder(true);
@@ -193,7 +234,7 @@ export default function ProfessionalInvoiceWorkspace({
   async function handleReminder(event) {
     event.preventDefault();
 
-    if (!selected || !canSendInvoiceReminder) return;
+    if (!selected || !canSendInvoiceReminder || !selected.conversationId || busy) return;
 
     const messageText = reminderDraft.trim() || null;
     const command = {
@@ -262,9 +303,8 @@ export default function ProfessionalInvoiceWorkspace({
         idempotencyKey: createInvoiceCommandKey("invoice-payment"),
         setPage,
       });
-      setSelected(result.invoice);
-      setPaymentDraft({ amount: "", method: "CHECK", receivedDate: today(), reference: "" });
-      setShowPayment(false);
+      acceptCanonicalInvoice(result.invoice);
+      resetPaymentInteraction();
       setNotice(copy.recorded);
       await loadWorkspace();
     } catch (error) {
@@ -278,97 +318,84 @@ export default function ProfessionalInvoiceWorkspace({
   }
 
   async function share() {
-    if (!selected) return;
-    const result = await shareInvoiceExternally({ invoice: selected, language, branding });
-    if (result.ok && result.method === "download") setNotice(copy.pdfReady);
+    if (!selected || busy) return;
+    setBusy("share");
+    try {
+      if (!await verifyCompletion()) return;
+      const result = await shareInvoiceExternally({ invoice: selected, language, setPage });
+      if (result.ok && result.method === "download") setNotice(copy.pdfReady);
+    } catch (error) { setNotice(error?.message || copy.unavailable); }
+    finally { setBusy(""); }
   }
 
   async function copyDetails() {
-    if (selected && await copyInvoiceDetails({ invoice: selected, language })) {
-      setNotice(copy.copied);
-    }
+    try { if (selected && await copyInvoiceDetails({ invoice: selected, language })) setNotice(copy.copied); }
+    catch (error) { setNotice(error?.message || copy.unavailable); }
   }
 
   async function emailInvoice() {
-    if (!selected || !await downloadInvoicePdf({ invoice: selected, language, branding })) {
-      setNotice(copy.unavailable);
-      return;
-    }
-    const url = buildInvoiceEmailUrl(selected, { language });
-    if (url) window.location.href = url;
+    if (!selected || busy) return;
+    setBusy("email");
+    try {
+      if (!await verifyCompletion()) return;
+      if (selected.authority?.kind === "BUSINESS_CUSTOMER") {
+        await sendExternalEmail("INVOICE");
+        return;
+      }
+      if (!await downloadInvoicePdf({ invoice: selected, setPage })) { setNotice(copy.unavailable); return; }
+      setNotice("PDF downloaded. Attach it to the email draft before sending. External delivery is not confirmed by Meetro.");
+      const url = buildInvoiceEmailUrl(selected, { language });
+      if (url) window.location.href = url;
+    } catch (error) { setNotice(error?.message || copy.unavailable); }
+    finally { setBusy(""); }
   }
 
-  async function requestInvoiceHelp(action, prompt) {
-    const intents = {
-      create: "CREATE_INVOICE",
-      review: "REVIEW_INVOICE",
-      balance: "EXPLAIN_BALANCE",
-    };
-    if (!selected) return;
-    setAssistant({ busy: true, error: "", notice: "", result: null });
-    try {
-      const result = await requestWorkflowIntelligence({
-        operation: INTELLIGENCE_OPERATION.INVOICE,
-        locale: language,
-        input: {
-          jobId: null,
-          invoiceId: selected.invoiceId,
-          intent: intents[action],
-          professionalInstructions: prompt || null,
-        },
-        expected: {
-          invoiceId: selected.invoiceId,
-        },
-        setPage,
-      });
-      setAssistant({ busy: false, error: "", notice: "", result });
-    } catch (error) {
-      setAssistant({ busy: false, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable, notice: "", result: null });
-    }
+  async function sendExternalEmail(purpose, messageText = null) {
+    const command = {invoiceId:selected.invoiceId,expectedVersion:selected.currentVersion,purpose,messageText};
+    const signature = JSON.stringify(command);
+    if (reminderAttemptRef.current.signature !== signature) reminderAttemptRef.current = {signature,key:createInvoiceCommandKey("invoice-email")};
+    const result = await emailCanonicalInvoice({...command,idempotencyKey:reminderAttemptRef.current.key,setPage});
+    setNotice(result.delivery.state === "REQUESTING" ? "Email request is pending." : `Email delivery requested for ${result.delivery.recipientEmail}.`);
+    if(result.delivery.state !== "REQUESTING") reminderAttemptRef.current = {signature:"",key:""};
+    return result;
   }
 
-  async function reviewInvoiceProposal(action) {
-    const proposal = assistant.result?.proposal;
-    if (!proposal) return;
-    const items = [proposal.customerNotes, proposal.terms, proposal.dueDateWording, proposal.balanceExplanation]
-      .filter((item) => item?.id && item.text);
+  async function externalReminder(transport) {
+    if (!selected || selected.conversationId || !canSendInvoiceReminder || busy) return;
+    setBusy("reminder");
     try {
-      await Promise.all(items.map((item) => recordWorkflowReview({
-        proposalId: proposal.proposalId,
-        elementId: item.id,
-        action,
-        reasonCategory: action === "REJECTED" ? "PROFESSIONAL_DISMISSED" : undefined,
-        setPage,
-      })));
-      setAssistant((current) => ({
-        ...current,
-        result: action === "REJECTED" ? null : current.result,
-        notice: action === "REJECTED" ? "" : getAskMeetroWorkflowCopy(language).useInInvoice,
-      }));
-    } catch (error) {
-      setAssistant((current) => ({ ...current, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable }));
-    }
+      if (transport === "copy") {
+        await navigator.clipboard.writeText(reminderDraft);
+        setNotice("Reminder copied. No payment or delivery has been recorded.");
+      } else if (transport === "email") {
+        await sendExternalEmail("REMINDER", reminderDraft.trim() || null);
+        setShowReminder(false);
+      } else if (navigator.share) {
+        await navigator.share({ title: `Payment reminder ${selected.invoiceNumber}`, text: reminderDraft });
+      }
+    } catch (error) { if (error?.name !== "AbortError") setNotice(error?.message || copy.unavailable); }
+    finally { setBusy(""); }
   }
 
   const summary = workspace?.summary;
   const selectedActions = selected ? (
     <div style={styles.actions}>
-      {selected.actions.canIssue && !confirmIssue && (
-        <button type="button" style={styles.primaryButton} onClick={() => setConfirmIssue(true)}>
-          {copy.send}
+      {(selected.conversationId || (selected.authority?.kind === "BUSINESS_CUSTOMER" && selected.status === "DRAFT")) && !confirmIssue && (
+        <button type="button" style={styles.primaryButton} disabled={Boolean(busy)} onClick={beginIssue}>
+          {selected.conversationId ? "Send via Meetro" : "Review Invoice"}
         </button>
       )}
-      {selected.actions.canIssue && confirmIssue && (
+      {confirmIssue && (
         <div style={styles.confirmRow} role="group" aria-label={copy.confirmSend}>
-          <button type="button" style={styles.primaryButton} onClick={handleIssue}>
-            {copy.confirmSend}
+          <button type="button" style={styles.primaryButton} disabled={Boolean(busy)} onClick={handleIssue}>
+            {selected.conversationId ? copy.confirmSend : "Confirm Invoice"}
           </button>
           <button type="button" style={styles.secondaryButton} onClick={() => setConfirmIssue(false)}>
             {copy.cancel}
           </button>
         </div>
       )}
-      {canSendInvoiceReminder && !showReminder && (
+      {canSendInvoiceReminder && !showReminder && !showPayment && (
         <button
           type="button"
           style={styles.secondaryButton}
@@ -395,7 +422,7 @@ export default function ProfessionalInvoiceWorkspace({
       {selected.actions.canShareExternal && (
         <>
           <button type="button" style={styles.secondaryButton} onClick={share}>{copy.share}</button>
-          <button type="button" style={styles.linkButton} onClick={() => void emailInvoice()}>{copy.email}</button>
+          <button type="button" style={styles.linkButton} disabled={Boolean(busy)} onClick={() => void emailInvoice()}>{selected.authority?.kind === "BUSINESS_CUSTOMER" ? "Email PDF" : "Download PDF + Open Email Draft"}</button>
           <button type="button" style={styles.secondaryButton} onClick={copyDetails}>{copy.copy}</button>
         </>
       )}
@@ -419,9 +446,11 @@ export default function ProfessionalInvoiceWorkspace({
         description={workspaceCopy.financeDescription}
       />
 
+      <UniversalAskMeetroEntry language={language} context={{ invoiceId: selected?.invoiceId, jobId: selected?.jobId, conversationId: selected?.conversationId }} contextName={selected?.invoiceNumber || "Invoices & Payments"} />
       {isLoading && <p role="status">{copy.loading}</p>}
       {!isLoading && hasError && <p role="alert">{copy.unavailable}</p>}
       {notice && <p role="status" style={styles.notice}>{notice}</p>}
+      {completionNotice && <InvoiceCompletionNotice onClose={() => setCompletionNotice(false)} />}
 
       {summary && (
         <WorkCenterMetricGrid
@@ -463,33 +492,6 @@ export default function ProfessionalInvoiceWorkspace({
             ))}
           </div>
         </section>
-      )}
-
-      {selected && (
-        <ContextualAskMeetro
-          language={language}
-          contextLabel="invoice"
-          contextName={selected.invoiceNumber}
-          actions={[
-            { id: "review", label: getAskMeetroWorkflowCopy(language).reviewInvoice },
-            { id: "balance", label: getAskMeetroWorkflowCopy(language).explainBalance },
-          ]}
-          busy={assistant.busy}
-          error={assistant.error}
-          notice={assistant.notice}
-          onRequest={requestInvoiceHelp}
-        >
-          {assistant.result && (
-            <InvoiceAssistantResult
-              proposal={assistant.result.proposal}
-              language={language}
-              canApply={false}
-              money={money}
-              onApply={() => void reviewInvoiceProposal("ACCEPTED")}
-              onDismiss={() => void reviewInvoiceProposal("REJECTED")}
-            />
-          )}
-        </ContextualAskMeetro>
       )}
 
       {workspace?.invoices.length > 0 ? (
@@ -547,7 +549,7 @@ export default function ProfessionalInvoiceWorkspace({
               </label>
 
               <div style={styles.confirmRow}>
-                <button
+                {selected.conversationId ? <button
                   type="submit"
                   disabled={busy === "reminder"}
                   style={styles.primaryButton}
@@ -555,7 +557,11 @@ export default function ProfessionalInvoiceWorkspace({
                   {busy === "reminder"
                     ? copy.sendingReminder
                     : copy.confirmReminder}
-                </button>
+                </button> : <>
+                  <button type="button" onClick={() => externalReminder("copy")}>Copy reminder</button>
+                  <button type="button" disabled={Boolean(busy)} onClick={() => externalReminder("email")}>Email reminder</button>
+                  {typeof navigator.share === "function" && <button type="button" onClick={() => externalReminder("share")}>Share reminder</button>}
+                </>}
 
                 <button
                   type="button"
@@ -570,13 +576,13 @@ export default function ProfessionalInvoiceWorkspace({
           )}
 
           {showPayment && selected.actions.canRecordPayment && (
-            <form style={styles.form} onSubmit={handlePayment}>
+            <form style={styles.form} onSubmit={handlePayment} data-record-payment-form="invoice">
               <h3 style={styles.subheading}>{copy.recordPayment}</h3>
               <label style={styles.field}>{copy.amount}<input required inputMode="decimal" value={paymentDraft.amount} onChange={(event) => setPaymentDraft((current) => ({ ...current, amount: event.target.value }))} style={styles.input} /></label>
               <label style={styles.field}>{copy.method}<select value={paymentDraft.method} onChange={(event) => setPaymentDraft((current) => ({ ...current, method: event.target.value }))} style={styles.input}><option value="CASH">{copy.cash}</option><option value="CHECK">{copy.check}</option><option value="BANK_TRANSFER">{copy.bankTransfer}</option><option value="OTHER">{copy.other}</option></select></label>
               <label style={styles.field}>{copy.receivedDate}<input required max={today()} type="date" value={paymentDraft.receivedDate} onChange={(event) => setPaymentDraft((current) => ({ ...current, receivedDate: event.target.value }))} style={styles.input} /></label>
               <label style={styles.field}>{copy.reference}<input maxLength={500} value={paymentDraft.reference} onChange={(event) => setPaymentDraft((current) => ({ ...current, reference: event.target.value }))} style={styles.input} /></label>
-              <div style={styles.confirmRow}><button type="submit" disabled={busy === "payment" || !dollarsToMinor(paymentDraft.amount)} style={styles.primaryButton}>{copy.recordPayment}</button><button type="button" style={styles.secondaryButton} onClick={() => setShowPayment(false)}>{copy.cancel}</button></div>
+              <div style={styles.confirmRow}><button type="submit" disabled={busy === "payment" || !dollarsToMinor(paymentDraft.amount)} style={styles.primaryButton}>{copy.recordPayment}</button><button type="button" style={styles.secondaryButton} onClick={resetPaymentInteraction}>{copy.cancel}</button></div>
             </form>
           )}
         </section>
@@ -585,36 +591,12 @@ export default function ProfessionalInvoiceWorkspace({
   );
 }
 
-function InvoiceAssistantResult({ proposal, language, canApply, money, onApply, onDismiss }) {
-  const copy = getAskMeetroWorkflowCopy(language);
-  const financial = proposal.canonicalFinancialTruth;
-  return (
-    <div style={styles.assistantResult}>
-      <strong>{proposal.summary}</strong>
-      <div style={styles.financialTruth}>
-        <span>{financial.status.replaceAll("_", " ")}</span>
-        {financial.totalMinor != null && <strong>{money(financial.totalMinor, financial.currency || "USD")}</strong>}
-        {financial.balanceMinor != null && <span>{money(financial.balanceMinor, financial.currency || "USD")}</span>}
-      </div>
-      {proposal.lineDescriptions.map((item) => <p key={item.id} style={styles.assistantText}>{item.text}</p>)}
-      {proposal.customerNotes.text && <p style={styles.assistantText}>{proposal.customerNotes.text}</p>}
-      {proposal.terms.text && <p style={styles.assistantText}>{proposal.terms.text}</p>}
-      {proposal.balanceExplanation.text && <p style={styles.assistantText}>{proposal.balanceExplanation.text}</p>}
-      <div style={styles.actions}>
-        {canApply && <button type="button" style={styles.primaryButton} onClick={onApply}>{copy.useInInvoice}</button>}
-        <button type="button" style={styles.secondaryButton} onClick={onDismiss}>{copy.dismiss}</button>
-      </div>
-    </div>
-  );
-}
-
 const styles = {
-  workspace: { width: "100%", maxWidth: "100%", minWidth: 0, boxSizing: "border-box" },
+  workspace: { width: "100%", maxWidth: "100%", minWidth: 0, paddingTop: "max(8px, calc(env(safe-area-inset-top, 0px) + 8px))", boxSizing: "border-box" },
   safeHeader: {
     width: "100%",
     maxWidth: "100%",
     minWidth: 0,
-    paddingTop: "env(safe-area-inset-top, 0px)",
     boxSizing: "border-box",
   },
   notice: { margin: 0, padding: 12, borderLeft: "4px solid #0f766e", background: "#eff8f7" },

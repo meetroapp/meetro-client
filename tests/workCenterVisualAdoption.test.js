@@ -21,7 +21,7 @@ test("homeowner Work Center adopts Meetro Community visual constitution classes"
 
 test("professional Work Center adopts Meetro Community visual constitution classes", () => {
   assert.match(contractorDashboardSource, /meetro-wide-page meetro-visual-page/);
-  assert.match(contractorDashboardSource, /work-center-dashboard-hero meetro-visual-hero/);
+  assert.match(contractorDashboardSource, /work-center-opportunities-banner meetro-visual-surface/);
   assert.match(contractorDashboardSource, /meetro-visual-surface/);
   assert.match(contractorDashboardSource, /meetro-visual-empty-state/);
   assert.match(contractorDashboardSource, /meetro-visual-primary-button/);

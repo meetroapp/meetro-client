@@ -112,11 +112,11 @@ test("semantic stages map to exact Business and Customer panels", () => {
   );
   assert.equal(
     getBusinessWorkCenterPanelId("deposit"),
-    "canonical-job-deposit-scheduling"
+    "canonical-job-deposit"
   );
   assert.equal(
     getBusinessWorkCenterPanelId("schedule"),
-    "canonical-job-deposit-scheduling"
+    "canonical-job-schedule"
   );
   assert.equal(
     getBusinessWorkCenterPanelId("work"),
@@ -124,8 +124,9 @@ test("semantic stages map to exact Business and Customer panels", () => {
   );
   assert.equal(
     getBusinessWorkCenterPanelId("invoice"),
-    "canonical-job-completion-invoice"
+    "canonical-job-invoice"
   );
+  assert.equal(getBusinessWorkCenterPanelId("completion"), "canonical-job-complete");
 
   assert.equal(
     getHomeownerWorkCenterSection("deposit"),

@@ -49,17 +49,17 @@ test("compact Current Job context preserves identity, state, and message action"
 
   assert.match(
     contractorDashboardSource,
-    /status=\{jobDisplayStatus\}/
+    /status=\{workCenterLabel\(jobDisplayStatus, activeLanguage\)\}/
   );
 
   assert.match(
     contractorDashboardSource,
-    /nextStep=\{jobDisplayNextStep\}/
+    /nextStep=\{workCenterLabel\(jobDisplayNextStep, activeLanguage\)\}/
   );
 
   assert.match(
     contractorDashboardSource,
-    /responsibility=\{jobDisplayResponsibility\}/
+    /responsibility=\{workCenterActor\(canonicalLiveJob\?\.responsibility, jobDisplayResponsibility, activeLanguage\)\}/
   );
 
   assert.match(

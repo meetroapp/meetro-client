@@ -573,7 +573,7 @@ test("Deposit iPad composer is a viewport-owned row outside the independently sc
   );
   assert.match(
     editor.slice(scrollEnd),
-    /className="deposit-request-composer"[\s\S]*<textarea rows=\{4\}[\s\S]*>Propose Change</
+    /className="deposit-request-composer"[\s\S]*<textarea[\s\S]*rows=\{4\}[\s\S]*>\s*Propose Change\s*</
   );
   assert.match(
     tabletEditorRules,

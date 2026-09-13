@@ -37,9 +37,9 @@ test("Work Center child screens share one visible 44px Back control", () => {
   );
 });
 
-test("Invoice Work Center back control begins below the iOS safe area", () => {
+test("Invoice Work Center header begins below the iOS safe area with status-bar breathing room", () => {
   assert.match(invoiceSource, /className="work-center-invoice-safe-header"/);
-  assert.match(invoiceSource, /paddingTop: "env\(safe-area-inset-top, 0px\)"/);
+  assert.match(invoiceSource, /paddingTop: "max\(8px, calc\(env\(safe-area-inset-top, 0px\) \+ 8px\)\)"/);
   assert.match(invoiceSource, /width: "100%"/);
   assert.match(invoiceSource, /maxWidth: "100%"/);
   assert.match(invoiceSource, /boxSizing: "border-box"/);

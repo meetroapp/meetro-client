@@ -1665,3 +1665,191 @@ test("initial Job Analysis timeout keeps its session, evidence, instruction, and
   assert.doesNotMatch(askBlock, /onApplyQuotePatch\(/);
   assert.doesNotMatch(askBlock, /setInvoice\(/);
 });
+
+
+test("Satisfied Deposit to Invoice re-resolves exact Quote authority and payment evidence", () => {
+  const quoteToInvoiceSource = readFileSync(
+    new URL("../src/utils/quoteToInvoice.js", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(
+    workspace,
+    /loadExactInvoiceSource/
+  );
+
+  assert.match(
+    workspace,
+    /initializeSatisfiedDepositInvoice/
+  );
+
+  const depositContinuationStart = workspace.indexOf(
+    "async function handleDepositDocumentChange"
+  );
+  const depositContinuationEnd = workspace.indexOf(
+    "function cancelManualEditing",
+    depositContinuationStart
+  );
+
+  assert.notEqual(depositContinuationStart, -1);
+
+  const depositContinuation = workspace.slice(
+    depositContinuationStart,
+    depositContinuationEnd === -1
+      ? depositContinuationStart + 7000
+      : depositContinuationEnd
+  );
+
+  assert.match(
+    depositContinuation,
+    /options\.depositSatisfied !== true/
+  );
+
+  assert.match(
+    depositContinuation,
+    /initializeSatisfiedDepositInvoice/
+  );
+
+  assert.match(
+    depositContinuation,
+    /switchDocument\("invoice",\s*\{\s*depositSatisfied:\s*true/
+  );
+
+  assert.match(
+    workspace,
+    /setActiveInvoiceSource\(loaded\.document\)/
+  );
+
+  assert.match(
+    workspace,
+    /paymentEvidence:\s*loaded\.paymentEvidence/
+  );
+
+  // A satisfied canonical Deposit can provide payment continuity before
+  // Job completion. The Invoice must not require readyJobs/completedAt
+  // merely to show money already received.
+  assert.match(
+    quoteToInvoiceSource,
+    /depositGate\.deposit/
+  );
+
+  assert.match(
+    quoteToInvoiceSource,
+    /appliedMinor/
+  );
+
+  assert.match(
+    quoteToInvoiceSource,
+    /receivedMinor/
+  );
+});
+
+test("Final Invoice delivery reads canonical Job completion and fails closed without mutating completion", () => {
+  assert.match(
+    workspace,
+    /fetchJobCompletionReview/
+  );
+
+  assert.match(
+    workspace,
+    /review\.state === "COMPLETED"/
+  );
+
+  assert.match(
+    workspace,
+    /Complete the job first/
+  );
+
+  assert.match(
+    workspace,
+    /The job must be marked complete before the final Invoice can be sent/
+  );
+
+  // Invoice delivery may observe completion authority but must never
+  // complete the Job as a side effect of Send.
+  assert.doesNotMatch(
+    workspace,
+    /completeCanonicalJob/
+  );
+});
+
+test("Invoice remains preparable before completion while both delivery paths use the same completion gate", () => {
+  // Preparing the document remains available.
+  assert.match(workspace, /Save Draft/);
+  assert.match(workspace, /Preview PDF/);
+  assert.match(workspace, /Download PDF/);
+
+  // Generic saved-draft delivery is completion-gated.
+  assert.match(
+    workspace,
+    /beginInvoiceDelivery/
+  );
+
+  // Canonical created-Invoice delivery is completion-gated too.
+  assert.match(
+    workspace,
+    /openCreatedInvoiceDelivery/
+  );
+
+  assert.match(
+    workspace,
+    /verifyInvoiceCompletionForDelivery/
+  );
+
+  // The gate is Job-authority based, not customer-source based.
+  const gateStart = workspace.indexOf(
+    "async function verifyInvoiceCompletionForDelivery"
+  );
+  const gateEnd = workspace.indexOf(
+    "async function",
+    gateStart + 20
+  );
+
+  assert.notEqual(gateStart, -1);
+
+  const gate = workspace.slice(
+    gateStart,
+    gateEnd === -1 ? gateStart + 4000 : gateEnd
+  );
+
+  assert.doesNotMatch(gate, /customerParty/);
+  assert.doesNotMatch(gate, /externalCustomer/);
+  assert.doesNotMatch(gate, /businessContactId/);
+});
+
+
+test("Incomplete Invoice blocks at the visible Send Invoice button before delivery choices open", () => {
+  const deliveryMenuStart = workspace.indexOf("function DeliveryMenu(");
+  const deliveryMenuEnd = workspace.indexOf(
+    "function DocumentTabs",
+    deliveryMenuStart
+  );
+
+  assert.notEqual(deliveryMenuStart, -1);
+
+  const deliveryMenu = workspace.slice(
+    deliveryMenuStart,
+    deliveryMenuEnd === -1 ? deliveryMenuStart + 9000 : deliveryMenuEnd
+  );
+
+  assert.match(deliveryMenu, /onBeforeOpen/);
+  assert.match(deliveryMenu, /await onBeforeOpen/);
+
+  // Invoice checks canonical completion before the delivery menu opens.
+  assert.match(
+    workspace,
+    /onBeforeOpen=\{[\s\S]*verifyInvoiceCompletionForDelivery/
+  );
+
+  // Recheck again when a channel is actually selected.
+  assert.match(
+    workspace,
+    /onSelect=\{[\s\S]*beginInvoiceDelivery/
+  );
+
+  assert.match(workspace, /Complete the job first/);
+  assert.match(
+    workspace,
+    /The job must be marked complete before the final Invoice can be sent/
+  );
+});

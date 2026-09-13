@@ -30,22 +30,24 @@ test("server-owned next actions map only to their presentation section", () => {
     PREPARE_RECOMMENDATIONS: "findings",
     BUILD_QUOTE: "quotes",
     REVIEW_DRAFT_QUOTE: "quotes",
+    REVIEW_QUOTE_DELIVERY: "quotes",
     WAIT_FOR_CUSTOMER_DECISION: "quotes",
     REVIEW_DECLINED_QUOTE: "quotes",
+    REVIEW_APPROVED_QUOTE_TERMS: "deposit",
     REVIEW_ACTIVE_WORK: "workPlan",
     REVIEW_BLOCKED_WORK: "workPlan",
-    REVIEW_WORKSTREAM_COMPLETION: "workPlan",
-    READY_TO_INVOICE: "completionInvoice",
-    NEXT_STEP_NOT_YET_AVAILABLE: "visits",
+    REVIEW_WORKSTREAM_COMPLETION: "completeJob",
+    READY_TO_INVOICE: "invoice",
+    NEXT_STEP_NOT_YET_AVAILABLE: "schedule",
   };
   for (const [code, section] of Object.entries(cases)) {
     assert.equal(resolveWorkCenterSectionForNextAction(code), section, code);
   }
-  assert.equal(resolveWorkCenterSectionForNextAction("REVIEW_ACTIVE_WORK", "WORK_READY"), "visits");
+  assert.equal(resolveWorkCenterSectionForNextAction("REVIEW_ACTIVE_WORK", "WORK_READY"), "schedule");
   assert.equal(resolveWorkCenterSectionForNextAction("REVIEW_ACTIVE_WORK", "WORK_IN_PROGRESS"), "workPlan");
-  assert.equal(resolveWorkCenterSectionForNextAction("REVIEW_ACTIVE_WORK", "WORK_IN_PROGRESS", "Schedule approved work"), "visits");
+  assert.equal(resolveWorkCenterSectionForNextAction("REVIEW_ACTIVE_WORK", "WORK_IN_PROGRESS", "Schedule approved work"), "schedule");
   assert.equal(resolveWorkCenterSectionForNextAction("REVIEW_ACTIVE_WORK", "WORK_IN_PROGRESS", "Continue work"), "workPlan");
-  assert.equal(resolveWorkCenterSectionForNextAction(""), "visits");
+  assert.equal(resolveWorkCenterSectionForNextAction(""), "schedule");
 });
 
 test("shared system owns headers, truthful metrics, empty states, statuses, and accessible disclosure", () => {
@@ -76,10 +78,10 @@ test("all seven Work Center destinations adopt the shared presentation system", 
 
 test("Current Job stays identity-first and progressively discloses canonical sections", () => {
   for (const id of [
-    "canonical-job-evaluation", "canonical-job-work-plan",
-    "canonical-job-quotes", "canonical-job-completion-invoice",
+    "canonical-job-evaluation", "canonical-job-quotes",
+    "canonical-job-deposit", "canonical-job-schedule",
+    "canonical-job-work-plan", "canonical-job-complete", "canonical-job-invoice",
   ]) assert.match(dashboard, new RegExp(`id="${id}"`));
-  assert.doesNotMatch(dashboard, /id="canonical-job-visits"/);
   assert.match(dashboard, /canonicalLiveJob\?\.nextAction\?\.code/);
   assert.match(dashboard, /canonicalLiveJob\?\.stage\?\.code/);
   assert.match(dashboard, /resolveWorkCenterSectionForNextAction/);

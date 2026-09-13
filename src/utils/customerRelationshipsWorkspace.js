@@ -59,6 +59,28 @@ export function readCustomerRelationshipNavigationContext(storage) {
   });
 }
 
+export function writeCustomerRelationshipNavigationContext(
+  storage,
+  { businessContactId, focus = "overview", returnPage = "businessCommandCenter" } = {}
+) {
+  const target = safeStorage(storage);
+  const contactId = validUuid(businessContactId);
+  if (!target?.setItem || !contactId) return false;
+  target.setItem(
+    CUSTOMER_RELATIONSHIP_NAVIGATION_KEY,
+    JSON.stringify({
+      businessContactId: contactId,
+      focus: ["overview", "work", "quotes", "invoices", "documents"].includes(text(focus))
+        ? text(focus)
+        : "overview",
+      returnPage: text(returnPage) === "messagesInbox"
+        ? "messagesInbox"
+        : "businessCommandCenter",
+    })
+  );
+  return true;
+}
+
 export async function loadCustomerRelationshipActivity({
   relationshipId,
   setPage,

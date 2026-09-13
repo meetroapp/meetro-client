@@ -12,19 +12,13 @@ const dashboardSource = readFileSync(
 );
 const cssSource = readFileSync(new URL("../src/index.css", import.meta.url), "utf8");
 
-test("phone and tablet Work Center use a reachable right-side Companion safe dock", () => {
+test("Work Center uses a reserved dock while other surfaces retain saved drag positions", () => {
   assert.match(
     assistantSource,
-    /!appLayoutMetrics\.desktopMode && currentPage === "contractorDashboard"/
+    /currentPage === "contractorDashboard"/
   );
-  assert.match(
-    assistantSource,
-    /compactWorkCenterSafeDock[\s\S]*right: `max\(\$\{launcherEdgeMargin\}px, env\(safe-area-inset-right, 0px\)\)`[\s\S]*bottom: launcherPosition \? "auto" : launcherFallbackBottom[\s\S]*top: launcherPosition \? `\$\{launcherPosition\.y\}px` : "auto"/
-  );
-  assert.match(
-    assistantSource,
-    /data-position-mode="draggable"/
-  );
+  assert.match(assistantSource, /bottom: "calc\(var\(--work-center-dock-bottom, 74px\) \+ var\(--work-center-dock-gap, 6px\)\)"/);
+  assert.match(assistantSource, /data-position-mode=\{compactWorkCenterSafeDock \? "docked" : "draggable"\}/);
   assert.match(
     assistantSource,
     /compactWorkCenterSafeDock \? "compact-work-center-safe-rail" : "free"/
@@ -34,7 +28,7 @@ test("phone and tablet Work Center use a reachable right-side Companion safe doc
   assert.match(assistantSource, /assistantCompanionAskMeetro/);
 });
 
-test("Current Job and list cards reserve a compact-workspace rail for Ask Meetro", () => {
+test("Current Job and list cards scroll above the reserved Ask Meetro lane", () => {
   assert.match(
     dashboardSource,
     /<CompactCurrentJobHeader/
@@ -50,15 +44,9 @@ test("Current Job and list cards reserve a compact-workspace rail for Ask Meetro
     /className="meetro-visual-surface meetro-current-job-list-card"/
   );
 
-  assert.match(
-    cssSource,
-    /@media \(max-width: 1099px\)[\s\S]*\.compact-current-job-header,[\s\S]*\.meetro-current-job-list-card[\s\S]*padding-right: calc\(164px \+ env\(safe-area-inset-right, 0px\)\) !important;/
-  );
-
-  assert.match(
-    cssSource,
-    /@media \(max-width: 520px\) and \(orientation: portrait\)[\s\S]*\.compact-current-job-header \{[\s\S]*padding-right: 14px !important;/
-  );
+  assert.match(cssSource, /height: calc\(100dvh - var\(--work-center-dock-bottom\) - var\(--work-center-launcher-height\) - 2 \* var\(--work-center-dock-gap\)\)/);
+  assert.match(cssSource, /--meetro-visual-viewport-bottom-gap/);
+  assert.match(cssSource, /padding-right: 16px !important/);
 
   assert.doesNotMatch(
     cssSource,

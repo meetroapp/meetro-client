@@ -561,7 +561,7 @@ test("Work In Progress renders one governed Complete Work CTA and a cancelable c
   assert.match(source, /completionInFlight\.current/);
 });
 
-test("success waits for the canonical response, refreshes execution, Work Plan, and live Job, then shows Invoice handoff", () => {
+test("success waits for the canonical response, refreshes execution and Work Plan, then points to governed Job review", () => {
   const source = readFileSync(
     new URL("../src/components/ProfessionalWorkPlanWorkspace.jsx", import.meta.url),
     "utf8"
@@ -573,7 +573,7 @@ test("success waits for the canonical response, refreshes execution, Work Plan, 
   assert.match(submit, /execution: result\.execution/);
   assert.match(submit, /setRefreshKey/);
   assert.match(submit, /await Promise\.resolve\(onCanonicalChange/);
-  assert.match(source, /Work Completed[\s\S]*The approved work has been finished\.[\s\S]*Prepare Final Invoice/);
+  assert.match(source, /Work Completed[\s\S]*The approved work has been finished\.[\s\S]*Complete the governed Job review/);
 });
 
 test("normal client path contains no Activity, Workstream, Job completion, Invoice, payment, or History mutation chain", () => {

@@ -133,7 +133,7 @@ for (const viewport of MOBILE_VIEWPORTS) test(`mobile portrait ${viewport.width}
 test("New Quote customer sheets support both paths and Back/Cancel without document writes", async (t) => {
   const w = await mount(t, { generic: true });
   assert.match(w.text(), /Who is this Quote for/);
-  await w.click("External Customer"); assert.match(w.text(), /Use a saved Customer relationship/);
+  await w.click("External Customer"); assert.match(w.text(), /Use a saved customer/);
   await w.click("Add New Customer"); assert.ok(document.querySelector('.new-quote-customer-setup form input[required]'));
   await w.click("Back"); await w.click("Back");
   await w.click("Meetro Customer"); await w.click("Jordan Lee");

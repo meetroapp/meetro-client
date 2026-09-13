@@ -745,6 +745,7 @@ export async function fetchCanonicalVisits({
   jobId,
   purpose,
   evaluationId = null,
+  includeAuthority = false,
   approvedQuoteDecisionId = null,
   quoteApprovalId = null,
   setPage,
@@ -810,6 +811,16 @@ export async function fetchCanonicalVisits({
       );
   }).length) {
     throw invalidResponse();
+  }
+  if (includeAuthority) {
+    // Keep the authenticated collection action; an empty list is not permission.
+    if (purpose !== "EVALUATION" || typeof data.actions?.canPropose !== "boolean") {
+      throw invalidResponse("The server returned invalid Visit scheduling actions.");
+    }
+    return Object.freeze({
+      visits,
+      actions: Object.freeze({ canPropose: data.actions.canPropose }),
+    });
   }
   return visits;
 }

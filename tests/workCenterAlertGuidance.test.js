@@ -39,9 +39,11 @@ test("canonical Job panels expose owned unread lifecycle counts", () => {
   for (const marker of [
     "evaluationAlertCount",
     "quoteAlertPanelCount",
-    "depositSchedulingAlertCount",
+    "depositAlertCount",
+    "scheduleAlertCount",
     "workPlanAlertCount",
-    "completionInvoiceAlertCount",
+    "completeJobAlertCount",
+    "invoiceAlertCount",
   ]) {
     assert.match(
       dashboard,
@@ -61,8 +63,10 @@ test("canonical Job panels expose owned unread lifecycle counts", () => {
 
   assert.match(
     dashboard,
-    /id="canonical-job-deposit-scheduling"[\s\S]{0,240}attentionCount=\{depositSchedulingAlertCount\}/
+    /id="canonical-job-deposit"[\s\S]{0,240}attentionCount=\{depositAlertCount\}/
   );
+
+  assert.match(dashboard, /id="canonical-job-schedule"[\s\S]{0,240}attentionCount=\{scheduleAlertCount\}/);
 
   assert.match(
     dashboard,
@@ -71,8 +75,9 @@ test("canonical Job panels expose owned unread lifecycle counts", () => {
 
   assert.match(
     dashboard,
-    /id="canonical-job-completion-invoice"[\s\S]{0,240}attentionCount=\{completionInvoiceAlertCount\}/
+    /id="canonical-job-complete"[\s\S]{0,240}attentionCount=\{completeJobAlertCount\}/
   );
+  assert.match(dashboard, /id="canonical-job-invoice"[\s\S]{0,240}attentionCount=\{invoiceAlertCount\}/);
 });
 
 test("Alert stage is part of exact Work Center route application", () => {

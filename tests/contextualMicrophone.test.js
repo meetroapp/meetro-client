@@ -115,11 +115,12 @@ test("shared microphone remains transcript-only across all four workflows", () =
 
   assert.match(control, /onTranscript\?\.\(result\.transcript\)/);
   assert.doesNotMatch(control, /onRequest|handleConversationSubmit|evaluation\.complete|quote\.issue|invoice\.issue/);
-  assert.match(panel, /WorkflowMicrophoneInput/);
+  assert.match(panel, /UniversalAskMeetroEntry/);
+  assert.doesNotMatch(panel, /WorkflowMicrophoneInput/);
   assert.match(upload, /contextLabel="job_request"/);
   assert.match(evaluation, /contextLabel="evaluation"/);
   assert.match(quote, /voiceContextLabel="estimate"/);
-  assert.match(invoice, /contextLabel="invoice"/);
+  assert.match(invoice, /useAskMeetroContext/);
   assert.match(documentWorkspace, /contextLabel=\{\s*activeDocument === "quote"\s*\?\s*"estimate"\s*:\s*"invoice"\s*\}/);
   assert.doesNotMatch(documentWorkspace, /contextLabel=\{`business-\$\{activeDocument\}`\}/);
   assert.match(documentWorkspace, /onTranscript=\{\s*\(transcript\)\s*=>\s*setMessage\(\(current\)\s*=>\s*\[current, transcript\]/);

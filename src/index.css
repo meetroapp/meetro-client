@@ -5748,6 +5748,535 @@ button {
 }
 /* END 90453 PHONE CURRENT JOB */
 
+/* R5 canonical seven-stage Work Center */
+.work-center-overview {
+  display: grid;
+  gap: 18px;
+  width: min(100%, 1024px);
+  min-width: 0;
+  margin: 0 auto 24px !important;
+  padding-bottom: calc(var(--meetro-mobile-persistent-control-clearance, 0px) + 24px);
+}
+
+.work-center-overview__header h1 {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(34px, 4.3vw, 44px);
+  line-height: 1.04;
+  letter-spacing: -0.035em;
+}
+
+.work-center-overview__header p {
+  margin: 6px 0 0;
+  color: #52627a;
+  font-size: 16px;
+  line-height: 1.4;
+}
+
+.work-center-opportunities-banner {
+  position: relative;
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) minmax(210px, 0.55fr);
+  align-items: center;
+  gap: 18px;
+  min-width: 0;
+  min-height: 148px;
+  padding: 22px;
+  overflow: hidden;
+  border-color: #cce5d7;
+  border-radius: 18px;
+  background:
+    radial-gradient(circle at 85% 25%, rgba(119, 181, 211, 0.34), transparent 34%),
+    linear-gradient(112deg, #e9f8ef 0%, #f4fbf7 58%, #dceee7 100%);
+}
+
+.work-center-opportunities-banner::after {
+  content: "";
+  position: absolute;
+  inset: 0 0 0 58%;
+  pointer-events: none;
+  background: linear-gradient(120deg, transparent, rgba(4, 93, 62, 0.08));
+}
+
+.work-center-opportunities-banner__icon {
+  display: grid;
+  place-items: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.72);
+  color: #075f3d;
+  box-shadow: 0 10px 28px rgba(7, 95, 61, 0.12);
+}
+
+.work-center-opportunities-banner__copy {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  justify-items: start;
+  gap: 4px;
+  min-width: 0;
+  color: #0d2138;
+}
+
+.work-center-opportunities-banner__copy > span {
+  color: #5e6c6a;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0.075em;
+  text-transform: uppercase;
+}
+
+.work-center-opportunities-banner__copy h2,
+.work-center-opportunities-banner__copy p {
+  margin: 0;
+}
+
+.work-center-opportunities-banner__copy h2 {
+  font-size: clamp(23px, 3vw, 30px);
+  line-height: 1.1;
+}
+
+.work-center-opportunities-banner__copy p {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.work-center-opportunities-banner__copy button {
+  min-height: 44px;
+  margin-top: 7px;
+  padding: 9px 18px;
+  border: 0;
+  border-radius: 10px;
+  background: #066443;
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.work-center-opportunities-banner__summary {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px 18px;
+  border: 1px solid rgba(61, 84, 75, 0.16);
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.9);
+  color: #2b3b52;
+  box-shadow: 0 12px 24px rgba(37, 65, 43, 0.08);
+}
+
+.work-center-opportunities-banner__summary span {
+  display: flex;
+  gap: 10px;
+  font-size: 14px;
+}
+
+.work-center-opportunities-banner__summary strong { color: #0a6844; }
+
+.work-center-active-jobs {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.work-center-active-jobs__toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  min-width: 0;
+}
+
+.work-center-active-jobs__toolbar h2 {
+  margin: 0;
+  color: #0f172a;
+  font-size: clamp(25px, 3vw, 32px);
+  line-height: 1.1;
+}
+
+.work-center-active-jobs__controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  width: min(100%, 480px);
+  min-width: 0;
+}
+
+.work-center-active-jobs__search {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 48px;
+  padding: 0 12px;
+  border: 1px solid #d7dfe8;
+  border-radius: 12px;
+  background: #fff;
+  color: #64748b;
+  box-sizing: border-box;
+}
+
+.work-center-active-jobs__search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #12233d;
+  font: inherit;
+  font-size: 16px;
+}
+
+.work-center-active-jobs__filter-button {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  max-width: 144px;
+  min-width: 48px;
+  min-height: 48px;
+  padding: 8px 10px;
+  font: inherit;
+  font-size: 14px;
+  overflow-wrap: normal;
+  word-break: normal;
+  border: 1px solid #d7dfe8;
+  border-radius: 12px;
+  background: #eef3f5;
+  color: #38506c;
+  cursor: pointer;
+}
+
+.work-center-active-jobs__filter {
+  display: grid;
+  grid-template-columns: auto minmax(180px, 280px);
+  align-items: center;
+  justify-content: end;
+  gap: 10px;
+  color: #52627a;
+  font-size: 14px;
+  font-weight: 750;
+}
+
+.work-center-active-jobs__filter select {
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 1px solid #d7dfe8;
+  border-radius: 10px;
+  background: #fff;
+  color: #12233d;
+  font: inherit;
+}
+
+.work-center-active-jobs__list {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.work-center-job-card {
+  position: relative;
+  display: grid;
+  grid-template-columns: 112px minmax(0, 1fr) minmax(0, 0.9fr) 48px;
+  grid-template-areas:
+    "image identity state open"
+    "lifecycle lifecycle lifecycle lifecycle";
+  align-items: center;
+  gap: 12px 18px;
+  width: 100%;
+  min-width: 0;
+  padding: 16px;
+  color: #102039;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+/* Touch scrolling must not latch a different card shadow/border. */
+@media (hover: hover) and (pointer: fine) {
+  .work-center-job-card:hover { border-color: #8fbda3; box-shadow: 0 13px 30px rgba(20, 53, 31, 0.11); }
+}
+.work-center-job-card:focus-visible { outline: 3px solid rgba(5, 123, 80, 0.32); outline-offset: 2px; }
+
+.work-center-job-card__image {
+  grid-area: image;
+  display: grid;
+  place-items: center;
+  width: 112px;
+  height: 92px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: linear-gradient(145deg, #dcefe4, #a8c9b6);
+  color: #0a6844;
+  font-size: 32px;
+  font-weight: 900;
+}
+
+.work-center-job-card__image img { width: 100%; height: 100%; object-fit: cover; }
+
+.work-center-job-card__identity,
+.work-center-job-card__state {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.work-center-job-card__identity { grid-area: identity; }
+.work-center-job-card__identity > strong { font-size: 18px; line-height: 1.2; }
+.work-center-job-card__identity > span { color: #596a83; font-size: 14px; line-height: 1.3; }
+.work-center-job-card__identity .work-center-job-card__service { color: #263c5a; font-weight: 750; }
+
+.work-center-job-card__state { grid-area: state; }
+.work-center-job-card__state > span:not(.work-center-job-card__status) { color: #5d6d85; font-size: 13px; }
+.work-center-job-card__state > strong { color: #102039; font-size: 15px; line-height: 1.3; }
+
+.work-center-job-card__status {
+  justify-self: start;
+  max-width: 100%;
+  margin-bottom: 3px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: #dcfce7;
+  color: #087443;
+  font-size: 13px;
+  font-weight: 850;
+  line-height: 1.2;
+}
+
+.work-center-job-card__status--quote { background: #fee2e2; color: #bb1830; }
+.work-center-job-card__status--deposit { background: #fff0dc; color: #c25e00; }
+.work-center-job-card__status--schedule,
+.work-center-job-card__status--workPlan { background: #dbeafe; color: #0865c5; }
+
+.work-center-job-card__open {
+  grid-area: open;
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  border: 1px solid #dbe2e8;
+  border-radius: 10px;
+  background: #f7f9fa;
+  color: #0f2140;
+  font-size: 32px;
+  line-height: 1;
+}
+
+.work-center-job-card__lifecycle { grid-area: lifecycle; min-width: 0; }
+
+.work-center-lifecycle {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+  min-width: 0;
+}
+
+.work-center-lifecycle__stage {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  color: #6c7b90;
+}
+
+.work-center-lifecycle__indicator {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border: 1.5px solid #aab5c3;
+  border-radius: 50%;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.work-center-lifecycle__label {
+  min-width: 0;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.15;
+}
+
+.work-center-lifecycle__stage--complete { color: #08764a; }
+.work-center-lifecycle__stage--complete .work-center-lifecycle__indicator { border-color: #0aa35f; background: #0aa35f; color: #fff; }
+.work-center-lifecycle__stage--current { color: #102039; font-weight: 850; }
+.work-center-lifecycle__stage--current .work-center-lifecycle__indicator { border: 3px solid #2d7ff0; color: #1368d5; }
+
+.work-center-job-lifecycle-overview {
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+  padding: 4px 0 2px;
+}
+
+.work-center-lifecycle-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.work-center-lifecycle-heading h2 { margin: 0; color: #0f172a; font-size: 25px; }
+.work-center-lifecycle-heading span { color: #34456a; font-size: 15px; }
+
+.work-center-accordion--complete .work-center-accordion__icon {
+  background: #dcfce7;
+  color: #09945a;
+}
+
+.work-center-accordion--current {
+  border: 2px solid #0aa35f;
+  background: linear-gradient(110deg, #f0fbf5, #fff);
+  box-shadow: 0 12px 30px rgba(10, 163, 95, 0.1);
+}
+
+.work-center-accordion--current .work-center-accordion__icon {
+  background: #d8f5e5;
+  color: #08764a;
+  font-weight: 900;
+}
+
+.work-center-accordion--locked { background: rgba(255, 255, 255, 0.72); }
+.work-center-accordion--locked .work-center-accordion__icon { background: #eef1f3; color: #68778a; }
+
+.work-center-accordion__stage-label {
+  justify-self: start;
+  width: fit-content;
+  margin-top: 2px;
+  color: #66758a !important;
+  font-size: 12px !important;
+  font-weight: 850;
+}
+
+.work-center-accordion__stage-label--complete,
+.work-center-accordion__stage-label--current { color: #08764a !important; }
+
+.work-center-lifecycle-lock-copy,
+.work-center-lifecycle-complete-copy {
+  margin: 14px 0 0;
+  padding: 12px 14px;
+  border-radius: 10px;
+  background: #f4f6f7;
+  color: #52627a;
+  font-size: 15px;
+  line-height: 1.45;
+}
+
+.work-center-lifecycle-complete-copy { background: #eef9f2; color: #17613c; }
+
+.compact-current-job-header__identity-group {
+  display: grid;
+  grid-template-columns: 132px minmax(0, 1fr);
+  align-items: start;
+  gap: 16px;
+  min-width: 0;
+}
+
+.compact-current-job-header__image {
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 112px;
+  overflow: hidden;
+  border-radius: 13px;
+  background: linear-gradient(145deg, #dcefe4, #a8c9b6);
+  color: #0a6844;
+  font-size: 36px;
+  font-weight: 900;
+}
+
+.compact-current-job-header__image img { width: 100%; height: 100%; object-fit: cover; }
+
+@media (min-width: 1100px) {
+  #root[data-app-layout="desktop"] .work-center-overview { width: min(100%, 1100px); }
+  #root[data-app-layout="desktop"] .work-center-job-card { grid-template-columns: 116px minmax(0, 1fr) minmax(0, 0.8fr) 48px; }
+}
+
+@media (min-width: 768px) and (max-width: 1099px) {
+  #root[data-app-layout="tablet"] .work-center-overview {
+    width: 100%;
+    padding-right: 0;
+    box-sizing: border-box;
+  }
+
+  #root[data-app-layout="tablet"] .work-center-workspace {
+    padding-right: clamp(16px, 3vw, 30px);
+  }
+
+  #root[data-app-layout="tablet"] .compact-current-job-header,
+  #root[data-app-layout="tablet"] .meetro-current-job-list-card {
+    padding-right: 16px !important;
+  }
+
+  #root[data-app-layout="tablet"] .work-center-job-card {
+    grid-template-columns: 94px minmax(0, 1fr) minmax(0, 0.9fr) 44px;
+    gap: 10px 12px;
+  }
+
+  #root[data-app-layout="tablet"] .work-center-job-card__image { width: 94px; height: 82px; }
+  #root[data-app-layout="tablet"] .work-center-lifecycle { gap: 5px; }
+  #root[data-app-layout="tablet"] .work-center-lifecycle__stage { grid-template-columns: 18px minmax(0, 1fr); gap: 3px; }
+  #root[data-app-layout="tablet"] .work-center-lifecycle__indicator { width: 18px; height: 18px; }
+  #root[data-app-layout="tablet"] .work-center-lifecycle__label { font-size: 12px; }
+}
+
+@media (max-width: 767px) {
+  .work-center-overview { gap: 16px; padding-bottom: calc(var(--meetro-mobile-persistent-control-clearance, 128px) + env(safe-area-inset-bottom, 0px)); }
+  .work-center-overview__header h1 { font-size: 38px; }
+  .work-center-opportunities-banner { grid-template-columns: 58px minmax(0, 1fr); min-height: 0; padding: 16px; gap: 12px; }
+  .work-center-opportunities-banner__icon { width: 54px; height: 54px; }
+  .work-center-opportunities-banner__summary { grid-column: 1 / -1; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: 12px; }
+  .work-center-opportunities-banner__summary span { display: grid; gap: 2px; font-size: 12px; }
+  .work-center-active-jobs__toolbar { align-items: flex-end; flex-wrap: wrap; }
+  .work-center-active-jobs__controls { width: 100%; }
+  .work-center-active-jobs__filter { grid-template-columns: minmax(0, 1fr); justify-content: stretch; }
+  .work-center-job-card {
+    grid-template-columns: 96px minmax(0, 1fr) 44px;
+    grid-template-areas:
+      "image identity open"
+      "state state state"
+      "lifecycle lifecycle lifecycle";
+    align-items: start;
+    padding: 13px;
+    gap: 11px 12px;
+  }
+  .work-center-job-card__image { width: 96px; height: 96px; }
+  .work-center-job-card__state { grid-template-columns: minmax(0, 1fr); padding-top: 10px; border-top: 1px solid #e1e6eb; }
+  .work-center-job-card__identity > strong { font-size: 17px; }
+  .work-center-job-card__identity > span,
+  .work-center-job-card__state > strong,
+  .work-center-job-card__state > span:not(.work-center-job-card__status) { font-size: 15px; }
+  .work-center-lifecycle { gap: 4px; }
+  .work-center-lifecycle__stage { grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: 4px; text-align: center; }
+  .work-center-lifecycle__label { font-size: 12.5px; line-height: 1.1; overflow-wrap: normal; word-break: normal; }
+  .work-center-lifecycle-heading { align-items: center; }
+  .work-center-lifecycle-heading h2 { font-size: 24px; }
+  .work-center-lifecycle-heading span { font-size: 14px; }
+  .compact-current-job-header__identity-group { grid-template-columns: 112px minmax(0, 1fr); gap: 13px; }
+  .compact-current-job-header__image { width: 112px; height: 112px; }
+}
+
+@media (max-width: 430px) {
+  .work-center-opportunities-banner { grid-template-columns: minmax(0, 1fr); }
+  .work-center-opportunities-banner__summary { grid-column: 1; }
+  .work-center-job-card { grid-template-columns: 82px minmax(0, 1fr) 44px; }
+  .work-center-job-card__image { width: 82px; height: 82px; }
+  .compact-current-job-header__identity-group { grid-template-columns: 96px minmax(0, 1fr); }
+  .compact-current-job-header__image { width: 96px; height: 96px; }
+}
+/* END R5 canonical seven-stage Work Center */
+
 .work-center-visual-review-page {
   min-height: 100vh;
   box-sizing: border-box;
@@ -5912,3 +6441,360 @@ button {
     flex-wrap: wrap;
   }
 }
+
+/* R5 responsive polish: content-lane sizing, no new workflow authority. */
+.contractor-dashboard {
+  min-width: 0;
+  text-align: left;
+}
+/* Keep containment below the shell: BottomNav owns the fixed sidebar and the
+   post-sidebar page width. It must never be inside this query container. */
+.work-center-content-lane {
+  container: work-center / inline-size;
+  min-width: 0;
+  width: 100%;
+}
+.work-center-opportunities-banner {
+  grid-template-columns: 44px minmax(0, 1fr) auto;
+  gap: 12px;
+  min-height: 0;
+  padding: 16px;
+  overflow: visible;
+}
+.work-center-opportunities-banner__icon { width: 44px; height: 44px; }
+.work-center-opportunities-banner__copy h2 { font-size: 22px; }
+.work-center-opportunities-banner__view {
+  min-height: 44px;
+  max-width: 220px;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 12px;
+  background: #066443;
+  color: white;
+  font: inherit;
+  font-weight: 750;
+  cursor: pointer;
+}
+.work-center-opportunities-banner__summary {
+  grid-column: 1 / -1;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0;
+  background: transparent;
+  border: 0;
+  box-shadow: none;
+}
+.work-center-opportunities-banner__summary button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14px;
+  min-width: 0;
+  min-height: 64px;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid #d7e9df;
+  border-radius: 12px;
+  background: #fcfffd;
+  color: #233854;
+  font: inherit;
+  cursor: pointer;
+}
+.work-center-opportunities-banner__summary button strong { grid-column: 1; font-size: 20px; }
+.work-center-opportunities-banner__summary button span { font-size: 14px; line-height: 1.3; overflow-wrap: normal; word-break: normal; }
+.work-center-opportunities-banner__summary button span:last-child { grid-column: 2; grid-row: 1 / 3; align-self: center; font-size: 25px; }
+.work-center-opportunities-banner button:focus-visible,
+.opportunity-presentation-filters button:focus-visible { outline: 3px solid #2d7ff0; outline-offset: 2px; }
+.opportunity-presentation-filters { display: flex; flex-wrap: wrap; gap: 8px; margin: 16px 0; }
+.opportunity-presentation-filters button { min-height: 44px; padding: 10px 14px; border: 1px solid #bbd5c5; border-radius: 10px; background: #fff; color: #123e2b; font: inherit; cursor: pointer; }
+.opportunity-presentation-filters button[aria-pressed="true"] { background: #def4e7; border-color: #087443; }
+.work-center-active-jobs__toolbar { display: grid; grid-template-columns: minmax(0, 1fr); }
+.work-center-active-jobs__controls { grid-row: 1; width: 100%; max-width: none; }
+.work-center-active-jobs__toolbar h2 { grid-row: 2; }
+.work-center-lifecycle { display: grid; grid-template-columns: minmax(0, 1fr); gap: 16px; padding: 14px 4px; border-radius: 14px; background: #f6f9fa; box-sizing: border-box; }
+.work-center-lifecycle__row { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 4px; min-width: 0; }
+.work-center-lifecycle__row:last-child { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.work-center-lifecycle .work-center-lifecycle__stage { grid-template-columns: minmax(0, 1fr); justify-items: center; align-content: start; gap: 6px; text-align: center; }
+.work-center-lifecycle .work-center-lifecycle__indicator { width: 26px; height: 26px; font-size: 13px; box-sizing: border-box; }
+.work-center-lifecycle .work-center-lifecycle__label { font-size: 14px; line-height: 1.3; overflow-wrap: normal; word-break: normal; hyphens: none; }
+/* Equal rows remain readable in both tablet orientations, including Split View. */
+#root[data-app-layout="tablet"] .work-center-lifecycle { grid-template-columns: minmax(0, 1fr); gap: 18px; }
+#root[data-app-layout="tablet"] .work-center-lifecycle__label { font-size: 15px; }
+#root[data-app-layout="tablet"] .work-center-lifecycle__stage { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+#root[data-app-layout="tablet"] .work-center-lifecycle__indicator { width: 26px; height: 26px; }
+.work-center-job-card__actions { grid-area: open; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+.work-center-job-card :is(.work-center-job-card__identity, .work-center-job-card__state) { overflow-wrap: normal; word-break: normal; }
+.work-center-job-card__status { box-sizing: border-box; }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header { box-sizing: border-box; padding-right: 16px !important; }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header__primary { grid-template-columns: minmax(0, 1fr); }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header__state {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "status" "next" "responsibility" "action" "blocker";
+  gap: 12px;
+}
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header__state-item { min-width: 0; padding: 0; border: 0; }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header__state-item--status { grid-area: status; }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header__state-item--next { grid-area: next; }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header__state-item--responsibility { grid-area: responsibility; }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header__action { grid-area: action; }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header__blocker { grid-area: blocker; }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header :is(h2, p, strong, summary) { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: normal; word-break: normal; }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header__state-item strong { font-size: 16px; line-height: 1.4; }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header__details { grid-template-columns: minmax(0, 1fr); }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header__details > * { grid-column: 1; min-width: 0; }
+#root[data-app-layout] .contractor-dashboard .compact-current-job-header__action button { min-height: 44px !important; }
+.completion-review-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; background: transparent !important; border: 0 !important; gap: 8px !important; }
+.completion-review-metrics > div { border: 1px solid #dbe3df; border-radius: 10px; }
+@container work-center (max-width: 760px) {
+  #root .contractor-dashboard .work-center-job-card { grid-template-columns: 80px minmax(0, 1fr); grid-template-areas: "image identity" "state state" "lifecycle lifecycle" "open open"; gap: 12px; padding: 16px; }
+  #root .contractor-dashboard .work-center-job-card__image { width: 80px; height: 80px; }
+  #root .contractor-dashboard .work-center-job-card__identity > span,
+  #root .contractor-dashboard .work-center-job-card__state > span:not(.work-center-job-card__status) { font-size: 15px; }
+  #root[data-app-layout] .contractor-dashboard .compact-current-job-header__identity-group { grid-template-columns: 80px minmax(0, 1fr); gap: 12px; }
+  #root[data-app-layout] .contractor-dashboard .compact-current-job-header__image { width: 80px; height: 80px; }
+  .work-center-opportunities-banner { grid-template-columns: 44px minmax(0, 1fr); padding: 12px; gap: 10px; text-align: left; }
+  .work-center-opportunities-banner__copy { display: contents; }
+  .work-center-opportunities-banner__copy h2 { grid-column: 2; font-size: 20px; }
+  .work-center-opportunities-banner__copy p { grid-column: 1 / -1; grid-row: 2; font-size: 15px; }
+  .work-center-opportunities-banner__view { grid-column: 1 / -1; grid-row: 3; justify-self: stretch; max-width: none; font-size: 14px; padding: 8px; }
+  .work-center-opportunities-banner__view > span { display: none; }
+  .work-center-opportunities-banner__summary { grid-column: 1 / -1; gap: 6px; }
+  .work-center-opportunities-banner__summary button { padding: 10px 8px; grid-template-columns: minmax(0, 1fr); }
+  .work-center-opportunities-banner__summary button span:last-child { display: none; }
+}
+@container work-center (max-width: 480px) {
+  .completion-review-metrics { grid-template-columns: minmax(0, 1fr) !important; }
+}
+@container work-center (min-width: 761px) {
+  #root .contractor-dashboard .work-center-job-card { grid-template-columns: 100px minmax(0, 1fr) minmax(0, 0.85fr) auto; }
+  #root[data-app-layout] .contractor-dashboard .compact-current-job-header__primary { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); }
+}
+/* One 50px launcher + two 6px gaps above the existing navigation/viewport
+   clearance. Only this scroll surface reserves space; no second nav spacer. */
+#root { --work-center-launcher-height: 50px; --work-center-dock-gap: 6px; --work-center-dock-bottom: calc(var(--meetro-visual-viewport-bottom-gap, 0px) + var(--meetro-bottom-nav-height, 74px)); }
+#root:is([data-app-layout="tablet"], [data-app-layout="desktop"]) { --work-center-dock-bottom: calc(var(--meetro-visual-viewport-bottom-gap, 0px) + env(safe-area-inset-bottom, 0px)); }
+#root:is([data-app-layout="mobile"], [data-app-layout="tablet"], [data-app-layout="desktop"]) .contractor-dashboard {
+  min-height: 0 !important;
+  height: calc(100dvh - var(--work-center-dock-bottom) - var(--work-center-launcher-height) - 2 * var(--work-center-dock-gap));
+  overflow: auto;
+  overscroll-behavior-y: contain;
+  padding-top: max(16px, calc(env(safe-area-inset-top, 0px) + 12px)) !important;
+  padding-bottom: 8px !important;
+  scroll-padding-block: 8px;
+}
+#root:is([data-app-layout="mobile"], [data-app-layout="tablet"], [data-app-layout="desktop"]) .contractor-dashboard .work-center-overview { padding-block: 0 !important; margin-block: 0 !important; }
+#root .contractor-dashboard > .bottom-nav-content-spacer { display: none; }
+#root .meetro-assistant-launcher[data-containment-mode="compact-work-center-safe-rail"] { max-width: calc(100% - var(--meetro-sidebar-width, 0px) - 32px); height: var(--work-center-launcher-height); min-height: 44px; animation: none; }
+#root[data-app-layout="mobile"] .meetro-assistant-launcher[data-containment-mode="compact-work-center-safe-rail"] { max-width: calc(100% - 32px); }
+/* END R5 responsive polish */
+
+/* R5.4 Active Job cards: composition follows the usable Work Center lane.
+   The existing button, stage nodes and Job-opening handler never change. */
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card {
+  grid-template-columns: 72px minmax(0, 1fr);
+  grid-template-areas: "image identity" "state state" "open open" "lifecycle lifecycle";
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  height: auto;
+  padding: 16px;
+  align-items: center;
+}
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__image { width: 72px; height: 72px; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__identity,
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__state {
+  min-width: 0;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__identity > strong { font-size: 18px; line-height: 1.3; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__identity > span { font-size: 14px; line-height: 1.4; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__state {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 4px;
+  padding-top: 12px;
+  border-top: 1px solid #e1e6eb;
+}
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__state > span:not(.work-center-job-card__status) { font-size: 14px; line-height: 1.4; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__state > strong { font-size: 15px; line-height: 1.4; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__status { font-size: 14px; line-height: 1.3; margin: 0; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__actions { justify-self: end; min-width: 44px; min-height: 44px; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__open { flex: 0 0 44px; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  padding: 10px 4px;
+}
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__stage { gap: 4px; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__label { font-size: 14px; line-height: 1.3; }
+
+/* 560px leaves room for identity plus a 44px action, and three readable
+   state columns. Below it the state and action stack without squeezing words. */
+@container work-center (min-width: 560px) {
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card {
+    grid-template-columns: 72px minmax(0, 1fr) auto;
+    grid-template-areas: "image identity open" "state state state" "lifecycle lifecycle lifecycle";
+  }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__state {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr) minmax(0, 1fr);
+    gap: 4px 16px;
+    align-items: start;
+  }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__state > :first-child { grid-column: 1; grid-row: 1 / 3; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__state > :nth-child(2) { grid-column: 2; grid-row: 1; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__state > strong { grid-column: 2; grid-row: 2; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__state > :last-child { grid-column: 3; grid-row: 1 / 3; }
+}
+
+/* 900px fits two useful summary columns and seven 110px-ish stage cells.
+   Flatten only the visual row wrappers; all seven mounted stage nodes remain. */
+@container work-center (min-width: 900px) {
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card {
+    grid-template-columns: 80px minmax(0, 1.2fr) minmax(0, 1fr) auto;
+    grid-template-areas: "image identity state open" "lifecycle lifecycle lifecycle lifecycle";
+    gap: 8px 16px;
+    padding: 14px;
+  }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__status { padding: 4px 10px; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__image { width: 80px; height: 80px; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__state { grid-template-columns: minmax(0, 1fr); padding-top: 0; border-top: 0; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__state > :nth-child(n) { grid-column: auto; grid-row: auto; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; padding: 8px 4px; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__row { display: contents; }
+}
+/* END R5.4 Active Job cards */
+
+/* R5.4B action-first cards: governed text and stage nodes, decorative links. */
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__state > strong { font-size: 17px; line-height: 1.25; font-weight: 800; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__responsibility { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card__responsibility > :last-child { color: #263c5a; font-weight: 600; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle { width: 100%; max-width: 980px; justify-self: center; margin-inline: auto; background: transparent; border-radius: 0; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__stage { position: relative; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__stage::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: calc(50% + 17px);
+  width: calc(100% - 30px);
+  height: 2px;
+  background: #cbd5e1;
+  pointer-events: none;
+}
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__stage--complete::after { background: #0aa35f; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__stage:last-child::after { display: none; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__indicator { position: relative; z-index: 1; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__stage--current .work-center-lifecycle__label { color: #1368d5; font-weight: 800; }
+@container work-center (min-width: 900px) {
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card { grid-template-columns: 80px minmax(0, 1fr) minmax(0, 1.2fr) auto; padding: 10px 14px; gap: 6px 16px; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__identity { gap: 1px; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__identity > strong { line-height: 1.2; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__identity > span { line-height: 1.25; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__state { gap: 2px; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card__status { padding: 3px 8px; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle { padding: 2px 4px; gap: 8px; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__indicator { width: 22px; height: 22px; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__stage { gap: 3px; }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__stage::after { top: 10px; left: calc(50% + 15px); width: calc(100% - 22px); }
+  #root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__row:first-child .work-center-lifecycle__stage:last-child::after { display: block; }
+}
+/* END R5.4B action-first cards */
+
+/* R5.4C unified Job Overview: the existing header owns the existing progress. */
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header {
+  container: job-overview / inline-size;
+  gap: 10px;
+  height: auto;
+}
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header :is(h2, p, strong, span, summary, li) {
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__primary {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+}
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__identity-group {
+  grid-template-columns: 80px minmax(0, 1fr);
+  gap: 12px;
+}
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__image { width: 80px; height: 80px; }
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__state {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-areas: "status" "next" "responsibility" "action" "blocker";
+  gap: 7px;
+  justify-content: stretch;
+}
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__state-item {
+  min-width: 0;
+  min-height: 0;
+  padding: 0;
+  border: 0;
+}
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__state-item--next strong {
+  font-size: 17px;
+  line-height: 1.25;
+  font-weight: 800;
+}
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__action button {
+  min-width: 44px;
+  min-height: 44px !important;
+}
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__details { grid-template-columns: minmax(0, 1fr); }
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__details > * { grid-column: 1; min-width: 0; }
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  padding-top: 10px;
+  border-top: 1px solid #dce5df;
+}
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle-heading {
+  width: min(100%, 980px);
+  margin-inline: auto;
+}
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle-heading h2 { font-size: 18px; }
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle-heading span { font-size: 14px; color: #64748b; }
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle {
+  width: min(100%, 980px);
+  margin-inline: auto;
+  padding: 4px;
+  gap: 12px;
+  background: transparent;
+  border-radius: 0;
+}
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__stage { position: relative; gap: 4px; }
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__stage::after {
+  content: "";
+  position: absolute;
+  top: 12px;
+  left: calc(50% + 17px);
+  width: calc(100% - 30px);
+  height: 2px;
+  background: #cbd5e1;
+  pointer-events: none;
+}
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__stage--complete::after { background: #0aa35f; }
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__stage:last-child::after { display: none; }
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__indicator { position: relative; z-index: 1; }
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__stage--current .work-center-lifecycle__label { color: #1368d5; font-weight: 800; }
+
+@container work-center (min-width: 900px) {
+  #root .contractor-dashboard .work-center-content-lane .compact-current-job-header { padding: 12px 14px; }
+  #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__primary { grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 16px; }
+  #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__identity-group { grid-template-columns: 96px minmax(0, 1fr); gap: 12px; }
+  #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__image { width: 96px; height: 88px; }
+  #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__details { grid-template-columns: minmax(0, 1fr) auto auto; }
+  #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__details > * { grid-column: auto; }
+  #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle { grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 8px; }
+  #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__row { display: contents; }
+  #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__indicator { width: 22px; height: 22px; }
+  #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__stage::after { top: 10px; left: calc(50% + 15px); width: calc(100% - 22px); }
+  #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__row:first-child .work-center-lifecycle__stage:last-child::after { display: block; }
+}
+/* END R5.4C unified Job Overview */

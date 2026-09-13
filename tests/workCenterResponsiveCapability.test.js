@@ -139,14 +139,14 @@ test("Current Job truth and Ask Meetro remain separated at compact breakpoints",
     cssSource,
     "@media (min-width: 768px) and (max-width: 1179px)"
   );
-  for (const label of ["nextStep", "whoActsNext"]) {
+  for (const label of ["nextStep", "wc52nextUp"]) {
     assert.match(dashboardSource, new RegExp(label, "i"));
   }
   assert.match(dashboardSource, /jobDisplayStatus/);
   assert.match(dashboardSource, /jobDisplayBlocker/);
   assert.match(
     assistantSource,
-    /!appLayoutMetrics\.desktopMode && currentPage === "contractorDashboard"/
+    /currentPage === "contractorDashboard"/
   );
   assert.doesNotMatch(
     tabletAssistantCss,
@@ -154,7 +154,7 @@ test("Current Job truth and Ask Meetro remain separated at compact breakpoints",
   );
   assert.match(
     cssSource,
-    /@media \(max-width: 1099px\)[\s\S]*\.compact-current-job-header,[\s\S]*\.meetro-current-job-list-card[\s\S]*padding-right: calc\(164px/
+    /height: calc\(100dvh - var\(--work-center-dock-bottom\) - var\(--work-center-launcher-height\) - 2 \* var\(--work-center-dock-gap\)\)/
   );
   assert.doesNotMatch(
     dashboardSource,

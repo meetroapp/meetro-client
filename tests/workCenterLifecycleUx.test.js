@@ -33,11 +33,11 @@ const preparation = { exists: true, deposit: { state: "NOT_REQUIRED" }, readines
 const schedule = { visits: [{ id: "visit-1", state: "SCHEDULED", scheduledStartAt: "2026-01-03", scheduledEndAt: null }] };
 
 test("1. lifecycle starts with Evaluation", () => assert.equal(WORK_CENTER_LIFECYCLE[0], "Evaluation"));
-test("2. lifecycle places Quote & Approval second", () => assert.equal(WORK_CENTER_LIFECYCLE[1], "Quote & Approval"));
-test("3. lifecycle places Work Plan before Start Work", () => assert.ok(WORK_CENTER_LIFECYCLE.indexOf("Work Plan") < WORK_CENTER_LIFECYCLE.indexOf("Start Work")));
-test("4. lifecycle places Invoice & Closeout after Complete Work", () => assert.ok(WORK_CENTER_LIFECYCLE.indexOf("Invoice & Closeout") > WORK_CENTER_LIFECYCLE.indexOf("Complete Work")));
+test("2. lifecycle places Quote second", () => assert.equal(WORK_CENTER_LIFECYCLE[1], "Quote"));
+test("3. lifecycle separates Deposit and Schedule before Work Plan", () => assert.deepEqual(WORK_CENTER_LIFECYCLE.slice(2, 5), ["Deposit", "Schedule", "Work Plan"]));
+test("4. lifecycle places Invoice after Complete Job", () => assert.ok(WORK_CENTER_LIFECYCLE.indexOf("Invoice") > WORK_CENTER_LIFECYCLE.indexOf("Complete Job")));
 test("5. Ask Meetro is not a lifecycle stage", () => assert.equal(WORK_CENTER_LIFECYCLE.includes("Ask Meetro"), false));
-test("6. Deposit is not a lifecycle stage", () => assert.equal(WORK_CENTER_LIFECYCLE.includes("Deposit"), false));
+test("6. Deposit is a lifecycle stage", () => assert.equal(WORK_CENTER_LIFECYCLE.includes("Deposit"), true));
 test("7. Ready to Start is not a lifecycle stage", () => assert.equal(WORK_CENTER_LIFECYCLE.includes("Ready to Start"), false));
 test("8. Evaluation observations remain canonical truth", () => assert.equal(buildEvaluationTruthProjection({ evaluation }).observations, "Water staining below sink."));
 test("9. Evaluation assessment summary remains canonical truth", () => assert.match(buildEvaluationTruthProjection({ evaluation }).assessmentSummary, /fitting/));

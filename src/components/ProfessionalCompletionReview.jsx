@@ -122,7 +122,7 @@ export default function ProfessionalCompletionReview({
 
       {review && !isCompleted && (
         <>
-          <div style={styles.metrics}>
+          <div className="completion-review-metrics" style={styles.metrics}>
             <div style={styles.metric}>
               <strong>{review.work.completedWorkItemCount}/{review.work.workItemCount}</strong>
               <span>{copy.work} · {copy.completed}</span>

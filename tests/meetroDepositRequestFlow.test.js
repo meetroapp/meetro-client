@@ -10,25 +10,30 @@ const visits = read("src/components/CanonicalJobVisits.jsx");
 const quoteCard = read("src/components/CanonicalQuoteCard.jsx");
 const depositCard = read("src/components/ProfessionalDepositCard.jsx");
 
-test("Meetro Work Center exposes Deposit & Scheduling after Quote & Approval", () => {
+test("Meetro Work Center exposes separate Deposit and Schedule stages after Quote", () => {
   const quoteSection = dashboard.indexOf('id="canonical-job-quotes"');
   const depositSection = dashboard.indexOf(
-    'id="canonical-job-deposit-scheduling"'
+    'id="canonical-job-deposit"'
   );
+  const scheduleSection = dashboard.indexOf('id="canonical-job-schedule"');
   const workPlanSection = dashboard.indexOf(
     'id="canonical-job-work-plan"'
   );
 
   assert.ok(quoteSection >= 0);
   assert.ok(depositSection > quoteSection);
-  assert.ok(workPlanSection > depositSection);
+  assert.ok(scheduleSection > depositSection);
+  assert.ok(workPlanSection > scheduleSection);
 
-  const bridge = dashboard.slice(depositSection, workPlanSection);
+  const deposit = dashboard.slice(depositSection, scheduleSection);
+  const schedule = dashboard.slice(scheduleSection, workPlanSection);
 
-  assert.match(bridge, /title="Deposit & Scheduling"/);
-  assert.match(bridge, /purposeFilter="APPROVED_WORK"/);
-  assert.match(bridge, /showDeposit/);
-  assert.match(bridge, /depositActionLabel="Request Deposit"/);
+  assert.match(deposit, /title=\{translate\("wc52deposit", activeLanguage\)\}/);
+  assert.match(deposit, /contentMode="deposit"/);
+  assert.match(deposit, /depositActionLabel="Request Deposit"/);
+  assert.match(schedule, /title=\{translate\("wc52schedule", activeLanguage\)\}/);
+  assert.match(schedule, /contentMode="schedule"/);
+  assert.doesNotMatch(dashboard, /title="Deposit & Scheduling"/);
 });
 
 test("Work Center Continue Quote actually opens the Job-scoped Quote Builder", () => {

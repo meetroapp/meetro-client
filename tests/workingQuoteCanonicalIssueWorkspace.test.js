@@ -227,7 +227,7 @@ test("delivered and terminal Quotes expose explicit confirmed same-version COPY 
 });
 
 test("working-document delivery remains separate for Invoice and non-Job documents", () => {
-  assert.match(workspace, /<DeliveryMenu kind=\{activeDocument\}/);
+  assert.match(workspace, /<DeliveryMenu\s+kind=\{activeDocument\}/);
   assert.match(workspace, /deliverBusinessDocumentDraft/);
   assert.match(workspace, /Sending does not issue, accept, approve, pay, or close anything/);
   assert.match(workspace, /Save keeps this private working document for your business\. It does not send or issue anything\./);

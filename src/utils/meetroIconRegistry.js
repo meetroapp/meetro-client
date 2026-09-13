@@ -142,7 +142,7 @@ export const MEETRO_ICONS = {
   customerRelationships: {
     sfSymbol: "person.2.fill",
     fallback: "◎",
-    description: "Customer relationships.",
+    description: "Customer History.",
   },
   portfolio: {
     sfSymbol: "photo.on.rectangle.angled",

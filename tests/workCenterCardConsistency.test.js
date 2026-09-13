@@ -22,21 +22,18 @@ test("all Work Center navigation cards share one resting border and elevation", 
   assert.doesNotMatch(dashboardSource, /`\$\{card\.accent\}24`/);
 });
 
-test("Quotes and Job History do not receive permanent default outlines", () => {
-  assert.match(dashboardSource, /key: "quotes"/);
-  assert.match(dashboardSource, /key: "history"/);
-  assert.match(dashboardSource, /work-center-navigation-card/);
-  assert.match(
-    dashboardSource,
-    /isWorkCenterSectionOpen && activeTab === card\.key/
-  );
+test("active Jobs use one horizontal card and open through the canonical Job control", () => {
+  assert.match(dashboardSource, /className="work-center-job-card meetro-visual-surface"/);
+  assert.match(dashboardSource, /className="work-center-job-card__identity"/);
+  assert.match(dashboardSource, /className="work-center-job-card__state"/);
+  assert.match(dashboardSource, /className="work-center-job-card__lifecycle"/);
+  assert.match(dashboardSource, /setSelectedWorkCenterJob\(job\)/);
 });
 
 test("Work Center cards retain a visible keyboard focus state", () => {
   assert.match(
     globalStyles,
-    /\.work-center-navigation-card:focus-visible\s*\{[^}]*outline: 3px solid/s
+    /\.work-center-job-card:focus-visible\s*\{[^}]*outline: 3px solid/s
   );
-  assert.match(globalStyles, /outline-offset: 3px/);
+  assert.match(globalStyles, /outline-offset: 2px/);
 });
-

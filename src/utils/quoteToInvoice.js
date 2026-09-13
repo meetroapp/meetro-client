@@ -1,4 +1,5 @@
-import { fetchProfessionalInvoiceWorkspace } from "./invoicePaymentApi.js";
+import { fetchProfessionalInvoiceWorkspace, fetchProfessionalJobInvoice } from "./invoicePaymentApi.js";
+import { buildInvoiceBuilderRoute } from "./completedJobInvoiceHandoff.js";
 import { fetchEffectiveApprovedInvoiceQuote } from "./invoiceReviewDraft.js";
 import { listBusinessDocumentDrafts, getBusinessDocumentDraft } from "./businessDocumentDraftApi.js";
 import { hydrateSavedQuoteAuthority } from "./savedQuoteAuthorityHydration.js";
@@ -123,6 +124,26 @@ export function resolveQuoteInvoiceDepositGate(read) {
 
 // Transient language is never route authority and never placed in a URL/storage.
 const proposals = new Map();
+// Deposit owns this read. Generic tab switching must never resolve financial authority.
+export async function resolveDepositInvoiceDestination(loaded, { getInvoice = fetchProfessionalJobInvoice, setPage } = {}) {
+  const jobId = loaded?.document?.jobId;
+  const quote = loaded?.authority?.canonicalQuote;
+  if (!jobId || !quote?.id) throw new Error("The exact approved Quote is unavailable.");
+  let invoice;
+  try {
+    invoice = await getInvoice({ jobId, setPage });
+  } catch (error) {
+    if (error.status === 404 && error.code === "INVOICE_UNAVAILABLE") return { ...loaded, invoice: null, route: "" };
+    throw error;
+  }
+  const approvedLines = invoice?.lineItems?.filter((line) => line.type === "approvedWork") || [];
+  if (invoice?.jobId !== jobId || !approvedLines.length || approvedLines.some((line) => line.sourceQuoteId !== quote.id || line.sourceQuoteVersion !== quote.decisionVersion)) {
+    throw new Error("The existing Invoice does not match this exact approved Quote. Open its Job to review the source.");
+  }
+  const route = buildInvoiceBuilderRoute({ jobId, invoiceId: invoice.invoiceId });
+  if (!route) throw new Error("The exact Invoice destination is unavailable.");
+  return { ...loaded, invoice, route };
+}
 export function stageQuoteInvoiceInstruction(route, instruction) { proposals.clear(); proposals.set(route, instruction); }
 export function takeQuoteInvoiceInstruction(route) { const text = proposals.get(route) || ""; proposals.delete(route); return text; }
 
@@ -167,9 +188,28 @@ export async function loadExactInvoiceSource(route, {
       error.code = "QUOTE_TO_INVOICE_DEPOSIT_UNVERIFIED";
       throw error;
     }
+
+    if (
+      depositGate.deposit?.state === "SATISFIED" &&
+      Number.isSafeInteger(depositGate.deposit.appliedMinor) &&
+      depositGate.deposit.appliedMinor >= 0
+    ) {
+      paymentEvidence = {
+        jobId: document.jobId,
+        quoteId: canonical.id,
+        quoteVersion: canonical.decisionVersion,
+        receivedMinor: depositGate.deposit.appliedMinor,
+      };
+    }
   }
 
-  if (projectQuoteToInvoiceWorkingDraft({ quoteDocument: document, quoteAuthority: authority }).invoiceDraft.lineItems.length) {
+  if (
+    !paymentEvidence &&
+    projectQuoteToInvoiceWorkingDraft({
+      quoteDocument: document,
+      quoteAuthority: authority,
+    }).invoiceDraft.lineItems.length
+  ) {
     // A bounded workspace read can supply payment continuity only when its exact
     // Job and current effective approved Quote both agree with this source.
     try {

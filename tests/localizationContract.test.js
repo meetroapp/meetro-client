@@ -24,7 +24,7 @@ test("parser-backed localization contract has no duplicate or unknown active key
 
 test("certified shared-interface keys have complete non-deferred parity", async () => {
   const audit = await auditLocalization();
-  assert.equal(SHARED_INTERFACE_KEYS.length, 86);
+  assert.equal(SHARED_INTERFACE_KEYS.length, 87);
   for (const missing of Object.values(audit.sharedMissingByLanguage)) {
     assert.deepEqual(missing, []);
   }

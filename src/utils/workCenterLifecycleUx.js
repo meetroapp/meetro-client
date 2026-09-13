@@ -1,12 +1,11 @@
 export const WORK_CENTER_LIFECYCLE = Object.freeze([
   "Evaluation",
-  "Quote & Approval",
+  "Quote",
+  "Deposit",
+  "Schedule",
   "Work Plan",
-  "Start Work",
-  "Work In Progress",
-  "Complete Work",
-  "Invoice & Closeout",
-  "History",
+  "Complete Job",
+  "Invoice",
 ]);
 
 export const WORK_LEVEL_AUTHORITY_GAPS = Object.freeze([

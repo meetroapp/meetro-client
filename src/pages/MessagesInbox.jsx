@@ -7935,6 +7935,25 @@ const splitInboxHistoryNavigation = {
   boxSizing: "border-box",
 };
 
+const savedHistorySecondaryButton = {
+  ...glassPill,
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  border: "1px solid rgba(148,163,184,0.18)",
+  borderRadius: "18px",
+  color: "#475569",
+  padding: "12px 13px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  textAlign: "left",
+  cursor: "pointer",
+  boxSizing: "border-box",
+  overflow: "hidden",
+};
+
 const splitInboxHistoryButton = {
   ...savedHistorySecondaryButton,
   minHeight: "43px",
@@ -8445,24 +8464,6 @@ const conversationList = {
   overflowX: "hidden",
 };
 
-const savedHistorySecondaryButton = {
-  ...glassPill,
-  width: "100%",
-  maxWidth: "100%",
-  minWidth: 0,
-  border: "1px solid rgba(148,163,184,0.18)",
-  borderRadius: "18px",
-  color: "#475569",
-  padding: "12px 13px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "12px",
-  textAlign: "left",
-  cursor: "pointer",
-  boxSizing: "border-box",
-  overflow: "hidden",
-};
 
 const savedHistorySecondaryTitle = {
   minWidth: 0,

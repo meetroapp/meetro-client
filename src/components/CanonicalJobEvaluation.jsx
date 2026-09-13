@@ -152,6 +152,7 @@ export default function CanonicalJobEvaluation({
   language = "en",
   setPage,
   findingsPresentation = null,
+  showAssistantEntry = true,
   onCanonicalChange,
 }) {
   const copy = getEfrCopy(language);
@@ -1067,10 +1068,11 @@ export default function CanonicalJobEvaluation({
         {loadState.status === "loading" && <p role="status" style={styles.message}>{copy.loadingEvaluation}</p>}
         {loadState.error && <p role="alert" style={styles.error}>{loadState.error}</p>}
         {loadState.notice && <p role="status" style={styles.success}>{loadState.notice}</p>}
-        {environmentEnabled && jobId && visitAllowsDocumentation && (
+        {showAssistantEntry && environmentEnabled && jobId && visitAllowsDocumentation && (
           <ContextualAskMeetro
             language={language}
             contextLabel="evaluation"
+            context={{ jobId }}
             contextName={customerConcern || copy.evaluation}
             actions={askActions}
             busy={assistant.busy}
@@ -1093,6 +1095,7 @@ export default function CanonicalJobEvaluation({
             )}
           </ContextualAskMeetro>
         )}
+        {!showAssistantEntry && environmentEnabled && jobId && visitAllowsDocumentation && photoControls}
         {loadState.status === "error" && (
           <button type="button" style={styles.secondaryButton} onClick={() => setRefresh((value) => value + 1)}>
             {copy.retry}

@@ -102,6 +102,9 @@ export function WorkCenterAccordion({
   expanded,
   onExpandedChange,
   nested = false,
+  lifecycleState = "",
+  stepNumber = null,
+  currentAction = "",
   children,
 }) {
   const generatedId = useId();
@@ -129,14 +132,28 @@ export function WorkCenterAccordion({
   }, [autoOpenToken, controlled, defaultOpen]);
 
   return (
-    <section className={`work-center-accordion${visibleOpen ? " work-center-accordion--open" : ""}${nested ? " work-center-accordion--nested" : ""}`} data-work-center-accordion={sectionId}>
+    <section
+      className={`work-center-accordion${visibleOpen ? " work-center-accordion--open" : ""}${nested ? " work-center-accordion--nested" : ""}${lifecycleState ? ` work-center-accordion--${lifecycleState}` : ""}`}
+      data-work-center-accordion={sectionId}
+      data-lifecycle-state={lifecycleState || undefined}
+      aria-current={lifecycleState === "current" ? "step" : undefined}
+    >
       <header className="work-center-accordion__header">
         <span className="work-center-accordion__icon" aria-hidden="true">
-          <MeetroIcon name={icon} size={24} decorative />
+          {lifecycleState === "complete"
+            ? <MeetroIcon name="checkCircle" size={24} decorative />
+            : lifecycleState === "locked"
+              ? <MeetroIcon name="lock" size={22} decorative />
+              : stepNumber || <MeetroIcon name={icon} size={24} decorative />}
         </span>
         <span className="work-center-accordion__copy">
           <strong>{title}</strong>
-          <span>{summary}</span>
+          <span>{lifecycleState === "current" && currentAction ? currentAction : summary}</span>
+          {lifecycleState && (
+            <span className={`work-center-accordion__stage-label work-center-accordion__stage-label--${lifecycleState}`}>
+              {lifecycleState === "complete" ? "Completed" : lifecycleState === "current" ? "Current Step" : "Upcoming Step"}
+            </span>
+          )}
         </span>
         {(status || attentionCount > 0) && (
           <div className="work-center-accordion__meta">

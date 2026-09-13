@@ -112,8 +112,8 @@ test("iPad landscape Job Overview reflows within sidebar and Companion width", (
 
 test("Job Overview markup assigns each lifecycle value a stable landscape grid area", () => {
   assert.match(header, /state-item--status[\s\S]*>Job status</);
-  assert.match(header, /state-item--next[\s\S]*>Next</);
-  assert.match(header, /state-item--responsibility[\s\S]*>Who acts next</);
+  assert.match(header, /state-item--next[\s\S]*\{t\("wc52nextStep", language\)\}/);
+  assert.match(header, /state-item--responsibility[\s\S]*\{t\("wc52nextUp", language\)\}/);
   assert.equal((header.match(/compact-current-job-header__state-item--/g) || []).length, 3);
 });
 

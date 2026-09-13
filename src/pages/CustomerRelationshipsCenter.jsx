@@ -12,7 +12,9 @@ import {
   loadCustomerRelationshipForContact,
   readCustomerRelationshipNavigationContext,
   writeCustomerRelationshipContactReturn,
+  writeCustomerRelationshipNavigationContext,
 } from "../utils/customerRelationshipsWorkspace.js";
+import { buildProfessionalWorkCenterRoute } from "../utils/professionalWorkCenterRoute.js";
 
 const DATE_LOCALES = Object.freeze({
   en: "en-US",
@@ -76,7 +78,13 @@ function CustomerRelationshipsCenter({ setPage }) {
     activity: null,
     error: "",
   });
+  const setPageRef = useRef(setPage);
   const activityRequestRef = useRef(0);
+  const detailRequestRef = useRef(0);
+  setPageRef.current = setPage;
+  const navigate = useCallback((destination) => {
+    setPageRef.current?.(destination);
+  }, []);
   useAskMeetroContext(workspaceState.status === "ready" && workspaceState.detail
     ? { businessContactId: workspaceState.detail.contact?.id, relationshipId: workspaceState.detail.relationship?.id, label: workspaceState.detail.contact?.displayName || "" }
     : {});
@@ -89,7 +97,7 @@ function CustomerRelationshipsCenter({ setPage }) {
     try {
       const activity = await loadCustomerRelationshipActivity({
         relationshipId,
-        setPage,
+        setPage: navigate,
       });
       if (activityRequestRef.current !== requestId) return;
       setActivityState({ status: "ready", activity, error: "" });
@@ -101,17 +109,17 @@ function CustomerRelationshipsCenter({ setPage }) {
         error: error?.message || copy.activityErrorText,
       }));
     }
-  }, [copy.activityErrorText, setPage]);
+  }, [copy.activityErrorText, navigate]);
 
   const loadInitialWorkspace = useCallback(async () => {
     setWorkspaceState((current) => ({ ...current, status: "loading", error: "" }));
     try {
       const [relationships, detail] = await Promise.all([
-        loadCustomerRelationshipDirectory({ setPage }),
+        loadCustomerRelationshipDirectory({ setPage: navigate }),
         navigationContext?.businessContactId
           ? loadCustomerRelationshipForContact({
               businessContactId: navigationContext.businessContactId,
-              setPage,
+              setPage: navigate,
             })
           : Promise.resolve(null),
       ]);
@@ -129,7 +137,7 @@ function CustomerRelationshipsCenter({ setPage }) {
         error: error?.message || copy.loadErrorText,
       });
     }
-  }, [copy.loadErrorText, navigationContext, setPage]);
+  }, [copy.loadErrorText, navigate, navigationContext]);
 
   useEffect(() => {
     if (typeof window !== "undefined") {
@@ -149,13 +157,16 @@ function CustomerRelationshipsCenter({ setPage }) {
   }, [loadActivity, loadedRelationshipId]);
 
   async function openRelationship(relationshipId) {
+    const requestId = detailRequestRef.current + 1;
+    detailRequestRef.current = requestId;
     setActivityFocus("overview");
     setWorkspaceState((current) => ({ ...current, status: "loading", error: "" }));
     try {
       const detail = await loadCustomerRelationshipDetail({
         relationshipId,
-        setPage,
+        setPage: navigate,
       });
+      if (detailRequestRef.current !== requestId) return;
       setWorkspaceState((current) => ({
         ...current,
         status: "ready",
@@ -163,6 +174,7 @@ function CustomerRelationshipsCenter({ setPage }) {
         error: "",
       }));
     } catch (error) {
+      if (detailRequestRef.current !== requestId) return;
       setWorkspaceState((current) => ({
         ...current,
         status: "error",
@@ -172,19 +184,37 @@ function CustomerRelationshipsCenter({ setPage }) {
   }
 
   function returnFromPage() {
-    setPage(navigationContext?.returnPage || "businessCommandCenter");
+    navigate(navigationContext?.returnPage || "businessCommandCenter");
   }
 
   function openContact(contact) {
     if (typeof window !== "undefined") {
       writeCustomerRelationshipContactReturn(window.localStorage, contact);
     }
-    setPage("messagesInbox");
+    navigate("messagesInbox");
   }
 
   function showDirectory() {
+    detailRequestRef.current += 1;
     setActivityFocus("overview");
     setWorkspaceState((current) => ({ ...current, detail: null }));
+  }
+
+  function openJob(job) {
+    const route = buildProfessionalWorkCenterRoute({
+      jobId: job?.jobId,
+      stage: "work",
+      returnPage: "customerRelationshipsCenter",
+    });
+    if (!route || !contact?.id) return;
+    if (typeof window !== "undefined") {
+      writeCustomerRelationshipNavigationContext(window.localStorage, {
+        businessContactId: contact.id,
+        focus: "work",
+        returnPage: navigationContext?.returnPage || "businessCommandCenter",
+      });
+    }
+    navigate(route);
   }
 
   const detail = workspaceState.detail;
@@ -333,6 +363,7 @@ function CustomerRelationshipsCenter({ setPage }) {
                 focus={activityFocus}
                 copy={copy}
                 language={language}
+                onOpenJob={openJob}
               />
             )}
             <p style={externalNote}>{copy.externalContact}</p>
@@ -405,24 +436,121 @@ function CustomerRelationshipsCenter({ setPage }) {
   );
 }
 
-function RelationshipActivity({ activity, focus, copy, language }) {
+function jobIsCompleted(item = {}) {
+  return Boolean(
+    item.completedAt ||
+    ["COMPLETED", "CLOSED", "JOB_COMPLETED"].includes(text(item.status).toUpperCase())
+  );
+}
+
+function RelationshipActivity({ activity, focus, copy, language, onOpenJob }) {
+  const jobs = Array.isArray(activity.work) ? activity.work : [];
+  const activeJobs = jobs.filter((item) => !jobIsCompleted(item));
+  const completedJobs = jobs.filter(jobIsCompleted);
+  const jobRow = (item) => {
+    const invoice = activity.invoices.find((candidate) => candidate.jobId === item.jobId);
+    return (
+      <ActivityRow
+        key={item.jobId}
+        title={text(item.title) || text(item.service) || copy.job}
+        status={text(item.status) || (jobIsCompleted(item) ? copy.completed : copy.active)}
+        secondaryStatus={jobIsCompleted(item) ? "" : text(item.nextAction?.label || item.nextStep)}
+        secondaryStatusLabel={copy.nextStep}
+        money={invoice ? [
+          [copy.total, formatMoney(invoice.totalMinor, invoice.currency, language)],
+          [copy.paid, formatMoney(invoice.paidMinor, invoice.currency, language)],
+          [copy.balance, formatMoney(invoice.balanceMinor, invoice.currency, language)],
+        ] : null}
+        dateLabel={item.completedAt ? copy.completed : copy.created}
+        dateValue={item.completedAt || item.createdAt || item.linkedAt}
+        language={language}
+        actionLabel={copy.openJob}
+        onOpen={() => onOpenJob?.(item)}
+      />
+    );
+  };
+  if (focus === "overview") {
+    return (
+      <div style={activitySections}>
+        <section aria-labelledby="customer-history-summary-title">
+          <h5 id="customer-history-summary-title" style={activitySectionTitle}>
+            {copy.historySummary}
+          </h5>
+          <div style={summaryGrid}>
+            {[
+              [copy.activeJobs, activeJobs.length],
+              [copy.completedJobs, completedJobs.length],
+              [copy.quotes, activity.quotes.length],
+              [copy.invoices, activity.invoices.length],
+              [copy.documentsPhotos, activity.documents.length + activity.media.length],
+            ].map(([label, value]) => (
+              <div key={label} style={summaryCard}>
+                <strong style={summaryValue}>{value}</strong>
+                <span style={summaryLabel}>{label}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+        {activity.deposits?.length ? (
+          <section aria-labelledby="relationship-deposits-title">
+            <h5 id="relationship-deposits-title" style={activitySectionTitle}>{copy.deposits}</h5>
+            <div style={activityList}>{activity.deposits.map((item) => (
+              <ActivityRow key={item.id} title={copy.deposit} status={item.state}
+                money={[[copy.required, formatMoney(item.requiredMinor, item.currency, language)], [copy.applied, formatMoney(item.appliedMinor, item.currency, language)]]}
+                dateLabel={copy.latest} dateValue={item.updatedAt} language={language} />
+            ))}</div>
+          </section>
+        ) : null}
+        {activity.payments?.length ? (
+          <section aria-labelledby="relationship-payments-title">
+            <h5 id="relationship-payments-title" style={activitySectionTitle}>{copy.paymentHistory}</h5>
+            <div style={activityList}>{activity.payments.map((item) => (
+              <ActivityRow key={item.id}
+                title={item.kind === "DEPOSIT_RECEIPT" ? copy.depositReceived : copy.invoicePaymentReceived}
+                money={[copy.received, formatMoney(item.amountMinor, item.currency, language)]}
+                dateLabel={copy.latest} dateValue={item.receivedAt} language={language} />
+            ))}</div>
+          </section>
+        ) : null}
+        {activity.visits?.length ? (
+          <section aria-labelledby="relationship-visits-title">
+            <h5 id="relationship-visits-title" style={activitySectionTitle}>{copy.visits}</h5>
+            <div style={activityList}>{activity.visits.map((item) => (
+              <ActivityRow key={item.visitId} title={text(item.purpose) || copy.visits} status={text(item.state)}
+                dateLabel={copy.scheduled} dateValue={item.scheduledStartAt || item.createdAt} language={language} />
+            ))}</div>
+          </section>
+        ) : null}
+        {activity.workPerformed?.length ? (
+          <section aria-labelledby="relationship-work-performed-title">
+            <h5 id="relationship-work-performed-title" style={activitySectionTitle}>{copy.workPerformed}</h5>
+            <div style={activityList}>{activity.workPerformed.map((item) => (
+              <ActivityRow key={item.activityId}
+                title={text(item.statement) || text(item.workstreamTitle) || copy.workPerformed}
+                status={text(item.status)} dateLabel={item.performedAt ? copy.completed : copy.created}
+                dateValue={item.performedAt || item.createdAt} language={language} />
+            ))}</div>
+          </section>
+        ) : null}
+      </div>
+    );
+  }
+  if (focus === "work") {
+    return (
+      <div style={activitySections}>
+        {[
+          ["active", copy.activeJobs, activeJobs],
+          ["completed", copy.completedJobs, completedJobs],
+        ].map(([id, title, items]) => (
+          <section key={id} aria-labelledby={`relationship-${id}-jobs-title`}>
+            <h5 id={`relationship-${id}-jobs-title`} style={activitySectionTitle}>{title}</h5>
+            {items.length ? <div style={activityList}>{items.map(jobRow)}</div> : <p style={activityEmpty}>{copy.noWork}</p>}
+          </section>
+        ))}
+      </div>
+    );
+  }
   const sections = [
-    {
-      id: "work",
-      title: copy.work,
-      items: activity.work,
-      empty: copy.noWork,
-      render: (item) => (
-        <ActivityRow
-          key={item.jobId}
-          title={text(item.title) || text(item.service) || copy.job}
-          status={text(item.status)}
-          dateLabel={item.completedAt ? copy.completed : copy.created}
-          dateValue={item.completedAt || item.createdAt || item.linkedAt}
-          language={language}
-        />
-      ),
-    },
     {
       id: "quotes",
       title: copy.quotes,
@@ -464,9 +592,7 @@ function RelationshipActivity({ activity, focus, copy, language }) {
       ),
     },
   ];
-  const visible = focus === "overview"
-    ? sections
-    : sections.filter((section) => section.id === focus);
+  const visible = sections.filter((section) => section.id === focus);
   return (
     <div style={activitySections}>
       {visible.map((section) => (
@@ -481,7 +607,7 @@ function RelationshipActivity({ activity, focus, copy, language }) {
           )}
         </section>
       ))}
-      {(focus === "overview" || focus === "documents") && (
+      {focus === "documents" && (
         <RelationshipDocumentsMedia
           documents={activity.documents}
           media={activity.media}
@@ -615,7 +741,7 @@ function RelationshipDocumentsMedia({ documents, media, copy, language }) {
   );
 }
 
-function ActivityRow({ title, status, secondaryStatus, secondaryStatusLabel, money, dateLabel, dateValue, language }) {
+function ActivityRow({ title, status, secondaryStatus, secondaryStatusLabel, money, dateLabel, dateValue, language, actionLabel, onOpen }) {
   const amounts = Array.isArray(money?.[0]) ? money : money ? [money] : [];
   return (
     <article style={activityRow}>
@@ -639,6 +765,12 @@ function ActivityRow({ title, status, secondaryStatus, secondaryStatusLabel, mon
       {dateValue && (
         <p style={activityMeta}>{dateLabel}: {formatEstablishedDate(dateValue, language)}</p>
       )}
+      {onOpen && (
+        <button type="button" style={activityOpenButton} onClick={onOpen}>
+          {actionLabel}
+          <span aria-hidden="true">›</span>
+        </button>
+      )}
     </article>
   );
 }
@@ -647,11 +779,14 @@ const page = {
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
+  height: "100dvh",
   minHeight: "100dvh",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 50px) max(18px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 96px) max(18px, env(safe-area-inset-left, 0px))",
   overflowY: "auto",
   overflowX: "hidden",
+  overscrollBehaviorY: "contain",
+  touchAction: "pan-y",
   WebkitOverflowScrolling: "touch",
   boxSizing: "border-box",
   background: "var(--meetro-color-background, #FAFAFC)",
@@ -684,10 +819,14 @@ const activityHeader = { marginTop: "28px", paddingTop: "22px", borderTop: "1px 
 const activityTitle = { margin: 0, color: "#173b27", fontSize: "20px", lineHeight: 1.3 };
 const activityNavigation = { display: "flex", gap: "8px", width: "100%", marginTop: "14px", paddingBottom: "2px", overflowX: "auto", WebkitOverflowScrolling: "touch" };
 const activityTab = { flex: "0 0 auto", minHeight: "44px", padding: "9px 14px", border: "1px solid #cfdacf", borderRadius: "999px", background: "#fff", color: "#31543f", fontSize: "14px", fontWeight: 800, cursor: "pointer" };
-const activityTabActive = { ...activityTab, borderColor: "#1f4d34", background: "#1f4d34", color: "#fff" };
+const activityTabActive = { ...activityTab, border: "1px solid #1f4d34", background: "#1f4d34", color: "#fff" };
 const activityStateCard = { marginTop: "18px", padding: "18px", border: "1px solid #dfe6d9", borderRadius: "14px", background: "#f7f9f5", color: "#405449", lineHeight: 1.5 };
 const activitySections = { display: "grid", gap: "24px", marginTop: "20px" };
 const activitySectionTitle = { margin: "0 0 10px", color: "#1d492f", fontSize: "16px" };
+const summaryGrid = { display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 138px), 1fr))", gap: "10px", minWidth: 0 };
+const summaryCard = { display: "flex", minWidth: 0, minHeight: "86px", padding: "14px", flexDirection: "column", justifyContent: "center", gap: "4px", border: "1px solid #dfe6dc", borderRadius: "14px", background: "#fff", boxSizing: "border-box" };
+const summaryValue = { color: "#173b27", fontSize: "24px", lineHeight: 1 };
+const summaryLabel = { color: "#5d6c61", fontSize: "13px", lineHeight: 1.35 };
 const activityList = { display: "grid", gap: "9px" };
 const activityEmpty = { margin: 0, padding: "16px", border: "1px solid #e1e7df", borderRadius: "13px", background: "#fafbf8", color: "#66736a", fontSize: "14px" };
 const activityRow = { minWidth: 0, padding: "15px", border: "1px solid #dfe6dc", borderRadius: "14px", background: "#fff", boxSizing: "border-box" };
@@ -697,6 +836,7 @@ const activityStatus = { maxWidth: "100%", padding: "4px 9px", borderRadius: "99
 const activityMeta = { margin: "9px 0 0", color: "#69766d", fontSize: "13px", lineHeight: 1.4, overflowWrap: "anywhere" };
 const activityAmounts = { display: "flex", flexWrap: "wrap", gap: "10px 22px", marginTop: "11px" };
 const activityAmount = { display: "inline-flex", flexDirection: "column", gap: "2px", minWidth: 0, color: "#25382b" };
+const activityOpenButton = { display: "inline-flex", alignItems: "center", justifyContent: "space-between", gap: "10px", width: "100%", minHeight: "44px", marginTop: "13px", padding: "9px 12px", border: "1px solid #cfdacf", borderRadius: "11px", background: "#f8faf7", color: "#1f4d34", fontSize: "14px", fontWeight: 900, cursor: "pointer", boxSizing: "border-box" };
 const documentGroups = { display: "grid", gap: "12px" };
 const documentGroup = { minWidth: 0, padding: "15px", border: "1px solid #d9e2d6", borderRadius: "16px", background: "#fafbf8", boxSizing: "border-box" };
 const documentGroupHeader = { display: "flex", minWidth: 0, flexDirection: "column", gap: "5px", paddingBottom: "12px", borderBottom: "1px solid #e1e7df" };

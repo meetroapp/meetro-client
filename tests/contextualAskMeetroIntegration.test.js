@@ -19,8 +19,9 @@ test("four workflow surfaces expose contextual assistance without silent authori
   assert.match(quote, /parseSavedQuoteRoute\(window\.location\.hash\)/);
   assert.match(quote, /routeCanonicalJobId = sourceQuoteRoute \? "" : savedQuoteRoute\.jobId/);
   assert.match(quote, /applyConfirmedQuoteComposition/);
-  assert.match(invoice, /canonicalFinancialTruth/);
-  for (const source of [evaluation, quote, invoice]) assert.match(source, /directMutationAllowed|recordWorkflowReview|recordQuoteCompositionReview/);
+  assert.match(invoice, /useAskMeetroContext/);
+  assert.doesNotMatch(invoice, /requestWorkflowIntelligence|InvoiceAssistantResult/);
+  for (const source of [evaluation, quote]) assert.match(source, /directMutationAllowed|recordWorkflowReview|recordQuoteCompositionReview/);
 });
 
 test("contextual assistant copy covers EN ES FR and PT-BR", () => {
@@ -30,11 +31,11 @@ test("contextual assistant copy covers EN ES FR and PT-BR", () => {
 });
 
 test("contextual controls and workflow actions preserve 44px minimum targets", () => {
-  const panel = read("src/components/ContextualAskMeetro.jsx");
+  const panel = read("src/components/UniversalAskMeetroEntry.jsx");
   const evaluation = read("src/components/CanonicalJobEvaluation.jsx");
   const invoice = read("src/components/ProfessionalInvoiceWorkspace.jsx");
   assert.match(panel, /minHeight: 44/);
-  assert.match(panel, /width: 44, height: 44/);
+  assert.match(panel, /meetro:assistant:open/);
   assert.match(evaluation, /minHeight: 44/);
   assert.match(invoice, /minHeight: 44/);
 });

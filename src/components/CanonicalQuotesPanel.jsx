@@ -1,3 +1,4 @@
+import { t } from "../utils/language.js";
 import { useEffect, useState } from "react";
 import {
   buildCanonicalQuoteLineage,
@@ -20,7 +21,7 @@ function canonicalRecord(jobId) {
 function quoteErrorMessage(error) {
   if (error?.status === 401) return "Sign in is required to read Quotes.";
   if (error?.status === 403) {
-    return "Quote read authority is unavailable for this account.";
+    return t("wc52quoteAccess");
   }
   if (error?.status === 404) {
     return "Quotes are unavailable for this job.";

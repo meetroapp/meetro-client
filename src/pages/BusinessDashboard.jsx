@@ -1133,6 +1133,14 @@ function BusinessDashboard({ setPage }) {
           </div>
             <div className="business-dashboard-glance-grid" style={glanceGrid}>
               <GlanceItem
+                icon="revenue"
+                title={t("wc52revenue", language)}
+                value={t("wc52viewRevenue", language)}
+                note={t("wc52revenueHelp", language)}
+                onClick={() => openWorkCenterSection("revenue")}
+              />
+
+              <GlanceItem
                 icon="briefcase"
                 title={text.activeJobs}
                 value={activeProjectsCount}

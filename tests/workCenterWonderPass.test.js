@@ -37,14 +37,10 @@ test("professional Work Center preserves customer-work stages without becoming b
     t("workCenterProfessionalPerspectiveLine", "en"),
     "Customer work stays connected through requests, evaluations, quotes, schedule, active jobs, completion, and history."
   );
-  assert.match(
-    contractorDashboardSource,
-    /translate\("workCenterDashboardTitle", activeLanguage\)/
-  );
-  assert.match(
-    contractorDashboardSource,
-    /translate\("workCenterPurposeStatement", activeLanguage\)/
-  );
+  assert.match(contractorDashboardSource, /<h1>\{translate\("workCenter", activeLanguage\)\}<\/h1>/);
+  assert.match(contractorDashboardSource, /translate\("wc52subtitle", activeLanguage\)/);
+  assert.match(contractorDashboardSource, /<WorkCenterLifecycle/);
+  assert.match(contractorDashboardSource, /resolveWorkCenterLifecyclePresentation/);
   assert.match(contractorDashboardSource, /workPlanCopy\.cardPurpose/);
   assert.match(contractorDashboardSource, /const workCenterPrimaryNavigationCards = \[/);
   assert.match(contractorDashboardSource, /translate\("workCenterOpportunitiesTitle"\)/);

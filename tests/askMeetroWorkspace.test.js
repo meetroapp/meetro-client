@@ -1083,10 +1083,13 @@ test("specific Quote edit pulls the exact working form into Ask without leaving 
     underlying
   );
 
+  for (let attempt = 0; attempt < 40 && !document.querySelector(".meetro-assistant-launcher"); attempt += 1) {
+    await act(async () => { await pause(); });
+  }
   await act(async () => {
-    document
-      .querySelector(".meetro-assistant-launcher")
-      .click();
+    const launcher = document.querySelector(".meetro-assistant-launcher");
+    assert.ok(launcher, "Ask launcher returns after the close transition");
+    launcher.click();
     await pause();
   });
 
@@ -1266,10 +1269,13 @@ test("specific Quote edit pulls the exact working form into Ask without leaving 
     null
   );
 
+  for (let attempt = 0; attempt < 40 && !document.querySelector(".meetro-assistant-launcher"); attempt += 1) {
+    await act(async () => { await pause(); });
+  }
   await act(async () => {
-    document
-      .querySelector(".meetro-assistant-launcher")
-      .click();
+    const launcher = document.querySelector(".meetro-assistant-launcher");
+    assert.ok(launcher, "Ask launcher returns after the close transition");
+    launcher.click();
     await pause();
   });
 
@@ -2757,7 +2763,7 @@ test("Job-linked Quote inside Ask uses exact governed Review & Send authority be
 });
 
 
-test("specific working Invoice edit hosts the exact owning Invoice workspace inside Ask", async (t) => {
+for (const hasCompletedJob of [false, true]) test(`specific working Invoice edit hosts the exact owner; completed Job: ${hasCompletedJob}`, async (t) => {
   const DRAFT_ID =
     "55a5d4de-c95c-47ae-bca0-e10830f34211";
 
@@ -2771,7 +2777,7 @@ test("specific working Invoice edit hosts the exact owning Invoice workspace ins
     status: "WORKING_DRAFT",
     reference: "invoice-working",
     documentNumber: "INV-0000012",
-    jobId: null,
+    jobId: hasCompletedJob ? JOB : null,
     customerParty: null,
     customerDisplayName: "Bob Hamel",
     paymentRequirementId: null,
@@ -2868,6 +2874,8 @@ test("specific working Invoice edit hosts the exact owning Invoice workspace ins
   let deliveryEvidence = null;
 
   globalThis.__dashboardHttp = async (path, options = {}) => {
+    if (path.endsWith("/completion-review")) return { response: { ok: true }, data: { success: true, completionReview: { contractVersion: 1, jobId: JOB, requestId: 14, relationshipId: 22, currentVersion: 1, state: "COMPLETED", eligible: false, canComplete: false, reasons: [], work: { workstreamCount: 1, completedWorkstreamCount: 1, workItemCount: 1, completedWorkItemCount: 1 }, outstanding: { workstreams: 0, workItems: 0, obligations: 0, findings: 0 }, customerUpdates: { count: 1, status: "UP_TO_DATE" }, completedAt: "2026-09-11T12:00:00.000Z" } } };
+
     if (path.startsWith("/business-document-drafts?")) {
       return {
         response: { ok: true, status: 200 },
@@ -3266,6 +3274,14 @@ test("specific working Invoice edit hosts the exact owning Invoice workspace ins
     sendInvoiceMenu.click();
     await pause();
   });
+
+  if (!hasCompletedJob) {
+    assert.match(w.text(), /Complete the job first/);
+    assert.equal(document.querySelector('[data-dialog-purpose="business-document-delivery-review-title"]'), null);
+    assert.equal(deliveryPosts.length, 0);
+    assert.deepEqual(w.routes, []);
+    return;
+  }
 
   await w.click("Email with Meetro");
 

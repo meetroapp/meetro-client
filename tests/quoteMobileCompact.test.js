@@ -91,7 +91,7 @@ test("Deposit Request opens its shared preparation workspace before authority ex
 
   assert.match(
     read("src/components/DepositRequestWorkspace.jsx"),
-    /The Quote supplies the customer, project, deposit amount, and payment terms/
+    /Change the customer, project, or deposit terms on the Quote/
   );
 });
 

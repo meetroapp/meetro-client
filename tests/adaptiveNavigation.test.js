@@ -240,7 +240,7 @@ test("desktop Property and Relationships actions report their own active page st
   );
   assert.match(
     businessDesktopBlock,
-    /page: "customerRelationshipsCenter"[\s\S]*aliases: \["customerRelationshipsCenter"\][\s\S]*label: t\("navigationRelationships", language\)/
+    /page: "customerRelationshipsCenter"[\s\S]*aliases: \["customerRelationshipsCenter"\][\s\S]*label: t\("navigationCustomers", language\)[\s\S]*sub: t\("navigationHistoryRecords", language\)/
   );
   assert.match(assetCenterSource, /<BottomNav setPage=\{setPage\} currentPage="assetCenter" \/>/);
   assert.match(

@@ -18,7 +18,7 @@ function positiveInteger(value) {
 
 export class BusinessCustomerRelationshipApiError extends Error {
   constructor({ status = 500, code, message } = {}) {
-    super(message || "The Customer Relationship operation could not be completed.");
+    super(message || "The Customer History operation could not be completed.");
     this.name = "BusinessCustomerRelationshipApiError";
     this.status = status;
     this.code = code || "BUSINESS_CUSTOMER_RELATIONSHIP_FAILED";
@@ -47,7 +47,7 @@ function validatedRelationship(value) {
       !positiveInteger(value.version)) {
     throw new BusinessCustomerRelationshipApiError({
       code: "BUSINESS_CUSTOMER_RELATIONSHIP_RESPONSE_INVALID",
-      message: "The server returned an invalid Customer Relationship.",
+      message: "The server returned invalid Customer History data.",
     });
   }
   return Object.freeze({ ...value });
@@ -71,7 +71,7 @@ function validRelationshipId(value) {
     throw new BusinessCustomerRelationshipApiError({
       status: 400,
       code: "BUSINESS_CUSTOMER_RELATIONSHIP_ID_INVALID",
-      message: "A valid Customer Relationship identity is required.",
+      message: "A valid Customer History identity is required.",
     });
   }
   return id;
@@ -134,15 +134,22 @@ function validatedActivity(value, relationshipId) {
       text(value.relationship.id).toLowerCase() !== relationshipId ||
       !Array.isArray(value.work) || !Array.isArray(value.quotes) ||
       !Array.isArray(value.invoices) || !Array.isArray(value.documents) ||
-      !Array.isArray(value.media)) {
+      !Array.isArray(value.media) || (value.deposits != null && !Array.isArray(value.deposits)) ||
+      (value.payments != null && !Array.isArray(value.payments)) ||
+      (value.visits != null && !Array.isArray(value.visits)) ||
+      (value.workPerformed != null && !Array.isArray(value.workPerformed))) {
     throw new BusinessCustomerRelationshipApiError({
       code: "BUSINESS_CUSTOMER_RELATIONSHIP_ACTIVITY_RESPONSE_INVALID",
-      message: "The server returned invalid Customer Relationship activity.",
+      message: "The server returned invalid Customer History activity.",
     });
   }
   return Object.freeze({
     ...value,
     relationship: Object.freeze({ ...value.relationship }),
+    deposits: Object.freeze((value.deposits || []).map(item => validatedActivityItem(item,"Deposit"))),
+    payments: Object.freeze((value.payments || []).map(item => validatedActivityItem(item,"Payment"))),
+    visits: Object.freeze((value.visits || []).map(item => validatedActivityItem(item, "Visit"))),
+    workPerformed: Object.freeze((value.workPerformed || []).map(item => validatedActivityItem(item, "work performed"))),
     work: Object.freeze(value.work.map((item) => validatedActivityItem(item, "work"))),
     quotes: Object.freeze(value.quotes.map((item) => validatedActivityItem(item, "Quote"))),
     invoices: Object.freeze(value.invoices.map((item) => validatedActivityItem(item, "Invoice"))),
@@ -221,7 +228,7 @@ export async function listBusinessCustomerRelationships({
     throw new BusinessCustomerRelationshipApiError({
       status: 400,
       code: "BUSINESS_CUSTOMER_RELATIONSHIP_QUERY_INVALID",
-      message: "A valid business is required before loading Customer Relationships.",
+      message: "A valid business is required before loading Customer History.",
     });
   }
   const params = new URLSearchParams({
@@ -236,7 +243,7 @@ export async function listBusinessCustomerRelationships({
   if (!Array.isArray(data.relationships)) {
     throw new BusinessCustomerRelationshipApiError({
       code: "BUSINESS_CUSTOMER_RELATIONSHIP_RESPONSE_INVALID",
-      message: "The server returned an invalid Customer Relationship list.",
+      message: "The server returned an invalid Customer History list.",
     });
   }
   return Object.freeze(data.relationships.map(validatedRelationship));

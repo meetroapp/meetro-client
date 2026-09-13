@@ -1,3 +1,5 @@
+import { t } from "../utils/language.js";
+import { proposeDepositInstruction } from "../utils/depositInstruction.js";
 import { useEffect, useMemo, useState } from "react";
 
 import BottomNav from "./BottomNav.jsx";
@@ -112,21 +114,6 @@ function documentPayload({ jobId, paymentRequirementId, content, customerParty }
   };
 }
 
-function proposalFromInstruction(instruction) {
-  const text = String(instruction || "").trim();
-  if (!text) return null;
-  const patch = {};
-  if (/thank/i.test(text)) patch.notes = "Thank you for approving the work.";
-  if (/before scheduling/i.test(text)) {
-    patch.customerMessage = "Thank you for approving the work. The deposit is required before scheduling can begin.";
-  }
-  const due = text.match(/(?:due|make it due)\s+(.+?)(?:[.!]|$)/i);
-  if (due) patch.dueDate = due[1].trim();
-  const method = text.match(/(?:pay|payment)(?:\s+by|\s+with|\s+instructions?\s*:?)\s+(.+?)(?:[.!]|$)/i);
-  if (method) patch.paymentInstructions = method[1].trim();
-  if (!Object.keys(patch).length) patch.notes = text;
-  return patch;
-}
 
 function deliveryLabel(deliveries) {
   const latest = deliveries[0] || null;
@@ -253,6 +240,51 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
       needed: formatDepositMoney(authority.remainingMinor, authority.currency),
     };
   }, [authority]);
+
+  const depositPreviewStatus = depositSatisfied
+    ? {
+        label: "Deposit satisfied",
+        title: "Deposit already received",
+        detail: money
+          ? `${money.received} received · ${money.needed} still needed`
+          : "Payment has been recorded.",
+        guidance: "No Deposit Request needs to be sent.",
+      }
+    : authority?.state === "PARTIALLY_SATISFIED"
+      ? {
+          label: "Partially paid",
+          title: "Deposit partially received",
+          detail: money
+            ? `${money.received} received · ${money.needed} still needed`
+            : "A partial payment has been recorded.",
+          guidance:
+            "The remaining deposit is still required before the deposit gate clears.",
+        }
+      : authority?.state === "DUE"
+        ? {
+            label: "Payment needed",
+            title: "Deposit payment required",
+            detail: money
+              ? `${money.requested} requested · ${money.needed} still needed`
+              : "The approved Quote requires a deposit.",
+            guidance:
+              "Send the Deposit Request when you are ready to request payment.",
+          }
+        : authority?.state === "NOT_REQUIRED"
+          ? {
+              label: "No deposit required",
+              title: "No pre-work deposit required",
+              detail: "This approved Quote does not require a deposit.",
+              guidance: "No Deposit Request is needed for this Quote.",
+            }
+          : {
+              label: "Preparation only",
+              title: "Deposit Request not ready",
+              detail: t("wc52depositUnavailable"),
+              guidance:
+                "An approved Quote with an unpaid deposit requirement is required before sending.",
+            };
+
   const customerState = businessDocumentCustomerState({
     jobLinked,
     customerParty,
@@ -395,7 +427,7 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
       updateCustomerControl({ open: false, busy: false, duplicateConfirmed: false });
       setNotice(eligible
         ? "External customer created and linked to this Deposit Request."
-        : "External customer created. The Deposit Request remains preparation-only until its canonical requirement exists.");
+        : t("wc52depositCustomerCreated"));
     } catch (reason) {
       updateCustomerControl({ busy: false, error: reason?.message || "The external customer could not be created." });
     }
@@ -440,14 +472,14 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
   }
 
   function propose() {
-    const patch = proposalFromInstruction(instruction);
+    const patch = proposeDepositInstruction(instruction);
     if (!patch) return;
     setProposal(patch);
   }
 
   async function beginDelivery() {
     if (!eligible) {
-      setError("Send is disabled until an approved Quote creates an unpaid canonical deposit requirement.");
+      setError(t("wc52depositSendLocked"));
       return;
     }
     setBusy(true);
@@ -498,7 +530,7 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
 
   async function pdf(action) {
     if (!eligible) {
-      setError("PDF is disabled until an approved Quote creates an unpaid canonical deposit requirement.");
+      setError(t("wc52depositPdfLocked"));
       return;
     }
     if (!document || dirty) {
@@ -681,86 +713,151 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
             />
           ) : null}
 
-          {proposal ? <div className="deposit-request-proposal" style={styles.proposal}><strong>Review proposed changes</strong>{Object.entries(proposal).map(([key, value]) => <p key={key}><b>{key.replace(/([A-Z])/g, " $1")}:</b> {value}</p>)}<div style={styles.row}><button type="button" onClick={() => setProposal(null)}>Dismiss</button><button type="button" onClick={() => { setContent((current) => ({ ...current, ...proposal })); setProposal(null); setInstruction(""); }}>Apply</button></div></div> : null}
-          <details className="deposit-request-customize">
-            <summary>Customize request wording</summary>
+          {depositSatisfied ? (
+            <section
+              className="deposit-request-satisfied-editor-state"
+              data-satisfied={depositSatisfied}
+              aria-label="Satisfied deposit status"
+            >
+              <span>Payment status</span>
+              <strong>Deposit received in full</strong>
+              <p>
+                No additional Deposit Request is needed. The recorded payment
+                evidence above remains part of this Job history.
+              </p>
+            </section>
+          ) : (
+            <>
+              {proposal ? (
+                <div
+                  className="deposit-request-proposal"
+                  style={styles.proposal}
+                >
+                  <strong>Review proposed changes</strong>
+                  {Object.entries(proposal).map(([key, value]) => (
+                    <p key={key}>
+                      <b>{key.replace(/([A-Z])/g, " $1")}:</b> {value}
+                    </p>
+                  ))}
+                  <div style={styles.row}>
+                    <button
+                      type="button"
+                      onClick={() => setProposal(null)}
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContent((current) => ({
+                          ...current,
+                          ...proposal,
+                        }));
+                        setProposal(null);
+                        setInstruction("");
+                      }}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              ) : null}
 
-            <div>
-              <label>
-                Due date
-                <input
-                  type="date"
-                  min={today()}
-                  value={
-                    /^\d{4}-\d{2}-\d{2}$/.test(content.dueDate)
-                      ? content.dueDate
-                      : ""
-                  }
-                  onChange={(event) =>
-                    setContent({
-                      ...content,
-                      dueDate: event.target.value,
-                    })
-                  }
-                  style={styles.input}
-                />
-              </label>
+              <details className="deposit-request-customize">
+                <summary>Customize request wording</summary>
 
-              <label>
-                Note
-                <textarea
-                  rows={3}
-                  value={content.notes}
-                  onChange={(event) =>
-                    setContent({
-                      ...content,
-                      notes: event.target.value,
-                    })
-                  }
-                  style={styles.input}
-                />
-              </label>
+                <div>
+                  <label>
+                    Due date
+                    <input
+                      type="date"
+                      min={today()}
+                      value={
+                        /^\d{4}-\d{2}-\d{2}$/.test(content.dueDate)
+                          ? content.dueDate
+                          : ""
+                      }
+                      onChange={(event) =>
+                        setContent({
+                          ...content,
+                          dueDate: event.target.value,
+                        })
+                      }
+                      style={styles.input}
+                    />
+                  </label>
 
-              <label>
-                Payment instructions
-                <textarea
-                  rows={3}
-                  value={content.paymentInstructions}
-                  onChange={(event) =>
-                    setContent({
-                      ...content,
-                      paymentInstructions: event.target.value,
-                    })
-                  }
-                  style={styles.input}
-                />
-              </label>
+                  <label>
+                    Note
+                    <textarea
+                      rows={3}
+                      value={content.notes}
+                      onChange={(event) =>
+                        setContent({
+                          ...content,
+                          notes: event.target.value,
+                        })
+                      }
+                      style={styles.input}
+                    />
+                  </label>
 
-              <label>
-                Customer message
-                <textarea
-                  rows={3}
-                  value={content.customerMessage}
-                  onChange={(event) =>
-                    setContent({
-                      ...content,
-                      customerMessage: event.target.value,
-                    })
-                  }
-                  style={styles.input}
-                />
-              </label>
-            </div>
-          </details>
+                  <label>
+                    Payment instructions
+                    <textarea
+                      rows={3}
+                      value={content.paymentInstructions}
+                      onChange={(event) =>
+                        setContent({
+                          ...content,
+                          paymentInstructions: event.target.value,
+                        })
+                      }
+                      style={styles.input}
+                    />
+                  </label>
+
+                  <label>
+                    Customer message
+                    <textarea
+                      rows={3}
+                      value={content.customerMessage}
+                      onChange={(event) =>
+                        setContent({
+                          ...content,
+                          customerMessage: event.target.value,
+                        })
+                      }
+                      style={styles.input}
+                    />
+                  </label>
+                </div>
+              </details>
+            </>
+          )}
 
           {error ? <p role="alert" style={styles.error}>{error}</p> : null}
           {notice ? <p role="status" style={styles.notice}>{notice}</p> : null}
           </div>
 
-          <div className="deposit-request-composer">
-            <textarea rows={4} value={instruction} onChange={(event) => setInstruction(event.target.value)} placeholder="Thank the customer and tell them they can pay by check." style={styles.input} />
-            <button type="button" onClick={propose} disabled={!instruction.trim()}>Propose Change</button>
-          </div>
+          {!depositSatisfied ? (
+            <div className="deposit-request-composer">
+              <textarea
+                rows={4}
+                value={instruction}
+                onChange={(event) => setInstruction(event.target.value)}
+                placeholder="Thank the customer and tell them how they can make the deposit."
+                style={styles.input}
+              />
+              <button
+                type="button"
+                onClick={propose}
+                disabled={!instruction.trim()}
+              >
+                Propose Change
+              </button>
+            </div>
+          ) : null}
         </section>
 
         <section
@@ -770,21 +867,313 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
           style={styles.preview}
           aria-label="Live Deposit Request Preview"
         >
-          <header className="deposit-request-preview-header" style={styles.previewHeader}><div><small>DEPOSIT REQUEST</small><h2>{document?.reference || "Draft"}</h2></div><span>Live preview</span></header>
-          <dl className="deposit-request-document-summary" style={styles.summary}>
-            <div><dt>Customer</dt><dd>{content.customerName || "Linked customer"}</dd></div>
-            <div><dt>Project</dt><dd>{content.projectTitle || "Linked Job"}</dd></div>
-            <div><dt>Approved Quote</dt><dd>{authority?.quoteReference || content.quoteReference || (authority ? "Verified approved Quote" : "Approval pending")}</dd></div>
-            <div><dt>Quote version</dt><dd>{authority?.issuedQuoteVersion ? `Version ${authority.issuedQuoteVersion}` : "Approval pending"}</dd></div>
-            <div><dt>Service address</dt><dd>{content.serviceLocation || content.customerLocation || "Not confirmed"}</dd></div>
-            <div><dt>Approved scope</dt><dd>{content.recommendedSolution || content.projectDescription || "Not confirmed"}</dd></div>
-          </dl>
-          {money ? <div style={styles.money}><p><span>Project total</span><strong>{money.project}</strong></p><p><span>Deposit requested</span><strong>{money.requested}</strong></p><p><span>Recorded received</span><strong>{money.received}</strong></p><p><span>Amount still needed</span><strong>{money.needed}</strong></p><p><span>Amount remaining after deposit</span><strong>{money.after}</strong></p><p><span>Status</span><strong>{authority.state === "SATISFIED" ? "Deposit satisfied" : authority.state === "PARTIALLY_SATISFIED" ? "Partially paid" : "Awaiting payment confirmation"}</strong></p></div> : <div style={styles.preparation} role="status"><strong>{authority?.state === "NOT_REQUIRED" ? "No deposit required" : "Deposit not ready to send"}</strong><p><span>Requested deposit</span><br />{authority?.state === "NOT_REQUIRED" ? "Not required" : "Pending canonical requirement"}</p><p>{authority?.state === "NOT_REQUIRED" ? "This approved Quote has no pre-work deposit requirement. You can continue without a Deposit Request." : "An approved Quote with an unpaid deposit requirement is required before sending a Deposit Request."}</p><p>The Quote supplies the customer, project, deposit amount, and payment terms. Approved scope and service context carry forward when available.</p></div>}
-          {content.dueDate ? <p><strong>Due date</strong><br />{content.dueDate}</p> : null}
-          {content.paymentInstructions ? <p><strong>Payment instructions</strong><br />{content.paymentInstructions}</p> : null}
-          {content.notes ? <p><strong>Note</strong><br />{content.notes}</p> : null}
-          {content.customerMessage ? <p><strong>Customer message</strong><br />{content.customerMessage}</p> : null}
-          <div style={styles.actions}><button type="button" onClick={saveClick} disabled={!eligible || busy || (document && !dirty)}>{busy ? "Working…" : "Save Draft"}</button><button type="button" onClick={() => void pdf("preview")} disabled={!eligible || !document || dirty || busy}>Preview PDF</button><button type="button" onClick={() => void pdf("download")} disabled={!eligible || !document || dirty || busy}>Download PDF</button><button type="button" onClick={beginDelivery} disabled={!eligible || busy}>{deliveryLabel(deliveries)}</button></div>
+          <header
+            className="deposit-request-preview-header"
+            style={styles.previewHeader}
+          >
+            <div>
+              <small>DEPOSIT REQUEST</small>
+              <h2>{document?.reference || "Draft"}</h2>
+            </div>
+            <span>Live preview</span>
+          </header>
+
+          <section
+            className="deposit-request-status-banner"
+            data-state={authority?.state || "PREPARATION"}
+            aria-label="Deposit status"
+          >
+            <div className="deposit-request-status-banner-heading">
+              <span>{depositPreviewStatus.label}</span>
+              <strong>{depositPreviewStatus.title}</strong>
+            </div>
+
+            <p className="deposit-request-status-amount">
+              {depositPreviewStatus.detail}
+            </p>
+
+            <p className="deposit-request-status-guidance">
+              {depositPreviewStatus.guidance}
+            </p>
+          </section>
+
+          <section className="deposit-request-preview-section deposit-request-preview-identity">
+            <header className="deposit-request-preview-section-heading">
+              <div>
+                <span>Request details</span>
+                <h3>Approved Quote</h3>
+              </div>
+            </header>
+
+            <dl className="deposit-request-document-summary">
+              <div>
+                <dt>Customer</dt>
+                <dd>{content.customerName || "Linked customer"}</dd>
+              </div>
+
+              <div>
+                <dt>Project</dt>
+                <dd>{content.projectTitle || "Linked Job"}</dd>
+              </div>
+
+              <div>
+                <dt>Approved Quote</dt>
+                <dd>
+                  {authority?.quoteReference ||
+                    content.quoteReference ||
+                    (authority ? "Verified approved Quote" : "Approval pending")}
+                </dd>
+              </div>
+
+              <div>
+                <dt>Quote version</dt>
+                <dd>
+                  {authority?.issuedQuoteVersion
+                    ? `Version ${authority.issuedQuoteVersion}`
+                    : "Approval pending"}
+                </dd>
+              </div>
+
+              <div>
+                <dt>Service address</dt>
+                <dd>
+                  {content.serviceLocation ||
+                    content.customerLocation ||
+                    "Not confirmed"}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          {money ? (
+            <section className="deposit-request-preview-section deposit-request-preview-financial">
+              <header className="deposit-request-preview-section-heading">
+                <div>
+                  <span>Financial snapshot</span>
+                  <h3>Deposit summary</h3>
+                </div>
+                <strong>{depositPreviewStatus.label}</strong>
+              </header>
+
+              <div className="deposit-request-money-grid">
+                <div className="deposit-request-money-card">
+                  <span>Project total</span>
+                  <strong>{money.project}</strong>
+                </div>
+
+                <div className="deposit-request-money-card">
+                  <span>Deposit requested</span>
+                  <strong>{money.requested}</strong>
+                </div>
+
+                <div className="deposit-request-money-card">
+                  <span>Received</span>
+                  <strong>{money.received}</strong>
+                </div>
+
+                <div className="deposit-request-money-card">
+                  <span>Still needed</span>
+                  <strong>{money.needed}</strong>
+                </div>
+
+                <div className="deposit-request-money-card deposit-request-money-card-wide">
+                  <span>Remaining project balance</span>
+                  <strong>{money.after}</strong>
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section
+              className="deposit-request-preview-section deposit-request-preview-preparation"
+              role="status"
+            >
+              <header className="deposit-request-preview-section-heading">
+                <div>
+                  <span>Deposit status</span>
+                  <h3>
+                    {authority?.state === "NOT_REQUIRED"
+                      ? "No deposit required"
+                      : "Deposit not ready to send"}
+                  </h3>
+                </div>
+              </header>
+
+              <p>
+                {authority?.state === "NOT_REQUIRED"
+                  ? "This approved Quote has no pre-work deposit requirement."
+                  : "An approved Quote with an unpaid deposit requirement is required before sending a Deposit Request."}
+              </p>
+            </section>
+          )}
+
+          <section className="deposit-request-preview-section deposit-request-preview-scope">
+            <header className="deposit-request-preview-section-heading">
+              <div>
+                <span>Approved work</span>
+                <h3>Scope</h3>
+              </div>
+            </header>
+
+            <p>
+              {content.recommendedSolution ||
+                content.projectDescription ||
+                "Approved scope is not confirmed yet."}
+            </p>
+          </section>
+
+          <section className="deposit-request-preview-section deposit-request-preview-message">
+            <header className="deposit-request-preview-section-heading">
+              <div>
+                <span>Customer-facing details</span>
+                <h3>Request message</h3>
+              </div>
+            </header>
+
+            <dl className="deposit-request-message-list">
+              {depositSatisfied ? (
+                <>
+                  <div>
+                    <dt>Payment status</dt>
+                    <dd>Deposit received in full</dd>
+                  </div>
+
+                  {content.paymentInstructions ? (
+                    <div>
+                      <dt>Original payment instructions</dt>
+                      <dd>{content.paymentInstructions}</dd>
+                    </div>
+                  ) : null}
+
+                  {content.notes ? (
+                    <div>
+                      <dt>Note</dt>
+                      <dd>{content.notes}</dd>
+                    </div>
+                  ) : null}
+
+                  {content.customerMessage ? (
+                    <div className="deposit-request-historical-message">
+                      <dt>Original request message</dt>
+                      <dd>
+                        <span>{content.customerMessage}</span>
+                        <small>
+                          Historical wording · no longer active
+                        </small>
+                      </dd>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {content.dueDate ? (
+                    <div>
+                      <dt>Due date</dt>
+                      <dd>{content.dueDate}</dd>
+                    </div>
+                  ) : null}
+
+                  {content.paymentInstructions ? (
+                    <div>
+                      <dt>Payment instructions</dt>
+                      <dd>{content.paymentInstructions}</dd>
+                    </div>
+                  ) : null}
+
+                  {content.notes ? (
+                    <div>
+                      <dt>Note</dt>
+                      <dd>{content.notes}</dd>
+                    </div>
+                  ) : null}
+
+                  {content.customerMessage ? (
+                    <div>
+                      <dt>Customer message</dt>
+                      <dd>{content.customerMessage}</dd>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </dl>
+          </section>
+
+          {eligible ? (
+            <div className="deposit-request-actions">
+              <button
+                type="button"
+                onClick={saveClick}
+                disabled={busy || (document && !dirty)}
+              >
+                {busy ? "Working…" : "Save Draft"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void pdf("preview")}
+                disabled={!document || dirty || busy}
+              >
+                Preview PDF
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void pdf("download")}
+                disabled={!document || dirty || busy}
+              >
+                Download PDF
+              </button>
+
+              <button
+                type="button"
+                onClick={beginDelivery}
+                disabled={busy}
+              >
+                {deliveryLabel(deliveries)}
+              </button>
+            </div>
+          ) : depositSatisfied ? (
+            <section
+              className="deposit-request-next-step"
+              aria-label="Deposit Request next step"
+            >
+              <span>Next step</span>
+              <strong>Deposit requirement is complete</strong>
+              <p>
+                {money
+                  ? `${money.after} remains on the approved project after the deposit.`
+                  : "The deposit requirement has been satisfied."}
+              </p>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onDocumentChange("invoice", {
+                    depositSatisfied: true,
+                  })
+                }
+              >
+                Continue to Invoice
+              </button>
+            </section>
+          ) : (
+            <section
+              className="deposit-request-action-guidance"
+              aria-label="Deposit Request next step"
+            >
+              <strong>
+                {authority?.state === "NOT_REQUIRED"
+                  ? "No Deposit Request required"
+                  : "Deposit Request unavailable"}
+              </strong>
+
+              <p>
+                {authority?.state === "NOT_REQUIRED"
+                  ? "The approved Quote does not require a pre-work deposit."
+                  : "Complete the governed Quote and deposit requirement before saving or sending this request."}
+              </p>
+            </section>
+          )}
+
           {deliveries.length ? <section><h3>Delivery history</h3><ul>{deliveries.map((item) => <li key={item.id}>{item.state === "FAILED" ? "Deposit request delivery failed" : item.channel === "EMAIL" ? "Deposit request emailed" : "Deposit request sent in Meetro"} · {new Date(item.requestedAt).toLocaleString()}</li>)}</ul></section> : null}
         </section>
       </main>

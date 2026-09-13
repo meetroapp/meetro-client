@@ -1,3 +1,4 @@
+import { matchesOpportunityFilter, parseOpportunityFilter, opportunityFilterRoute } from "../utils/opportunityPresentationFilters.js";
 import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import SafeBackBar from "../components/SafeBackBar";
@@ -40,6 +41,12 @@ import {
 import { parseBusinessLeadAlertRoute } from "../utils/alertWorkflowRoutes.js";
 
 function BusinessLeads({ setPage }) {
+  const [presentationFilter, setPresentationFilter] = useState(() => parseOpportunityFilter(window.location.hash));
+  useEffect(() => {
+    const update = () => setPresentationFilter(parseOpportunityFilter(window.location.hash));
+    window.addEventListener("hashchange", update);
+    return () => window.removeEventListener("hashchange", update);
+  }, []);
   const emergencyRefreshCoordinatorRef = useRef(null);
   const [language, setLanguage] = useState(getLanguage());
   const [status, setStatus] = useState("loading");
@@ -56,6 +63,7 @@ function BusinessLeads({ setPage }) {
     useState({});
   const [reloadKey, setReloadKey] = useState(0);
   const isProfessional = isProfessionalSession();
+  const visibleOpportunities = opportunities.filter((record) => matchesOpportunityFilter(record, presentationFilter));
   const alertRoute = parseBusinessLeadAlertRoute(
     typeof window === "undefined" ? "" : window.location.hash
   );
@@ -391,7 +399,12 @@ function BusinessLeads({ setPage }) {
         </p>
       </div>
 
-      <section
+      <nav className="opportunity-presentation-filters" aria-label="Opportunity filter">
+        {[["all", "All Opportunities"], ["new", "New"], ["awaiting-response", "Awaiting Response"]].map(([filter, label]) => (
+          <button key={filter} type="button" aria-pressed={presentationFilter === filter} onClick={() => { setPresentationFilter(filter); setPage(opportunityFilterRoute(filter)); }}>{label}</button>
+        ))}
+      </nav>
+      {presentationFilter === "all" && <section
         style={leadSection}
         aria-labelledby="emergency-opportunities-title"
       >
@@ -546,7 +559,7 @@ function BusinessLeads({ setPage }) {
             })}
           </div>
         )}
-      </section>
+      </section>}
 
       {status === PROFESSIONAL_OPPORTUNITY_STATUS.LOADING ? (
         <section style={unavailableCard} role="status">Loading request opportunities…</section>
@@ -557,7 +570,7 @@ function BusinessLeads({ setPage }) {
           <p style={stateText}>Meetro could not verify eligible requests. Try again.</p>
           <button style={primaryButton} onClick={() => setReloadKey((value) => value + 1)}>Try Again</button>
         </section>
-      ) : status === PROFESSIONAL_OPPORTUNITY_STATUS.EMPTY ? (
+      ) : status === PROFESSIONAL_OPPORTUNITY_STATUS.EMPTY || visibleOpportunities.length === 0 ? (
         <section style={unavailableCard} role="status">
           <div style={stateIcon}>LEAD</div>
           <h2 style={stateTitle}>No matching requests are available right now.</h2>
@@ -565,7 +578,7 @@ function BusinessLeads({ setPage }) {
         </section>
       ) : (
         <section style={leadList} aria-label="Eligible request opportunities">
-          {opportunities.map((opportunity) => {
+          {visibleOpportunities.map((opportunity) => {
             const conversationContext =
               getBusinessLeadConversationContext(opportunity);
             const cardKey = conversationContext

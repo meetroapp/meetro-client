@@ -180,3 +180,19 @@ test("unsafe history and completion responses fail closed", async () => {
     }),
   }), { code: "UNSAFE_JOB_COMPLETION_RESPONSE" });
 });
+
+const businessAuthority = { kind: 'BUSINESS_CUSTOMER', contractorProfileId: 10,
+  businessContactId: '77777777-7777-4777-8777-777777777777',
+  customerRelationshipId: '88888888-8888-4888-8888-888888888888' };
+for (const [name, factory, validate] of [
+  ['completion review',review,validateJobCompletionReview],
+  ['completion receipt',completion,validateJobCompletion],
+  ['completed history',historySummary,validateJobHistorySummary],
+]) test(`external ${name} requires explicit durable customer authority without request IDs`, () => {
+  const external=factory({requestId:null,relationshipId:null,authority:businessAuthority,...(name==='completed history'?{conversationId:null}:{})});
+  assert.ok(validate(external,{jobId:JOB_ID}));
+  assert.equal(validate({...external,authority:undefined},{jobId:JOB_ID}),null);
+  assert.equal(validate({...external,requestId:14},{jobId:JOB_ID}),null);
+  assert.equal(validate({...external,authority:{...businessAuthority,customerRelationshipId:'invalid'}},{jobId:JOB_ID}),null);
+  assert.ok(validate(factory(),{jobId:JOB_ID}));
+});

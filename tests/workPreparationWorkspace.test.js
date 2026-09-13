@@ -23,7 +23,7 @@ test("professional workspace is integrated inside Work Plan and reads the dedica
   const compact = source("src/components/CompactWorkPlanPreparation.jsx");
   const workspace = source("src/components/ProfessionalWorkPreparationWorkspace.jsx");
   const api = source("src/utils/workPreparationApi.js");
-  assert.match(dashboard, /canonical-job-evaluation[\s\S]*canonical-job-quotes[\s\S]*canonical-job-work-plan[\s\S]*canonical-job-completion-invoice/);
+  assert.match(dashboard, /canonical-job-evaluation[\s\S]*canonical-job-quotes[\s\S]*canonical-job-deposit[\s\S]*canonical-job-schedule[\s\S]*canonical-job-work-plan[\s\S]*canonical-job-complete[\s\S]*canonical-job-invoice/);
   assert.doesNotMatch(dashboard, /id="canonical-job-work-preparation"/);
   assert.match(workPlan, /CompactWorkPlanPreparation/);
   assert.match(compact, /ProfessionalWorkPreparationWorkspace/);
@@ -39,7 +39,7 @@ test("workspace exposes three dimensions, explicit materialization, and refresh-
     "materializeWorkPreparation", "recordWorkPreparationPurchase", "recordWorkPreparationEvent",
     "reviseWorkPreparation", "await load()", "commitmentLocked", "safeNextActions",
   ]) assert.match(workspace, new RegExp(marker.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-  assert.match(getWorkPreparationCopy("en").emptyBody, /Viewing this section does not create a plan/);
+  assert.match(getWorkPreparationCopy("en").emptyBody, /Nothing is created until you choose Create plan/);
 });
 
 test("actions stay bounded by provider, item kind, deposit gate, and canonical safe actions", () => {

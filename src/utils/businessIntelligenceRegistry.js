@@ -106,7 +106,7 @@ export const BUSINESS_INTELLIGENCE_REGISTRY = toRegistryMap([
   {
     id: "customer_history_insights",
     name: "Customer History Insights",
-    purpose: "Shows business patterns across customer relationships and closed history.",
+    purpose: "Shows business patterns across Customer History and closed Jobs.",
     futureExamples: [
       "Repeat customers",
       "Customer service history",

@@ -45,7 +45,7 @@ export function askMeetroRecordRoute(context, kind, role = "personal") {
 }
 
 const commandPrefix = "(?:(?:please|can you|could you|would you|help me|i want to) )?";
-const changeClause = new RegExp(`^${commandPrefix}(?:create|prepare|revise|update|edit|change|record|mark|complete|finish|schedule|reschedule|approve|accept|cancel|add|attach|upload|continue|make|crear|preparar|actualizar|cambiar|registrar|completar|agendar)\\b`);
+const changeClause = new RegExp(`^${commandPrefix}(?:send|create|prepare|revise|update|edit|change|record|mark|complete|finish|schedule|reschedule|approve|accept|cancel|add|attach|upload|continue|make|crear|preparar|actualizar|cambiar|registrar|completar|agendar)\\b`);
 const informationClause = /^(?:(?:please|can you|could you|would you)\s+)?(?:tell me|show me how|should i|can i|do i|explain|troubleshoot|diagnos(?:e|is)|summari[sz]e|compare|interpret|why|how|what|whether|explica|explicar|diagnosticar|resume|comparar|por que|como|help\b|(?:i\s+)?(?:need|want)\s+(?:help|guidance|advice)|(?:check|review)\s+(?:whether|if|why|how|what))\b/;
 
 const sourceFirstQuoteToInvoiceClause =
@@ -122,7 +122,7 @@ export function planAskMeetroActions(instruction, { context = {}, role = "person
   if (command("cancel|cancelar", "job|visit|appointment|trabajo|visita")) add("CANCEL", "Review cancellation", "JOB");
   if (command("add|attach|upload|agregar|subir", "photo|photos|picture|pictures|foto|fotos")) add("PHOTOS", "Review photos for the Project Folder");
   if (!actions.some((item) => item.kind === "QUOTE_APPROVAL") && command("create|prepare|revise|update|edit|continue|crear|preparar|actualizar", "quote|cotizacion")) add("QUOTE", "Review Quote instructions");
-  if (command("create|prepare|revise|update|edit|crear|preparar|actualizar", "invoice|factura")) add("INVOICE", "Prepare or review Invoice");
+  if (command("send|create|prepare|revise|update|edit|crear|preparar|actualizar", "invoice|factura")) add("INVOICE", "Prepare or review Invoice");
   return actions.map((action) => {
     const details = [];
     if (["PAYMENT", "DEPOSIT"].includes(action.kind)) {

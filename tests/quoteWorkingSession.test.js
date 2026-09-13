@@ -71,6 +71,7 @@ function workspace({ initialized = true, failSave = false } = {}) {
     clearPersistedQuoteAuthority() {}, hydrateLinkedCustomer() {}, restoreJobAnalysisPresentation() {},
     hydratePersistedQuoteAuthority() {}, refreshDeliveryHistory() {},
     createQuickQuoteAnalysisPresentationState: () => ({}),
+    onHostedDocumentSaved: null,
     onDurableDocumentOpened: (doc) => events.push(["opened", doc.id]),
     onApplyQuotePatch: (patch) => { scope.quote = { ...patch }; },
     onRestorePhotos: (photos) => { scope.photos = photos; },

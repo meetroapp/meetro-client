@@ -1194,7 +1194,7 @@ test("workspace exposes selected-Job Evaluation Visit authority before Evaluatio
   const workspace = await loadCanonicalVisitWorkspace({
     record: record(),
     dependencies: {
-      loadEvaluation: async () => ({ evaluation: { id: ids.evaluation } }),
+      loadEvaluation: async () => ({ evaluation: null }),
       loadQuotes: async () => [],
       fetchAuthority: async () =>
         normalizeCanonicalVisitAuthority(
@@ -1203,7 +1203,7 @@ test("workspace exposes selected-Job Evaluation Visit authority before Evaluatio
         ),
       fetchVisits: async () => {
         visitReads += 1;
-        return [];
+        return { visits: [], actions: { canPropose: true } };
       },
       fetchDetail: async () => null,
     },
@@ -1230,7 +1230,9 @@ test("workspace exposes Approved Work only for exact ISSUED + APPROVED Quote tru
           { authority: approvedAuthority() },
           { jobId: ids.job, purpose: "APPROVED_WORK", subjectId: ids.quote }
         ),
-      fetchVisits: async () => [approvedVisit()],
+      fetchVisits: async ({ includeAuthority }) => includeAuthority
+        ? { visits: [], actions: { canPropose: false } }
+        : [approvedVisit()],
       fetchDetail: async () => {
         const current = approvedVisit();
         return normalizeCanonicalVisit(
@@ -1357,4 +1359,51 @@ test("reschedule uses the current version and same Visit endpoint even with earl
   assert.equal(result.id, ids.visit);
   assert.equal(current.currentVersion, 3);
   assert.equal(current.history.versions[0].version, 1);
+});
+
+test("Evaluation collection preserves only the authenticated proposal boolean", async () => {
+  for (const canPropose of [true, false]) {
+    let reads = 0;
+    const collection = await fetchCanonicalVisits({
+      jobId: ids.job, purpose: "EVALUATION", includeAuthority: true,
+      authFetchImpl: async (endpoint, options) => {
+        reads += 1;
+        assert.equal(endpoint, `/jobs/${ids.job}/visits`);
+        assert.equal(options.method, "GET");
+        return { response: { ok: true, status: 200 }, data: { success: true, visits: [], actions: { canPropose } } };
+      },
+    });
+    assert.deepEqual(collection, { visits: [], actions: { canPropose } });
+    assert.equal(reads, 1);
+  }
+});
+
+test("Evaluation scheduling does not consume the approved-work deposit gate", async () => {
+  const purposes = [];
+  const workspace = await loadCanonicalVisitWorkspace({
+    record: record(),
+    dependencies: {
+      loadEvaluation: async () => null,
+      loadQuotes: async () => [{ id: ids.quote, status: "ISSUED", decisionState: "APPROVED" }],
+      fetchAuthority: async ({ purpose }) => {
+        purposes.push(purpose);
+        return {
+          state: "LOCKED", actions: { canActivate: false, canPropose: false },
+          deposit: { state: "REQUIRED", remainingMinor: 51000, currency: "USD", schedulingLocked: true },
+        };
+      },
+      fetchVisits: async input => {
+        assert.equal(input.purpose, "EVALUATION");
+        assert.equal(input.evaluationId, null);
+        assert.equal(input.includeAuthority, true);
+        return { visits: [], actions: { canPropose: true } };
+      },
+      fetchDetail: async () => { throw Error("No Visit exists yet"); },
+    },
+  });
+  assert.deepEqual(purposes, ["APPROVED_WORK"]);
+  assert.equal(workspace.evaluation.authority.actions.canPropose, true);
+  assert.equal(workspace.approvedWork[0].authority.state, "LOCKED");
+  assert.equal(workspace.approvedWork[0].authority.actions.canPropose, false);
+  assert.equal(workspace.approvedWork[0].authority.deposit.remainingMinor, 51000);
 });

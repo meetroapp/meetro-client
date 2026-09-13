@@ -214,12 +214,18 @@ const NEXT_ACTION_SECTION = Object.freeze({
   PREPARE_RECOMMENDATIONS: "findings",
   BUILD_QUOTE: "quotes",
   REVIEW_DRAFT_QUOTE: "quotes",
+  REVIEW_QUOTE_DELIVERY: "quotes",
   WAIT_FOR_CUSTOMER_DECISION: "quotes",
   REVIEW_DECLINED_QUOTE: "quotes",
+  REVIEW_APPROVED_QUOTE_TERMS: "deposit",
   REVIEW_ACTIVE_WORK: "workPlan",
   REVIEW_BLOCKED_WORK: "workPlan",
-  REVIEW_WORKSTREAM_COMPLETION: "workPlan",
-  READY_TO_INVOICE: "completionInvoice",
+  REVIEW_WORKSTREAM_COMPLETION: "completeJob",
+  READY_TO_INVOICE: "invoice",
+  REVIEW_DRAFT_INVOICE: "invoice",
+  WAIT_FOR_PAYMENT: "invoice",
+  REVIEW_BALANCE_DUE: "invoice",
+  REVIEW_PAID_INVOICE: "invoice",
 });
 
 export const WORK_CENTER_WORKSPACE_LANGUAGES = Object.freeze(["en", "es", "fr", "pt-BR"]);
@@ -232,6 +238,6 @@ export function resolveWorkCenterSectionForNextAction(nextActionCode = "", stage
   const action = String(nextActionCode || "").trim();
   const stage = String(stageCode || "").trim();
   const label = String(nextActionLabel || "").trim();
-  if (action === "REVIEW_ACTIVE_WORK" && (stage === "WORK_READY" || /schedule/i.test(label))) return "visits";
-  return NEXT_ACTION_SECTION[action] || "visits";
+  if (action === "REVIEW_ACTIVE_WORK" && (stage === "WORK_READY" || /schedule/i.test(label))) return "schedule";
+  return NEXT_ACTION_SECTION[action] || "schedule";
 }

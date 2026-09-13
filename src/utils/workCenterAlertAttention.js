@@ -130,14 +130,16 @@ export function getBusinessWorkCenterPanelId(stage) {
     case "quote":
       return "canonical-job-quotes";
     case "deposit":
+      return "canonical-job-deposit";
     case "schedule":
-      return "canonical-job-deposit-scheduling";
+      return "canonical-job-schedule";
     case "work":
       return "canonical-job-work-plan";
-    case "invoice":
     case "completion":
     case "review":
-      return "canonical-job-completion-invoice";
+      return "canonical-job-complete";
+    case "invoice":
+      return "canonical-job-invoice";
     default:
       return null;
   }

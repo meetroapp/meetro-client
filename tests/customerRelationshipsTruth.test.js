@@ -50,7 +50,8 @@ test("Customer Relationships direct route and professional navigation remain saf
   assert.match(appSource, /"customerRelationshipsCenter"[\s\S]*"invoiceBuilder"/);
   assert.match(navSource, /page: "customerRelationshipsCenter"/);
   assert.match(businessToolsSource, /setPage\("customerRelationshipsCenter"\)/);
-  assert.match(pageSource, /setPage\(navigationContext\?\.returnPage \|\| "businessCommandCenter"\)/);
+  assert.match(pageSource, /navigate\(navigationContext\?\.returnPage \|\| "businessCommandCenter"\)/);
+  assert.match(pageSource, /setPageRef\.current = setPage/);
   assert.match(
     pageSource,
     /<BottomNav setPage=\{setPage\} currentPage="customerRelationshipsCenter" \/>/

@@ -77,7 +77,7 @@ test("canonical Job/section state survives refreshed objects and is independent 
   assert.equal(getPersistedWorkCenterAccordionOpen(state, "unknown"), undefined);
   assert.match(dashboard, /getCanonicalCurrentJobIdentityKey\(selectedWorkCenterJob\)/);
   assert.match(dashboard, /className="work-center-content-grid" key=\{canonicalAccordionJobIdentity\}/);
-  assert.equal((dashboard.match(/\.\.\.getCanonicalAccordionPresentation\(/g) || []).length, 5);
+  assert.equal((dashboard.match(/\.\.\.getCanonicalAccordionPresentation\(/g) || []).length, 7);
 });
 
 test("rendered header is passive, dedicated control is named, and body is outside the button", async () => {

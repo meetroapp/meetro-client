@@ -1,8 +1,5 @@
-import { buildCanonicalInvoiceDocumentModel } from "./customerDocumentModel.js";
-import {
-  downloadCustomerDocumentPdf,
-  shareCustomerDocumentPdf,
-} from "./customerDocumentPdf.js";
+import { fetchCanonicalInvoicePdf } from "./invoicePaymentApi.js";
+import { downloadBusinessDocumentPdfArtifact, shareBusinessDocumentPdfArtifact } from "./businessDocumentDeviceShare.js";
 import { formatLocaleCurrency } from "./localeFormat.js";
 import { getInvoiceCopy } from "./invoicePaymentLanguage.js";
 
@@ -40,23 +37,27 @@ function cancelled(error) {
 export async function shareInvoiceExternally({
   invoice,
   language = "en",
-  branding = {},
-  sharePdf = shareCustomerDocumentPdf,
+  setPage,
+  getPdf = fetchCanonicalInvoicePdf,
+  sharePdf = shareBusinessDocumentPdfArtifact,
 } = {}) {
   const presentation = buildInvoiceSharePresentation(invoice, { language });
-  const model = buildCanonicalInvoiceDocumentModel(invoice, { locale: language, branding });
-  if (!presentation || !model) return { ok: false, method: "unavailable" };
+  if (!presentation) return { ok: false, method: "unavailable" };
   try {
-    return await sharePdf({ model, message: presentation.text });
+    const artifact = await getPdf({ invoiceId: invoice.invoiceId, expectedVersion: invoice.currentVersion, setPage });
+    const result = await sharePdf({ artifact, message: presentation.text });
+    if (result.method === "fallback" && downloadBusinessDocumentPdfArtifact(artifact)) return { ok: true, method: "download" };
+    return result;
   } catch (error) {
     if (cancelled(error)) return { ok: false, method: "cancelled" };
     throw error;
   }
 }
 
-export async function downloadInvoicePdf({ invoice, language = "en", branding = {}, download = downloadCustomerDocumentPdf } = {}) {
-  const model = buildCanonicalInvoiceDocumentModel(invoice, { locale: language, branding });
-  return Boolean(model && await download(model));
+export async function downloadInvoicePdf({ invoice, audience = "professional", setPage, getPdf = fetchCanonicalInvoicePdf, download = downloadBusinessDocumentPdfArtifact } = {}) {
+  if (!invoice?.invoiceId) return false;
+  const artifact = await getPdf({ invoiceId: invoice.invoiceId, expectedVersion: invoice.currentVersion, audience, setPage });
+  return Boolean(await download(artifact));
 }
 
 export async function copyInvoiceDetails({
@@ -73,6 +74,6 @@ export async function copyInvoiceDetails({
 export function buildInvoiceEmailUrl(invoice, { language = "en" } = {}) {
   const presentation = buildInvoiceSharePresentation(invoice, { language });
   return presentation
-    ? `mailto:?subject=${encodeURIComponent(presentation.title)}&body=${encodeURIComponent(presentation.text)}`
+    ? `mailto:?subject=${encodeURIComponent(presentation.title)}&body=${encodeURIComponent(`${presentation.text}\n\nPlease attach the downloaded PDF before sending.`)}`
     : null;
 }

@@ -1,3 +1,8 @@
+import { t } from "../utils/language.js";
+import { useState } from "react";
+import { fetchCanonicalInvoicePdf } from "../utils/invoicePaymentApi.js";
+import { previewBusinessDocumentPdfArtifact, downloadBusinessDocumentPdfArtifact } from "../utils/businessDocumentDeviceShare.js";
+import { invoicePaymentProvenance } from "../utils/invoicePaymentProvenance.js";
 import { formatLocaleCurrency } from "../utils/localeFormat.js";
 import { getInvoiceCopy } from "../utils/invoicePaymentLanguage.js";
 
@@ -15,9 +20,21 @@ function lineageLabel(value, copy) {
 }
 
 export default function CanonicalInvoiceDetail({ invoice, language = "en", actions = null }) {
+  const [pdfState, setPdfState] = useState({ busy: false, error: "" });
   if (!invoice) return null;
   const copy = getInvoiceCopy(language);
+  const provenance = invoicePaymentProvenance(invoice);
   const money = (minor) => formatLocaleCurrency(minor / 100, invoice.currency, {}, language);
+  async function openPdf(preview) {
+    if (pdfState.busy) return;
+    setPdfState({ busy: true, error: "" });
+    try {
+      const artifact = await fetchCanonicalInvoicePdf({ invoiceId: invoice.invoiceId, expectedVersion: invoice.currentVersion, audience: invoice.currentVersion ? "professional" : "customer" });
+      const ok = preview ? await previewBusinessDocumentPdfArtifact(artifact) : downloadBusinessDocumentPdfArtifact(artifact);
+      if (!ok) throw new Error("The PDF could not be opened on this device.");
+      setPdfState({ busy: false, error: "" });
+    } catch (error) { setPdfState({ busy: false, error: error?.message || "The Invoice PDF is unavailable." }); }
+  }
   return (
     <article
       style={styles.detail}
@@ -37,9 +54,9 @@ export default function CanonicalInvoiceDetail({ invoice, language = "en", actio
       </header>
 
       <div style={styles.summaryGrid}>
-        <div style={styles.summaryItem}><span>{copy.total}</span><strong>{money(invoice.totalMinor)}</strong></div>
-        <div style={styles.summaryItem}><span>{copy.paid}</span><strong>{money(invoice.paidMinor)}</strong></div>
-        <div style={styles.summaryItem}><span>{copy.balance}</span><strong>{money(invoice.balanceMinor)}</strong></div>
+        <div style={styles.summaryItem}><span>{copy.total}</span><strong style={styles.moneyValue}>{money(invoice.totalMinor)}</strong></div>
+        <div style={styles.summaryItem}><span>{copy.paid}</span><strong style={styles.moneyValue}>{money(invoice.paidMinor)}</strong></div>
+        <div style={styles.summaryItem}><span>{copy.balance}</span><strong style={styles.moneyValue}>{money(invoice.balanceMinor)}</strong></div>
       </div>
 
       <div style={styles.due}>
@@ -49,13 +66,13 @@ export default function CanonicalInvoiceDetail({ invoice, language = "en", actio
 
       <div style={styles.lines}>
         {invoice.lineItems.map((item) => (
-          <div key={`${item.sequence}-${item.description}`} style={styles.line}>
+          <div key={`${item.sequence}-${item.description}`} style={styles.line} data-invoice-line-item={item.sequence}>
             <div style={styles.lineCopy}>
               <span style={styles.lineage}>{lineageLabel(item.lineageLabel, copy)}</span>
               <strong>{item.description}</strong>
               <span>{item.quantity} x {money(item.unitAmountMinor)}</span>
             </div>
-            <strong>{money(item.lineTotalMinor)}</strong>
+            <strong style={styles.moneyValue} data-invoice-money="line-total">{money(item.lineTotalMinor)}</strong>
           </div>
         ))}
       </div>
@@ -69,11 +86,17 @@ export default function CanonicalInvoiceDetail({ invoice, language = "en", actio
 
       <section style={styles.paymentSection} aria-label={copy.payments}>
         <h4 style={styles.sectionTitle}>{copy.payments}</h4>
-        {invoice.payments.length === 0 ? (
+        {provenance.appliedBeforeInvoiceMinor > 0 && (
+          <div style={styles.payment} data-payment-source="prior-applied">
+            <div style={styles.paymentCopy}><strong>{t("wc52priorPayments", language)}</strong><p style={styles.muted}>{t("wc52priorPaymentsHelp", language)}</p></div>
+            <strong style={styles.moneyValue} data-invoice-money="prior-applied">{money(provenance.appliedBeforeInvoiceMinor)}</strong>
+          </div>
+        )}
+        {invoice.payments.length === 0 && provenance.appliedBeforeInvoiceMinor === 0 ? (
           <p style={styles.muted}>{copy.noPayments}</p>
         ) : invoice.payments.map((payment, index) => (
           <div key={payment.paymentId || `${payment.recordedAt}-${index}`} style={styles.payment}>
-            <div><strong>{money(payment.amountMinor)}</strong><span>{copy[payment.method === "BANK_TRANSFER" ? "bankTransfer" : payment.method.toLowerCase()] || copy.other}</span></div>
+            <div style={styles.paymentCopy}><strong style={styles.moneyValue}>{money(payment.amountMinor)}</strong><span>{copy[payment.method === "BANK_TRANSFER" ? "bankTransfer" : payment.method.toLowerCase()] || copy.other}</span></div>
             <span>{payment.receivedDate}</span>
           </div>
         ))}
@@ -82,6 +105,11 @@ export default function CanonicalInvoiceDetail({ invoice, language = "en", actio
       {invoice.actions?.canPayOnline === false && (
         <p style={styles.offline}>{copy.onlineUnavailable}</p>
       )}
+      <div style={styles.header}>
+        <button type="button" disabled={pdfState.busy} onClick={() => openPdf(true)}>Preview PDF</button>
+        <button type="button" disabled={pdfState.busy} onClick={() => openPdf(false)}>Download PDF</button>
+      </div>
+      {pdfState.error && <p role="alert">{pdfState.error}</p>}
       {actions}
     </article>
   );
@@ -100,13 +128,15 @@ const styles = {
   summaryItem: { display: "grid", gap: 4, minWidth: 0, padding: 12, border: "1px solid #e4e8e5", borderRadius: 6 },
   due: { display: "flex", flexWrap: "wrap", justifyContent: "space-between", gap: 8, paddingBottom: 12, borderBottom: "1px solid #e4e8e5" },
   lines: { display: "grid", gap: 0 },
-  line: { display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12, minWidth: 0, padding: "12px 0", borderBottom: "1px solid #edf0ed" },
+  line: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "center", gap: 12, minWidth: 0, padding: "12px 0", borderBottom: "1px solid #edf0ed" },
   lineCopy: { display: "grid", gap: 3, minWidth: 0, overflowWrap: "anywhere" },
   lineage: { color: "#0f766e", fontSize: 11, fontWeight: 900, textTransform: "uppercase" },
   notes: { padding: 12, background: "#f7faf8", borderRadius: 6, overflowWrap: "anywhere" },
   paymentSection: { display: "grid", gap: 8 },
   sectionTitle: { margin: 0, fontSize: 16, letterSpacing: 0 },
-  payment: { display: "flex", justifyContent: "space-between", gap: 12, padding: 10, border: "1px solid #e4e8e5", borderRadius: 6 },
+  payment: { display: "grid", gridTemplateColumns: "minmax(0, 1fr) auto", alignItems: "start", gap: 12, minWidth: 0, padding: 10, border: "1px solid #e4e8e5", borderRadius: 6 },
+  paymentCopy: { display: "grid", gap: 3, minWidth: 0, overflowWrap: "anywhere" },
+  moneyValue: { minWidth: "max-content", whiteSpace: "nowrap", flexShrink: 0, textAlign: "right" },
   muted: { margin: 0, color: "#667267" },
   offline: { margin: 0, padding: 12, borderLeft: "4px solid #0f766e", background: "#eff8f7", color: "#20433f" },
 };

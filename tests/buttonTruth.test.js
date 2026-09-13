@@ -62,7 +62,7 @@ test("Work Center opportunity and emergency labels match their handlers", () => 
   assert.match(contractorDashboardSource, /\{translate\("openEmergencyChat"\)\}/);
 });
 
-test("Work Center landing copy stays responsibility-first and labels legacy domains read-only", () => {
+test("Work Center landing copy follows the approved opportunities and active-jobs hierarchy", () => {
   assert.equal(
     t("workCenterPurposeStatement", "en"),
     "See what needs your attention and what to do next."
@@ -71,10 +71,10 @@ test("Work Center landing copy stays responsibility-first and labels legacy doma
     t("workCenterPurposeStatement", "es"),
     "Ve qué necesita tu atención y qué hacer después."
   );
-  assert.match(
-    contractorDashboardSource,
-    /translate\("workCenterPurposeStatement", activeLanguage\)/
-  );
+  assert.match(contractorDashboardSource, /<h1>\{translate\("workCenter", activeLanguage\)\}<\/h1>/);
+  assert.match(contractorDashboardSource, /translate\("wc52subtitle", activeLanguage\)/);
+  assert.match(contractorDashboardSource, /className="work-center-opportunities-banner/);
+  assert.match(contractorDashboardSource, /<h2 id="work-center-active-jobs-title">\{translate\("wc52activeJobs", activeLanguage\)\}<\/h2>/);
   assert.match(contractorDashboardSource, /workCenterNewRequestsThatNeedADecision/);
   assert.match(contractorDashboardSource, /LegacyWorkCenterReadOnlyPanel/);
   assert.match(legacyWorkCenterSource, /Read-only/);

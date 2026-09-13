@@ -23,7 +23,8 @@ test("canonical Invoice workspace routes completed Jobs to the builder and final
     "expectedVersion", "Payments received", "Amount still due",
   ]) assert.match(source, new RegExp(required));
   assert.doesNotMatch(source, /createCanonicalInvoice|data-invoice-create-job-id/);
-  assert.doesNotMatch(source, /issueCanonicalInvoice/);
+  assert.match(source, /issueCanonicalInvoice/);
+  assert.match(source, /fetchJobCompletionReview/);
   assert.doesNotMatch(source, /Pay Now|stripe|paypal|publicInvoice|invoiceUrl/);
   assert.match(source, /minHeight: 44/);
   assert.match(source, /WorkCenterMetricGrid/);

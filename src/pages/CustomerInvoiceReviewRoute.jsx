@@ -27,7 +27,7 @@ export default function CustomerInvoiceReviewRoute({ setPage }) {
     void fetchCustomerInvoice({ invoiceId: route.invoiceId, setPage })
       .then((invoice) => {
         if (!active) return;
-        setState(invoice.jobId === route.jobId
+        setState(invoice.jobId === route.jobId && invoice.conversationId === route.conversationId
           ? { status: "ready", invoice }
           : { status: "error", invoice: null });
       })

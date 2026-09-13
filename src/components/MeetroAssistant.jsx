@@ -3853,13 +3853,13 @@ function MeetroAssistant({ currentPage = "", setPage, onOpenWorkspace }) {
   }
 
   const compactWorkCenterSafeDock =
-    !appLayoutMetrics.desktopMode && currentPage === "contractorDashboard";
+    currentPage === "contractorDashboard";
   const launcherPositionStyle = compactWorkCenterSafeDock
     ? {
         right: `max(${launcherEdgeMargin}px, env(safe-area-inset-right, 0px))`,
-        bottom: launcherPosition ? "auto" : launcherFallbackBottom,
+        bottom: "calc(var(--work-center-dock-bottom, 74px) + var(--work-center-dock-gap, 6px))",
         left: "auto",
-        top: launcherPosition ? `${launcherPosition.y}px` : "auto",
+        top: "auto",
       }
     : launcherPosition
     ? {
@@ -3888,13 +3888,13 @@ function MeetroAssistant({ currentPage = "", setPage, onOpenWorkspace }) {
       {!externalKeyboardOpen && (
       <button
         className="meetro-assistant-launcher"
-        data-position-mode="draggable"
+        data-position-mode={compactWorkCenterSafeDock ? "docked" : "draggable"}
         data-containment-mode={
           compactWorkCenterSafeDock ? "compact-work-center-safe-rail" : "free"
         }
         type="button"
         aria-label={t("companionLauncherLabel", language)}
-        onPointerDown={handleLauncherPointerDown}
+        onPointerDown={compactWorkCenterSafeDock ? undefined : handleLauncherPointerDown}
         onPointerMove={handleLauncherPointerMove}
         onPointerUp={handleLauncherPointerUp}
         onPointerCancel={handleLauncherPointerUp}

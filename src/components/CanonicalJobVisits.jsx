@@ -1,3 +1,4 @@
+import { t } from "../utils/language.js";
 import { useEffect, useMemo, useState } from "react";
 import {
   activateCanonicalVisitAuthority,
@@ -144,6 +145,7 @@ export default function CanonicalJobVisits({
   embedded = false,
   focusVisitId = "",
   depositActionLabel = "Prepare Deposit Request",
+  contentMode = "all",
 }) {
   const environmentEnabled = isCanonicalWorkCenterHydrationEnabled();
   const jobId = String(record.jobId || "").trim();
@@ -541,7 +543,9 @@ export default function CanonicalJobVisits({
       </div>}
 
       <p style={styles.boundaryNote}>
-        {purposeFilter === "EVALUATION"
+        {contentMode === "deposit"
+          ? t("wc52depositSummary")
+          : purposeFilter === "EVALUATION"
           ? "Evaluation Visit timing and history stay with the assessment."
           : purposeFilter === "APPROVED_WORK"
             ? "Schedule the customer-approved Work from this Work Plan."
@@ -559,10 +563,11 @@ export default function CanonicalJobVisits({
 
       {workspace.status === "ready" && subjects.length === 0 && (
         <div style={styles.emptyState}>
-          <strong>Scheduling is not available yet.</strong>
+          <strong>{contentMode === "deposit" ? "Deposit is not available yet." : "Scheduling is not available yet."}</strong>
           <span>
-            Evaluation Visits become available after professional Selection. Work
-            Visits remain unavailable until the customer approves an issued quote.
+            {contentMode === "deposit"
+              ? "Deposit terms appear after the customer approves an issued Quote."
+              : "Evaluation Visits become available after professional Selection. Work Visits remain unavailable until the customer approves an issued quote."}
           </span>
           {workspace.quoteDecisionSummary.pending > 0 && (
             <span>Waiting for the customer’s quote decision before work can be scheduled.</span>
@@ -586,18 +591,24 @@ export default function CanonicalJobVisits({
                 <div style={styles.subjectHeader}>
                   <div>
                     <span style={styles.subjectType}>
-                      {subject.purpose === "EVALUATION"
+                      {contentMode === "deposit"
+                        ? "Approved Quote"
+                        : subject.purpose === "EVALUATION"
                         ? "Evaluation Visit"
                         : "Approved Work"}
                     </span>
                     <strong style={styles.subjectTitle}>
-                      {subject.purpose === "EVALUATION"
+                      {contentMode === "deposit"
+                        ? "Deposit requirement"
+                        : subject.purpose === "EVALUATION"
                         ? "Evaluation Visit"
                         : "Work scheduling"}
                     </strong>
                   </div>
                   <span style={styles.stateBadge}>
-                    {evaluationVisitCompleted
+                    {contentMode === "deposit"
+                      ? t("wc52deposit")
+                      : evaluationVisitCompleted
                       ? STATE_LABELS.COMPLETED
                       : authority
                       ? AUTHORITY_LABELS[authority.state] || authority.state
@@ -609,7 +620,7 @@ export default function CanonicalJobVisits({
                   <p role="alert" style={styles.error}>{subject.error}</p>
                 )}
 
-                {showDeposit && subject.purpose === "APPROVED_WORK" && (
+                {contentMode !== "schedule" && showDeposit && subject.purpose === "APPROVED_WORK" && (
                   <ProfessionalDepositCard
                     jobId={jobId}
                     quoteId={subject.subjectId}
@@ -623,7 +634,7 @@ export default function CanonicalJobVisits({
                   />
                 )}
 
-                {authority && (
+                {contentMode !== "deposit" && authority && (
                   <>
                     {authority.state === "AVAILABLE" && (
                       <p style={styles.message}>
@@ -677,11 +688,11 @@ export default function CanonicalJobVisits({
                   </>
                 )}
 
-                {authority?.state === "ACTIVE" && subject.visits.length === 0 && (
+                {contentMode !== "deposit" && authority?.state === "ACTIVE" && subject.visits.length === 0 && (
                   <p style={styles.message}>No visits have been proposed yet.</p>
                 )}
 
-                {subject.visits.length > 0 && (
+                {contentMode !== "deposit" && subject.visits.length > 0 && (
                   <div style={styles.visitGrid}>
                     {subject.visits.map((visit) => {
                       const changeRequest = unresolvedChangeRequest(visit);
@@ -715,7 +726,7 @@ export default function CanonicalJobVisits({
                           {visit.state === "PROPOSED" && (
                             <p style={styles.pendingNotice}>
                               {visit.actions.canConfirm
-                                ? "Customer proposed a new time. Approve this exact version or edit it."
+                                ? t("wc52visitChange")
                                 : visit.actions.canRecordExternalConfirmation
                                   ? "Waiting for the external customer to confirm this exact proposed time."
                                   : "Waiting for the customer to confirm or propose a new time."}

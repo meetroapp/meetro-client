@@ -1,3 +1,4 @@
+import { authorityKeys, validJobAuthority, jobAuthorityFields, invoiceAuthorityMatchesParty } from "./businessJobAuthority.js";
 import { authFetch } from "./authFetch.js";
 
 const UUID_PATTERN =
@@ -177,7 +178,7 @@ export function validateInvoice(value, { audience, invoiceId = "", jobId = "" } 
   const keys = audience === "professional"
     ? [...baseKeys, "currentVersion", "customerParty"]
     : baseKeys;
-  if (!exact(value, keys) || !Array.isArray(value.lineItems) || value.lineItems.length > 500 ||
+  if (!exact(value, authorityKeys(value, keys)) || !Array.isArray(value.lineItems) || value.lineItems.length > 500 ||
       !Array.isArray(value.payments) || value.payments.length > 500) return null;
   const lines = value.lineItems.map((line) => validateLine(line, audience));
   const payments = value.payments.map((payment) => validatePayment(payment, audience));
@@ -189,6 +190,7 @@ export function validateInvoice(value, { audience, invoiceId = "", jobId = "" } 
     invoiceId: uuid(value.invoiceId),
     invoiceNumber: text(value.invoiceNumber, 40),
     jobId: uuid(value.jobId),
+    ...jobAuthorityFields(value),
     requestId: integer(value.requestId),
     relationshipId: integer(value.relationshipId),
     conversationId: value.conversationId == null ? null : integer(value.conversationId),
@@ -221,7 +223,7 @@ export function validateInvoice(value, { audience, invoiceId = "", jobId = "" } 
   const exactJobId = uuid(jobId);
   if (
     normalized.contractVersion !== 1 || !normalized.invoiceId || !normalized.invoiceNumber ||
-    !normalized.jobId || !normalized.requestId || !normalized.relationshipId ||
+    !normalized.jobId || !validJobAuthority(value) || !invoiceAuthorityMatchesParty(value) ||
     !normalized.business || !normalized.customer || !normalized.job || !normalized.status ||
     !normalized.currency || !normalized.invoiceDate || !normalized.due ||
     lines.some((line) => !line) || payments.some((payment) => !payment) ||
@@ -244,11 +246,11 @@ export function validateInvoice(value, { audience, invoiceId = "", jobId = "" } 
 }
 
 function validateReadyJob(value) {
-  if (!exact(value, [
+  if (!exact(value, authorityKeys(value, [
     "jobId", "requestId", "relationshipId", "customerName", "serviceTitle",
     "completedAt", "completionVersion", "approvedAmount", "paymentsReceivedMinor",
     "amountStillDueMinor", "paymentTerms", "approvedWork",
-  ])) return null;
+  ]))) return null;
   const amount = value.approvedAmount == null ? null : (() => {
     if (!exact(value.approvedAmount, ["currency", "totalMinor"])) return false;
     const normalized = {
@@ -259,6 +261,7 @@ function validateReadyJob(value) {
   })();
   const normalized = {
     jobId: uuid(value.jobId),
+    ...jobAuthorityFields(value),
     requestId: integer(value.requestId),
     relationshipId: integer(value.relationshipId),
     customerName: text(value.customerName, 500),
@@ -281,7 +284,7 @@ function validateReadyJob(value) {
         line.lineTotalMinor === line.quantity * line.unitAmountMinor ? line : null;
     }) : null,
   };
-  return normalized.jobId && normalized.requestId && normalized.relationshipId &&
+  return normalized.jobId && validJobAuthority(value) &&
     normalized.customerName && normalized.serviceTitle && normalized.completedAt &&
     normalized.completionVersion && amount !== false &&
     normalized.paymentsReceivedMinor != null && normalized.amountStillDueMinor != null &&
@@ -296,12 +299,13 @@ export function validateInvoiceWorkspace(value) {
       ]) || !Array.isArray(value.readyJobs) || !Array.isArray(value.invoices)) return null;
   const readyJobs = value.readyJobs.map(validateReadyJob);
   const invoices = value.invoices.map((invoice) => {
-    if (!exact(invoice, [
+    if (!exact(invoice, authorityKeys(invoice, [
       "invoiceId", "invoiceNumber", "jobId", "requestId", "relationshipId",
       "customerName", "serviceTitle", "currentVersion", "status", "currency",
       "totalMinor", "paidMinor", "balanceMinor", "invoiceDate", "due", "issuedAt",
-    ])) return null;
+    ]))) return null;
     const normalized = {
+      ...jobAuthorityFields(invoice),
       invoiceId: uuid(invoice.invoiceId), invoiceNumber: text(invoice.invoiceNumber, 40),
       jobId: uuid(invoice.jobId), requestId: integer(invoice.requestId),
       relationshipId: integer(invoice.relationshipId), customerName: text(invoice.customerName, 500),
@@ -311,7 +315,7 @@ export function validateInvoiceWorkspace(value) {
       balanceMinor: integer(invoice.balanceMinor, { zero: true }), invoiceDate: date(invoice.invoiceDate),
       due: validateDue(invoice.due), issuedAt: timestamp(invoice.issuedAt, { nullable: true }),
     };
-    return Object.values(normalized).some((item) => item === "" || item === undefined) ||
+    return !validJobAuthority(invoice) || Object.values(normalized).some((item) => item === "" || item === undefined) ||
       normalized.paidMinor == null || normalized.balanceMinor == null ||
       normalized.totalMinor !== normalized.paidMinor + normalized.balanceMinor
       ? null : normalized;
@@ -477,4 +481,33 @@ export function createInvoiceCommandKey(prefix, cryptoProvider = globalThis.cryp
   const suffix = cryptoProvider?.randomUUID?.();
   if (!suffix) throw new InvoicePaymentApiError({ status: 500, code: "INVOICE_IDEMPOTENCY_UNAVAILABLE" });
   return `${prefix}-${suffix}`;
+}
+
+export async function fetchCanonicalInvoicePdf({ invoiceId, expectedVersion, audience = "professional", setPage, authFetchImpl = authFetch } = {}) {
+  const id = uuid(invoiceId);
+  if (!id || !["professional", "customer"].includes(audience)) throw new InvoicePaymentApiError({ status: 400, code: "INVALID_INVOICE_ID" });
+  const query = expectedVersion == null ? "" : `?version=${encodeURIComponent(expectedVersion)}`;
+  const { response, data } = await authFetchImpl(`/${audience}/invoices/${id}/customer-pdf${query}`, { method: "GET", responseType: "blob", cache: "no-store" }, setPage);
+  if (!response.ok || !(data instanceof Blob) || data.type.split(";")[0] !== "application/pdf" || data.size < 5 || !(await data.slice(0, 5).text()).startsWith("%PDF-")) {
+    throw new InvoicePaymentApiError({ status: response.status || 502, code: "INVOICE_PDF_UNAVAILABLE", message: "The exact Invoice PDF is unavailable. Reopen the Invoice and try again." });
+  }
+  return Object.freeze({ blob: data, fileName: `invoice-${id}${expectedVersion ? `-v${expectedVersion}` : ""}.pdf`, contentType: "application/pdf", invoiceId: id });
+}
+
+export async function issueCanonicalInvoiceExternally({invoiceId,expectedVersion,idempotencyKey,setPage,authFetchImpl=authFetch}={}) {
+  const id=uuid(invoiceId),version=integer(expectedVersion);
+  if(!id || !version || !text(idempotencyKey,200)) throw new InvoicePaymentApiError({status:400,code:'INVALID_INVOICE_ISSUE_COMMAND'});
+  const data=await request(`/professional/invoices/${id}/issue-external`,commandOptions({expectedVersion:version},idempotencyKey),setPage,authFetchImpl);
+  const invoice=validateInvoice(data.invoice,{audience:'professional',invoiceId:id});
+  if(!invoice || invoice.authority?.kind!=='BUSINESS_CUSTOMER' || invoice.status==='DRAFT') throw new InvoicePaymentApiError({status:502,code:'UNSAFE_INVOICE_DELIVERY_RESPONSE'});
+  return {invoice,replayed:data.replayed===true};
+}
+
+export async function emailCanonicalInvoice({invoiceId,expectedVersion,purpose='INVOICE',messageText=null,idempotencyKey,setPage,authFetchImpl=authFetch}={}) {
+  const id=uuid(invoiceId),version=integer(expectedVersion);
+  if(!id || !version || !['INVOICE','REMINDER'].includes(purpose) || !text(idempotencyKey,200)) throw new InvoicePaymentApiError({status:400,code:'INVALID_INVOICE_EMAIL_COMMAND'});
+  const data=await request(`/professional/invoices/${id}/external-email`,commandOptions({expectedVersion:version,purpose,messageText},idempotencyKey),setPage,authFetchImpl);
+  const d=data.delivery;
+  if(!exact(d,['id','invoiceId','jobId','invoiceVersion','purpose','recipientEmail','state']) || !uuid(d.id) || d.invoiceId!==id || !uuid(d.jobId) || d.invoiceVersion!==version || d.purpose!==purpose || !text(d.recipientEmail,320) || !['REQUESTING','DELIVERY_REQUESTED'].includes(d.state)) throw new InvoicePaymentApiError({status:502,code:'UNSAFE_INVOICE_EMAIL_RESPONSE'});
+  return {delivery:Object.freeze(d),replayed:data.replayed===true};
 }

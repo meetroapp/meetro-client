@@ -1,3 +1,4 @@
+import { t } from "./language.js";
 import { loadCanonicalEvaluationForRecord } from "./evaluationAuthorityController.js";
 import { loadCanonicalQuotesForRecord } from "./quoteReadController.js";
 import {
@@ -10,10 +11,10 @@ import { getCanonicalQuoteJobContext } from "./canonicalQuoteRead.js";
 function visitErrorMessage(error) {
   if (error?.status === 401) return "Sign in is required to view visit scheduling.";
   if (error?.status === 403) {
-    return "Visit scheduling is not available for this professional account.";
+    return t("wc52visitSchedulingUnavailable");
   }
   if (error?.status === 404) {
-    return "Visit scheduling is not available for this job.";
+    return t("wc52visitSchedulingUnavailable");
   }
   return error?.message || "Visit scheduling could not be loaded.";
 }
@@ -120,17 +121,22 @@ async function loadEvaluationVisitSubject({
   fetchDetail,
 }) {
   try {
-    const visits = await fetchVisits({
+    const collection = await fetchVisits({
       jobId,
       purpose: "EVALUATION",
       evaluationId,
+      includeAuthority: true,
       setPage,
     });
+    if (!Array.isArray(collection?.visits) ||
+        typeof collection?.actions?.canPropose !== "boolean") {
+      throw new Error("Visit scheduling could not be loaded.");
+    }
     const details = await loadVisitDetails({
       jobId,
       purpose: "EVALUATION",
       evaluationId,
-      visits,
+      visits: collection.visits,
       setPage,
       fetchDetail,
     });
@@ -142,7 +148,7 @@ async function loadEvaluationVisitSubject({
       authority: {
         authoritySource: "CANONICAL_JOB_EVALUATION_VISIT_AUTHORITY",
         state: "ACTIVE",
-        actions: { canActivate: false, canPropose: details.length === 0 },
+        actions: { canActivate: false, canPropose: collection.actions.canPropose },
       },
       visits: details,
       error: "",

@@ -1,3 +1,6 @@
+import { workCenterLabel, workCenterActor } from "../utils/workCenterPresentation.js";
+import { getOpportunityTileCounts, opportunityFilterRoute } from "../utils/opportunityPresentationFilters.js";
+import { requestProfessionalOpportunities, subscribeProfessionalOpportunities } from "../utils/professionalOpportunityCoordinator.js";
 import useAskMeetroContext from "../hooks/useAskMeetroContext.js";
 import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
@@ -14,7 +17,9 @@ import ProfessionalScheduleWorkspace from "../components/ProfessionalScheduleWor
 import ProfessionalQuotesWorkspace from "../components/ProfessionalQuotesWorkspace";
 import ProfessionalWorkPlanOverview from "../components/ProfessionalWorkPlanOverview.jsx";
 import ProfessionalWorkPlanWorkspace from "../components/ProfessionalWorkPlanWorkspace.jsx";
+import ProfessionalCompletionReview from "../components/ProfessionalCompletionReview.jsx";
 import CompactCurrentJobHeader from "../components/CompactCurrentJobHeader.jsx";
+import WorkCenterLifecycle, { WorkCenterLifecycleHeading } from "../components/WorkCenterLifecycle.jsx";
 import ProfessionalJobHistoryWorkspace from "../components/ProfessionalJobHistoryWorkspace.jsx";
 import CanonicalQuotesPanel from "../components/CanonicalQuotesPanel";
 import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage.js";
@@ -143,10 +148,15 @@ import {
 } from "../utils/professionalQuotesProjection";
 import { fetchProfessionalWorkPlanSummary } from "../utils/workPlanApi.js";
 import { getWorkPlanCopy } from "../utils/workPlanLanguage.js";
+import { getCustomerRelationshipsCopy } from "../utils/customerRelationshipsLanguage.js";
 import {
   getWorkCenterWorkspaceCopy,
   resolveWorkCenterSectionForNextAction,
 } from "../utils/workCenterWorkspaceLanguage.js";
+import {
+  getWorkCenterLifecycleStage,
+  resolveWorkCenterLifecyclePresentation,
+} from "../utils/workCenterLifecyclePresentation.js";
 import { fetchProfessionalJobHistory } from "../utils/jobCompletionApi.js";
 import { getJobCompletionCopy } from "../utils/jobCompletionLanguage.js";
 import {
@@ -362,6 +372,41 @@ function readMeetroObject(key) {
   return value && typeof value === "object" && !Array.isArray(value) ? value : {};
 }
 
+function firstWorkCenterText(...values) {
+  return values.find((value) => typeof value === "string" && value.trim())?.trim() || "";
+}
+
+function getWorkCenterJobVisual(job = {}) {
+  const compatibility = job.compatibilityProjection || {};
+  const sources = [
+    job,
+    job.schedule,
+    job.active,
+    job.request,
+    compatibility.schedule,
+    compatibility.active,
+    compatibility.request,
+    ...(Array.isArray(job.sourceRecords) ? job.sourceRecords.map((item) => item?.record) : []),
+  ].filter((source) => source && typeof source === "object");
+  const firstPhoto = sources
+    .flatMap((source) => Array.isArray(source.photos) ? source.photos : [])
+    .find(Boolean);
+  const image = firstWorkCenterText(
+    ...sources.flatMap((source) => [source.imageUrl, source.photoUrl, source.image, source.projectImage]),
+    typeof firstPhoto === "string" ? firstPhoto : firstPhoto?.url,
+    firstPhoto?.dataUrl,
+    firstPhoto?.preview
+  );
+  const location = firstWorkCenterText(
+    job.address,
+    ...sources.flatMap((source) => [source.cityArea, source.location, source.address, source.fullAddress, source.city])
+  );
+  const scheduledAt = firstWorkCenterText(
+    ...sources.flatMap((source) => [source.scheduledStartAt, source.scheduledDate, source.date, source.startAt])
+  );
+  return { image, location, scheduledAt };
+}
+
 function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
   // App layout renders recreate its navigation prop. Keep the current callback
   // without making viewport changes reload every canonical lifecycle panel.
@@ -372,6 +417,14 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
   const setPage = useCallback((...args) => navigatePageRef.current?.(...args), []);
   const activeJobSnapshot = getActiveJobSnapshot();
   const activeWorkSnapshot = getActiveWorkSnapshot();
+  const [opportunitySnapshot, setOpportunitySnapshot] = useState(null);
+  useEffect(() => {
+    const unsubscribe = subscribeProfessionalOpportunities(setOpportunitySnapshot);
+    void requestProfessionalOpportunities({ caller: "WorkCenterTiles", trigger: "mount", setPage });
+    return unsubscribe;
+  }, [setPage]);
+  const opportunityTileCounts = getOpportunityTileCounts(opportunitySnapshot);
+
   const userRole = localStorage.getItem("businessCategory") || "Handyman";
   const [refreshKey, setRefreshKey] = useState(0);
   const [availableNow, setAvailableNow] = useState(readBusinessAvailability());
@@ -385,6 +438,9 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
     Number(localStorage.getItem("meetroViewedOpportunityCount") || "0")
   );
   const [selectedWorkCenterJob, setSelectedWorkCenterJob] = useState(null);
+  const [workCenterJobQuery, setWorkCenterJobQuery] = useState("");
+  const [workCenterJobFilter, setWorkCenterJobFilter] = useState("all");
+  const [workCenterFilterOpen, setWorkCenterFilterOpen] = useState(false);
   useAskMeetroContext(selectedWorkCenterJob && isCanonicalWorkCenterEntry(selectedWorkCenterJob)
     ? { jobId: selectedWorkCenterJob.jobId, label: selectedWorkCenterJob.title || selectedWorkCenterJob.projectTitle || "" }
     : {});
@@ -1358,6 +1414,14 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 
       if (!target) return;
 
+      const scrollSurface = target.closest?.(".contractor-dashboard");
+      if (scrollSurface && scrollSurface.scrollHeight > scrollSurface.clientHeight) {
+        scrollSurface.scrollTo({
+          top: scrollSurface.scrollTop + target.getBoundingClientRect().top - scrollSurface.getBoundingClientRect().top - 24,
+          behavior: "smooth",
+        });
+        return;
+      }
       const y = target.getBoundingClientRect().top + window.pageYOffset - 70;
 
       window.scrollTo({
@@ -1773,6 +1837,14 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 
       if (!target) return;
 
+      const scrollSurface = target.closest?.(".contractor-dashboard");
+      if (scrollSurface && scrollSurface.scrollHeight > scrollSurface.clientHeight) {
+        scrollSurface.scrollTo({
+          top: scrollSurface.scrollTop + target.getBoundingClientRect().top - scrollSurface.getBoundingClientRect().top - 24,
+          behavior: "smooth",
+        });
+        return;
+      }
       const y =
         target.getBoundingClientRect().top +
         window.pageYOffset -
@@ -2308,8 +2380,8 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
       showEvaluationSaveFeedback(
         "success",
         complete
-          ? `Evaluation completed at server version ${confirmed.aggregate.version}.`
-          : `Evaluation saved at server version ${confirmed.aggregate.version}.`
+          ? translate("wc52evaluationComplete", activeLanguage)
+          : translate("wc52evaluationSaved", activeLanguage)
       );
       return confirmed;
     } catch (error) {
@@ -3698,6 +3770,14 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 
       if (!target) return;
 
+      const scrollSurface = target.closest?.(".contractor-dashboard");
+      if (scrollSurface && scrollSurface.scrollHeight > scrollSurface.clientHeight) {
+        scrollSurface.scrollTo({
+          top: scrollSurface.scrollTop + target.getBoundingClientRect().top - scrollSurface.getBoundingClientRect().top - 24,
+          behavior: "smooth",
+        });
+        return;
+      }
       const y =
         target.getBoundingClientRect().top +
         window.pageYOffset -
@@ -8103,7 +8183,9 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
   };
 
   const getWorkCenterJobStage = (job = {}) => {
-    if (job.liveJob?.stage?.code === "JOB_COMPLETED") return "closed";
+    if (isCanonicalWorkCenterEntry(job)) {
+      return job.liveJob?.stage?.code === "JOB_COMPLETED" ? "closed" : "active";
+    }
     const quoteStatus = normalizeQuoteStatus(job.quote || {});
     const scheduleStatus = String(
       job.schedule?.jobStage ||
@@ -8806,6 +8888,23 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
   const workCenterActiveJobs = workCenterJobs.filter(
     (job) => getWorkCenterJobStage(job) !== "closed"
   );
+
+  const filteredWorkCenterActiveJobs = workCenterActiveJobs.filter((job) => {
+    const lifecycle = resolveWorkCenterLifecyclePresentation({ liveJob: job.liveJob });
+    const query = workCenterJobQuery.trim().toLowerCase();
+    const searchable = [
+      job.customer,
+      job.title,
+      getWorkCenterJobVisual(job).location,
+      lifecycle.statusLabel,
+      lifecycle.nextActionLabel,
+    ].join(" ").toLowerCase();
+    const queryMatches = !query || searchable.includes(query);
+    const filterMatches =
+      workCenterJobFilter === "all" ||
+      lifecycle.currentStageKey === workCenterJobFilter;
+    return queryMatches && filterMatches;
+  });
 
   const workCenterHistoryJobs = workCenterJobs.filter(
     (job) => getWorkCenterJobStage(job) === "closed"
@@ -10853,7 +10952,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
         `}
       </style>
       {renderWorkflowDependencyPrompt()}
-      {!isCompactWorkCenterChildPageOpen && (
+      {isWorkCenterSectionOpen && !isCompactWorkCenterChildPageOpen && (
         <div style={topBar}>
           {!isWorkCenterSectionOpen && !selectedWorkCenterJob && (
             <FloatingBackButton onClick={() => setPage("businessDashboard")} />
@@ -10884,25 +10983,36 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
         </>
       )}
 
-      <div ref={workCenterPanelRef}>
+      <div ref={workCenterPanelRef} className="work-center-content-lane">
         {!isWorkCenterSectionOpen ? (
-          <section className="work-center-dashboard" style={workCenterDashboard}>
-            <div className="work-center-dashboard-hero meetro-visual-hero" style={workCenterDashboardIntro}>
-              <span style={workCenterDashboardEyebrow}>
-                {translate("workCenterHeaderEyebrow", activeLanguage)}
-              </span>
-              <h2 style={workCenterDashboardTitle}>
-                {translate("workCenterDashboardTitle", activeLanguage)}
-              </h2>
-              <p style={workCenterDashboardPurpose}>
-                {translate("workCenterPurposeStatement", activeLanguage)}
-              </p>
+          <section className="work-center-dashboard work-center-overview" style={workCenterDashboard}>
+            {!selectedWorkCenterJob && <header className="work-center-overview__header">
+              <h1>{translate("workCenter", activeLanguage)}</h1>
+              <p>{translate("wc52subtitle", activeLanguage)}</p>
               {isPropertyManagementBusiness && (
                 <p style={propertyManagementWorkCenterFoundationNote}>
                   {translate("propertyManagementWorkCenterNote")}
                 </p>
               )}
-            </div>
+            </header>}
+
+            {!selectedWorkCenterJob && (
+              <section className="work-center-opportunities-banner meetro-visual-surface" aria-label={translate("wc52opportunities", activeLanguage)}>
+                <span className="work-center-opportunities-banner__icon" aria-hidden="true">
+                  <MeetroIcon name="opportunities" size={30} decorative />
+                </span>
+                <div className="work-center-opportunities-banner__copy">
+                  <h2>{translate("wc52opportunities", activeLanguage)}</h2>
+                  <p>{translate("wc52opportunitiesHelp", activeLanguage)}</p>
+                </div>
+                <button className="work-center-opportunities-banner__view" type="button" onClick={() => setPage(opportunityFilterRoute("all"))}>{translate("wc52viewOpportunities", activeLanguage)} <span aria-hidden="true">→</span></button>
+                <div className="work-center-opportunities-banner__summary" aria-label="Opportunity status summary">
+                  <button type="button" onClick={() => setPage(opportunityFilterRoute("new"))}><strong>{opportunityTileCounts?.new ?? "—"}</strong><span>{translate("wc52new", activeLanguage)}</span><span aria-hidden="true">›</span></button>
+                  <button type="button" onClick={() => setPage(opportunityFilterRoute("awaiting-response"))}><strong>{opportunityTileCounts?.awaiting ?? "—"}</strong><span>{translate("wc52awaiting", activeLanguage)}</span><span aria-hidden="true">›</span></button>
+                  <button type="button" onClick={() => openWorkTab("schedule")}><strong>{canonicalScheduleCounts ? canonicalScheduleCounts.today + canonicalScheduleCounts.upcoming : "—"}</strong><span>{translate("wc52scheduled", activeLanguage)}</span><span aria-hidden="true">›</span></button>
+                </div>
+              </section>
+            )}
 
             {workCenterLandingAlert && (
               <section className="meetro-visual-surface" style={workCenterAlertGuidanceCard}>
@@ -10944,61 +11054,120 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
             )}
 
             {!selectedWorkCenterJob && (
-            <div
-              style={workCenterPrimaryNavGrid}
-              aria-label={translate("workCenterAreasAccessibility", activeLanguage)}
-            >
-              {workCenterPrimaryNavigationCards.map((card) => (
-                <button
-                  key={card.key}
-                  type="button"
-                  data-schedule-source-state={
-                    card.key === "schedule" ? card.scheduleSourceStatus : undefined
-                  }
-                  className={`meetro-visual-surface work-center-navigation-card${
-                    isWorkCenterSectionOpen && activeTab === card.key
-                      ? " meetro-selected-card"
-                      : ""
-                  }`}
-                  style={{
-                    ...workCenterPrimaryNavCard,
-                    ...(card.alert ? workCenterPrimaryNavCardAlert : {}),
-                    ...(card.alert ? { borderColor: "#fb923c" } : {}),
-                  }}
-                  onClick={card.onClick}
-                >
-                  <span
-                    style={{
-                      ...workCenterPrimaryNavIcon,
-                      background: card.tone,
-                      color: card.accent,
-                    }}
-                    aria-hidden="true"
-                  >
-                    <MeetroIcon name={card.icon} size={24} decorative />
-                  </span>
-                  <span style={workCenterPrimaryNavContent}>
-                    <span style={workCenterPrimaryNavTitleRow}>
-                      <strong style={workCenterPrimaryNavTitle}>{card.title}</strong>
-                      <span
-                        style={{
-                          ...workCenterPrimaryNavMeta,
-                          background: card.tone,
-                          color: card.accent,
-                          ...(card.alert ? workCenterPrimaryNavMetaAlert : {}),
+              <section className="work-center-active-jobs" aria-labelledby="work-center-active-jobs-title">
+                <div className="work-center-active-jobs__toolbar">
+                  <h2 id="work-center-active-jobs-title">{translate("wc52activeJobs", activeLanguage)}</h2>
+                  <div className="work-center-active-jobs__controls">
+                    <label className="work-center-active-jobs__search">
+                      <span aria-hidden="true">⌕</span>
+                      <span className="sr-only">{translate("wc52search", activeLanguage)}</span>
+                      <input
+                        type="search"
+                        value={workCenterJobQuery}
+                        onChange={(event) => setWorkCenterJobQuery(event.target.value)}
+                        placeholder={translate("wc52searchPlaceholder", activeLanguage)}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="work-center-active-jobs__filter-button"
+                      aria-label={translate("wc52filterAccessible", activeLanguage)}
+                      aria-expanded={workCenterFilterOpen}
+                      onClick={() => setWorkCenterFilterOpen((current) => !current)}
+                    >
+                      {translate("wc52filterViews", activeLanguage)}
+                    </button>
+                  </div>
+                </div>
+                {workCenterFilterOpen && (
+                  <label className="work-center-active-jobs__filter">
+                    {translate("wc52filterStage", activeLanguage)}
+                    <select value={workCenterJobFilter} onChange={(event) => {
+                      const value = event.target.value;
+                      if (value === "view:jobHistory") {
+                        setWorkCenterFilterOpen(false);
+                        openWorkCenterJobsPage("history");
+                      } else if (value === "view:revenue") {
+                        setWorkCenterFilterOpen(false);
+                        openWorkTab("revenue");
+                      } else {
+                        setWorkCenterJobFilter(value);
+                      }
+                    }}>
+                      <optgroup label={translate("wc52jobStage", activeLanguage)}>
+                        <option value="all">{translate("wc52all", activeLanguage)}</option>
+                        {['evaluation', 'quote', 'deposit', 'schedule', 'workPlan', 'completeJob', 'invoice'].map((stage) => (
+                          <option key={stage} value={stage}>{translate(`wc52${stage}`, activeLanguage)}</option>
+                        ))}
+                      </optgroup>
+                      <optgroup label={translate("wc52views", activeLanguage)}>
+                        <option value="view:jobHistory">{translate("wc52history", activeLanguage)}</option>
+                        <option value="view:revenue">{translate("wc52revenue", activeLanguage)}</option>
+                      </optgroup>
+                    </select>
+                  </label>
+                )}
+                <div className="work-center-active-jobs__list">
+                  {filteredWorkCenterActiveJobs.length > 0 ? filteredWorkCenterActiveJobs.map((job) => {
+                    const jobListPresentation = getCurrentJobListPresentation(job);
+                    const lifecycle = resolveWorkCenterLifecyclePresentation({ liveJob: job.liveJob });
+                    const visual = getWorkCenterJobVisual(job);
+                    const scheduledDate = visual.scheduledAt
+                      ? formatLocaleDate(visual.scheduledAt, { month: "short", day: "numeric", year: "numeric" }, activeLanguage)
+                      : translate("wc52notScheduled", activeLanguage);
+                    const jobAlertAttention = isCanonicalWorkCenterEntry(job)
+                      ? getWorkCenterJobAttention(canonicalAlertCountSnapshot, "", job.jobId)
+                      : null;
+                    const jobAlertCount = Number.isSafeInteger(jobAlertAttention?.unread) ? jobAlertAttention.unread : 0;
+                    return (
+                      <button
+                        key={getCanonicalCurrentJobIdentityKey(job) || job.id}
+                        type="button"
+                        className="work-center-job-card meetro-visual-surface"
+                        data-current-lifecycle-stage={lifecycle.currentStageKey}
+                        onClick={() => {
+                          setSelectedJobDetailView("");
+                          setIsJobHistoryMode(false);
+                          setSelectedWorkCenterAlertStage("");
+                          setIsWorkCenterSectionOpen(false);
+                          setSelectedWorkCenterJob(job);
                         }}
                       >
-                        {card.meta}
-                      </span>
-                    </span>
-                    <span style={workCenterPrimaryNavPurpose}>{card.purpose}</span>
-                    <span style={{ ...workCenterPrimaryNavAction, color: card.accent }}>
-                      {card.actionLabel}
-                    </span>
-                  </span>
-                </button>
-              ))}
-            </div>
+                        <span className="work-center-job-card__image" aria-hidden="true">
+                          {visual.image ? <img src={visual.image} alt="" /> : <span>{String(job.customer || "J").charAt(0).toUpperCase()}</span>}
+                        </span>
+                        <span className="work-center-job-card__identity">
+                          <strong>{job.customer}</strong>
+                          <span className="work-center-job-card__service">{job.title}</span>
+                          <span>⌖ {visual.location || translate("wc52location", activeLanguage)}</span>
+                          <span>▣ {scheduledDate}</span>
+                        </span>
+                        <span className="work-center-job-card__state">
+                          <span className={`work-center-job-card__status work-center-job-card__status--${lifecycle.currentStageKey}`}>
+                            {workCenterLabel(jobListPresentation.statusLabel, activeLanguage)}
+                          </span>
+                          <span>{translate("wc52nextStep", activeLanguage)}</span>
+                          <strong>{workCenterLabel(jobListPresentation.nextStepLabel, activeLanguage)}</strong>
+                          <span className="work-center-job-card__responsibility"><span>{translate("wc52nextUp", activeLanguage)}</span>{" "}<span>{workCenterActor(job.liveJob?.responsibility, "", activeLanguage)}</span></span>
+                        </span>
+                        <span className="work-center-job-card__lifecycle">
+                          <WorkCenterLifecycle presentation={lifecycle} compact language={activeLanguage} ariaLabel={translate("wc52progress", activeLanguage)} />
+                        </span>
+                        <span className="work-center-job-card__actions">
+                          <WorkCenterAttentionBadge count={jobAlertCount} />
+                          <span className="work-center-job-card__open" aria-hidden="true">›</span>
+                        </span>
+                      </button>
+                    );
+                  }) : (
+                    <WorkCenterEmptyState
+                      icon="currentJobs"
+                      title={workCenterJobQuery || workCenterJobFilter !== "all" ? translate("wc52noMatch", activeLanguage) : workCenterWorkspaceCopy.currentJobsEmptyTitle}
+                      body={workCenterJobQuery || workCenterJobFilter !== "all" ? translate("wc52noMatchHelp", activeLanguage) : workCenterWorkspaceCopy.currentJobsEmptyBody}
+                    />
+                  )}
+                </div>
+              </section>
             )}
 
             {selectedWorkCenterJob ? (() => {
@@ -11080,31 +11249,39 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                   canonicalJobAlertAttention,
                   "quote"
                 );
-              const depositSchedulingAlertCount =
-                getWorkCenterGroupedStageUnread(
-                  canonicalJobAlertAttention,
-                  ["deposit", "schedule"]
-                );
+              const depositAlertCount =
+                getWorkCenterStageUnread(canonicalJobAlertAttention, "deposit");
+              const scheduleAlertCount =
+                getWorkCenterStageUnread(canonicalJobAlertAttention, "schedule");
               const workPlanAlertCount =
                 getWorkCenterStageUnread(
                   canonicalJobAlertAttention,
                   "work"
                 );
-              const completionInvoiceAlertCount =
+              const completeJobAlertCount =
                 getWorkCenterGroupedStageUnread(
                   canonicalJobAlertAttention,
-                  [
-                    "invoice",
-                    "completion",
-                    "review",
-                  ]
+                  ["completion", "review"]
                 );
+              const invoiceAlertCount =
+                getWorkCenterStageUnread(canonicalJobAlertAttention, "invoice");
 
               const canonicalNextActionSection = resolveWorkCenterSectionForNextAction(
                 canonicalLiveJob?.nextAction?.code,
                 canonicalLiveJob?.stage?.code,
                 canonicalLiveJob?.nextAction?.label
               );
+              const canonicalLifecyclePresentation =
+                resolveWorkCenterLifecyclePresentation({
+                  liveJob: canonicalLiveJob,
+                });
+              const evaluationLifecycle = getWorkCenterLifecycleStage(canonicalLifecyclePresentation, "evaluation");
+              const quoteLifecycle = getWorkCenterLifecycleStage(canonicalLifecyclePresentation, "quote");
+              const depositLifecycle = getWorkCenterLifecycleStage(canonicalLifecyclePresentation, "deposit");
+              const scheduleLifecycle = getWorkCenterLifecycleStage(canonicalLifecyclePresentation, "schedule");
+              const workPlanLifecycle = getWorkCenterLifecycleStage(canonicalLifecyclePresentation, "workPlan");
+              const completeJobLifecycle = getWorkCenterLifecycleStage(canonicalLifecyclePresentation, "completeJob");
+              const invoiceLifecycle = getWorkCenterLifecycleStage(canonicalLifecyclePresentation, "invoice");
               const canonicalAutoOpenToken = `${canonicalLiveJob?.jobId || "job"}:${canonicalLiveJob?.nextAction?.code || "unavailable"}`;
               const canonicalAccordionJobIdentity =
                 getCanonicalCurrentJobIdentityKey(selectedWorkCenterJob) ||
@@ -11168,7 +11345,8 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                   ? translate("stateClosed", activeLanguage)
                   : workflowState.statusLabel;
               const jobDisplayNextStep = isCanonicalReadOnlyJob
-                ? canonicalLiveJob?.nextAction.label ||
+                ? (canonicalLiveJob?.nextAction.code === "REVIEW_WORKSTREAM_COMPLETION"
+                    ? "Complete Job" : canonicalLiveJob?.nextAction.label) ||
                   "The current next step could not be loaded."
                 : isJobHistoryMode
                   ? translate("workCenterReviewTheFullJobHistory", activeLanguage)
@@ -11188,7 +11366,9 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                 scopedJob.title ||
                 (translate("relationshipCurrentStage", activeLanguage));
               const persistentContextAddress =
+                getWorkCenterJobVisual(selectedWorkCenterJob).location ||
                 selectedWorkCenterJob.address || scopedJob.address || "";
+              const persistentContextVisual = getWorkCenterJobVisual(selectedWorkCenterJob);
               const currentStateDefinition = getSarahJobStateDefinition(scopedJob);
               const evaluationPanelMode = getEvaluationPanelMode({
                 workflowState: workflowState.stateKey,
@@ -11242,13 +11422,13 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
               <div className="work-center-workspace" style={jobWorkspacePanel}>
                 <WorkCenterBackButton
 	                  onClick={() => {
-	                    if (workCenterJobReturnSurface === "notifications") {
+	                    if (["notifications", "customerRelationshipsCenter"].includes(workCenterJobReturnSurface)) {
 	                      setSelectedJobDetailView("");
 	                      setSelectedWorkCenterJob(null);
 	                      setSelectedWorkCenterQuoteId("");
 	                      setSelectedWorkCenterVisitId("");
 	                      setWorkCenterJobReturnSurface("jobs");
-	                      setPage("notifications");
+	                      setPage(workCenterJobReturnSurface);
 	                      return;
 	                    }
 	                    setSelectedJobDetailView("");
@@ -11258,36 +11438,48 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 	                      : workCenterJobReturnSurface === "workPlan"
 	                        ? "workPlan"
 	                        : isJobHistoryMode ? "jobHistory" : "currentJobs";
+	                    const returnToOverview = workCenterJobReturnSurface === "jobs" && !isJobHistoryMode;
 	                    setActiveTab(returnTab);
 	                    setJobMenuTab(isJobHistoryMode ? "history" : "current");
 	                    setIsJobHistoryMode(false);
-	                    setIsWorkCenterSectionOpen(true);
+	                    setIsWorkCenterSectionOpen(!returnToOverview);
 	                    setSelectedWorkCenterQuoteId("");
 	                    setSelectedWorkCenterVisitId("");
 	                    setWorkCenterJobReturnSurface("jobs");
-	                    localStorage.setItem("meetroWorkCenterTab", returnTab);
-	                    localStorage.setItem("activeWorkCenterTab", returnTab);
+	                    if (returnToOverview) {
+	                      localStorage.removeItem("meetroWorkCenterTab");
+	                      localStorage.removeItem("activeWorkCenterTab");
+	                    } else {
+	                      localStorage.setItem("meetroWorkCenterTab", returnTab);
+	                      localStorage.setItem("activeWorkCenterTab", returnTab);
+	                    }
 	                  }}
 	                  label={workCenterJobReturnSurface === "notifications"
 	                    ? translate("alertCenterBack", activeLanguage)
+	                    : workCenterJobReturnSurface === "customerRelationshipsCenter"
+	                      ? getCustomerRelationshipsCopy(activeLanguage).backToRelationships
 	                    : workCenterJobReturnSurface === "quotes"
 	                    ? translate("professionalQuotesBack", activeLanguage)
 	                    : workCenterJobReturnSurface === "workPlan"
 	                      ? workPlanCopy.backToWorkCenter
                     : isJobHistoryMode
                     ? translate("workCenterBackToHistory", activeLanguage)
-                    : translate("workCenterBackToJobs", activeLanguage)}
+                    : translate("backToWorkCenter", activeLanguage)}
                 />
 
 	                <div style={isCanonicalReadOnlyJob ? canonicalJobWorkflowShell : jobWorkflowFirstHero}>
 	                  <CompactCurrentJobHeader
+                      language={activeLanguage}
 	                    eyebrow={isJobHistoryMode ? translate("homeMyProjectsHistory", activeLanguage) : translate("workCenterCurrentJob", activeLanguage)}
 	                    customer={persistentContextCustomer}
 	                    service={persistentContextService}
 	                    address={persistentContextAddress}
-	                    status={jobDisplayStatus}
-	                    nextStep={jobDisplayNextStep}
-	                    responsibility={jobDisplayResponsibility}
+	                    image={persistentContextVisual.image}
+	                    scheduledAt={persistentContextVisual.scheduledAt}
+	                    jobId={canonicalLiveJob?.jobId || selectedWorkCenterJob.jobId || ""}
+	                    status={workCenterLabel(jobDisplayStatus, activeLanguage)}
+	                    nextStep={workCenterLabel(jobDisplayNextStep, activeLanguage)}
+	                    responsibility={workCenterActor(canonicalLiveJob?.responsibility, jobDisplayResponsibility, activeLanguage)}
 	                    blocker={jobDisplayBlocker}
 	                    concern={workCenterLifecycleProjection.projection?.customerConcern?.originalText || ""}
 	                    participants={workCenterLifecycleProjection.projection?.participants || []}
@@ -11301,6 +11493,14 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 	                      >
 	                        {translate("relationshipMessage", activeLanguage)}
 	                      </button>
+	                    ) : null}
+	                    progress={isCanonicalReadOnlyJob &&
+	                      workCenterLifecycleProjection.status === "ready" &&
+	                      workCenterLifecycleProjection.projection ? (
+	                      <>
+	                        <WorkCenterLifecycleHeading language={activeLanguage} presentation={canonicalLifecyclePresentation} />
+	                        <WorkCenterLifecycle language={activeLanguage} presentation={canonicalLifecyclePresentation} compact />
+	                      </>
 	                    ) : null}
 	                  />
 	                  {!isCanonicalReadOnlyJob && (
@@ -11420,8 +11620,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                   {isCanonicalReadOnlyJob &&
                     workCenterLifecycleProjection.status === "ready" &&
                     workCenterLifecycleProjection.projection && (
-                      <>
-                        <div className="work-center-content-grid" key={canonicalAccordionJobIdentity}>
+                      <div className="work-center-content-grid" key={canonicalAccordionJobIdentity}>
 	                          <WorkCenterAccordion
 	                            id="canonical-job-evaluation"
                             {...getCanonicalAccordionPresentation("canonical-job-evaluation")}
@@ -11429,6 +11628,9 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                             icon="evaluationNotes"
                             title={workCenterWorkspaceCopy.evaluation}
                             summary={workCenterWorkspaceCopy.evaluationSummary}
+                            lifecycleState={evaluationLifecycle.state}
+                            stepNumber={1}
+                            currentAction={workCenterLabel(evaluationLifecycle.currentAction, activeLanguage)}
                             defaultOpen={
                               selectedWorkCenterAlertStage === "evaluation" ||
                               canonicalEvaluationHandoffIsCurrent ||
@@ -11452,6 +11654,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                               availableActions={canonicalLiveJob?.availableActions || []}
                               language={activeLanguage}
                               setPage={setPage}
+                              showAssistantEntry={false}
                               findingsPresentation={{
                                 title: workCenterWorkspaceCopy.findings,
                                 summary: workCenterWorkspaceCopy.findingsSummary,
@@ -11481,8 +11684,11 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                             {...getCanonicalAccordionPresentation("canonical-job-quotes")}
                             attentionCount={quoteAlertPanelCount}
 	                            icon="quote"
-	                            title="Quote & Approval"
+	                            title={translate("wc52quote", activeLanguage)}
 	                            summary={workCenterWorkspaceCopy.quotesSummary}
+	                            lifecycleState={quoteLifecycle.state}
+	                            stepNumber={2}
+	                            currentAction={workCenterLabel(quoteLifecycle.currentAction, activeLanguage)}
 	                            defaultOpen={
                               selectedWorkCenterAlertStage === "quote" ||
                               canonicalNextActionSection === "quotes" ||
@@ -11490,7 +11696,9 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                             }
 	                            autoOpenToken={`${canonicalAutoOpenToken}:${selectedWorkCenterQuoteId}:alert:${selectedWorkCenterAlertStage}`}
 	                          >
-	                            <CanonicalQuotesPanel
+	                            {quoteLifecycle.state === "locked" ? (
+	                              <p className="work-center-lifecycle-lock-copy">{translate("wc52quoteGate", activeLanguage)}</p>
+	                            ) : <><CanonicalQuotesPanel
 	                              record={{
 	                                ...selectedWorkCenterJob,
 	                                lifecycleVerified: true,
@@ -11513,22 +11721,24 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 	                            >
 	                              {getAskMeetroWorkflowCopy(activeLanguage).estimate}
 	                            </button>
+	                            </>}
 	                          </WorkCenterAccordion>
 	                          <WorkCenterAccordion
-                            id="canonical-job-deposit-scheduling"
-                            {...getCanonicalAccordionPresentation("canonical-job-deposit-scheduling")}
-                            attentionCount={depositSchedulingAlertCount}
+                            id="canonical-job-deposit"
+                            {...getCanonicalAccordionPresentation("canonical-job-deposit")}
+                            attentionCount={depositAlertCount}
                             icon="payment"
-                            title="Deposit & Scheduling"
-                            summary="Request the approved Quote deposit and continue to work scheduling when payment requirements are satisfied."
-                            defaultOpen={
-                              ["deposit", "schedule"].includes(
-                                selectedWorkCenterAlertStage
-                              )
-                            }
+                            title={translate("wc52deposit", activeLanguage)}
+                            summary={translate("wc52depositSummary", activeLanguage)}
+                            lifecycleState={depositLifecycle.state}
+                            stepNumber={3}
+                            currentAction={workCenterLabel(depositLifecycle.currentAction, activeLanguage)}
+                            defaultOpen={selectedWorkCenterAlertStage === "deposit" || canonicalLifecyclePresentation.currentStageKey === "deposit" || canonicalNextActionSection === "deposit"}
                             autoOpenToken={`${canonicalAutoOpenToken}:alert:${selectedWorkCenterAlertStage}`}
                           >
-                            <CanonicalJobVisits
+                            {depositLifecycle.state === "locked" ? (
+                              <p className="work-center-lifecycle-lock-copy">{translate("wc52depositGate", activeLanguage)}</p>
+                            ) : <CanonicalJobVisits
                               record={{
                                 ...selectedWorkCenterJob,
                                 lifecycleVerified: true,
@@ -11547,9 +11757,42 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                               purposeFilter="APPROVED_WORK"
                               showDeposit
                               embedded
+                              contentMode="deposit"
                               depositActionLabel="Request Deposit"
                               focusVisitId={selectedWorkCenterVisitId}
-                            />
+                            />}
+                          </WorkCenterAccordion>
+                          <WorkCenterAccordion
+                            id="canonical-job-schedule"
+                            {...getCanonicalAccordionPresentation("canonical-job-schedule")}
+                            attentionCount={scheduleAlertCount}
+                            icon="schedule"
+                            title={translate("wc52schedule", activeLanguage)}
+                            summary="Plan and confirm the approved Work visit."
+                            lifecycleState={scheduleLifecycle.state}
+                            stepNumber={4}
+                            currentAction={workCenterLabel(scheduleLifecycle.currentAction, activeLanguage)}
+                            defaultOpen={selectedWorkCenterAlertStage === "schedule" || canonicalLifecyclePresentation.currentStageKey === "schedule" || canonicalNextActionSection === "schedule" || Boolean(selectedWorkCenterVisitId)}
+                            autoOpenToken={`${canonicalAutoOpenToken}:alert:${selectedWorkCenterAlertStage}`}
+                          >
+                            {scheduleLifecycle.state === "locked" ? (
+                              <p className="work-center-lifecycle-lock-copy">{translate("wc52scheduleGate", activeLanguage)}</p>
+                            ) : <CanonicalJobVisits
+                              record={{
+                                ...selectedWorkCenterJob,
+                                lifecycleVerified: true,
+                                lifecycleContractVersion: 2,
+                                jobId: workCenterLifecycleProjection.projection.job?.id || null,
+                                postId: workCenterLifecycleProjection.projection.requestId || workCenterLifecycleProjection.postId,
+                                requestId: workCenterLifecycleProjection.projection.requestId || workCenterLifecycleProjection.postId,
+                              }}
+                              setPage={setPage}
+                              purposeFilter="APPROVED_WORK"
+                              showDeposit={false}
+                              embedded
+                              contentMode="schedule"
+                              focusVisitId={selectedWorkCenterVisitId}
+                            />}
                           </WorkCenterAccordion>
                           <WorkCenterAccordion
 	                            id="canonical-job-work-plan"
@@ -11558,7 +11801,9 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                             icon="workCenter"
                             title={workCenterWorkspaceCopy.workPlan}
                             summary={workCenterWorkspaceCopy.workPlanSummary}
-                            status={jobDisplayStatus}
+                            lifecycleState={workPlanLifecycle.state}
+                            stepNumber={5}
+                            currentAction={workCenterLabel(workPlanLifecycle.currentAction, activeLanguage)}
                             defaultOpen={
                               selectedWorkCenterAlertStage === "work" ||
                               canonicalNextActionSection === "workPlan" ||
@@ -11566,7 +11811,9 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                             }
                             autoOpenToken={`${canonicalAutoOpenToken}:alert:${selectedWorkCenterAlertStage}`}
                           >
-	                            <ProfessionalWorkPlanWorkspace
+	                            {workPlanLifecycle.state === "locked" ? (
+	                              <p className="work-center-lifecycle-lock-copy">{translate("wc52workPlanGate", activeLanguage)}</p>
+	                            ) : <ProfessionalWorkPlanWorkspace
 	                              jobId={workCenterLifecycleProjection.projection.job?.id || null}
 	                              record={{
 	                                ...selectedWorkCenterJob,
@@ -11576,6 +11823,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 	                              preferredQuoteId={selectedWorkCenterQuoteId}
 	                              focusVisitId={selectedWorkCenterVisitId}
 	                              liveJob={canonicalLiveJob}
+	                              stageSeparated
 	                              language={activeLanguage}
                               setPage={setPage}
                               onCanonicalChange={() => {
@@ -11584,35 +11832,62 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                                 setProfessionalJobHistoryRefreshKey((value) => value + 1);
                                 setCanonicalWorkCenterRefreshKey((value) => value + 1);
                               }}
-	                            />
+	                            />}
 	                          </WorkCenterAccordion>
 	                          <WorkCenterAccordion
-	                            id="canonical-job-completion-invoice"
-                            {...getCanonicalAccordionPresentation("canonical-job-completion-invoice")}
-                            attentionCount={completionInvoiceAlertCount}
-	                            icon="payment"
-	                            title="Invoice & Closeout"
-	                            summary={workCenterWorkspaceCopy.completionInvoiceSummary}
-	                            defaultOpen={
-                              ["invoice", "completion", "review"].includes(
-                                selectedWorkCenterAlertStage
-                              ) ||
-                              canonicalNextActionSection === "completionInvoice"
-                            }
+	                            id="canonical-job-complete"
+                            {...getCanonicalAccordionPresentation("canonical-job-complete")}
+                            attentionCount={completeJobAlertCount}
+	                            icon="completion"
+	                            title={translate("wc52completeJob", activeLanguage)}
+	                            summary={translate("wc52completeSummary", activeLanguage)}
+	                            lifecycleState={completeJobLifecycle.state}
+	                            stepNumber={6}
+	                            currentAction={workCenterLabel(completeJobLifecycle.currentAction, activeLanguage)}
+	                            defaultOpen={["completion", "review"].includes(selectedWorkCenterAlertStage) || canonicalLifecyclePresentation.currentStageKey === "completeJob" || canonicalNextActionSection === "completeJob"}
 	                            autoOpenToken={`${canonicalAutoOpenToken}:alert:${selectedWorkCenterAlertStage}`}
 	                          >
-	                            {["WORK_COMPLETED", "JOB_COMPLETED"].includes(canonicalLiveJob?.stage?.code) ? (
+	                            {completeJobLifecycle.state === "current" ? (
+	                              <ProfessionalCompletionReview
+	                                jobId={workCenterLifecycleProjection.projection.job?.id || null}
+	                                language={activeLanguage}
+	                                setPage={setPage}
+	                                onCompleted={() => {
+	                                  setWorkCenterLifecycleRefreshKey((value) => value + 1);
+	                                  setProfessionalJobHistoryRefreshKey((value) => value + 1);
+	                                  setCanonicalWorkCenterRefreshKey((value) => value + 1);
+	                                }}
+	                              />
+	                            ) : completeJobLifecycle.state === "complete" ? (
+	                              <p className="work-center-lifecycle-complete-copy">{translate("wc52jobComplete", activeLanguage)}</p>
+	                            ) : (
+	                              <p className="work-center-lifecycle-lock-copy">{translate("wc52completeGate", activeLanguage)}</p>
+	                            )}
+	                          </WorkCenterAccordion>
+	                          <WorkCenterAccordion
+	                            id="canonical-job-invoice"
+                            {...getCanonicalAccordionPresentation("canonical-job-invoice")}
+                            attentionCount={invoiceAlertCount}
+	                            icon="payment"
+	                            title={translate("wc52invoice", activeLanguage)}
+	                            summary={translate("wc52invoiceGate", activeLanguage)}
+	                            lifecycleState={invoiceLifecycle.state}
+	                            stepNumber={7}
+	                            currentAction={workCenterLabel(invoiceLifecycle.currentAction, activeLanguage)}
+	                            defaultOpen={selectedWorkCenterAlertStage === "invoice" || canonicalLifecyclePresentation.currentStageKey === "invoice" || canonicalNextActionSection === "invoice"}
+	                            autoOpenToken={`${canonicalAutoOpenToken}:alert:${selectedWorkCenterAlertStage}`}
+	                          >
+	                            {canonicalLiveJob?.stage?.code === "JOB_COMPLETED" ? (
 	                              <CompletedJobInvoiceHandoff
 	                                jobId={workCenterLifecycleProjection.projection.job?.id || null}
 	                                language={activeLanguage}
 	                                setPage={setPage}
 	                              />
 	                            ) : (
-	                              <p style={jobWorkspaceDisclosureText}>Available after the work is completed.</p>
+	                              <p className="work-center-lifecycle-lock-copy">{translate("wc52invoiceGate", activeLanguage)}</p>
 	                            )}
 	                          </WorkCenterAccordion>
-                        </div>
-                      </>
+	                        </div>
                     )}
 
                   {!isCanonicalReadOnlyJob && (
@@ -13179,8 +13454,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                             {!canReadLegacyWorkflowStorage() && canonicalEvaluation && (
                               <>
                                 <p style={jobWorkspaceDisclosureText}>
-                                  Server-confirmed {canonicalEvaluation.evaluation.status} · version{" "}
-                                  {canonicalEvaluation.aggregate.version}. Quote and Authorization remain unavailable.
+                                  {translate("wc52evaluationNotice", activeLanguage)}
                                 </p>
                                 {canonicalEvaluation.evaluation.status === "draft" && (
                                   <button
@@ -13341,6 +13615,8 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                         isCanonicalWorkCenterEntry(job);
                       const jobListPresentation =
                         getCurrentJobListPresentation(job);
+                      const jobLifecyclePresentation =
+                        resolveWorkCenterLifecyclePresentation({ liveJob: job.liveJob });
                       const jobAlertAttention =
                         isCanonicalReadOnlyJob
                           ? getWorkCenterJobAttention(
@@ -13378,16 +13654,16 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                             <span style={jobListMeta}>{job.title}</span>
                             <span style={jobListStatus}>
                               {translate("homeStatus", activeLanguage)}:{" "}
-                              {jobListPresentation.statusLabel}
+                              {workCenterLabel(jobListPresentation.statusLabel, activeLanguage)}
                             </span>
                             <span style={jobListNextStep}>
                               {translate("myRequestsNextStep", activeLanguage)}:{" "}
-                              {jobListPresentation.nextStepLabel}
+                              {workCenterLabel(jobListPresentation.nextStepLabel, activeLanguage)}
                             </span>
                             {jobListPresentation.responsibilityLabel && (
                               <span style={jobListMeta}>
-                                {workCenterWorkspaceCopy.whoActsNext}:{" "}
-                                {jobListPresentation.responsibilityLabel}
+                                {translate("wc52nextUp", activeLanguage)}:{" "}
+                                {workCenterActor(job.liveJob?.responsibility, jobListPresentation.responsibilityLabel, activeLanguage)}
                               </span>
                             )}
                             {jobListPresentation.blockerLabel && (
@@ -13395,6 +13671,11 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                                 {jobListPresentation.blockerLabel}
                               </span>
                             )}
+                            <WorkCenterLifecycle
+                              presentation={jobLifecyclePresentation}
+                              compact
+                              language={activeLanguage} ariaLabel={translate("wc52progress", activeLanguage)}
+                            />
                           </span>
                           <span style={jobListAction}>
                             <WorkCenterAttentionBadge
@@ -14432,8 +14713,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                 {!canReadLegacyWorkflowStorage() && canonicalEvaluation && (
                   <>
                     <p style={{ ...jobWorkspaceDisclosureText, gridColumn: "1 / -1" }}>
-                      Server-confirmed {canonicalEvaluation.evaluation.status} · version{" "}
-                      {canonicalEvaluation.aggregate.version}. Quote and Authorization remain unavailable.
+                      {translate("wc52evaluationNotice", activeLanguage)}
                     </p>
                     {canonicalEvaluation.evaluation.status === "draft" && (
                       <button
@@ -16734,7 +17014,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
             </div>
 
 	            <p role="status" style={jobWorkspaceDisclosureText}>
-	              Legacy quote preview is read-only and cannot update canonical Quote truth.
+	              {translate("wc52quoteReference", activeLanguage)}
 	            </p>
 	          </div>
 	        </div>
@@ -17896,7 +18176,6 @@ const page = {
   padding:
     "72px max(16px, env(safe-area-inset-right)) calc(68px + env(safe-area-inset-bottom)) max(16px, env(safe-area-inset-left))",
   boxSizing: "border-box",
-  overflowX: "hidden",
 };
 
 const topBar = {
