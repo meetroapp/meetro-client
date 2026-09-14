@@ -42,12 +42,12 @@ test('system-label changes preserve unknown labels and do not declare the job co
  assert.deepEqual(WORK_CENTER_JOB_LIFECYCLE.map(x=>x.label),['Evaluation','Quote','Deposit','Schedule','Work Plan','Complete Job','Invoice']);
 });
 
-test('rendered Filter & Views separates seven stages and All from the two navigation destinations',async()=>{
+test('rendered Filter & Views separates active Job stages and All from the two navigation destinations',async()=>{
  const { FilterMenu }=await prepareWorkCenterPolishFixture();
  for(const activeLanguage of ['en','es','fr','pt-BR']) {
   const d=doc(React.createElement(FilterMenu,{activeLanguage,workCenterJobFilter:'all'}));
   const groups=[...d.querySelectorAll('optgroup')];assert.equal(groups.length,2);
-  assert.deepEqual([...groups[0].children].map(x=>x.value),['all',...stages]);
+  assert.deepEqual([...groups[0].children].map(x=>x.value),['all',...stages.filter(stage=>stage!=='invoice')]);
   assert.deepEqual([...groups[1].children].map(x=>x.value),['view:jobHistory','view:revenue']);
   assert.doesNotMatch(d.body.textContent,/canonical|lifecycle|closeout/i);
  }
@@ -57,8 +57,8 @@ test('selecting a stage only filters; History and Revenue call the existing owne
  const {FilterMenu}=await prepareWorkCenterPolishFixture();const calls=[];
  const tree=FilterMenu({workCenterJobFilter:'all',setWorkCenterJobFilter:v=>calls.push(['filter',v]),setWorkCenterFilterOpen:v=>calls.push(['open',v]),openWorkCenterJobsPage:v=>calls.push(['jobs',v]),openWorkTab:v=>calls.push(['tab',v])});
  const select=React.Children.toArray(tree.props.children).find(x=>x.type==='select');
- for(const value of ['all',...stages]) select.props.onChange({target:{value}});
- assert.deepEqual(calls.splice(0),['all',...stages].map(v=>['filter',v]));
+ for(const value of ['all',...stages.filter(stage=>stage!=='invoice')]) select.props.onChange({target:{value}});
+ assert.deepEqual(calls.splice(0),['all',...stages.filter(stage=>stage!=='invoice')].map(v=>['filter',v]));
  select.props.onChange({target:{value:'view:jobHistory'}});select.props.onChange({target:{value:'view:revenue'}});
  assert.deepEqual(calls,[['open',false],['jobs','history'],['open',false],['tab','revenue']]);
  assert.match(dashboard,/openWorkTab\(mode === "history" \? "jobHistory" : "currentJobs"\)/);

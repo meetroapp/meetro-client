@@ -92,17 +92,23 @@ export function resolveWorkCenterLifecyclePresentation({ liveJob, invoice } = {}
   const ready = Boolean(liveJob?.stage?.code && liveJob?.nextAction?.code);
   const currentIndex = ready ? resolveCurrentStageIndex(liveJob) : 0;
   const canonicalJobCompleted = liveJob?.stage?.code === "JOB_COMPLETED";
+  const canonicalInvoicePaid =
+    canonicalJobCompleted &&
+    normalized(liveJob?.nextAction?.code).toUpperCase() === "REVIEW_PAID_INVOICE";
+  const lifecycleComplete = ready && canonicalInvoicePaid;
 
   const stages = WORK_CENTER_JOB_LIFECYCLE.map((stage, index) => {
-    const state = ready
-      ? index < currentIndex
-        ? "complete"
-        : index === currentIndex
+    const state = lifecycleComplete
+      ? "complete"
+      : ready
+        ? index < currentIndex
+          ? "complete"
+          : index === currentIndex
+            ? "current"
+            : "locked"
+        : index === 0
           ? "current"
-          : "locked"
-      : index === 0
-        ? "current"
-        : "locked";
+          : "locked";
 
     return Object.freeze({
       ...stage,
@@ -115,7 +121,7 @@ export function resolveWorkCenterLifecyclePresentation({ liveJob, invoice } = {}
 
   return Object.freeze({
     authoritySource: ready ? "CANONICAL_LIVE_JOB_READ" : "UNAVAILABLE",
-    currentStageKey: stages[currentIndex].key,
+    currentStageKey: lifecycleComplete ? "" : stages[currentIndex].key,
     completedCount: stages.filter((stage) => stage.state === "complete").length,
     canonicalJobCompleted,
     invoiceUnlocked: canonicalJobCompleted,

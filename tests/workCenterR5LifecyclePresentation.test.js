@@ -86,17 +86,33 @@ test("business customer completion review uses the same governed stage", () => {
   assert.doesNotMatch(workPlan, /authority\?\.kind/);
 });
 
-test("canonical JOB_COMPLETED completes Complete Job and makes Invoice current", () => {
+test("canonical JOB_COMPLETED keeps Invoice current while payment is still outstanding", () => {
+  const presentation = resolveWorkCenterLifecyclePresentation({
+    liveJob: liveJob({
+      stage: { code: "JOB_COMPLETED", label: "Job Completed" },
+      nextAction: { code: "WAIT_FOR_PAYMENT", label: "Wait for payment" },
+    }),
+  });
+  assert.equal(presentation.currentStageKey, "invoice");
+  assert.equal(presentation.completedCount, 6);
+  assert.equal(stateMap(presentation).completeJob, "complete");
+  assert.equal(stateMap(presentation).invoice, "current");
+  assert.equal(presentation.invoiceUnlocked, true);
+});
+
+test("canonical JOB_COMPLETED with paid Invoice closes all seven presentation stages", () => {
   const presentation = resolveWorkCenterLifecyclePresentation({
     liveJob: liveJob({
       stage: { code: "JOB_COMPLETED", label: "Job Completed" },
       nextAction: { code: "REVIEW_PAID_INVOICE", label: "Review paid Invoice" },
     }),
   });
-  assert.equal(presentation.currentStageKey, "invoice");
+  assert.equal(presentation.currentStageKey, "");
+  assert.equal(presentation.completedCount, 7);
   assert.equal(stateMap(presentation).completeJob, "complete");
-  assert.equal(stateMap(presentation).invoice, "current");
+  assert.equal(stateMap(presentation).invoice, "complete");
   assert.equal(presentation.invoiceUnlocked, true);
+  assert.equal(presentation.stages.some((stage) => stage.state === "current"), false);
 });
 
 test("Work completion and a paid Invoice cannot fabricate canonical Job completion", () => {
@@ -120,6 +136,17 @@ test("Deposit and Schedule are separate governed render paths", () => {
   assert.match(dashboard.slice(scheduleStart, workPlanStart), /contentMode="schedule"/);
   assert.match(visits, /contentMode = "all"/);
   assert.doesNotMatch(dashboard, /title="Deposit & Scheduling"/);
+});
+
+test("Active Jobs stage filter omits Invoice because Invoice begins after canonical Job completion", () => {
+  assert.match(
+    dashboard,
+    /\['evaluation', 'quote', 'deposit', 'schedule', 'workPlan', 'completeJob'\]\.map/
+  );
+  assert.doesNotMatch(
+    dashboard,
+    /\['evaluation', 'quote', 'deposit', 'schedule', 'workPlan', 'completeJob', 'invoice'\]\.map/
+  );
 });
 
 test("active Job cards preserve the exact canonical next-action label", () => {

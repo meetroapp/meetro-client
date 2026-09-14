@@ -11096,7 +11096,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                     }}>
                       <optgroup label={translate("wc52jobStage", activeLanguage)}>
                         <option value="all">{translate("wc52all", activeLanguage)}</option>
-                        {['evaluation', 'quote', 'deposit', 'schedule', 'workPlan', 'completeJob', 'invoice'].map((stage) => (
+                        {['evaluation', 'quote', 'deposit', 'schedule', 'workPlan', 'completeJob'].map((stage) => (
                           <option key={stage} value={stage}>{translate(`wc52${stage}`, activeLanguage)}</option>
                         ))}
                       </optgroup>
