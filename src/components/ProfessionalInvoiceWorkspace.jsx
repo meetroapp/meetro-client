@@ -501,7 +501,7 @@ export default function ProfessionalInvoiceWorkspace({
             {workspace.invoices.map((invoice) => (
               <button key={invoice.invoiceId} type="button" style={styles.invoiceRow} onClick={() => openInvoice(invoice.invoiceId)} data-invoice-id={invoice.invoiceId}>
                 <span><strong>{invoice.invoiceNumber}</strong><small>{invoice.customerName} / {invoice.serviceTitle}</small></span>
-                <span><strong>{money(invoice.balanceMinor, invoice.currency)}</strong><small>{invoice.status.replaceAll("_", " ")}</small></span>
+                <span><strong>{money(invoice.totalMinor, invoice.currency)}</strong><small>{invoice.status === "PAID" ? copy.paid : invoice.status === "PARTIALLY_PAID" ? copy.outstanding : invoice.status === "DRAFT" ? copy.drafts : copy.waiting}</small></span>
               </button>
             ))}
           </div>

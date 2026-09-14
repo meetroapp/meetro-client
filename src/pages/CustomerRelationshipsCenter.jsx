@@ -508,7 +508,7 @@ function RelationshipActivity({ activity, focus, copy, language, onOpenJob }) {
               <ActivityRow key={item.id}
                 title={item.kind === "DEPOSIT_RECEIPT" ? copy.depositReceived : copy.invoicePaymentReceived}
                 money={[copy.received, formatMoney(item.amountMinor, item.currency, language)]}
-                dateLabel={copy.latest} dateValue={item.receivedAt} language={language} />
+                dateLabel={copy.latest} dateValue={item.receivedDate || item.receivedAt} language={language} />
             ))}</div>
           </section>
         ) : null}
