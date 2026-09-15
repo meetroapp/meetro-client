@@ -53,6 +53,13 @@ function emptyPaymentDraft() {
   return { amount: "", method: "CHECK", receivedDate: today(), reference: "" };
 }
 
+const REVENUE_PERIOD_OPTIONS = Object.freeze([
+  { value: "THIS_MONTH", copyKey: "revenueThisMonth" },
+  { value: "LAST_30_DAYS", copyKey: "revenue30Days" },
+  { value: "LAST_90_DAYS", copyKey: "revenue90Days" },
+  { value: "THIS_YEAR", copyKey: "revenueThisYear" },
+]);
+
 export default function ProfessionalInvoiceWorkspace({
   language = "en",
   setPage,
@@ -63,6 +70,7 @@ export default function ProfessionalInvoiceWorkspace({
   const copy = getInvoiceCopy(language);
   const workspaceCopy = getWorkCenterWorkspaceCopy(language);
   const [workspace, setWorkspace] = useState(null);
+  const [revenuePeriod, setRevenuePeriod] = useState("THIS_MONTH");
   const [workspacePhase, setWorkspacePhase] = useState("idle");
   const [invoicePhase, setInvoicePhase] = useState("idle");
   const [selected, setSelected] = useState(null);
@@ -80,11 +88,15 @@ export default function ProfessionalInvoiceWorkspace({
   useAskMeetroContext({ invoiceId: selected?.invoiceId, jobId: selected?.jobId, conversationId: selected?.conversationId, label: selected?.invoiceNumber });
 
   const loadWorkspace = useCallback(async () => {
-    const value = await fetchProfessionalInvoiceWorkspace({ limit: 50, setPage });
+    const value = await fetchProfessionalInvoiceWorkspace({
+      limit: 50,
+      period: revenuePeriod,
+      setPage,
+    });
     setWorkspace(value);
     setWorkspacePhase("ready");
     return value;
-  }, [setPage]);
+  }, [revenuePeriod, setPage]);
 
   const resetPaymentInteraction = useCallback(() => {
     setShowPayment(false);
@@ -149,9 +161,22 @@ export default function ProfessionalInvoiceWorkspace({
     return () => { active = false; };
   }, [acceptCanonicalInvoice, copy.unavailable, expectedJobId, initialInvoiceId, setPage]);
 
-  const money = useCallback((minor, currency = workspace?.summary.currency || "USD") =>
-    formatLocaleCurrency((Number(minor) || 0) / 100, currency || "USD", {}, language),
-  [language, workspace]);
+  const money = useCallback(
+    (
+      minor,
+      currency =
+        workspace?.revenue?.currency ||
+        workspace?.summary?.currency ||
+        "USD"
+    ) =>
+      formatLocaleCurrency(
+        (Number(minor) || 0) / 100,
+        currency || "USD",
+        {},
+        language
+      ),
+    [language, workspace]
+  );
 
   async function openInvoice(invoiceId) {
     const isSameInvoiceRefresh = selectedInvoiceIdRef.current === invoiceId;
@@ -377,7 +402,52 @@ export default function ProfessionalInvoiceWorkspace({
     finally { setBusy(""); }
   }
 
-  const summary = workspace?.summary;
+  const revenue = workspace?.revenue || null;
+
+  const revenueIsCurrent =
+    revenue?.period === revenuePeriod;
+
+  const revenueMoney = useCallback(
+    (minor) => {
+      if (revenue?.currency) {
+        return money(
+          minor,
+          revenue.currency
+        );
+      }
+
+      return Number(minor) === 0
+        ? "0"
+        : "-";
+    },
+    [money, revenue]
+  );
+
+  const revenueHasNoActivity =
+    revenueIsCurrent &&
+    revenue?.state === "READY" &&
+    revenue.cashReceivedMinor === 0 &&
+    revenue.invoicedMinor === 0 &&
+    revenue.outstandingMinor === 0 &&
+    revenue.paidInvoices === 0;
+
+  const hasActionableFinancialWork =
+    Boolean(
+      workspace?.readyJobs?.length ||
+      workspace?.invoices?.length
+    );
+
+  const revenueMessage =
+    !revenueIsCurrent
+      ? ""
+      : revenue?.state === "TIME_ZONE_REQUIRED"
+        ? copy.revenueTimeZoneRequired
+        : revenue?.state === "MULTI_CURRENCY"
+          ? copy.revenueMultiCurrency
+          : revenue?.state === "UNSAFE_FINANCIAL_HISTORY"
+            ? copy.revenueUnsafe
+            : "";
+
   const selectedActions = selected ? (
     <div style={styles.actions}>
       {(selected.conversationId || (selected.authority?.kind === "BUSINESS_CUSTOMER" && selected.status === "DRAFT")) && !confirmIssue && (
@@ -452,18 +522,102 @@ export default function ProfessionalInvoiceWorkspace({
       {notice && <p role="status" style={styles.notice}>{notice}</p>}
       {completionNotice && <InvoiceCompletionNotice onClose={() => setCompletionNotice(false)} />}
 
-      {summary && (
+      {!initialInvoiceId && (
+        <div
+          style={styles.periodControls}
+          role="group"
+          aria-label={copy.revenuePeriod}
+          data-revenue-period={revenuePeriod}
+        >
+          {REVENUE_PERIOD_OPTIONS.map((option) => (
+            <button
+              key={option.value}
+              type="button"
+              aria-pressed={revenuePeriod === option.value}
+              disabled={
+                workspacePhase === "loading" ||
+                Boolean(busy)
+              }
+              style={{
+                ...styles.periodButton,
+                ...(revenuePeriod === option.value
+                  ? styles.periodButtonActive
+                  : {}),
+              }}
+              onClick={() => {
+                if (option.value === revenuePeriod) return;
+                setWorkspacePhase("loading");
+                setRevenuePeriod(option.value);
+              }}
+            >
+              {copy[option.copyKey]}
+            </button>
+          ))}
+        </div>
+      )}
+
+      {revenueMessage && (
+        <p
+          role="status"
+          style={styles.revenueStatus}
+          data-revenue-state={revenue?.state}
+        >
+          {revenueMessage}
+        </p>
+      )}
+
+      {revenueIsCurrent &&
+        revenue?.state === "READY" && (
         <WorkCenterMetricGrid
           ariaLabel={copy.title}
           metrics={[
-            { key: "ready", icon: "completion", label: copy.ready, value: summary.readyToInvoice },
-            { key: "drafts", icon: "quickInvoice", tone: "info", label: copy.drafts, value: summary.drafts },
-            { key: "waiting", icon: "history", tone: "warning", label: copy.waiting, value: summary.waitingForPayment },
-            { key: "paid", icon: "payment", tone: "success", label: copy.paid, value: summary.paid },
-            { key: "outstanding", icon: "revenue", tone: "violet", label: copy.outstanding, value: summary.totalOutstandingMinor == null ? "-" : money(summary.totalOutstandingMinor) },
+            {
+              key: "cash-received",
+              icon: "payment",
+              tone: "success",
+              label: copy.cashReceived,
+              value: revenueMoney(
+                revenue.cashReceivedMinor
+              ),
+            },
+            {
+              key: "invoiced",
+              icon: "quickInvoice",
+              tone: "info",
+              label: copy.invoiced,
+              value: revenueMoney(
+                revenue.invoicedMinor
+              ),
+            },
+            {
+              key: "outstanding-now",
+              icon: "revenue",
+              tone: "violet",
+              label: copy.outstandingNow,
+              value: revenueMoney(
+                revenue.outstandingMinor
+              ),
+            },
+            {
+              key: "paid-invoices",
+              icon: "completion",
+              label: copy.paidInvoices,
+              value: revenue.paidInvoices,
+            },
           ]}
         />
       )}
+
+      {revenueHasNoActivity &&
+        hasActionableFinancialWork && (
+          <p
+            role="status"
+            style={styles.revenueStatus}
+            data-revenue-zero-state="actionable"
+          >
+            {copy.revenueNoActivity}
+          </p>
+        )}
 
       {workspace?.readyJobs.length > 0 && (
         <section style={styles.band} aria-label={copy.ready}>
@@ -600,6 +754,10 @@ const styles = {
     boxSizing: "border-box",
   },
   notice: { margin: 0, padding: 12, borderLeft: "4px solid #0f766e", background: "#eff8f7" },
+  periodControls: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" },
+  periodButton: { minHeight: 40, padding: "0 12px", border: "1px solid #9aa89d", borderRadius: 999, background: "#fff", color: "#172317", fontWeight: 800, cursor: "pointer" },
+  periodButtonActive: { background: "#1f5132", borderColor: "#1f5132", color: "#fff" },
+  revenueStatus: { margin: 0, padding: 12, borderLeft: "4px solid #1f5132", background: "#eef6f0", color: "#173d25", lineHeight: 1.45 },
   band: { display: "grid", gap: 10, minWidth: 0, paddingTop: 4 },
   subheading: { margin: 0, fontSize: 18, letterSpacing: 0 },
   list: { display: "grid", gap: 8, minWidth: 0 },

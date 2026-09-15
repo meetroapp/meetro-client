@@ -6,6 +6,20 @@ const UUID_PATTERN =
 const STATUSES = new Set(["DRAFT", "SENT", "PARTIALLY_PAID", "PAID"]);
 const METHODS = new Set(["CASH", "CHECK", "BANK_TRANSFER", "OTHER"]);
 
+const REVENUE_PERIODS = new Set([
+  "THIS_MONTH",
+  "LAST_30_DAYS",
+  "LAST_90_DAYS",
+  "THIS_YEAR",
+]);
+
+const REVENUE_STATES = new Set([
+  "READY",
+  "TIME_ZONE_REQUIRED",
+  "MULTI_CURRENCY",
+  "UNSAFE_FINANCIAL_HISTORY",
+]);
+
 function plain(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
   const prototype = Object.getPrototypeOf(value);
@@ -291,12 +305,177 @@ function validateReadyJob(value) {
     normalized.approvedWork?.every(Boolean) ? normalized : null;
 }
 
+function revenueInteger(value, { signed = false } = {}) {
+  return typeof value === "number" &&
+    Number.isSafeInteger(value) &&
+    (signed || value >= 0)
+    ? value
+    : null;
+}
+
+function validateRevenue(value) {
+  const keys = [
+    "state",
+    "period",
+    "timeZone",
+    "localStartDate",
+    "localEndDateExclusive",
+    "currency",
+    "cashReceivedMinor",
+    "invoicedMinor",
+    "outstandingMinor",
+    "paidInvoices",
+  ];
+
+  if (!exact(value, keys)) return null;
+
+  const state =
+    REVENUE_STATES.has(value.state)
+      ? value.state
+      : "";
+
+  const period =
+    REVENUE_PERIODS.has(value.period)
+      ? value.period
+      : "";
+
+  if (!state || !period) return null;
+
+  if (state === "TIME_ZONE_REQUIRED") {
+    return value.timeZone == null &&
+      value.localStartDate == null &&
+      value.localEndDateExclusive == null &&
+      value.currency == null &&
+      value.cashReceivedMinor == null &&
+      value.invoicedMinor == null &&
+      value.outstandingMinor == null &&
+      value.paidInvoices == null
+      ? Object.freeze({
+          state,
+          period,
+          timeZone: null,
+          localStartDate: null,
+          localEndDateExclusive: null,
+          currency: null,
+          cashReceivedMinor: null,
+          invoicedMinor: null,
+          outstandingMinor: null,
+          paidInvoices: null,
+        })
+      : null;
+  }
+
+  const timeZone =
+    text(value.timeZone, 100);
+
+  const localStartDate =
+    date(value.localStartDate);
+
+  const localEndDateExclusive =
+    date(value.localEndDateExclusive);
+
+  if (
+    !timeZone ||
+    !localStartDate ||
+    !localEndDateExclusive ||
+    localStartDate >= localEndDateExclusive
+  ) {
+    return null;
+  }
+
+  if (state !== "READY") {
+    return value.currency == null &&
+      value.cashReceivedMinor == null &&
+      value.invoicedMinor == null &&
+      value.outstandingMinor == null &&
+      value.paidInvoices == null
+      ? Object.freeze({
+          state,
+          period,
+          timeZone,
+          localStartDate,
+          localEndDateExclusive,
+          currency: null,
+          cashReceivedMinor: null,
+          invoicedMinor: null,
+          outstandingMinor: null,
+          paidInvoices: null,
+        })
+      : null;
+  }
+
+  const cashReceivedMinor =
+    revenueInteger(
+      value.cashReceivedMinor,
+      { signed: true }
+    );
+
+  const invoicedMinor =
+    revenueInteger(
+      value.invoicedMinor
+    );
+
+  const outstandingMinor =
+    revenueInteger(
+      value.outstandingMinor
+    );
+
+  const paidInvoices =
+    revenueInteger(
+      value.paidInvoices
+    );
+
+  const revenueCurrency =
+    value.currency == null
+      ? null
+      : currency(value.currency);
+
+  if (
+    cashReceivedMinor == null ||
+    invoicedMinor == null ||
+    outstandingMinor == null ||
+    paidInvoices == null ||
+    (value.currency != null && !revenueCurrency)
+  ) {
+    return null;
+  }
+
+  const hasFinancialValue =
+    cashReceivedMinor !== 0 ||
+    invoicedMinor > 0 ||
+    outstandingMinor > 0 ||
+    paidInvoices > 0;
+
+  if (
+    hasFinancialValue &&
+    !revenueCurrency
+  ) {
+    return null;
+  }
+
+  return Object.freeze({
+    state,
+    period,
+    timeZone,
+    localStartDate,
+    localEndDateExclusive,
+    currency: revenueCurrency,
+    cashReceivedMinor,
+    invoicedMinor,
+    outstandingMinor,
+    paidInvoices,
+  });
+}
+
 export function validateInvoiceWorkspace(value) {
-  if (!exact(value, ["contractVersion", "summary", "readyJobs", "invoices", "limit"]) ||
+  if (!exact(value, ["contractVersion", "revenue", "summary", "readyJobs", "invoices", "limit"]) ||
       !exact(value.summary, [
         "readyToInvoice", "drafts", "waitingForPayment", "paid",
         "totalOutstandingMinor", "currency",
       ]) || !Array.isArray(value.readyJobs) || !Array.isArray(value.invoices)) return null;
+  const revenue = validateRevenue(value.revenue);
+  if (!revenue) return null;
+
   const readyJobs = value.readyJobs.map(validateReadyJob);
   const invoices = value.invoices.map((invoice) => {
     if (!exact(invoice, authorityKeys(invoice, [
@@ -331,7 +510,14 @@ export function validateInvoiceWorkspace(value) {
   };
   return value.contractVersion === 1 && readyJobs.every(Boolean) && invoices.every(Boolean) &&
     Object.values(summary).every((item) => item !== "") && integer(value.limit)
-    ? Object.freeze({ contractVersion: 1, summary, readyJobs, invoices, limit: integer(value.limit) })
+    ? Object.freeze({
+        contractVersion: 1,
+        revenue,
+        summary,
+        readyJobs,
+        invoices,
+        limit: integer(value.limit),
+      })
     : null;
 }
 
@@ -384,12 +570,59 @@ function commandOptions(body, idempotencyKey) {
   };
 }
 
-export async function fetchProfessionalInvoiceWorkspace({ limit = 20, setPage, authFetchImpl = authFetch } = {}) {
+export async function fetchProfessionalInvoiceWorkspace({
+  limit = 20,
+  period = "THIS_MONTH",
+  setPage,
+  authFetchImpl = authFetch,
+} = {}) {
   const bounded = integer(limit);
-  if (!bounded || bounded > 50) throw new InvoicePaymentApiError({ status: 400, code: "INVALID_INVOICE_WORKSPACE_PAGE" });
-  const data = await request(`/professional/invoices/workspace?limit=${bounded}`, { method: "GET", cache: "no-store" }, setPage, authFetchImpl);
-  const workspace = validateInvoiceWorkspace(data.workspace);
-  if (!workspace) throw new InvoicePaymentApiError({ status: 502, code: "UNSAFE_INVOICE_WORKSPACE_RESPONSE" });
+
+  if (!bounded || bounded > 50) {
+    throw new InvoicePaymentApiError({
+      status: 400,
+      code: "INVALID_INVOICE_WORKSPACE_PAGE",
+    });
+  }
+
+  const exactPeriod =
+    REVENUE_PERIODS.has(period)
+      ? period
+      : "";
+
+  if (!exactPeriod) {
+    throw new InvoicePaymentApiError({
+      status: 400,
+      code: "INVALID_REVENUE_PERIOD",
+      message: "Choose a supported Revenue period.",
+    });
+  }
+
+  const data = await request(
+    `/professional/invoices/workspace?limit=${bounded}&period=${encodeURIComponent(exactPeriod)}`,
+    {
+      method: "GET",
+      cache: "no-store",
+    },
+    setPage,
+    authFetchImpl
+  );
+
+  const workspace =
+    validateInvoiceWorkspace(
+      data.workspace
+    );
+
+  if (
+    !workspace ||
+    workspace.revenue.period !== exactPeriod
+  ) {
+    throw new InvoicePaymentApiError({
+      status: 502,
+      code: "UNSAFE_INVOICE_WORKSPACE_RESPONSE",
+    });
+  }
+
   return workspace;
 }
 

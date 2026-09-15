@@ -28,10 +28,120 @@ test("canonical Invoice workspace routes completed Jobs to the builder and final
   assert.doesNotMatch(source, /Pay Now|stripe|paypal|publicInvoice|invoiceUrl/);
   assert.match(source, /minHeight: 44/);
   assert.match(source, /WorkCenterMetricGrid/);
-  assert.match(source, /summary\.readyToInvoice/);
-  assert.match(source, /summary\.totalOutstandingMinor/);
+  assert.match(source, /const revenue = workspace\?\.revenue/);
+  assert.match(source, /revenue\.cashReceivedMinor/);
+  assert.match(source, /revenue\.invoicedMinor/);
+  assert.match(source, /revenue\.outstandingMinor/);
+  assert.match(source, /revenue\.paidInvoices/);
+  assert.match(source, /data-revenue-period/);
+  assert.match(source, /data-revenue-state/);
   assert.match(source, /WorkCenterEmptyState/);
   assert.doesNotMatch(source, /No canonical Invoice records yet/);
+});
+
+test("Revenue period UI reads only governed server projection and keeps failure states non-destructive", () => {
+  const source =
+    read("../src/components/ProfessionalInvoiceWorkspace.jsx");
+
+  for (const period of [
+    "THIS_MONTH",
+    "LAST_30_DAYS",
+    "LAST_90_DAYS",
+    "THIS_YEAR",
+  ]) {
+    assert.match(
+      source,
+      new RegExp(period)
+    );
+  }
+
+  for (const state of [
+    "TIME_ZONE_REQUIRED",
+    "MULTI_CURRENCY",
+    "UNSAFE_FINANCIAL_HISTORY",
+  ]) {
+    assert.match(
+      source,
+      new RegExp(state)
+    );
+  }
+
+  assert.match(
+    source,
+    /fetchProfessionalInvoiceWorkspace\(\{[\s\S]*period: revenuePeriod/
+  );
+
+  const revenueStart =
+    source.indexOf(
+      "const revenue = workspace?.revenue"
+    );
+
+  const invoiceListStart =
+    source.indexOf(
+      "workspace?.readyJobs.length",
+      revenueStart
+    );
+
+  assert.ok(
+    revenueStart >= 0 &&
+    invoiceListStart > revenueStart
+  );
+
+  const revenuePresentation =
+    source.slice(
+      revenueStart,
+      invoiceListStart
+    );
+
+  assert.doesNotMatch(
+    revenuePresentation,
+    /localStorage|sessionStorage|\.reduce\(/
+  );
+
+  assert.match(
+    source,
+    /workspace\?\.invoices\.length > 0/
+  );
+
+  assert.match(
+    source,
+    /const revenueIsCurrent\s*=\s*revenue\?\.period === revenuePeriod/
+  );
+
+  assert.match(
+    source,
+    /const revenueMoney = useCallback/
+  );
+
+  assert.match(
+    source,
+    /Number\(minor\) === 0[\s\S]*\? "0"[\s\S]*: "-"/
+  );
+
+  assert.match(
+    source,
+    /data-revenue-zero-state="actionable"/
+  );
+
+  assert.match(
+    source,
+    /revenueHasNoActivity/
+  );
+
+  assert.match(
+    source,
+    /hasActionableFinancialWork/
+  );
+
+  assert.match(
+    source,
+    /revenueIsCurrent[\s\S]*revenue\?\.state === "READY"/
+  );
+
+  assert.match(
+    source,
+    /disabled=\{[\s\S]*workspacePhase === "loading"[\s\S]*Boolean\(busy\)/
+  );
 });
 
 test("exact Invoice review hydrates one canonical detail read with one visible loading owner", () => {

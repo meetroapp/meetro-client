@@ -208,6 +208,22 @@ test("verified Job-only entry renders the existing exact-Invoice boundary withou
 function representativeWorkspace() {
   return {
     contractVersion: 1,
+
+    // Revenue may fail closed independently while Invoice preparation
+    // remains usable from the same canonical workspace.
+    revenue: {
+      state: "TIME_ZONE_REQUIRED",
+      period: "THIS_MONTH",
+      timeZone: null,
+      localStartDate: null,
+      localEndDateExclusive: null,
+      currency: null,
+      cashReceivedMinor: null,
+      invoicedMinor: null,
+      outstandingMinor: null,
+      paidInvoices: null,
+    },
+
     summary: {
       readyToInvoice: 1,
       drafts: 0,
@@ -258,6 +274,10 @@ test("completed-Job Invoice preparation has one stable route-scoped request", ()
 test("representative server-owned prefill remains exact without creating an Invoice", () => {
   const validated = validateInvoiceWorkspace(representativeWorkspace());
   assert.ok(validated);
+  assert.equal(
+    validated.revenue.state,
+    "TIME_ZONE_REQUIRED"
+  );
   assert.equal(validated.readyJobs.length, 1);
   assert.equal(validated.invoices.length, 0);
   assert.equal(validated.readyJobs[0].customerName, "Antony Guzman");

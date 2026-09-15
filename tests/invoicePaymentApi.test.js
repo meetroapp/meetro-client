@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   createCanonicalInvoice,
+  fetchProfessionalInvoiceWorkspace,
   fetchProfessionalJobInvoice,
   issueCanonicalInvoice,
   normalizeInvoiceDeliverySnapshot,
@@ -66,6 +67,22 @@ function invoice(audience = "professional", overrides = {}) {
   return value;
 }
 
+function revenue(overrides = {}) {
+  return {
+    state: "READY",
+    period: "THIS_MONTH",
+    timeZone: "America/New_York",
+    localStartDate: "2026-08-01",
+    localEndDateExclusive: "2026-09-01",
+    currency: "USD",
+    cashReceivedMinor: 46000,
+    invoicedMinor: 92000,
+    outstandingMinor: 92000,
+    paidInvoices: 0,
+    ...overrides,
+  };
+}
+
 test("strict Invoice validators separate professional command state from customer truth", () => {
   assert.ok(validateInvoice(invoice("professional"), { audience: "professional", invoiceId: INVOICE_ID }));
   const durableParty = validateInvoice(invoice("professional", {
@@ -101,6 +118,7 @@ test("Invoice validator derives no status and rejects arithmetic drift", () => {
 test("workspace validator accepts only server-owned financial summary and exact records", () => {
   const workspace = {
     contractVersion: 1,
+    revenue: revenue(),
     summary: { readyToInvoice: 1, drafts: 0, waitingForPayment: 1, paid: 0, totalOutstandingMinor: 92000, currency: "USD" },
     readyJobs: [{
       jobId: JOB_ID, requestId: 14, relationshipId: 9, customerName: "Liam Molina",
@@ -121,6 +139,185 @@ test("workspace validator accepts only server-owned financial summary and exact 
   };
   assert.ok(validateInvoiceWorkspace(workspace));
   assert.equal(validateInvoiceWorkspace({ ...workspace, revenueEstimate: 100000 }), null);
+
+  const refundPeriod = validateInvoiceWorkspace({
+    ...workspace,
+    revenue: revenue({
+      cashReceivedMinor: -10000,
+    }),
+  });
+
+  assert.equal(
+    refundPeriod.revenue.cashReceivedMinor,
+    -10000
+  );
+
+  assert.equal(
+    validateInvoiceWorkspace({
+      ...workspace,
+      revenue: revenue({
+        invoicedMinor: -1,
+      }),
+    }),
+    null
+  );
+
+  const timeZoneRequired =
+    validateInvoiceWorkspace({
+      ...workspace,
+      revenue: revenue({
+        state: "TIME_ZONE_REQUIRED",
+        timeZone: null,
+        localStartDate: null,
+        localEndDateExclusive: null,
+        currency: null,
+        cashReceivedMinor: null,
+        invoicedMinor: null,
+        outstandingMinor: null,
+        paidInvoices: null,
+      }),
+    });
+
+  assert.equal(
+    timeZoneRequired.revenue.state,
+    "TIME_ZONE_REQUIRED"
+  );
+
+  assert.equal(
+    validateInvoiceWorkspace({
+      ...workspace,
+      revenue: {
+        ...revenue(),
+        unsafeExtraField: true,
+      },
+    }),
+    null
+  );
+});
+
+test("Professional workspace request sends exact Revenue period and rejects period drift", async () => {
+  const emptyWorkspace = (period) => ({
+    contractVersion: 1,
+
+    revenue: revenue({
+      period,
+      localStartDate:
+        period === "THIS_YEAR"
+          ? "2026-01-01"
+          : "2026-06-18",
+      localEndDateExclusive:
+        period === "THIS_YEAR"
+          ? "2027-01-01"
+          : "2026-09-16",
+      currency: null,
+      cashReceivedMinor: 0,
+      invoicedMinor: 0,
+      outstandingMinor: 0,
+      paidInvoices: 0,
+    }),
+
+    summary: {
+      readyToInvoice: 0,
+      drafts: 0,
+      waitingForPayment: 0,
+      paid: 0,
+      totalOutstandingMinor: null,
+      currency: null,
+    },
+
+    readyJobs: [],
+    invoices: [],
+    limit: 50,
+  });
+
+  let endpoint = "";
+
+  const result =
+    await fetchProfessionalInvoiceWorkspace({
+      limit: 50,
+      period: "LAST_90_DAYS",
+
+      authFetchImpl: async (
+        value,
+        options
+      ) => {
+        endpoint = value;
+
+        assert.deepEqual(
+          options,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+
+        return {
+          response: {
+            ok: true,
+            status: 200,
+          },
+
+          data: {
+            success: true,
+            workspace:
+              emptyWorkspace(
+                "LAST_90_DAYS"
+              ),
+          },
+        };
+      },
+    });
+
+  assert.equal(
+    endpoint,
+    "/professional/invoices/workspace?limit=50&period=LAST_90_DAYS"
+  );
+
+  assert.equal(
+    result.revenue.period,
+    "LAST_90_DAYS"
+  );
+
+  await assert.rejects(
+    () =>
+      fetchProfessionalInvoiceWorkspace({
+        period: "ALL_TIME",
+
+        authFetchImpl: async () => {
+          throw new Error(
+            "Invalid period must fail before fetch."
+          );
+        },
+      }),
+    (error) =>
+      error?.code ===
+        "INVALID_REVENUE_PERIOD"
+  );
+
+  await assert.rejects(
+    () =>
+      fetchProfessionalInvoiceWorkspace({
+        period: "THIS_YEAR",
+
+        authFetchImpl: async () => ({
+          response: {
+            ok: true,
+            status: 200,
+          },
+
+          data: {
+            success: true,
+            workspace:
+              emptyWorkspace(
+                "LAST_90_DAYS"
+              ),
+          },
+        }),
+      }),
+    (error) =>
+      error?.code ===
+        "UNSAFE_INVOICE_WORKSPACE_RESPONSE"
+  );
 });
 
 test("Invoice delivery snapshot is exact-identity and customer-safe", () => {
