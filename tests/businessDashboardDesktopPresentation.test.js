@@ -35,6 +35,28 @@ test("business dashboard tablet and desktop presentation reflows the shared iPho
   assert.match(source, /const dashboardDesktopFlow = \{\s*display: "contents",\s*\}/);
 });
 
+test("business dashboard iPad glance cards use a readable two-column layout without splitting value words", () => {
+  assert.match(
+    presentation,
+    /#root\[data-app-layout="tablet"\] \.business-dashboard \.business-dashboard-glance-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\) !important;/
+  );
+
+  assert.match(
+    presentation,
+    /#root\[data-app-layout="desktop"\] \.business-dashboard \.business-dashboard-glance-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\) !important;/
+  );
+
+  assert.match(
+    presentation,
+    /business-dashboard-glance-grid button > strong,[\s\S]*?white-space:\s*normal;[\s\S]*?overflow-wrap:\s*normal;[\s\S]*?word-break:\s*normal;[\s\S]*?hyphens:\s*none;/
+  );
+
+  assert.match(
+    source,
+    /value=\{t\("wc52viewRevenue", language\)\}/
+  );
+});
+
 test("business dashboard Quick Access uses the four approved tools at every size", () => {
   const block = source.slice(source.indexOf("const dashboardQuickAccessItems"), source.indexOf("  return (", source.indexOf("const dashboardQuickAccessItems")));
   for (const key of ["hiring", "quote-builder", "invoice-builder", "timesheet"]) assert.ok(block.includes(`key: "${key}"`));

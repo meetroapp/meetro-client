@@ -144,6 +144,100 @@ test("Revenue period UI reads only governed server projection and keeps failure 
   );
 });
 
+test("Invoice Revenue mobile layout keeps money and Invoice summaries readable without changing financial authority", () => {
+  const source =
+    read("../src/components/ProfessionalInvoiceWorkspace.jsx");
+
+  const css =
+    read("../src/index.css");
+
+  assert.match(
+    source,
+    /className="work-center-workspace professional-invoice-workspace"/
+  );
+
+  for (const styleName of [
+    "invoiceRowCopy",
+    "invoiceRowNumber",
+    "invoiceRowDescription",
+    "invoiceRowAmount",
+  ]) {
+    assert.match(
+      source,
+      new RegExp(styleName)
+    );
+  }
+
+  assert.match(
+    source,
+    /invoiceRowAmount:[\s\S]*whiteSpace: "nowrap"/
+  );
+
+  assert.match(
+    css,
+    /\.professional-invoice-workspace \.work-center-metric-card__value\s*\{[\s\S]*?white-space:\s*nowrap;[\s\S]*?overflow-wrap:\s*normal;[\s\S]*?word-break:\s*normal;/
+  );
+
+  const metricSelector =
+    ".professional-invoice-workspace .work-center-metric-card__value";
+
+  const globalMetricRule =
+    css.indexOf(
+      metricSelector
+    );
+
+  const mobileMetricRule =
+    css.indexOf(
+      metricSelector,
+      globalMetricRule + metricSelector.length
+    );
+
+  const mobileMediaRule =
+    css.lastIndexOf(
+      "@media (max-width: 600px)",
+      mobileMetricRule
+    );
+
+  assert.ok(
+    globalMetricRule >= 0 &&
+    mobileMetricRule > globalMetricRule &&
+    mobileMediaRule > globalMetricRule &&
+    mobileMediaRule < mobileMetricRule
+  );
+
+  const mobileMetricEnd =
+    css.indexOf(
+      "}",
+      mobileMetricRule
+    );
+
+  const mobileMetricCss =
+    css.slice(
+      mobileMetricRule,
+      mobileMetricEnd + 1
+    );
+
+  assert.match(
+    mobileMetricCss,
+    /font-size:\s*clamp\(21px, 5\.7vw, 24px\);/
+  );
+
+  assert.match(
+    source,
+    /revenue\.cashReceivedMinor/
+  );
+
+  assert.match(
+    source,
+    /revenue\.invoicedMinor/
+  );
+
+  assert.doesNotMatch(
+    source,
+    /cashReceivedMinor\s*[+\-*\/]/
+  );
+});
+
 test("exact Invoice review hydrates one canonical detail read with one visible loading owner", () => {
   const source = read("../src/components/ProfessionalInvoiceWorkspace.jsx");
   const workspaceEffectStart = source.indexOf("useEffect(() => {", source.indexOf("const loadWorkspace"));

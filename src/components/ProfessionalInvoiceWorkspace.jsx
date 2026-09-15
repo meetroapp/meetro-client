@@ -504,7 +504,7 @@ export default function ProfessionalInvoiceWorkspace({
   const hasError = phase === "error" || invoicePhase === "error";
 
   return (
-    <section className="work-center-workspace" style={styles.workspace} data-invoice-workspace-phase={phase}>
+    <section className="work-center-workspace professional-invoice-workspace" style={styles.workspace} data-invoice-workspace-phase={phase}>
       {onBack && (
         <div className="work-center-invoice-safe-header" style={styles.safeHeader}>
           <WorkCenterBackButton label={copy.back} onClick={onBack} />
@@ -653,9 +653,30 @@ export default function ProfessionalInvoiceWorkspace({
           <h3 style={styles.subheading}>{copy.invoice}</h3>
           <div style={styles.list}>
             {workspace.invoices.map((invoice) => (
-              <button key={invoice.invoiceId} type="button" style={styles.invoiceRow} onClick={() => openInvoice(invoice.invoiceId)} data-invoice-id={invoice.invoiceId}>
-                <span><strong>{invoice.invoiceNumber}</strong><small>{invoice.customerName} / {invoice.serviceTitle}</small></span>
-                <span><strong>{money(invoice.totalMinor, invoice.currency)}</strong><small>{invoice.status === "PAID" ? copy.paid : invoice.status === "PARTIALLY_PAID" ? copy.outstanding : invoice.status === "DRAFT" ? copy.drafts : copy.waiting}</small></span>
+              <button
+                key={invoice.invoiceId}
+                type="button"
+                style={styles.invoiceRow}
+                onClick={() => openInvoice(invoice.invoiceId)}
+                data-invoice-id={invoice.invoiceId}
+              >
+                <span style={styles.invoiceRowCopy}>
+                  <strong style={styles.invoiceRowNumber}>
+                    {invoice.invoiceNumber}
+                  </strong>
+                  <small style={styles.invoiceRowDescription}>
+                    {invoice.customerName} / {invoice.serviceTitle}
+                  </small>
+                </span>
+
+                <span style={styles.invoiceRowAmount}>
+                  <strong>
+                    {money(invoice.totalMinor, invoice.currency)}
+                  </strong>
+                  <small>
+                    {invoice.status === "PAID" ? copy.paid : invoice.status === "PARTIALLY_PAID" ? copy.outstanding : invoice.status === "DRAFT" ? copy.drafts : copy.waiting}
+                  </small>
+                </span>
               </button>
             ))}
           </div>
@@ -765,7 +786,11 @@ const styles = {
   rowCopy: { display: "grid", gap: 3, minWidth: 0, overflowWrap: "anywhere" },
   rowAction: { display: "flex", flexWrap: "wrap", alignItems: "center", gap: 12 },
   moneySummary: { display: "grid", gridTemplateColumns: "repeat(3, minmax(120px, 1fr))", gap: 8, width: "100%", margin: 0 },
-  invoiceRow: { display: "flex", justifyContent: "space-between", gap: 12, width: "100%", minHeight: 56, padding: 12, border: "1px solid #d7ded8", borderRadius: 6, background: "#fff", color: "#172317", textAlign: "left", cursor: "pointer" },
+  invoiceRow: { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: 12, width: "100%", minWidth: 0, minHeight: 56, padding: 12, border: "1px solid #d7ded8", borderRadius: 6, background: "#fff", color: "#172317", textAlign: "left", cursor: "pointer" },
+  invoiceRowCopy: { display: "grid", gap: 4, flex: "1 1 auto", minWidth: 0 },
+  invoiceRowNumber: { display: "block", lineHeight: 1.25, overflowWrap: "anywhere" },
+  invoiceRowDescription: { display: "block", lineHeight: 1.35, overflowWrap: "anywhere" },
+  invoiceRowAmount: { display: "grid", gap: 4, flex: "0 0 auto", textAlign: "right", whiteSpace: "nowrap" },
   detailBand: { display: "grid", gap: 12, minWidth: 0 },
   actions: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" },
   confirmRow: { display: "flex", flexWrap: "wrap", gap: 8 },
