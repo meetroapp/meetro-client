@@ -280,4 +280,175 @@ export async function establishBusinessCustomerRelationship({
   return validatedRelationship(data.relationship);
 }
 
+
+function boundedString(value, maximum, { required = false } = {}) {
+  if (value === undefined || value === null) return required ? null : "";
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if ((required && !normalized) || normalized.length > maximum) return null;
+  return normalized;
+}
+
+function normalizedCreateJobServiceLocation(value) {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const allowed = new Set([
+    "mode",
+    "text",
+    "addressLine1",
+    "unitNumber",
+    "city",
+    "region",
+    "postalCode",
+    "countryCode",
+  ]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) return null;
+
+  const mode = text(value.mode).toUpperCase();
+
+  if (mode === "TEXT") {
+    const locationText = boundedString(value.text, 600, { required: true });
+    const unitNumber = boundedString(value.unitNumber, 120);
+    if (
+      locationText === null ||
+      unitNumber === null ||
+      value.addressLine1 != null ||
+      value.city != null ||
+      value.region != null ||
+      value.postalCode != null ||
+      value.countryCode != null
+    ) {
+      return null;
+    }
+    return Object.freeze({
+      mode: "TEXT",
+      text: locationText,
+      ...(unitNumber ? { unitNumber } : {}),
+    });
+  }
+
+  if (mode === "STRUCTURED") {
+    const addressLine1 = boundedString(value.addressLine1, 500, { required: true });
+    const unitNumber = boundedString(value.unitNumber, 120);
+    const city = boundedString(value.city, 120, { required: true });
+    const region = boundedString(value.region, 120, { required: true });
+    const postalCode = boundedString(value.postalCode, 32, { required: true });
+    const countryCode =
+      typeof value.countryCode === "string"
+        ? value.countryCode.trim().toUpperCase()
+        : "";
+    if (
+      addressLine1 === null ||
+      unitNumber === null ||
+      city === null ||
+      region === null ||
+      postalCode === null ||
+      !/^[A-Z]{2}$/.test(countryCode) ||
+      value.text != null
+    ) {
+      return null;
+    }
+    return Object.freeze({
+      mode: "STRUCTURED",
+      addressLine1,
+      ...(unitNumber ? { unitNumber } : {}),
+      city,
+      region,
+      postalCode,
+      countryCode,
+    });
+  }
+
+  if (mode === "UNSPECIFIED" && Object.keys(value).length === 1) {
+    return Object.freeze({ mode: "UNSPECIFIED" });
+  }
+
+  return null;
+}
+
+function validatedCreatedJob(value, relationshipId) {
+  const customer = value?.customer;
+  const project = value?.project;
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    !UUID_PATTERN.test(text(value.id)) ||
+    text(value.sourceType) !== "business_customer" ||
+    !UUID_PATTERN.test(text(value.sourceId)) ||
+    !positiveInteger(value.contractorProfileId) ||
+    !customer ||
+    typeof customer !== "object" ||
+    Array.isArray(customer) ||
+    !UUID_PATTERN.test(text(customer.businessContactId)) ||
+    text(customer.customerRelationshipId).toLowerCase() !== relationshipId ||
+    !project ||
+    typeof project !== "object" ||
+    Array.isArray(project) ||
+    !text(project.title)
+  ) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_JOB_RESPONSE_INVALID",
+      message: "The server returned invalid new Job data.",
+    });
+  }
+
+  return Object.freeze({
+    ...value,
+    customer: Object.freeze({ ...customer }),
+    project: Object.freeze({ ...project }),
+  });
+}
+
+export async function createBusinessCustomerJob({
+  relationshipId,
+  projectTitle,
+  projectDescription = "",
+  serviceLocation = null,
+  idempotencyKey,
+  setPage,
+  fetcher = authFetch,
+} = {}) {
+  const id = validRelationshipId(relationshipId);
+  const title = boundedString(projectTitle, 500, { required: true });
+  const description = boundedString(projectDescription, 12000);
+  const key = text(idempotencyKey).toLowerCase();
+  const location =
+    serviceLocation == null
+      ? null
+      : normalizedCreateJobServiceLocation(serviceLocation);
+
+  if (
+    title === null ||
+    description === null ||
+    !UUID_PATTERN.test(key) ||
+    (serviceLocation != null && !location)
+  ) {
+    throw new BusinessCustomerRelationshipApiError({
+      status: 400,
+      code: "BUSINESS_CUSTOMER_JOB_INVALID",
+      message: "Enter valid new Job details before creating the Job.",
+    });
+  }
+
+  const payload = {
+    projectTitle: title,
+    ...(description ? { projectDescription: description } : {}),
+    ...(location ? { serviceLocation: location } : {}),
+  };
+
+  const data = await request(
+    `/business-customer-relationships/${encodeURIComponent(id)}/jobs`,
+    {
+      method: "POST",
+      headers: { "Idempotency-Key": key },
+      body: JSON.stringify(payload),
+    },
+    { setPage, fetcher }
+  );
+
+  return validatedCreatedJob(data.job, id);
+}
+
 export { BusinessContactApiError };
