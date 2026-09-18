@@ -1263,6 +1263,24 @@ function ConversationThreadInner({
       ?.canManageWorkflow === true
       ? canonicalEmergencyWorkflow?.allowedActions || []
       : [];
+  const canonicalEmergencyDispatchAction =
+    canonicalEmergencyAllowedActions.length === 1 &&
+    Object.values(EMERGENCY_DISPATCH_ACTIONS).includes(
+      canonicalEmergencyAllowedActions[0]
+    )
+      ? canonicalEmergencyAllowedActions[0]
+      : "";
+  const canonicalEmergencyDispatchLabel =
+    {
+      [EMERGENCY_DISPATCH_ACTIONS.MARK_EN_ROUTE]:
+        t("onTheWay", language),
+      [EMERGENCY_DISPATCH_ACTIONS.MARK_ARRIVED]:
+        t("markArrived", language),
+      [EMERGENCY_DISPATCH_ACTIONS.START_WORK]:
+        t("startWork", language),
+      [EMERGENCY_DISPATCH_ACTIONS.COMPLETE_WORK]:
+        t("completeService", language),
+    }[canonicalEmergencyDispatchAction] || "";
 
   const emergencyDispatchStatus =
     canonicalEmergencyWorkflow?.status ||
@@ -1336,9 +1354,7 @@ useEffect(() => {
       setCanonicalDispatchPending(false);
 
       if (!result.ok) {
-        setCanonicalDispatchErrorKey(
-          "emergencyDispatchUpdateFailed"
-        );
+        setCanonicalDispatchErrorKey("serverError");
         return;
       }
 
@@ -8373,6 +8389,69 @@ const handleImageUpload = (event) => {
                 </span>
               ) : null}
               {invoiceSendReview.error ? <span role="alert">{invoiceSendReview.error}</span> : null}
+            </section>
+          ) : null}
+          {isCanonicalEmergencyThread &&
+          canonicalEmergencyDispatchAction ? (
+            <section
+              className="canonical-emergency-dispatch-action"
+              data-canonical-emergency-dispatch-action={
+                canonicalEmergencyDispatchAction
+              }
+              style={{
+                margin: "0 12px 10px",
+                padding: "12px",
+                border: "1px solid var(--meetro-color-line, #d9e1d5)",
+                borderRadius: "12px",
+                background: "var(--meetro-surface-sage, #eef4ea)",
+                display: "grid",
+                gap: "8px",
+              }}
+              aria-label={t("emergencyDispatch", language)}
+            >
+              {emergencyStatusSubtitle ? (
+                <span
+                  style={{
+                    color: "#475569",
+                    fontSize: "13px",
+                    fontWeight: 700,
+                  }}
+                >
+                  {emergencyStatusSubtitle}
+                </span>
+              ) : null}
+              <button
+                type="button"
+                style={{
+                  width: "100%",
+                  minHeight: "44px",
+                  border: "none",
+                  borderRadius: "10px",
+                  padding: "10px 14px",
+                  background: "var(--meetro-color-forest, #1f4d34)",
+                  color: "#ffffff",
+                  fontWeight: 900,
+                  cursor: canonicalDispatchPending
+                    ? "default"
+                    : "pointer",
+                  opacity: canonicalDispatchPending ? 0.7 : 1,
+                }}
+                disabled={canonicalDispatchPending}
+                onClick={() =>
+                  void advanceEmergencyFromChat(
+                    canonicalEmergencyDispatchAction
+                  )
+                }
+              >
+                {canonicalDispatchPending
+                  ? t("appUpdating", language)
+                  : canonicalEmergencyDispatchLabel}
+              </button>
+              {canonicalDispatchErrorKey ? (
+                <span role="alert" style={{ color: "#991b1b", fontSize: "13px" }}>
+                  {t(canonicalDispatchErrorKey, language)}
+                </span>
+              ) : null}
             </section>
           ) : null}
           <div className="chat-composer message-composer" style={composer}>
