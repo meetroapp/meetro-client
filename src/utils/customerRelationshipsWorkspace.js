@@ -3,6 +3,7 @@ import {
   getBusinessCustomerRelationshipActivity,
   getBusinessCustomerRelationshipByContact,
   listBusinessCustomerRelationships,
+  createBusinessCustomerJob,
 } from "./businessCustomerRelationshipsApi.js";
 import {
   getBusinessContact,
@@ -179,4 +180,25 @@ export async function loadCustomerRelationshipForContact({
     fetcher,
   });
   return Object.freeze({ relationship, contact });
+}
+
+
+export async function startCustomerRelationshipJob({
+  relationshipId,
+  projectTitle,
+  projectDescription = "",
+  serviceLocation = null,
+  idempotencyKey,
+  setPage,
+  fetcher,
+} = {}) {
+  return createBusinessCustomerJob({
+    relationshipId,
+    projectTitle,
+    projectDescription,
+    serviceLocation,
+    idempotencyKey,
+    setPage,
+    fetcher,
+  });
 }
