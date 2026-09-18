@@ -37,4 +37,3 @@ const eyebrowStyle = { margin: "0 0 7px", color: "#5b7d66", fontSize: 12, fontWe
 const headingStyle = { margin: "0 0 9px", color: "#173f28", fontSize: 24 };
 const copyStyle = { margin: "16px 0 0", color: "#587060", lineHeight: 1.5 };
 const definitionStyle = { display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(170px,1fr))", gap: 12, margin: "18px 0" };
-
