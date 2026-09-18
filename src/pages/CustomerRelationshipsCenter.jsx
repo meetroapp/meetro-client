@@ -10,11 +10,13 @@ import {
   loadCustomerRelationshipDetail,
   loadCustomerRelationshipDirectory,
   loadCustomerRelationshipForContact,
+  startCustomerRelationshipJob,
   readCustomerRelationshipNavigationContext,
   writeCustomerRelationshipContactReturn,
   writeCustomerRelationshipNavigationContext,
 } from "../utils/customerRelationshipsWorkspace.js";
 import { buildProfessionalWorkCenterRoute } from "../utils/professionalWorkCenterRoute.js";
+import { createBusinessCustomerJobCommandKey } from "../utils/businessCustomerRelationshipsApi.js";
 
 const DATE_LOCALES = Object.freeze({
   en: "en-US",
@@ -77,6 +79,15 @@ function CustomerRelationshipsCenter({ setPage }) {
     status: "idle",
     activity: null,
     error: "",
+  });
+  const [newJobState, setNewJobState] = useState({
+    open: false,
+    title: "",
+    description: "",
+    location: "",
+    status: "idle",
+    error: "",
+    idempotencyKey: "",
   });
   const setPageRef = useRef(setPage);
   const activityRequestRef = useRef(0);
@@ -197,7 +208,131 @@ function CustomerRelationshipsCenter({ setPage }) {
   function showDirectory() {
     detailRequestRef.current += 1;
     setActivityFocus("overview");
+    setNewJobState({
+      open: false,
+      title: "",
+      description: "",
+      location: "",
+      status: "idle",
+      error: "",
+      idempotencyKey: "",
+    });
     setWorkspaceState((current) => ({ ...current, detail: null }));
+  }
+
+  function openNewJob() {
+    if (!relationship || contact?.status !== "ACTIVE") return;
+    let idempotencyKey = "";
+    try {
+      idempotencyKey = createBusinessCustomerJobCommandKey();
+    } catch {
+      idempotencyKey = "";
+    }
+    setNewJobState({
+      open: true,
+      title: "",
+      description: "",
+      location: "",
+      status: "idle",
+      error: "",
+      idempotencyKey,
+    });
+  }
+
+  function cancelNewJob() {
+    if (newJobState.status === "creating") return;
+    setNewJobState({
+      open: false,
+      title: "",
+      description: "",
+      location: "",
+      status: "idle",
+      error: "",
+      idempotencyKey: "",
+    });
+  }
+
+  async function createNewJob(event) {
+    event?.preventDefault?.();
+    if (
+      !relationship ||
+      contact?.status !== "ACTIVE" ||
+      newJobState.status === "creating"
+    ) {
+      return;
+    }
+
+    const projectTitle = text(newJobState.title);
+    if (!projectTitle) {
+      setNewJobState((current) => ({
+        ...current,
+        error: copy.newJobErrorText,
+      }));
+      return;
+    }
+
+    let idempotencyKey = newJobState.idempotencyKey;
+    if (!idempotencyKey) {
+      try {
+        idempotencyKey = createBusinessCustomerJobCommandKey();
+      } catch {
+        setNewJobState((current) => ({
+          ...current,
+          error: copy.newJobErrorText,
+        }));
+        return;
+      }
+    }
+
+    setNewJobState((current) => ({
+      ...current,
+      status: "creating",
+      error: "",
+      idempotencyKey,
+    }));
+
+    try {
+      const job = await startCustomerRelationshipJob({
+        relationshipId: relationship.id,
+        projectTitle,
+        projectDescription: text(newJobState.description),
+        serviceLocation: text(newJobState.location)
+          ? {
+              mode: "TEXT",
+              text: text(newJobState.location),
+            }
+          : null,
+        idempotencyKey,
+        setPage: navigate,
+      });
+
+      const route = buildProfessionalWorkCenterRoute({
+        jobId: job.id,
+        stage: "evaluation",
+        returnPage: "customerRelationshipsCenter",
+      });
+
+      if (!route || !contact?.id) {
+        throw new Error(copy.newJobErrorText);
+      }
+
+      if (typeof window !== "undefined") {
+        writeCustomerRelationshipNavigationContext(window.localStorage, {
+          businessContactId: contact.id,
+          focus: "work",
+          returnPage: navigationContext?.returnPage || "businessCommandCenter",
+        });
+      }
+
+      navigate(route);
+    } catch (error) {
+      setNewJobState((current) => ({
+        ...current,
+        status: "error",
+        error: error?.message || copy.newJobErrorText,
+        idempotencyKey,
+      }));
+    }
   }
 
   function openJob(job) {
@@ -308,13 +443,121 @@ function CustomerRelationshipsCenter({ setPage }) {
             </div>
 
             <div style={actionRow}>
-              <button type="button" style={primaryButton} onClick={() => openContact(contact)}>
+              {contact.status === "ACTIVE" && (
+                <button type="button" style={primaryButton} onClick={openNewJob}>
+                  {copy.startNewJob}
+                </button>
+              )}
+              <button type="button" style={secondaryButton} onClick={() => openContact(contact)}>
                 {copy.viewContact}
               </button>
               <button type="button" style={secondaryButton} onClick={showDirectory}>
                 {copy.backToRelationships}
               </button>
             </div>
+
+            {contact.status === "ARCHIVED" && (
+              <div style={noticeCard} role="status">
+                <p style={noticeText}>{copy.archivedNewJobUnavailable}</p>
+              </div>
+            )}
+
+            {newJobState.open && contact.status === "ACTIVE" && (
+              <form style={newJobEditor} onSubmit={createNewJob}>
+                <div style={newJobEditorHeader}>
+                  <div style={minWidthZero}>
+                    <h4 style={newJobEditorTitle}>{copy.newJobHeading}</h4>
+                    <p style={newJobEditorIntro}>{copy.newJobIntro}</p>
+                  </div>
+                </div>
+
+                <label style={fieldLabel}>
+                  <span>{copy.newJobTitle}</span>
+                  <input
+                    type="text"
+                    value={newJobState.title}
+                    maxLength={500}
+                    autoComplete="off"
+                    required
+                    disabled={newJobState.status === "creating"}
+                    placeholder={copy.newJobTitlePlaceholder}
+                    onChange={(event) =>
+                      setNewJobState((current) => ({
+                        ...current,
+                        title: event.target.value,
+                        error: "",
+                      }))
+                    }
+                    style={textInput}
+                  />
+                </label>
+
+                <label style={fieldLabel}>
+                  <span>{copy.newJobDescription}</span>
+                  <textarea
+                    value={newJobState.description}
+                    maxLength={12000}
+                    rows={5}
+                    disabled={newJobState.status === "creating"}
+                    placeholder={copy.newJobDescriptionPlaceholder}
+                    onChange={(event) =>
+                      setNewJobState((current) => ({
+                        ...current,
+                        description: event.target.value,
+                        error: "",
+                      }))
+                    }
+                    style={textArea}
+                  />
+                </label>
+
+                <label style={fieldLabel}>
+                  <span>{copy.newJobLocation}</span>
+                  <input
+                    type="text"
+                    value={newJobState.location}
+                    maxLength={600}
+                    autoComplete="street-address"
+                    disabled={newJobState.status === "creating"}
+                    placeholder={copy.newJobLocationPlaceholder}
+                    onChange={(event) =>
+                      setNewJobState((current) => ({
+                        ...current,
+                        location: event.target.value,
+                        error: "",
+                      }))
+                    }
+                    style={textInput}
+                  />
+                  <span style={fieldHelp}>{copy.newJobLocationHelp}</span>
+                </label>
+
+                {newJobState.error && (
+                  <div role="alert" style={newJobError}>
+                    <strong>{copy.newJobErrorTitle}</strong>
+                    <p style={noticeText}>{newJobState.error}</p>
+                  </div>
+                )}
+
+                <div style={actionRow}>
+                  <button
+                    type="submit"
+                    style={primaryButton}
+                    disabled={newJobState.status === "creating" || !text(newJobState.title)}
+                  >
+                    {newJobState.status === "creating" ? copy.creatingJob : copy.createJob}
+                  </button>
+                  <button
+                    type="button"
+                    style={secondaryButton}
+                    disabled={newJobState.status === "creating"}
+                    onClick={cancelNewJob}
+                  >
+                    {copy.cancelNewJob}
+                  </button>
+                </div>
+              </form>
+            )}
 
             <div style={activityHeader}>
               <h4 style={activityTitle}>{copy.relationshipActivity}</h4>
@@ -815,6 +1058,15 @@ const noticeText = { margin: "8px 0 0", color: "#5d6c61", fontSize: "14px", line
 const actionRow = { display: "flex", flexWrap: "wrap", gap: "10px", marginTop: "22px" };
 const primaryButton = { minHeight: "46px", maxWidth: "100%", padding: "11px 16px", borderRadius: "13px", border: "1px solid var(--meetro-color-forest, #1f4d34)", background: "var(--meetro-color-forest, #1f4d34)", color: "#fff", fontSize: "14px", fontWeight: 900, cursor: "pointer", overflowWrap: "anywhere" };
 const secondaryButton = { ...primaryButton, background: "#fff", color: "var(--meetro-color-forest, #1f4d34)" };
+const newJobEditor = { width: "100%", minWidth: 0, marginTop: "20px", padding: "18px", border: "1px solid #d5e1d3", borderRadius: "16px", background: "#f9fbf7", boxSizing: "border-box" };
+const newJobEditorHeader = { display: "flex", alignItems: "flex-start", justifyContent: "space-between", gap: "12px", minWidth: 0 };
+const newJobEditorTitle = { margin: 0, color: "#173b27", fontSize: "18px", lineHeight: 1.3 };
+const newJobEditorIntro = { margin: "7px 0 0", color: "#5d6c61", fontSize: "14px", lineHeight: 1.5 };
+const fieldLabel = { display: "grid", gap: "7px", marginTop: "16px", minWidth: 0, color: "#294936", fontSize: "13px", fontWeight: 800 };
+const textInput = { width: "100%", minWidth: 0, minHeight: "46px", padding: "11px 12px", border: "1px solid #cfdacf", borderRadius: "11px", background: "#fff", color: "#172b1e", font: "inherit", fontSize: "16px", boxSizing: "border-box" };
+const textArea = { ...textInput, minHeight: "118px", resize: "vertical", lineHeight: 1.45 };
+const fieldHelp = { color: "#6b776f", fontSize: "12px", fontWeight: 500, lineHeight: 1.4 };
+const newJobError = { marginTop: "16px", padding: "14px", border: "1px solid #e4c8c3", borderRadius: "12px", background: "#fff7f5", color: "#743b32" };
 const activityHeader = { marginTop: "28px", paddingTop: "22px", borderTop: "1px solid #dfe6d9" };
 const activityTitle = { margin: 0, color: "#173b27", fontSize: "20px", lineHeight: 1.3 };
 const activityNavigation = { display: "flex", gap: "8px", width: "100%", marginTop: "14px", paddingBottom: "2px", overflowX: "auto", WebkitOverflowScrolling: "touch" };
