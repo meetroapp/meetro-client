@@ -74,19 +74,42 @@ test("active Emergency cards retain active conversation authority only", () => {
 });
 
 test("presentation split adds no Emergency mutation authority", () => {
-  const start = source.indexOf(
+  const projectionStart = source.indexOf(
     "const completedEmergencyConversations"
   );
-  const end = source.indexOf(
-    "if (!isProfessional)",
-    start
+  const projectionEnd = source.indexOf(
+    "const alertRoute",
+    projectionStart
   );
-  const projection = source.slice(start, end);
+  const projection = source.slice(
+    projectionStart,
+    projectionEnd
+  );
 
-  assert.ok(start >= 0);
-  assert.ok(end > start);
-  assert.doesNotMatch(
-    projection,
-    /transitionEmergencyDispatch|respondToEmergencyOpportunity|authFetch|localStorage\.setItem/
+  const completedRenderStart = source.indexOf(
+    "{completedEmergencyConversations.length > 0"
   );
+  const completedRenderEnd = source.indexOf(
+    "{emergencyStatus === \"loading\"",
+    completedRenderStart
+  );
+  const completedRender = source.slice(
+    completedRenderStart,
+    completedRenderEnd
+  );
+
+  assert.ok(projectionStart >= 0);
+  assert.ok(projectionEnd > projectionStart);
+  assert.ok(completedRenderStart >= 0);
+  assert.ok(completedRenderEnd > completedRenderStart);
+
+  for (const presentationOnlySource of [
+    projection,
+    completedRender,
+  ]) {
+    assert.doesNotMatch(
+      presentationOnlySource,
+      /transitionEmergencyDispatch|respondToEmergencyOpportunity|authFetch|localStorage\.setItem/
+    );
+  }
 });
