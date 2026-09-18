@@ -64,6 +64,19 @@ function BusinessLeads({ setPage }) {
   const [reloadKey, setReloadKey] = useState(0);
   const isProfessional = isProfessionalSession();
   const visibleOpportunities = opportunities.filter((record) => matchesOpportunityFilter(record, presentationFilter));
+  const completedEmergencyConversations =
+    activeEmergencyConversations.filter((conversation) =>
+      ["completed", "resolved"].includes(
+        conversation.workflow?.status
+      )
+    );
+  const currentEmergencyConversations =
+    activeEmergencyConversations.filter(
+      (conversation) =>
+        !["completed", "resolved"].includes(
+          conversation.workflow?.status
+        )
+    );
   const alertRoute = parseBusinessLeadAlertRoute(
     typeof window === "undefined" ? "" : window.location.hash
   );
@@ -415,12 +428,12 @@ function BusinessLeads({ setPage }) {
           {t("professionalEmergencyOpportunities", language)}
         </h2>
 
-        {activeEmergencyConversations.length > 0 && (
+        {currentEmergencyConversations.length > 0 && (
           <div style={leadList}>
             <h3 style={sectionSubheading}>
               {t("professionalEmergencyActive", language)}
             </h3>
-            {activeEmergencyConversations.map((conversation) => (
+            {currentEmergencyConversations.map((conversation) => (
               <article
                 key={`active-emergency-${conversation.conversationId}`}
                 style={emergencyLeadCard}
@@ -443,19 +456,62 @@ function BusinessLeads({ setPage }) {
                   }
                 >
                   {getConversationActionLabel(
-                    ["completed", "resolved"].includes(
-                      conversation.workflow?.status
-                    )
-                      ? CONVERSATION_ACTION_STAGE.HISTORY
-                      : CONVERSATION_ACTION_STAGE.ACTIVE,
+                    CONVERSATION_ACTION_STAGE.ACTIVE,
                     language
                   )}
                 </button>
                 {[
                   "professional_arrived",
                   "work_in_progress",
-                  "completed",
                 ].includes(conversation.workflow?.status) && (
+                  <button
+                    type="button"
+                    style={leadActionButton}
+                    onClick={() =>
+                      openCanonicalEmergencyEvaluation(conversation)
+                    }
+                  >
+                    Open Evaluation
+                  </button>
+                )}
+              </article>
+            ))}
+          </div>
+        )}
+
+        {completedEmergencyConversations.length > 0 && (
+          <div style={leadList}>
+            <h3 style={sectionSubheading}>
+              {t("messageLabelCompleted", language)}
+            </h3>
+            {completedEmergencyConversations.map((conversation) => (
+              <article
+                key={`completed-emergency-${conversation.conversationId}`}
+                style={emergencyLeadCard}
+              >
+                <span style={emergencyLeadStatus}>
+                  {t("messageLabelCompleted", language)}
+                </span>
+                <h3 style={stateTitle}>
+                  {conversation.project_title}
+                </h3>
+                <p style={leadMeta}>
+                  {conversation.workflow?.status ||
+                    conversation.status}
+                </p>
+                <button
+                  type="button"
+                  style={leadActionButton}
+                  onClick={() =>
+                    openCanonicalEmergencyConversation(conversation)
+                  }
+                >
+                  {getConversationActionLabel(
+                    CONVERSATION_ACTION_STAGE.HISTORY,
+                    language
+                  )}
+                </button>
+                {conversation.workflow?.status === "completed" && (
                   <button
                     type="button"
                     style={leadActionButton}
