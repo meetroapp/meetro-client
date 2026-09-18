@@ -164,6 +164,12 @@ export function createBusinessCustomerRelationshipCommandKey(
   return createBusinessContactCommandKey(cryptoProvider);
 }
 
+export function createBusinessCustomerJobCommandKey(
+  cryptoProvider = globalThis.crypto
+) {
+  return createBusinessContactCommandKey(cryptoProvider);
+}
+
 export async function getBusinessCustomerRelationshipByContact({
   businessContactId,
   setPage,
