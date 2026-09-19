@@ -57,6 +57,30 @@ test("acceptance fixture keeps the full Business application available without b
   assert.doesNotMatch(appSource, /provider.*shouldBlockProfessionalAccess|shouldBlockProfessionalAccess.*provider/is);
 });
 
+test("subscription service unavailable never locks the professional application", () => {
+  assert.equal(
+    shouldBlockProfessionalAccess({
+      status: "unavailable",
+      businessAccessActive: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldBlockProfessionalAccess({
+      status: "idle",
+      businessAccessActive: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldBlockProfessionalAccess({
+      status: "not_applicable",
+      businessAccessActive: true,
+    }),
+    false
+  );
+});
+
 test("ENFORCED active server trial grants access and retains truthful trial presentation", () => {
   const state = {
     applicable: true,
@@ -112,7 +136,7 @@ test("ENFORCED canonical paid access is provider-neutral at the application gate
   }
 });
 
-test("missing or invalid canonical Business authority fails closed", () => {
+test("missing or invalid canonical Business authority fails closed only after a successful authority response", () => {
   assert.equal(hasCanonicalBusinessAccess({ businessAccessActive: false }), false);
   assert.equal(shouldBlockProfessionalAccess({ status: "ready", businessAccessActive: false }), true);
   assert.equal(hasCanonicalBusinessAccess({}), false);
