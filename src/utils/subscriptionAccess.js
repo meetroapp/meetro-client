@@ -15,5 +15,5 @@ export function isNonBlockingAcceptanceState(state = {}) {
 }
 
 export function shouldBlockProfessionalAccess(gate = {}) {
-  return gate.status !== "idle" && gate.businessAccessActive !== true;
+  return gate.status === "ready" && gate.businessAccessActive !== true;
 }
