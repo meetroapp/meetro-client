@@ -640,6 +640,7 @@ function App() {
     setSubscriptionGate({
       status: "ready",
       businessAccessActive: hasCanonicalBusinessAccess(result),
+      purchaseAvailable: result?.purchaseAvailable === true,
     });
   }, []);
   const isStartupReady =
