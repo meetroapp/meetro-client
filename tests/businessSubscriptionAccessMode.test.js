@@ -139,7 +139,7 @@ test("ENFORCED expired trial remains blocked without a verified paid entitlement
     subscription: null,
   };
   assert.equal(hasCanonicalBusinessAccess(state), false);
-  assert.equal(shouldBlockProfessionalAccess({ status: "ready", businessAccessActive: false }), true);
+  assert.equal(shouldBlockProfessionalAccess({ status: "ready", businessAccessActive: false, purchaseAvailable: true }), true);
   assert.equal(getBusinessPlanPresentation(state).kind, "required");
 });
 
@@ -164,6 +164,6 @@ test("ENFORCED canonical paid access is provider-neutral at the application gate
 
 test("missing or invalid canonical Business authority fails closed only after a successful authority response", () => {
   assert.equal(hasCanonicalBusinessAccess({ businessAccessActive: false }), false);
-  assert.equal(shouldBlockProfessionalAccess({ status: "ready", businessAccessActive: false }), true);
+  assert.equal(shouldBlockProfessionalAccess({ status: "ready", businessAccessActive: false, purchaseAvailable: true }), true);
   assert.equal(hasCanonicalBusinessAccess({}), false);
 });
