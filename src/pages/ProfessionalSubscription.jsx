@@ -22,6 +22,7 @@ import {
   completeStoreKitRestore,
 } from "../utils/subscriptionPurchaseFlow";
 import { isNonBlockingAcceptanceState } from "../utils/subscriptionAccess";
+import { getBusinessPlanPresentation } from "../utils/subscriptionPresentation";
 
 function dateLabel(value) {
   if (!value) return "";
@@ -173,6 +174,16 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
   const subscription = state?.subscription;
   const businessTrial = state?.businessTrial;
   const businessTrialActive = businessTrial?.status === "ACTIVE";
+  const complimentaryAccess = state?.complimentaryAccess;
+  const complimentaryActive =
+    !subscription &&
+    state?.complimentaryEntitlementActive === true &&
+    complimentaryAccess?.status === "ACTIVE" &&
+    complimentaryAccess?.entitled === true;
+  const complimentaryPresentation =
+    complimentaryActive
+      ? getBusinessPlanPresentation(state)
+      : null;
   const nonBlockingAcceptanceActive =
     state?.businessAccessActive === true &&
     isNonBlockingAcceptanceState(state);
@@ -189,7 +200,16 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
       {error && <div role="alert" style={errorStyle}>{error}</div>}
       {message && <div role="status" style={messageStyle}>{message}</div>}
 
-      {businessTrial && !subscription && (businessTrialActive || !nonBlockingAcceptanceActive) && (
+      {complimentaryActive && complimentaryPresentation?.kind === "complimentary" && (
+        <section style={statusCardStyle} aria-label="Complimentary business access">
+          <div><span style={labelStyle}>Status</span><strong>{complimentaryPresentation.statusLabel}</strong></div>
+          <div><span style={labelStyle}>Current access</span><strong>{complimentaryPresentation.planName}</strong></div>
+          <div><span style={labelStyle}>Seats included</span><strong>{complimentaryAccess.seatLimit}</strong></div>
+          <div><span style={labelStyle}>Billing</span><strong>$0 complimentary</strong></div>
+        </section>
+      )}
+
+      {businessTrial && !subscription && !complimentaryActive && (businessTrialActive || !nonBlockingAcceptanceActive) && (
         <section style={trialStatusStyle} aria-label="Meetro Business Trial">
           <div><span style={labelStyle}>Status</span><strong>{businessTrialActive ? "Meetro Business Trial" : "Trial ended"}</strong></div>
           <div><span style={labelStyle}>Professional access</span><strong>{businessTrialActive ? "Full access" : "Choose a paid plan to continue"}</strong></div>
@@ -198,7 +218,7 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
         </section>
       )}
 
-      {nonBlockingAcceptanceActive && !subscription && !businessTrialActive && (
+      {nonBlockingAcceptanceActive && !subscription && !businessTrialActive && !complimentaryActive && (
         <section style={qaStyle} aria-label="Business access">
           <p style={eyebrowStyle}>BUSINESS PLAN</p>
           <h2 style={qaTitleStyle}>Business access</h2>
@@ -231,7 +251,8 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
             planCode: plan.code,
             providerReady: channel.providerReady,
             nativeIos,
-            businessTrialActive,
+            businessTrialActive:
+              businessTrialActive && !complimentaryActive,
           });
           const planName = plan.name || fallbackPlanName(plan);
           const positioning = plan.positioning || fallbackPlanPositioning(plan);
@@ -242,7 +263,11 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
               <p style={seatStyle}>Up to {plan.seatLimit} professional users</p>
               <p style={paidPlanStyle}>{channel.eligibilityLabel}</p>
               <p style={priceStyle}>{displayPrice}<span style={monthStyle}> / month</span></p>
-              <p style={trialCopyStyle}>{`${displayPrice}/month. Subscribe when you are ready.`}</p>
+              <p style={trialCopyStyle}>
+                {complimentaryActive
+                  ? "Your complimentary access is active. Paid plans are shown for comparison."
+                  : `${displayPrice}/month. Subscribe when you are ready.`}
+              </p>
               <p style={copyStyle}>Owner counts as one included professional user.</p>
               {action.kind === "purchase" ? (
                 <button
@@ -272,13 +297,13 @@ export default function ProfessionalSubscription({ setPage, onSubscriptionState 
         </ul>
       </section>
 
-      {(subscription || (nativeIos && !nonBlockingAcceptanceActive)) && (
+      {(subscription || (nativeIos && !nonBlockingAcceptanceActive && !complimentaryActive)) && (
         <section style={actionsStyle}>
           {nativeIos && subscription?.provider !== "STRIPE" && <button type="button" style={secondaryStyle} disabled={Boolean(busy)} onClick={restore}>Restore Purchases</button>}
           {subscription && <button type="button" style={secondaryStyle} disabled={Boolean(busy)} onClick={manage}>Manage Subscription</button>}
         </section>
       )}
-      <p style={footnoteStyle}>Meetro governs the one-time 14-day Business Trial. Paid subscription status is confirmed securely. One active Meetro business entitlement works on web and iPhone; a second subscription is not required.</p>
+      <p style={footnoteStyle}>Meetro governs the one-time 14-day Business Trial. Complimentary access is server-owned and does not create Apple or Stripe billing. Paid subscription status is confirmed securely. One active Meetro business entitlement works on web and iPhone; a second subscription is not required.</p>
       <BottomNav setPage={setPage} currentPage="professionalSubscription" />
     </div>
   );

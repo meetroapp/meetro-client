@@ -50,6 +50,41 @@ function resolveUsedSeats(state = {}, subscription = {}) {
 export function getBusinessPlanPresentation(state = {}) {
   const subscription = state?.subscription;
   const businessTrial = state?.businessTrial;
+  const complimentaryAccess = state?.complimentaryAccess;
+
+  const complimentaryActive =
+    !subscription &&
+    state?.complimentaryEntitlementActive === true &&
+    complimentaryAccess?.status === "ACTIVE" &&
+    complimentaryAccess?.entitled === true;
+
+  if (complimentaryActive) {
+    const seatLimit = positiveInteger(complimentaryAccess.seatLimit);
+    const isStarter =
+      complimentaryAccess.grantType === "TESTFLIGHT_STARTER" &&
+      complimentaryAccess.plan === "COMMUNITY_2_USER_MONTHLY" &&
+      seatLimit === 2;
+    const isFull =
+      complimentaryAccess.grantType === "FULL_COMPLIMENTARY" &&
+      complimentaryAccess.plan === "COMMUNITY_10_USER_MONTHLY" &&
+      seatLimit === 10;
+
+    if (isStarter || isFull) {
+      return Object.freeze({
+        kind: "complimentary",
+        eyebrow: "Business Plan",
+        planName: isFull
+          ? "Full Complimentary Access"
+          : "Complimentary Starter",
+        statusLabel: "Active · $0",
+        seatLabel: `${seatLimit} professional seats included`,
+        billingLabel: isFull
+          ? "Permanent complimentary access. No subscription payment is required."
+          : "Complimentary tester access. No subscription payment is required while this access is active.",
+        manageLabel: "Plan & Subscription",
+      });
+    }
+  }
 
   if (!subscription && businessTrial?.status === "ACTIVE") {
     const remaining = positiveInteger(businessTrial.daysRemaining);
