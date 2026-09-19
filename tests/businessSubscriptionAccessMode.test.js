@@ -81,6 +81,32 @@ test("subscription service unavailable never locks the professional application"
   );
 });
 
+test("ready subscription authority cannot lock access while purchasing is unavailable", () => {
+  assert.equal(
+    shouldBlockProfessionalAccess({
+      status: "ready",
+      businessAccessActive: false,
+      purchaseAvailable: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldBlockProfessionalAccess({
+      status: "ready",
+      businessAccessActive: false,
+    }),
+    false
+  );
+  assert.equal(
+    shouldBlockProfessionalAccess({
+      status: "ready",
+      businessAccessActive: false,
+      purchaseAvailable: true,
+    }),
+    true
+  );
+});
+
 test("ENFORCED active server trial grants access and retains truthful trial presentation", () => {
   const state = {
     applicable: true,
