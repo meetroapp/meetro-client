@@ -171,6 +171,33 @@ test("responsive Work Center keeps one architecture across iPhone, iPad, and web
   assert.doesNotMatch(r5, /overflow-x:\s*auto|white-space:\s*nowrap/);
 });
 
+test("tablet landscape keeps the Work Center list beside the selected job detail", () => {
+  assert.match(dashboard, /className="work-center-master-pane"/);
+  assert.match(dashboard, /className="work-center-detail-pane"/);
+  assert.match(dashboard, /data-selected=\{selectedWorkCenterJob &&/);
+  assert.match(
+    css,
+    /\.work-center-overview--detail \.work-center-master-pane \{\s*display: none;/
+  );
+  assert.match(css, /@media \(orientation: landscape\) \{/);
+  assert.match(
+    css,
+    /#root\[data-app-orientation="landscape"\]:is\([\s\S]*?\[data-app-layout="tablet"\][\s\S]*?\[data-app-native="true"\]\[data-app-layout="desktop"\][\s\S]*?\.work-center-overview--detail \{[\s\S]*?grid-template-columns:/
+  );
+  assert.match(
+    css,
+    /#root\[data-app-orientation="landscape"\]:is\([\s\S]*?\.work-center-overview--detail[\s\S]*?:is\(\.work-center-master-pane, \.work-center-detail-pane\) \{[\s\S]*?display: grid;/
+  );
+  assert.match(
+    css,
+    /\.contractor-dashboard\.work-center-job-selected \{[\s\S]*?height: 100dvh;[\s\S]*?overflow: hidden;/
+  );
+  assert.match(
+    css,
+    /:is\(\.work-center-master-pane, \.work-center-detail-pane\) \{[\s\S]*?overflow-y: auto;/
+  );
+});
+
 test("approved navigation and the single universal Ask Meetro entry remain intact", () => {
   assert.match(dashboard, /<BottomNav setPage=\{setPage\} currentPage="contractorDashboard"/);
   assert.match(app, /"contractorDashboard"/);
