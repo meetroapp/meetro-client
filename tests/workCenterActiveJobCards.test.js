@@ -78,7 +78,7 @@ test('action-first styling bounds progress and connects existing stages without 
  const actionCss=css.split('/* R5.4B action-first cards:')[1];
  assert.match(actionCss,/max-width: 980px/);
  assert.match(actionCss,/state > strong \{ font-size: 17px/);
- assert.match(actionCss,/stage--complete::after \{ background: #0aa35f/);
+ assert.match(actionCss,/stage--complete::after \{ background: var\(--work-center-lifecycle-complete-color\)/);
  assert.match(actionCss,/background: #cbd5e1/);
  assert.match(actionCss,/stage:last-child::after \{ display: none/);
  assert.match(actionCss,/row:first-child .*stage:last-child::after \{ display: block/);

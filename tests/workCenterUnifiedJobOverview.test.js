@@ -49,7 +49,7 @@ test('opened Job progress follows the same content lane, bounded connected 7 or 
   assert.match(r54c, /width: min\(100%, 980px\)/);
   assert.match(r54c, /repeat\(7, minmax\(0, 1fr\)\)/);
   assert.match(r54c, /work-center-lifecycle__row \{ display: contents/);
-  assert.match(r54c, /stage--complete::after \{ background: #0aa35f/);
+  assert.match(r54c, /stage--complete::after \{ background: var\(--work-center-lifecycle-complete-color\)/);
   assert.match(r54c, /background: #cbd5e1/);
   assert.match(r54c, /stage:last-child::after \{ display: none/);
   assert.match(r54c, /row:first-child .*stage:last-child::after \{ display: block/);

@@ -69,6 +69,20 @@ test('production tracker renders four stages then three with canonical current a
   assert.equal(doc.querySelector('[aria-current="step"]').dataset.lifecycleStage, 'completeJob');
   assert.equal(doc.querySelector('[data-lifecycle-stage="invoice"]').dataset.lifecycleState, 'locked');
 });
+test('Emergency progress uses the red lifecycle palette without changing Job Request progress', async () => {
+  const { WorkCenterLifecycle, lifecycle } = await prepareWorkCenterPolishFixture();
+  const emergency = new JSDOM(renderToStaticMarkup(React.createElement(WorkCenterLifecycle, {
+    presentation: { ...lifecycle, sourceType: 'emergency_request' },
+  }))).window.document;
+  const jobRequest = new JSDOM(renderToStaticMarkup(React.createElement(WorkCenterLifecycle, {
+    presentation: lifecycle,
+  }))).window.document;
+  assert.equal(emergency.querySelector('.work-center-lifecycle').dataset.lifecycleSource, 'emergency_request');
+  assert.equal(jobRequest.querySelector('.work-center-lifecycle').dataset.lifecycleSource, 'job_request');
+  const css = read('src/index.css');
+  assert.match(css, /data-lifecycle-source="emergency_request"[\s\S]*--work-center-lifecycle-complete-color: #ef4444/);
+  assert.match(css, /--work-center-lifecycle-complete-color: #0aa35f/);
+});
 test('chevron and alert remain inside the working Job button after the tracker', async () => {
   const { Card, cardProps } = await prepareWorkCenterPolishFixture();
   const selected = [];
