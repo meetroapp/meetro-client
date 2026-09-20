@@ -468,13 +468,14 @@ function validateRevenue(value) {
 }
 
 export function validateInvoiceWorkspace(value) {
-  if (!exact(value, ["contractVersion", "revenue", "summary", "readyJobs", "invoices", "limit"]) ||
+  const hasRevenue = Object.hasOwn(value || {}, "revenue");
+  if (!exact(value, ["contractVersion", ...(hasRevenue ? ["revenue"] : []), "summary", "readyJobs", "invoices", "limit"]) ||
       !exact(value.summary, [
         "readyToInvoice", "drafts", "waitingForPayment", "paid",
         "totalOutstandingMinor", "currency",
       ]) || !Array.isArray(value.readyJobs) || !Array.isArray(value.invoices)) return null;
-  const revenue = validateRevenue(value.revenue);
-  if (!revenue) return null;
+  const revenue = hasRevenue ? validateRevenue(value.revenue) : null;
+  if (hasRevenue && !revenue) return null;
 
   const readyJobs = value.readyJobs.map(validateReadyJob);
   const invoices = value.invoices.map((invoice) => {
@@ -615,7 +616,7 @@ export async function fetchProfessionalInvoiceWorkspace({
 
   if (
     !workspace ||
-    workspace.revenue.period !== exactPeriod
+    (workspace.revenue && workspace.revenue.period !== exactPeriod)
   ) {
     throw new InvoicePaymentApiError({
       status: 502,

@@ -46,7 +46,10 @@ function normalizedText(value, maximum, { nullable = false } = {}) {
 }
 
 function normalizeJob(value) {
-  if (!hasExactKeys(value, JOB_KEYS)) return null;
+  const emergency = value?.sourceType === "emergency_request";
+  const sourceKeys = Object.hasOwn(value || {}, "sourceType") ? ["sourceType"] : [];
+  if (!hasExactKeys(value, [...JOB_KEYS, ...sourceKeys, ...(emergency ? ["relationshipId", "emergencyRequestId"] : [])])) return null;
+  if (emergency && (value.sourceLabel !== "Emergency" || ![value.relationshipId, value.emergencyRequestId].every(n => Number.isSafeInteger(n) && n > 0))) return null;
   const jobId = String(value.jobId || "").trim().toLowerCase();
   const title = normalizedText(value.title, 500);
   const serviceDomain = normalizedText(value.serviceDomain, 200, {
@@ -78,6 +81,8 @@ function normalizeJob(value) {
 
   return Object.freeze({
     jobId,
+    ...(sourceKeys.length ? { sourceType: value.sourceType } : {}),
+    ...(emergency ? { relationshipId: value.relationshipId, emergencyRequestId: value.emergencyRequestId } : {}),
     title,
     serviceDomain,
     serviceSpecialty,

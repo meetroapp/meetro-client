@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { WorkCenterSourceBadge } from "./WorkCenterSource.jsx";
 
 import { fetchProfessionalInvoiceWorkspace } from "../utils/invoicePaymentApi.js";
 import { formatLocaleCurrency } from "../utils/localeFormat.js";
@@ -41,6 +42,7 @@ export default function CompletedJobInvoiceHandoff({ jobId, language = "en", set
     : source.amountStillDueMinor;
   return (
     <section aria-label={state.heading} data-completed-job-invoice-handoff={source.jobId}>
+      <WorkCenterSourceBadge record={source} language={language} />
       <h3>{state.heading}</h3>
       <p>{state.statusLabel}</p>
       {state.status === "existing" ? <p>Invoice {source.invoiceNumber}</p> : null}

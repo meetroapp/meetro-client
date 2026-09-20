@@ -1,3 +1,7 @@
+import EmergencyWorkCenterDetail from '../components/EmergencyWorkCenterDetail.jsx';
+import { fetchProfessionalWorkCenterEntries } from '../utils/professionalWorkCenterDiscovery.js';
+import { WorkCenterSourceBadge, WorkCenterSourceFilter } from "../components/WorkCenterSource.jsx";
+import { getWorkCenterSource, matchesWorkCenterSource } from "../utils/workCenterSourcePresentation.js";
 import { workCenterLabel, workCenterActor } from "../utils/workCenterPresentation.js";
 import { getOpportunityTileCounts, opportunityFilterRoute } from "../utils/opportunityPresentationFilters.js";
 import { requestProfessionalOpportunities, subscribeProfessionalOpportunities } from "../utils/professionalOpportunityCoordinator.js";
@@ -160,7 +164,6 @@ import {
 import { fetchProfessionalJobHistory } from "../utils/jobCompletionApi.js";
 import { getJobCompletionCopy } from "../utils/jobCompletionLanguage.js";
 import {
-  fetchCanonicalWorkCenterEntries,
   findCanonicalWorkCenterEntryByJobId,
   isCanonicalWorkCenterEntry,
   mergeCanonicalWorkCenterEntries,
@@ -440,6 +443,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
   const [selectedWorkCenterJob, setSelectedWorkCenterJob] = useState(null);
   const [workCenterJobQuery, setWorkCenterJobQuery] = useState("");
   const [workCenterJobFilter, setWorkCenterJobFilter] = useState("all");
+  const [workCenterSourceFilter, setWorkCenterSourceFilter] = useState("all");
   const [workCenterFilterOpen, setWorkCenterFilterOpen] = useState(false);
   useAskMeetroContext(selectedWorkCenterJob && isCanonicalWorkCenterEntry(selectedWorkCenterJob)
     ? { jobId: selectedWorkCenterJob.jobId, label: selectedWorkCenterJob.title || selectedWorkCenterJob.projectTitle || "" }
@@ -967,7 +971,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
     const collectionRevision = canonicalWorkCenterCollectionRef.current + 1;
     canonicalWorkCenterCollectionRef.current = collectionRevision;
 
-    void fetchCanonicalWorkCenterEntries({ setPage })
+    void fetchProfessionalWorkCenterEntries({ setPage })
       .then(async (result) => {
         if (
           !active ||
@@ -976,7 +980,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
           return;
         }
 
-        if (result.status !== "ready") {
+        if (result.status !== "ready" && !result.entries?.length) {
           setCanonicalWorkCenterHydration(result);
           return;
         }
@@ -1013,8 +1017,8 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
           canonicalWorkCenterCollectionRef.current === collectionRevision
         ) {
           setCanonicalWorkCenterHydration({
-            status: "ready",
-            reason: "",
+            status: result.status,
+            reason: result.reason,
             entries: hydratedEntries,
           });
         }
@@ -1079,6 +1083,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 
       setWorkCenterLifecycleProjection((current) => {
         const sameConfirmedJob =
+          selectedWorkCenterJob.sourceType !== "emergency_request" &&
           current?.projection &&
           String(current.postId || "") === String(target.postId || "");
 
@@ -1114,6 +1119,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 
         setWorkCenterLifecycleProjection((current) => {
           const sameConfirmedJob =
+            selectedWorkCenterJob.sourceType !== "emergency_request" &&
             current?.projection &&
             String(current.postId || "") === String(target.postId || "");
 
@@ -8890,7 +8896,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
   );
 
   const filteredWorkCenterActiveJobs = workCenterActiveJobs.filter((job) => {
-    const lifecycle = resolveWorkCenterLifecyclePresentation({ liveJob: job.liveJob });
+    const lifecycle = resolveWorkCenterLifecyclePresentation({ liveJob: job.liveJob, sourceType: job.sourceType });
     const query = workCenterJobQuery.trim().toLowerCase();
     const searchable = [
       job.customer,
@@ -8903,7 +8909,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
     const filterMatches =
       workCenterJobFilter === "all" ||
       lifecycle.currentStageKey === workCenterJobFilter;
-    return queryMatches && filterMatches;
+    return queryMatches && filterMatches && matchesWorkCenterSource(job, workCenterSourceFilter);
   });
 
   const workCenterHistoryJobs = workCenterJobs.filter(
@@ -11055,6 +11061,8 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 
             {!selectedWorkCenterJob && (
               <section className="work-center-active-jobs" aria-labelledby="work-center-active-jobs-title">
+                {canonicalWorkCenterHydration.status === 'error' && <div role="alert">Jobs could not be fully loaded. <button type="button" onClick={()=>setCanonicalWorkCenterRefreshKey(v=>v+1)}>Retry</button></div>}
+                <WorkCenterSourceFilter records={workCenterActiveJobs} value={workCenterSourceFilter} onChange={setWorkCenterSourceFilter} language={activeLanguage} />
                 <div className="work-center-active-jobs__toolbar">
                   <h2 id="work-center-active-jobs-title">{translate("wc52activeJobs", activeLanguage)}</h2>
                   <div className="work-center-active-jobs__controls">
@@ -11110,7 +11118,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                 <div className="work-center-active-jobs__list">
                   {filteredWorkCenterActiveJobs.length > 0 ? filteredWorkCenterActiveJobs.map((job) => {
                     const jobListPresentation = getCurrentJobListPresentation(job);
-                    const lifecycle = resolveWorkCenterLifecyclePresentation({ liveJob: job.liveJob });
+                    const lifecycle = resolveWorkCenterLifecyclePresentation({ liveJob: job.liveJob, sourceType: job.sourceType });
                     const visual = getWorkCenterJobVisual(job);
                     const scheduledDate = visual.scheduledAt
                       ? formatLocaleDate(visual.scheduledAt, { month: "short", day: "numeric", year: "numeric" }, activeLanguage)
@@ -11124,6 +11132,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                         key={getCanonicalCurrentJobIdentityKey(job) || job.id}
                         type="button"
                         className="work-center-job-card meetro-visual-surface"
+                        data-job-source={getWorkCenterSource(job)}
                         data-current-lifecycle-stage={lifecycle.currentStageKey}
                         onClick={() => {
                           setSelectedJobDetailView("");
@@ -11137,10 +11146,11 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                           {visual.image ? <img src={visual.image} alt="" /> : <span>{String(job.customer || "J").charAt(0).toUpperCase()}</span>}
                         </span>
                         <span className="work-center-job-card__identity">
-                          <strong>{job.customer}</strong>
-                          <span className="work-center-job-card__service">{job.title}</span>
+                          <WorkCenterSourceBadge record={job} language={activeLanguage} />
+                          <strong>{job.sourceType === "emergency_request" ? job.title : job.customer}</strong>
+                          <span className="work-center-job-card__service">{job.sourceType === "emergency_request" ? job.customer : job.title}</span>
                           <span>⌖ {visual.location || translate("wc52location", activeLanguage)}</span>
-                          <span>▣ {scheduledDate}</span>
+                          {job.sourceType !== "emergency_request" && <span>▣ {scheduledDate}</span>}
                         </span>
                         <span className="work-center-job-card__state">
                           <span className={`work-center-job-card__status work-center-job-card__status--${lifecycle.currentStageKey}`}>
@@ -11162,8 +11172,8 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                   }) : (
                     <WorkCenterEmptyState
                       icon="currentJobs"
-                      title={workCenterJobQuery || workCenterJobFilter !== "all" ? translate("wc52noMatch", activeLanguage) : workCenterWorkspaceCopy.currentJobsEmptyTitle}
-                      body={workCenterJobQuery || workCenterJobFilter !== "all" ? translate("wc52noMatchHelp", activeLanguage) : workCenterWorkspaceCopy.currentJobsEmptyBody}
+                      title={workCenterJobQuery || workCenterJobFilter !== "all" || workCenterSourceFilter !== "all" ? translate("wc52noMatch", activeLanguage) : workCenterWorkspaceCopy.currentJobsEmptyTitle}
+                      body={workCenterJobQuery || workCenterJobFilter !== "all" || workCenterSourceFilter !== "all" ? translate("wc52noMatchHelp", activeLanguage) : workCenterWorkspaceCopy.currentJobsEmptyBody}
                     />
                   )}
                 </div>
@@ -11173,6 +11183,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
             {selectedWorkCenterJob ? (() => {
               const isCanonicalReadOnlyJob =
                 isCanonicalWorkCenterEntry(selectedWorkCenterJob);
+              const isEmergencyJob = selectedWorkCenterJob.sourceType === "emergency_request";
               const scopedQuotes = isCanonicalReadOnlyJob
                 ? []
                 : getScopedJobQuotes(selectedWorkCenterJob);
@@ -11273,7 +11284,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
               );
               const canonicalLifecyclePresentation =
                 resolveWorkCenterLifecyclePresentation({
-                  liveJob: canonicalLiveJob,
+                  liveJob: canonicalLiveJob, sourceType: selectedWorkCenterJob.sourceType,
                 });
               const evaluationLifecycle = getWorkCenterLifecycleStage(canonicalLifecyclePresentation, "evaluation");
               const quoteLifecycle = getWorkCenterLifecycleStage(canonicalLifecyclePresentation, "quote");
@@ -11468,7 +11479,9 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                 />
 
 	                <div style={isCanonicalReadOnlyJob ? canonicalJobWorkflowShell : jobWorkflowFirstHero}>
-	                  <CompactCurrentJobHeader
+	                  <WorkCenterSourceBadge record={selectedWorkCenterJob} language={activeLanguage} />
+                  <CompactCurrentJobHeader
+                      sourceType={selectedWorkCenterJob.sourceType}
                       language={activeLanguage}
 	                    eyebrow={isJobHistoryMode ? translate("homeMyProjectsHistory", activeLanguage) : translate("workCenterCurrentJob", activeLanguage)}
 	                    customer={persistentContextCustomer}
@@ -11617,7 +11630,12 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 	                  </section>
 	                  )}
 
-                  {isCanonicalReadOnlyJob &&
+                  {isEmergencyJob && <EmergencyWorkCenterDetail
+                    key={canonicalLiveJob?.freshness?.derivedAt || selectedWorkCenterJob.jobId}
+                    record={selectedWorkCenterJob} liveJob={canonicalLiveJob} setPage={setPage} language={activeLanguage}
+                    onRefresh={() => {setWorkCenterLifecycleRefreshKey(v=>v+1);setCanonicalWorkCenterRefreshKey(v=>v+1);setProfessionalJobHistoryRefreshKey(v=>v+1);}}
+                  />}
+                  {isCanonicalReadOnlyJob && !isEmergencyJob &&
                     workCenterLifecycleProjection.status === "ready" &&
                     workCenterLifecycleProjection.projection && (
                       <div className="work-center-content-grid" key={canonicalAccordionJobIdentity}>
@@ -13608,15 +13626,17 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                   }]}
                 />
 
+                {canonicalWorkCenterHydration.status === 'error' && <div role="alert">Jobs could not be fully loaded. <button type="button" onClick={()=>setCanonicalWorkCenterRefreshKey(v=>v+1)}>Retry</button></div>}
+                <WorkCenterSourceFilter records={workCenterActiveJobs} value={workCenterSourceFilter} onChange={setWorkCenterSourceFilter} language={activeLanguage} />
                 <div style={jobListGrid}>
-                  {workCenterActiveJobs.length > 0 ? (
-                    workCenterActiveJobs.map((job) => {
+                  {workCenterActiveJobs.filter((job) => matchesWorkCenterSource(job, workCenterSourceFilter)).length > 0 ? (
+                    workCenterActiveJobs.filter((job) => matchesWorkCenterSource(job, workCenterSourceFilter)).map((job) => {
                       const isCanonicalReadOnlyJob =
                         isCanonicalWorkCenterEntry(job);
                       const jobListPresentation =
                         getCurrentJobListPresentation(job);
                       const jobLifecyclePresentation =
-                        resolveWorkCenterLifecyclePresentation({ liveJob: job.liveJob });
+                        resolveWorkCenterLifecyclePresentation({ liveJob: job.liveJob, sourceType: job.sourceType });
                       const jobAlertAttention =
                         isCanonicalReadOnlyJob
                           ? getWorkCenterJobAttention(
@@ -13639,6 +13659,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                           }
                           type="button"
                           className="meetro-visual-surface meetro-current-job-list-card"
+                          data-job-source={getWorkCenterSource(job)}
                           style={jobListCard}
                           onClick={() => {
                             setSelectedJobDetailView("");
@@ -13649,9 +13670,10 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                           }}
                         >
                           <span style={jobListCardMain}>
-                            <strong style={jobListCustomer}>{job.customer}</strong>
+                            <WorkCenterSourceBadge record={job} language={activeLanguage} />
+                            <strong style={jobListCustomer}>{job.sourceType === "emergency_request" ? job.title : job.customer}</strong>
                             {job.address && <span style={jobListMeta}>{job.address}</span>}
-                            <span style={jobListMeta}>{job.title}</span>
+                            <span style={jobListMeta}>{job.sourceType === "emergency_request" ? job.customer : job.title}</span>
                             <span style={jobListStatus}>
                               {translate("homeStatus", activeLanguage)}:{" "}
                               {workCenterLabel(jobListPresentation.statusLabel, activeLanguage)}

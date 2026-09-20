@@ -88,7 +88,22 @@ function resolveCurrentStageIndex(liveJob) {
   return 0;
 }
 
-export function resolveWorkCenterLifecyclePresentation({ liveJob, invoice } = {}) {
+export function resolveWorkCenterLifecyclePresentation({ liveJob, invoice, sourceType } = {}) {
+  if (sourceType === 'emergency_request' && !liveJob) return {sourceType,authoritySource:'UNAVAILABLE',currentStageKey:'',completedCount:0,canonicalJobCompleted:false,invoiceUnlocked:false,statusLabel:'Current status unavailable',nextActionLabel:'Open the Job to refresh its next step',responsibilityLabel:'Unavailable',stages:[]};
+  if (liveJob?.sourceType === 'emergency_request') {
+    const groups = [
+      ['dispatch','Dispatch',['ASSIGNED','ON_THE_WAY','EMERGENCY_REVIEW_REQUIRED']],
+      ['evaluation','Evaluation',['EVALUATION_NEEDED','EVALUATION_IN_PROGRESS']],
+      ['quote','Quote',['QUOTE_NEEDED','QUOTE_DRAFT','WAITING_FOR_CUSTOMER_DECISION','QUOTE_DECLINED']],
+      ['deposit','Deposit',['QUOTE_APPROVED_DEPOSIT_DUE']],
+      ['work','Work',['WORK_READY','WORK_IN_PROGRESS']],
+      ['invoice','Invoice',['JOB_COMPLETED','FINAL_INVOICE','PARTIALLY_PAID']],
+      ['paid','Paid',['PAID']],
+    ];
+    const current=groups.findIndex(g=>g[2].includes(liveJob.stage.code));
+    const stages=groups.map(([key,label],index)=>({key,label,index,state:index<current?'complete':index===current?'current':'locked',currentAction:index===current?liveJob.nextAction.label:''}));
+    return {authoritySource:'CANONICAL_LIVE_JOB_READ',sourceType:liveJob.sourceType,currentStageKey:groups[current]?.[0]||'',completedCount:Math.max(0,current),canonicalJobCompleted:['JOB_COMPLETED','FINAL_INVOICE','PARTIALLY_PAID','PAID'].includes(liveJob.stage.code),invoiceUnlocked:['JOB_COMPLETED','FINAL_INVOICE','PARTIALLY_PAID','PAID'].includes(liveJob.stage.code),statusLabel:liveJob.stage.label,nextActionLabel:liveJob.nextAction.label,responsibilityLabel:liveJob.responsibility.label,stages};
+  }
   const ready = Boolean(liveJob?.stage?.code && liveJob?.nextAction?.code);
   const currentIndex = ready ? resolveCurrentStageIndex(liveJob) : 0;
   const canonicalJobCompleted = liveJob?.stage?.code === "JOB_COMPLETED";

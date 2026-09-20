@@ -8,6 +8,7 @@ export default function CompactCurrentJobHeader({
   image = "",
   scheduledAt = "",
   jobId = "",
+  sourceType = "",
   status,
   nextStep,
   responsibility,
@@ -39,11 +40,11 @@ export default function CompactCurrentJobHeader({
           </span>
           <div className="compact-current-job-header__identity">
             <span className="compact-current-job-header__eyebrow">{eyebrow}</span>
-            <h2>{customer}</h2>
-            <p className="compact-current-job-header__service">{service}</p>
+            <h2>{sourceType === "emergency_request" ? service : customer}</h2>
+            <p className="compact-current-job-header__service">{sourceType === "emergency_request" ? customer : service}</p>
             {address && <p className="compact-current-job-header__address">⌖ {address}</p>}
             {scheduledLabel && <p className="compact-current-job-header__address">▣ Scheduled: {scheduledLabel}</p>}
-            {jobId && <p className="compact-current-job-header__address">▤ Job #{jobId}</p>}
+            {jobId && sourceType !== "emergency_request" && <p className="compact-current-job-header__address">▤ Job #{jobId}</p>}
           </div>
         </div>
 
@@ -65,7 +66,7 @@ export default function CompactCurrentJobHeader({
         </div>
       </div>
 
-      <div className="compact-current-job-header__details" aria-label="Job details">
+      {sourceType !== "emergency_request" && <div className="compact-current-job-header__details" aria-label="Job details">
         <div className="compact-current-job-header__concern">
           <span className="compact-current-job-header__label">Customer concern</span>
           <p>{concern || "Unavailable"}</p>
@@ -89,7 +90,7 @@ export default function CompactCurrentJobHeader({
             </ul>
           )}
         </details>
-      </div>
+      </div>}
 
       {progress && (
         <div className="compact-current-job-header__progress">

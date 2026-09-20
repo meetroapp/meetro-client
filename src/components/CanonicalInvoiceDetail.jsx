@@ -1,3 +1,4 @@
+import { WorkCenterSourceBadge } from "./WorkCenterSource.jsx";
 import { t } from "../utils/language.js";
 import { useState } from "react";
 import { fetchCanonicalInvoicePdf } from "../utils/invoicePaymentApi.js";
@@ -19,7 +20,7 @@ function lineageLabel(value, copy) {
   return copy.original;
 }
 
-export default function CanonicalInvoiceDetail({ invoice, language = "en", actions = null }) {
+export default function CanonicalInvoiceDetail({ invoice, language = "en", actions = null, sourceRecord = null }) {
   const [pdfState, setPdfState] = useState({ busy: false, error: "" });
   if (!invoice) return null;
   const copy = getInvoiceCopy(language);
@@ -44,6 +45,7 @@ export default function CanonicalInvoiceDetail({ invoice, language = "en", actio
     >
       <header style={styles.header}>
         <div style={styles.identity}>
+          <WorkCenterSourceBadge record={sourceRecord?.jobId === invoice.jobId ? sourceRecord : invoice} language={language} />
           <span style={styles.eyebrow}>{copy.invoice}</span>
           <h3 style={styles.title}>{invoice.invoiceNumber}</h3>
           <span style={styles.meta}>{invoice.business.displayName} / {invoice.customer.displayName}</span>

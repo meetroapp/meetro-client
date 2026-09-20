@@ -1,3 +1,4 @@
+import { emergencyIdentityMatches } from './emergencyWorkCenterContract.js';
 import { isCanonicalWorkCenterEntry } from "./workCenterCanonicalHydration.js";
 import { fetchWorkCenterLifecycleProjection } from "./workCenterLifecycleProjection.js";
 
@@ -8,6 +9,7 @@ function positiveInteger(value) {
 
 export function getCanonicalCurrentJobIdentityKey(entry = {}) {
   if (!isCanonicalWorkCenterEntry(entry)) return "";
+  if (entry.sourceType === "emergency_request") return `emergency:${entry.jobId}:relationship:${entry.relationshipId}`;
   const requestId = positiveInteger(entry.requestId ?? entry.postId);
   const relationshipId = positiveInteger(entry.relationshipId);
   if (!requestId || !relationshipId) return "";
@@ -105,6 +107,10 @@ export async function hydrateCurrentJobListEntry({
   }
 
   const liveJob = result?.projection?.liveJob || null;
+  if (entry.sourceType === 'emergency_request') {
+    const ready=result?.status === 'ready' && emergencyIdentityMatches(entry,liveJob);
+    return {...entry,liveJob:ready?liveJob:null,conversationId:ready?liveJob.conversationId:entry.conversationId,liveJobStatus:ready?'ready':'unavailable',liveJobUnavailableReason:ready?'':result?.reason||'LIVE_JOB_IDENTITY_MISMATCH'};
+  }
   const requestId = positiveInteger(entry.requestId ?? entry.postId);
   const relationshipId = positiveInteger(entry.relationshipId);
   const identityMatches = Boolean(

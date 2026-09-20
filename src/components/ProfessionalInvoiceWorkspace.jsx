@@ -1,3 +1,4 @@
+import { WorkCenterSourceBadge } from './WorkCenterSource.jsx';
 import { issueCanonicalInvoiceExternally, emailCanonicalInvoice } from "../utils/invoicePaymentApi.js";
 import UniversalAskMeetroEntry from "./UniversalAskMeetroEntry.jsx";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -626,7 +627,7 @@ export default function ProfessionalInvoiceWorkspace({
             {workspace.readyJobs.map((job) => (
               <div key={job.jobId} style={styles.row} data-ready-invoice-job-id={job.jobId}>
                 <div style={styles.rowCopy}>
-                  <strong>{job.customerName}</strong><span>{job.serviceTitle}</span>
+                  <WorkCenterSourceBadge record={job} language={language} /><strong>{job.customerName}</strong><span>{job.serviceTitle}</span>
                   <small>{copy.completed}: {new Date(job.completedAt).toLocaleDateString(language)}</small>
                 </div>
                 <div style={styles.rowAction}>
@@ -660,7 +661,7 @@ export default function ProfessionalInvoiceWorkspace({
                 onClick={() => openInvoice(invoice.invoiceId)}
                 data-invoice-id={invoice.invoiceId}
               >
-                <span style={styles.invoiceRowCopy}>
+                <span style={styles.invoiceRowCopy}><WorkCenterSourceBadge record={invoice} language={language} />
                   <strong style={styles.invoiceRowNumber}>
                     {invoice.invoiceNumber}
                   </strong>

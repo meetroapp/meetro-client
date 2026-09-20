@@ -1,3 +1,4 @@
+import { matchesWorkCenterSource } from "../src/utils/workCenterSourcePresentation.js";
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
@@ -89,7 +90,7 @@ test('search input and Filter & Views toggle retain their handlers and accessibl
 test('production search intersects the same stage predicate without admitting view destinations',()=>{
  const start=dashboard.indexOf('const filteredWorkCenterActiveJobs =');
  const body=dashboard.slice(start,dashboard.indexOf('\n  });',start)+6);
- const run=(query,stage)=>vm.runInNewContext(`${body}; filteredWorkCenterActiveJobs.map(x=>x.customer).join(',')`,{workCenterJobQuery:query,workCenterJobFilter:stage,workCenterActiveJobs:[{customer:'Liam',title:'Fan',liveJob:{key:'schedule'}},{customer:'Sarah',title:'Sink',liveJob:{key:'quote'}}],getWorkCenterJobVisual:()=>({location:'Cape Coral'}),resolveWorkCenterLifecyclePresentation:({liveJob})=>({currentStageKey:liveJob.key})});
+ const run=(query,stage)=>vm.runInNewContext(`${body}; filteredWorkCenterActiveJobs.map(x=>x.customer).join(',')`,{matchesWorkCenterSource,workCenterSourceFilter:"all",workCenterJobQuery:query,workCenterJobFilter:stage,workCenterActiveJobs:[{customer:'Liam',title:'Fan',liveJob:{key:'schedule'}},{customer:'Sarah',title:'Sink',liveJob:{key:'quote'}}],getWorkCenterJobVisual:()=>({location:'Cape Coral'}),resolveWorkCenterLifecyclePresentation:({liveJob})=>({currentStageKey:liveJob.key})});
  assert.equal(run('liam','all'),'Liam');assert.equal(run('','quote'),'Sarah');assert.equal(run('liam','quote'),'');assert.equal(run('','view:revenue'),'');
 });
 

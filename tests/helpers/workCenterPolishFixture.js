@@ -1,3 +1,4 @@
+import { getWorkCenterSource } from "../../src/utils/workCenterSourcePresentation.js";
 import { t as translate } from "../../src/utils/language.js";
 import { workCenterLabel, workCenterActor } from "../../src/utils/workCenterPresentation.js";
 // Render the production JSX blocks, not a second copy of their markup.
@@ -14,6 +15,7 @@ export async function prepareWorkCenterPolishFixture() {
     const { default: WorkCenterLifecycle, WorkCenterLifecycleHeading } = await vite.ssrLoadModule('/src/components/WorkCenterLifecycle.jsx');
     const { default: CompactCurrentJobHeader } = await vite.ssrLoadModule('/src/components/CompactCurrentJobHeader.jsx');
     const { WorkCenterAttentionBadge } = await vite.ssrLoadModule('/src/components/WorkCenterWorkspaceSystem.jsx');
+    const { WorkCenterSourceBadge } = await vite.ssrLoadModule('/src/components/WorkCenterSource.jsx');
     const dashboard = read('src/pages/ContractorDashboard.jsx');
     const bannerStart = dashboard.indexOf('<section className="work-center-opportunities-banner');
     const banner = dashboard.slice(bannerStart, dashboard.indexOf('</section>', bannerStart) + 10);
@@ -25,7 +27,7 @@ export async function prepareWorkCenterPolishFixture() {
     const metrics = completion.slice(metricsStart, completion.indexOf("\n\n          {!review.canComplete", metricsStart));
     const compile = async (jsx, names) => {
       const { code } = await transformWithOxc(`function Fixture(props) { const {${names}, activeLanguage = "en"} = props; return (${jsx}); }`, 'fixture.jsx', { jsx: { runtime: 'classic' } });
-      return vm.runInNewContext(`${code}; Fixture`, { React, translate, workCenterLabel, workCenterActor, WorkCenterLifecycle, WorkCenterAttentionBadge, opportunityFilterRoute,
+      return vm.runInNewContext(`${code}; Fixture`, { React, translate, workCenterLabel, workCenterActor, WorkCenterLifecycle, WorkCenterAttentionBadge, opportunityFilterRoute, WorkCenterSourceBadge, getWorkCenterSource,
         outstandingCount: (review) => Object.values(review.outstanding).reduce((a,b) => a+b, 0),
         MeetroIcon: () => React.createElement('span', { 'aria-hidden': true }, '◎'),
         getCanonicalCurrentJobIdentityKey: (job) => job.id,

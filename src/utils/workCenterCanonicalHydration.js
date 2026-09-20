@@ -95,7 +95,8 @@ export function isCanonicalWorkCenterEntry(record = {}) {
   return (
     record?.source === CANONICAL_WORK_CENTER_AUTHORITY &&
     record?.readOnly === true &&
-    firstPositiveInteger(record.postId, record.requestId) !== null
+    (firstPositiveInteger(record.postId, record.requestId) !== null ||
+      (record.sourceType === "emergency_request" && Boolean(record.jobId) && firstPositiveInteger(record.emergencyRequestId, null) !== null && firstPositiveInteger(record.relationshipId) !== null))
   );
 }
 
@@ -208,7 +209,7 @@ export function mergeCanonicalWorkCenterEntries(
   const canonicalByRequestId = new Map();
 
   canonicalEntries
-    .filter(isCanonicalWorkCenterEntry)
+    .filter(entry => isCanonicalWorkCenterEntry(entry) && entry.sourceType !== "emergency_request")
     .forEach((entry) => {
       const requestId = firstPositiveInteger(entry.postId, entry.requestId);
       const current = canonicalByRequestId.get(requestId);
@@ -250,6 +251,8 @@ export function mergeCanonicalWorkCenterEntries(
   });
 
   canonicalByRequestId.forEach((entry) => merged.push(entry));
+  const emergencies = new Map(canonicalEntries.filter(entry => isCanonicalWorkCenterEntry(entry) && entry.sourceType === "emergency_request").map(entry => [entry.jobId, entry]));
+  emergencies.forEach(entry => merged.push(entry));
   return merged;
 }
 

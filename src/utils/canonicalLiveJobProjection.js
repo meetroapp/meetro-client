@@ -1,3 +1,4 @@
+import { normalizeEmergencyLiveJob } from './emergencyWorkCenterContract.js';
 import { authFetch } from "./authFetch.js";
 import { normalizePreWorkDepositGate } from "./preWorkDepositApi.js";
 
@@ -175,6 +176,7 @@ function normalizeFreshness(value) {
 export function normalizeCanonicalLiveJobProjection(payload = {}) {
   const liveJob = payload?.liveJob;
   if (!liveJob || typeof liveJob !== "object" || Array.isArray(liveJob)) return null;
+  if (liveJob.sourceType === "emergency_request") return normalizeEmergencyLiveJob(liveJob);
   const jobId = canonicalUuid(liveJob.jobId);
   const requestId = positiveInteger(liveJob.requestId);
   const relationshipId = positiveInteger(liveJob.relationshipId);
@@ -218,6 +220,7 @@ export function normalizeCanonicalLiveJobProjection(payload = {}) {
   }
 
   return {
+    ...(liveJob.sourceType ? { sourceType: liveJob.sourceType } : {}),
     authoritySource: "CANONICAL_LIVE_JOB_READ",
     contractVersion: 1,
     jobId,

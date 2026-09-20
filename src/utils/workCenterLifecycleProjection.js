@@ -1,3 +1,4 @@
+import { emergencyIdentityMatches } from './emergencyWorkCenterContract.js';
 import { authFetch } from "./authFetch.js";
 import {
   getParticipantRoleLabelKey,
@@ -80,6 +81,14 @@ export function resolveWorkCenterLifecyclePostId(record = {}) {
 }
 
 export function getWorkCenterLifecycleProjectionTarget(record = {}) {
+  if (record.sourceType === "emergency_request") {
+    return {
+      available: isCanonicalWorkCenterEntry(record),
+      reason: isCanonicalWorkCenterEntry(record) ? "" : UNAVAILABLE_REASONS.INVALID_RESPONSE,
+      postId: null,
+      jobId: record.jobId,
+    };
+  }
   const contractVersion = getWorkCenterLifecycleContractVersion(record);
   const isUnverifiedCanonicalCandidate =
     isCanonicalWorkCenterEntry(record) &&
@@ -148,6 +157,12 @@ export async function fetchWorkCenterLifecycleProjection({
   setPage,
   authFetchImpl = authFetch,
 } = {}) {
+  if (record?.sourceType === 'emergency_request') {
+    const result = await fetchCanonicalLiveJobProjection({jobId:record.jobId,setPage,authFetchImpl});
+    if (result.status !== 'ready' || !emergencyIdentityMatches(record,result.projection)) return {...result,status:result.status === 'ready' ? 'unavailable' : result.status,projection:null};
+    const liveJob=result.projection;
+    return {status:'ready',reason:'',postId:null,projection:{sourceType:liveJob.sourceType,requestId:null,job:{present:true,id:liveJob.jobId,requestRelationshipId:liveJob.relationshipId},customerConcern:null,participants:[],liveJob}};
+  }
   const target = getWorkCenterLifecycleProjectionTarget(record);
   if (!target.available) {
     return {
