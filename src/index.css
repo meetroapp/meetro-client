@@ -6195,10 +6195,17 @@ button {
 .work-center-job-card__lifecycle { grid-area: lifecycle; min-width: 0; }
 
 .work-center-lifecycle {
+  --work-center-lifecycle-complete-color: #0aa35f;
+  --work-center-lifecycle-complete-text: #08764a;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   gap: 8px;
   min-width: 0;
+}
+
+.work-center-lifecycle[data-lifecycle-source="emergency_request"] {
+  --work-center-lifecycle-complete-color: #ef4444;
+  --work-center-lifecycle-complete-text: #dc2626;
 }
 
 .work-center-lifecycle__stage {
@@ -6230,8 +6237,8 @@ button {
   line-height: 1.15;
 }
 
-.work-center-lifecycle__stage--complete { color: #08764a; }
-.work-center-lifecycle__stage--complete .work-center-lifecycle__indicator { border-color: #0aa35f; background: #0aa35f; color: #fff; }
+.work-center-lifecycle__stage--complete { color: var(--work-center-lifecycle-complete-text); }
+.work-center-lifecycle__stage--complete .work-center-lifecycle__indicator { border-color: var(--work-center-lifecycle-complete-color); background: var(--work-center-lifecycle-complete-color); color: #fff; }
 .work-center-lifecycle__stage--current { color: #102039; font-weight: 850; }
 .work-center-lifecycle__stage--current .work-center-lifecycle__indicator { border: 3px solid #2d7ff0; color: #1368d5; }
 
@@ -6806,7 +6813,7 @@ button {
   background: #cbd5e1;
   pointer-events: none;
 }
-#root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__stage--complete::after { background: #0aa35f; }
+#root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__stage--complete::after { background: var(--work-center-lifecycle-complete-color); }
 #root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__stage:last-child::after { display: none; }
 #root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__indicator { position: relative; z-index: 1; }
 #root .contractor-dashboard .work-center-content-lane .work-center-job-card .work-center-lifecycle__stage--current .work-center-lifecycle__label { color: #1368d5; font-weight: 800; }
@@ -6901,7 +6908,7 @@ button {
   background: #cbd5e1;
   pointer-events: none;
 }
-#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__stage--complete::after { background: #0aa35f; }
+#root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__stage--complete::after { background: var(--work-center-lifecycle-complete-color); }
 #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__stage:last-child::after { display: none; }
 #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__indicator { position: relative; z-index: 1; }
 #root .contractor-dashboard .work-center-content-lane .compact-current-job-header__progress .work-center-lifecycle__stage--current .work-center-lifecycle__label { color: #1368d5; font-weight: 800; }

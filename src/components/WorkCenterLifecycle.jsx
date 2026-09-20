@@ -19,6 +19,7 @@ export default function WorkCenterLifecycle({
       className={`work-center-lifecycle${compact ? " work-center-lifecycle--compact" : ""}`}
       aria-label={ariaLabel}
       data-lifecycle-stage-count={stages.length}
+      data-lifecycle-source={presentation?.sourceType || "job_request"}
     >
       {[stages.slice(0, 4), stages.slice(4)].map((row, rowIndex) => (
         <div className="work-center-lifecycle__row" data-lifecycle-row={rowIndex + 1} key={rowIndex}>
