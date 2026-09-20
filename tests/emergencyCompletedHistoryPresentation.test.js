@@ -7,109 +7,38 @@ const source = readFileSync(
   "utf8"
 );
 
-test("completed Emergency conversations are separated from active presentation", () => {
-  assert.match(
-    source,
-    /const completedEmergencyConversations =[\s\S]*?\["completed", "resolved"\]\.includes/
-  );
-  assert.match(
-    source,
-    /const currentEmergencyConversations =[\s\S]*?!\["completed", "resolved"\]\.includes/
-  );
-
-  assert.match(
-    source,
-    /currentEmergencyConversations\.length > 0[\s\S]*?professionalEmergencyActive/
-  );
-  assert.match(
-    source,
-    /currentEmergencyConversations\.map[\s\S]*?messagesActiveEmergency/
-  );
-
-  assert.doesNotMatch(
-    source,
-    /activeEmergencyConversations\.map/
-  );
-});
-
-test("completed Emergency cards use history presentation without changing canonical routing", () => {
-  assert.match(
-    source,
-    /completedEmergencyConversations\.length > 0[\s\S]*?messageLabelCompleted/
-  );
-  assert.match(
-    source,
-    /completedEmergencyConversations\.map[\s\S]*?completed-emergency-/
-  );
-  assert.match(
-    source,
-    /completedEmergencyConversations\.map[\s\S]*?CONVERSATION_ACTION_STAGE\.HISTORY/
-  );
-  assert.match(
-    source,
-    /completedEmergencyConversations\.map[\s\S]*?openCanonicalEmergencyConversation\(conversation\)/
-  );
-});
-
-test("active Emergency cards retain active conversation authority only", () => {
-  const start = source.indexOf(
-    "{currentEmergencyConversations.length > 0"
-  );
-  const end = source.indexOf(
-    "{completedEmergencyConversations.length > 0",
-    start
-  );
-  const activeBlock = source.slice(start, end);
-
-  assert.ok(start >= 0);
-  assert.ok(end > start);
-  assert.match(
-    activeBlock,
-    /CONVERSATION_ACTION_STAGE\.ACTIVE/
-  );
-  assert.doesNotMatch(
-    activeBlock,
-    /CONVERSATION_ACTION_STAGE\.HISTORY/
-  );
-});
-
-test("presentation split adds no Emergency mutation authority", () => {
-  const projectionStart = source.indexOf(
-    "const completedEmergencyConversations"
-  );
-  const projectionEnd = source.indexOf(
-    "const alertRoute",
-    projectionStart
-  );
-  const projection = source.slice(
-    projectionStart,
-    projectionEnd
-  );
-
-  const completedRenderStart = source.indexOf(
-    "{completedEmergencyConversations.length > 0"
-  );
-  const completedRenderEnd = source.indexOf(
-    "{emergencyStatus === \"loading\"",
-    completedRenderStart
-  );
-  const completedRender = source.slice(
-    completedRenderStart,
-    completedRenderEnd
-  );
-
-  assert.ok(projectionStart >= 0);
-  assert.ok(projectionEnd > projectionStart);
-  assert.ok(completedRenderStart >= 0);
-  assert.ok(completedRenderEnd > completedRenderStart);
-
-  for (const presentationOnlySource of [
-    projection,
-    completedRender,
+test("Business Leads contains only distributable Emergency opportunities", () => {
+  for (const removed of [
+    "activeEmergencyConversations",
+    "completedEmergencyConversations",
+    "currentEmergencyConversations",
+    "fetchCanonicalConversations",
+    "openCanonicalEmergencyConversation",
+    "openCanonicalEmergencyEvaluation",
+    "Open Evaluation",
+    "completed-emergency-",
   ]) {
-    assert.doesNotMatch(
-      presentationOnlySource,
-      /transitionEmergencyDispatch|respondToEmergencyOpportunity|authFetch|localStorage\.setItem/
-    );
+    assert.equal(source.includes(removed), false, `obsolete Emergency Leads source remains: ${removed}`);
   }
+
+  assert.match(source, /listProfessionalEmergencyOpportunities\(\{[\s\S]*?setPage/);
+  assert.match(source, /respondToEmergencyOpportunity\(requestId/);
+  assert.match(source, /emergencyOpportunities\.map/);
+});
+
+test("ordinary opportunity conversation entry and filtering remain available", () => {
+  assert.match(source, /requestProfessionalOpportunities\(\{/);
+  assert.match(source, /function openOpportunityConversation\(opportunity\)/);
+  assert.match(source, /stageBusinessLeadConversation\(opportunity\)/);
+  assert.match(source, /getCanonicalConversationActionTarget/);
+  assert.match(source, /matchesOpportunityFilter/);
+  assert.match(source, /data-lead-request-id/);
+  assert.match(source, /data-emergency-request-id/);
+});
+
+test("Business Leads does not own selected Emergency lifecycle mutation", () => {
+  assert.doesNotMatch(
+    source,
+    /transitionEmergencyDispatch|transitionEmergencyStatus|EMERGENCY_DISPATCH_ACTIONS|START_WORK|COMPLETE_WORK/
+  );
 });

@@ -32,11 +32,6 @@ import {
 } from "../utils/alertCountCoordinator";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { getAuthenticatedIdentitySnapshot, isProfessionalSession } from "../utils/session";
-import { transitionEmergencyStatus } from "../utils/emergencyLifecycle";
-import {
-  EMERGENCY_DISPATCH_ACTIONS,
-  transitionEmergencyDispatch,
-} from "../utils/emergencyApi";
 import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoordinator";
 import WorkflowRenderer from "../components/workflows/WorkflowRenderer";
 import HiringUnavailableState from "../components/HiringUnavailableState";
@@ -964,10 +959,6 @@ function ConversationThreadInner({
   const managedTeamRequestRef = useRef(0);
   const [canonicalReloadKey, setCanonicalReloadKey] = useState(0);
   const [canonicalReadSnapshot, setCanonicalReadSnapshot] = useState(null);
-  const [canonicalDispatchPending, setCanonicalDispatchPending] =
-    useState(false);
-  const [canonicalDispatchErrorKey, setCanonicalDispatchErrorKey] =
-    useState("");
   const [canonicalVisitEditorToken, setCanonicalVisitEditorToken] = useState(0);
   const [invoiceSendReview, setInvoiceSendReview] = useState({
     phase: "idle", invoice: null, message: "", error: "", delivery: null,
@@ -1258,12 +1249,6 @@ function ConversationThreadInner({
     isCanonicalEmergencyThread
       ? canonicalConversationDetail.workflow
       : null;
-  const canonicalEmergencyAllowedActions =
-    canonicalConversationDetail?.permissions
-      ?.canManageWorkflow === true
-      ? canonicalEmergencyWorkflow?.allowedActions || []
-      : [];
-
   const emergencyDispatchStatus =
     canonicalEmergencyWorkflow?.status ||
     (isLegacyEmergencyThread
@@ -1306,58 +1291,6 @@ useEffect(() => {
       );
     };
   }, []);
-
-  const advanceEmergencyFromChat = async (nextStatusOrAction) => {
-    if (isCanonicalEmergencyThread) {
-      const emergencyRequestId =
-        canonicalConversationDetail.emergencyRequestId;
-
-      if (
-        !emergencyRequestId ||
-        canonicalDispatchPending ||
-        !canonicalEmergencyAllowedActions.includes(
-          nextStatusOrAction
-        )
-      ) {
-        return;
-      }
-
-      setCanonicalDispatchPending(true);
-      setCanonicalDispatchErrorKey("");
-
-      const result = await transitionEmergencyDispatch(
-        emergencyRequestId,
-        nextStatusOrAction,
-        {
-          setPage,
-        }
-      );
-
-      setCanonicalDispatchPending(false);
-
-      if (!result.ok) {
-        setCanonicalDispatchErrorKey(
-          "emergencyDispatchUpdateFailed"
-        );
-        return;
-      }
-
-      setCanonicalReloadKey((value) => value + 1);
-      return;
-    }
-
-    if (!isLegacyEmergencyThread) return;
-
-    const nextStatus = nextStatusOrAction;
-    transitionEmergencyStatus(nextStatus, {
-      service: activeJobService || activeName || "Emergency Service",
-      businessName: activeBusinessName || "",
-      customerName: activeCustomerName || "",
-      location: activeLocation || activeEmergencyRecord.location || "",
-    });
-    setEmergencyWorkflowTick((tick) => tick + 1);
-  };
-
 
   const emergencyStatusSubtitle = {
     pending:
@@ -1420,6 +1353,13 @@ useEffect(() => {
     : activeAccountMode === "business"
     ? "business"
     : "homeowner";
+  const canonicalEmergencyWorkCenterRoute =
+    isCanonicalEmergencyThread && currentViewerRole === "business"
+      ? buildProfessionalWorkCenterRoute({
+          jobId: canonicalConversationDetail?.relationship?.jobId,
+          returnPage: "messagesInbox",
+        })
+      : null;
 
   useEffect(() => {
     const invoiceId = canonicalRouteContext.invoiceId;
@@ -3582,7 +3522,6 @@ useEffect(() => {
           if (!cancelled) {
             canonicalConfirmedDetailRef.current = true;
             setCanonicalConversationDetail(detail);
-            setCanonicalDispatchErrorKey("");
             setCanonicalConversationState({
               phase: "ready",
               status: detail.status,
@@ -6538,161 +6477,20 @@ const handleImageUpload = (event) => {
                 </div>
               </div>
 
-              {currentViewerRole === "business" && (
-                <div style={emergencyChatActions}>
-                  {isCanonicalEmergencyThread &&
-                    canonicalEmergencyAllowedActions.includes(
-                      EMERGENCY_DISPATCH_ACTIONS.MARK_EN_ROUTE
-                    ) && (
-                      <button
-                        style={emergencyPrimaryAction}
-                        disabled={canonicalDispatchPending}
-                        onClick={() =>
-                          advanceEmergencyFromChat(
-                            EMERGENCY_DISPATCH_ACTIONS.MARK_EN_ROUTE
-                          )
-                        }
-                      >
-                        {t("onTheWay", language)}
-                      </button>
-                    )}
-
-                  {isCanonicalEmergencyThread &&
-                    canonicalEmergencyAllowedActions.includes(
-                      EMERGENCY_DISPATCH_ACTIONS.MARK_ARRIVED
-                    ) && (
-                      <button
-                        style={emergencyPrimaryAction}
-                        disabled={canonicalDispatchPending}
-                        onClick={() =>
-                          advanceEmergencyFromChat(
-                            EMERGENCY_DISPATCH_ACTIONS.MARK_ARRIVED
-                          )
-                        }
-                      >
-                        {t("arrived", language)}
-                      </button>
-                    )}
-
-                  {isCanonicalEmergencyThread &&
-                    canonicalEmergencyAllowedActions.includes(
-                      EMERGENCY_DISPATCH_ACTIONS.START_WORK
-                    ) && (
-                      <button
-                        style={emergencyPrimaryAction}
-                        disabled={canonicalDispatchPending}
-                        onClick={() =>
-                          advanceEmergencyFromChat(
-                            EMERGENCY_DISPATCH_ACTIONS.START_WORK
-                          )
-                        }
-                      >
-                        {t("startWork", language)}
-                      </button>
-                    )}
-
-                  {isCanonicalEmergencyThread &&
-                    canonicalEmergencyAllowedActions.includes(
-                      EMERGENCY_DISPATCH_ACTIONS.COMPLETE_WORK
-                    ) && (
-                      <button
-                        style={completeFromChatBtn}
-                        disabled={canonicalDispatchPending}
-                        onClick={() =>
-                          advanceEmergencyFromChat(
-                            EMERGENCY_DISPATCH_ACTIONS.COMPLETE_WORK
-                          )
-                        }
-                      >
-                        {t("completeEmergency", language)}
-                      </button>
-                    )}
-
-                  {canonicalDispatchPending && (
-                    <div style={canonicalDispatchNotice} role="status">
-                      {t("emergencyDispatchUpdating", language)}
-                    </div>
-                  )}
-
-                  {canonicalDispatchErrorKey && (
-                    <div style={canonicalDispatchError} role="alert">
-                      {t(canonicalDispatchErrorKey, language)}
-                    </div>
-                  )}
-
-                  {!isCanonicalEmergencyThread &&
-                    (!emergencyDispatchStatus ||
-                    emergencyDispatchStatus === "pending") && (
+              {currentViewerRole === "business" &&
+                canonicalEmergencyWorkCenterRoute && (
+                  <div style={emergencyChatActions}>
                     <button
+                      type="button"
                       style={emergencyPrimaryAction}
-                      onClick={() => advanceEmergencyFromChat("accepted")}
+                      onClick={() =>
+                        setPage(canonicalEmergencyWorkCenterRoute)
+                      }
                     >
-                      {t("acceptDispatch")}
+                      {t("wc52openInWorkCenter", language)}
                     </button>
-                  )}
-
-                  {!isCanonicalEmergencyThread &&
-                    emergencyDispatchStatus === "accepted" && (
-                    <button
-                      style={emergencyPrimaryAction}
-                      onClick={() => advanceEmergencyFromChat("enroute")}
-                    >
-                      {t("onTheWay")}
-                    </button>
-                  )}
-
-                  {!isCanonicalEmergencyThread &&
-                    emergencyDispatchStatus === "enroute" && (
-                    <button
-                      style={emergencyPrimaryAction}
-                      onClick={() => advanceEmergencyFromChat("arrived")}
-                    >
-                      {t("arrived")}
-                    </button>
-                  )}
-
-                  {!isCanonicalEmergencyThread &&
-                    emergencyDispatchStatus === "arrived" && (
-                    <button
-                      style={emergencyPrimaryAction}
-                      onClick={() => advanceEmergencyFromChat("started")}
-                    >
-                      {t("startWork")}
-                    </button>
-                  )}
-
-                  {!isCanonicalEmergencyThread &&
-                    emergencyDispatchStatus === "started" && (
-                    <button
-                      style={completeFromChatBtn}
-                      onClick={() => advanceEmergencyFromChat("completed")}
-                    >
-                      {t("completeEmergency")}
-                    </button>
-                  )}
-
-                  {!isCanonicalEmergencyThread &&
-                    emergencyDispatchStatus === "completed" && (
-                    <button
-                      style={completeFromChatBtn}
-                      onClick={() => {
-                        localStorage.setItem(
-                          "completionService",
-                          emergencyServiceName || "Emergency Service"
-                        );
-                        localStorage.setItem(
-                          "completionLocation",
-                          activeLocation || activeEmergencyRecord.location || ""
-                        );
-                        localStorage.setItem("completionSource", "emergency");
-                        setPage("completionSheet");
-                      }}
-                    >
-                      {t("openCompletionSheet")}
-                    </button>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
 
               {emergencyPanelExpanded && !emergencyContextInSidePanel && (
                 <>
@@ -9776,22 +9574,6 @@ const completeFromChatBtn = {
 
 const emergencyChatActions = {
   marginTop: "12px",
-};
-
-const canonicalDispatchNotice = {
-  marginTop: "10px",
-  color: "#7f1d1d",
-  fontSize: "12px",
-  fontWeight: "800",
-  textAlign: "center",
-};
-
-const canonicalDispatchError = {
-  ...canonicalDispatchNotice,
-  padding: "10px 12px",
-  borderRadius: "12px",
-  background: "#ffffff",
-  color: "#b91c1c",
 };
 
 const canonicalEmergencyLocationCard = {

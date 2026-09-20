@@ -17,6 +17,12 @@ const WORK_CENTER_STAGE_SET = new Set([
   "review",
 ]);
 
+const WORK_CENTER_RETURN_PAGE_SET = new Set([
+  "notifications",
+  "customerRelationshipsCenter",
+  "messagesInbox",
+]);
+
 function stage(value) {
   return typeof value === "string" &&
     WORK_CENTER_STAGE_SET.has(value)
@@ -38,9 +44,9 @@ export function buildProfessionalWorkCenterRoute({
 
   if (
     !canonicalJobId ||
-    (!canonicalQuoteId &&
-      !canonicalVisitId &&
-      !canonicalStage)
+    (quoteId != null && String(quoteId).trim() && !canonicalQuoteId) ||
+    (visitId != null && String(visitId).trim() && !canonicalVisitId) ||
+    (stageValue != null && String(stageValue).trim() && !canonicalStage)
   ) {
     return null;
   }
@@ -61,7 +67,7 @@ export function buildProfessionalWorkCenterRoute({
     query.set("stage", canonicalStage);
   }
 
-  if (["notifications", "customerRelationshipsCenter"].includes(returnPage)) {
+  if (WORK_CENTER_RETURN_PAGE_SET.has(returnPage)) {
     query.set("returnPage", returnPage);
   }
 
@@ -92,15 +98,16 @@ export function parseProfessionalWorkCenterRoute(value) {
   const quoteId = uuid(params.get("quoteId"));
   const visitId = uuid(params.get("visitId"));
   const canonicalStage = stage(params.get("stage"));
-  const returnPage = ["notifications", "customerRelationshipsCenter"].includes(
-    params.get("returnPage")
-  )
-    ? params.get("returnPage")
+  const requestedReturnPage = params.get("returnPage");
+  const returnPage = WORK_CENTER_RETURN_PAGE_SET.has(requestedReturnPage)
+    ? requestedReturnPage
     : "";
 
   if (
     !jobId ||
-    (!quoteId && !visitId && !canonicalStage)
+    (params.has("quoteId") && !quoteId) ||
+    (params.has("visitId") && !visitId) ||
+    (params.has("stage") && !canonicalStage)
   ) {
     return null;
   }

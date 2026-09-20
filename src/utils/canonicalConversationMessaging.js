@@ -39,6 +39,52 @@ export function normalizeCanonicalConversationId(value) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function normalizeCanonicalUuid(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return UUID_PATTERN.test(normalized) ? normalized : null;
+}
+
+function normalizeBoundedText(value, maxLength) {
+  return typeof value === "string"
+    ? value.trim().slice(0, maxLength)
+    : "";
+}
+
+function normalizeEmergencyRelationship(rawRelationship) {
+  const rawSource =
+    rawRelationship.source &&
+    typeof rawRelationship.source === "object" &&
+    !Array.isArray(rawRelationship.source)
+      ? rawRelationship.source
+      : {};
+
+  return {
+    id: normalizeCanonicalConversationId(rawRelationship.id),
+    emergencyRequestId: normalizeCanonicalConversationId(
+      rawRelationship.emergencyRequestId
+    ),
+    jobId: normalizeCanonicalUuid(rawRelationship.jobId),
+    title: normalizeBoundedText(rawRelationship.title, 200),
+    source:
+      rawSource.type === "emergency"
+        ? {
+            type: "emergency",
+            id: normalizeCanonicalConversationId(rawSource.id),
+            title: normalizeBoundedText(rawSource.title, 200),
+            serviceDomain: normalizeBoundedText(
+              rawSource.serviceDomain,
+              120
+            ),
+            serviceSpecialty: normalizeBoundedText(
+              rawSource.serviceSpecialty,
+              120
+            ),
+            isEmergency: rawSource.isEmergency === true,
+          }
+        : null,
+  };
+}
+
 function normalizeRouteId(value) {
   const normalized = String(value ?? "").trim();
   if (!/^[1-9]\d*$/.test(normalized)) return null;
@@ -192,7 +238,7 @@ export function normalizeCanonicalConversationDetail(payload = {}, expectedId) {
           : null,
         title: String(rawRelationship.title || "").trim(),
       }
-    : rawRelationship;
+    : normalizeEmergencyRelationship(rawRelationship);
   const location =
     conversationType === "emergency" &&
     payload.location &&

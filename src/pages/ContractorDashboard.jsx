@@ -8708,7 +8708,8 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
         current?.jobId === next?.jobId &&
         current?.quoteId === next?.quoteId &&
         current?.visitId === next?.visitId &&
-        current?.stage === next?.stage
+        current?.stage === next?.stage &&
+        current?.returnPage === next?.returnPage
       ) {
         return;
       }
@@ -8725,7 +8726,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
     const target = workCenterRouteRecordRef.current;
     if (!target) return;
     if (canonicalWorkCenterHydration.status !== "ready") return;
-    const token = `${target.jobId}:${target.quoteId || ""}:${target.visitId || ""}:${target.stage || ""}`;
+    const token = `${target.jobId}:${target.quoteId || ""}:${target.visitId || ""}:${target.stage || ""}:${target.returnPage || ""}`;
     const exactJob = findCanonicalWorkCenterEntryByJobId(
       canonicalWorkCenterHydration.entries,
       target.jobId
@@ -11449,7 +11450,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
               <div className="work-center-workspace" style={jobWorkspacePanel}>
                 <WorkCenterBackButton
 	                  onClick={() => {
-	                    if (["notifications", "customerRelationshipsCenter"].includes(workCenterJobReturnSurface)) {
+	                    if (["notifications", "customerRelationshipsCenter", "messagesInbox"].includes(workCenterJobReturnSurface)) {
 	                      setSelectedJobDetailView("");
 	                      setSelectedWorkCenterJob(null);
 	                      setSelectedWorkCenterQuoteId("");
@@ -11485,6 +11486,8 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 	                    ? translate("alertCenterBack", activeLanguage)
 	                    : workCenterJobReturnSurface === "customerRelationshipsCenter"
 	                      ? getCustomerRelationshipsCopy(activeLanguage).backToRelationships
+	                    : workCenterJobReturnSurface === "messagesInbox"
+	                      ? translate("wc52backToCommunicationCenter", activeLanguage)
 	                    : workCenterJobReturnSurface === "quotes"
 	                    ? translate("professionalQuotesBack", activeLanguage)
 	                    : workCenterJobReturnSurface === "workPlan"

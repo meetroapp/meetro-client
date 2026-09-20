@@ -335,9 +335,13 @@ test("canonical Emergency surfaces share bounded refresh without a second conver
     conversationSource,
     /if \(isCanonicalEmergencyThread\)[\s\S]*createEmergencyRefreshCoordinator/
   );
+  assert.doesNotMatch(
+    conversationSource,
+    /transitionEmergencyDispatch|transitionEmergencyStatus/
+  );
   assert.match(
     conversationSource,
-    /setCanonicalReloadKey\(\(value\) => value \+ 1\)/
+    /canonicalEmergencyWorkCenterRoute[\s\S]*returnPage: "messagesInbox"/
   );
 });
 

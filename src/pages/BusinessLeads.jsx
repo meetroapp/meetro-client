@@ -11,24 +11,16 @@ import {
 import {
   getCanonicalConversationActionTarget,
 } from "../utils/conversationActionRouting";
-import { buildCanonicalEvaluationRoute } from "../utils/canonicalEvaluation";
 import {
   listProfessionalEmergencyOpportunities,
   respondToEmergencyOpportunity,
 } from "../utils/emergencyApi";
 import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoordinator";
-import {
-  fetchCanonicalConversations,
-} from "../utils/requestCommunication";
 import { isProfessionalSession } from "../utils/session";
 import { PROFESSIONAL_OPPORTUNITY_STATUS } from "../utils/professionalOpportunityState";
 import {
   resolveProfessionalEmergencyResponsePresentation,
 } from "../utils/professionalEmergencyParticipation";
-import {
-  CONVERSATION_ACTION_STAGE,
-  getConversationActionLabel,
-} from "../utils/conversationActionLanguage";
 import {
   PROFESSIONAL_OPPORTUNITY_PHASE,
   requestProfessionalOpportunities,
@@ -53,8 +45,6 @@ function BusinessLeads({ setPage }) {
   const [opportunities, setOpportunities] = useState([]);
   const [emergencyOpportunities, setEmergencyOpportunities] =
     useState([]);
-  const [activeEmergencyConversations, setActiveEmergencyConversations] =
-    useState([]);
   const [emergencyStatus, setEmergencyStatus] =
     useState("loading");
   const [emergencyResponseState, setEmergencyResponseState] =
@@ -64,19 +54,6 @@ function BusinessLeads({ setPage }) {
   const [reloadKey, setReloadKey] = useState(0);
   const isProfessional = isProfessionalSession();
   const visibleOpportunities = opportunities.filter((record) => matchesOpportunityFilter(record, presentationFilter));
-  const completedEmergencyConversations =
-    activeEmergencyConversations.filter((conversation) =>
-      ["completed", "resolved"].includes(
-        conversation.workflow?.status
-      )
-    );
-  const currentEmergencyConversations =
-    activeEmergencyConversations.filter(
-      (conversation) =>
-        !["completed", "resolved"].includes(
-          conversation.workflow?.status
-        )
-    );
   const alertRoute = parseBusinessLeadAlertRoute(
     typeof window === "undefined" ? "" : window.location.hash
   );
@@ -109,27 +86,6 @@ function BusinessLeads({ setPage }) {
     if (!target.ok) return;
 
     setPage(target.route);
-  }
-
-  function openCanonicalEmergencyConversation(conversation) {
-    const target = getCanonicalConversationActionTarget(
-      conversation,
-      {
-        returnPage: "businessLeads",
-        preferCommunicationCenterShell: true,
-      }
-    );
-
-    if (!target.ok) return;
-
-    setPage(target.route);
-  }
-
-  function openCanonicalEmergencyEvaluation(conversation) {
-    const route = buildCanonicalEvaluationRoute(
-      conversation?.emergencyRequestId
-    );
-    if (route) setPage(route);
   }
 
   async function respondToEmergency(opportunity) {
@@ -299,32 +255,23 @@ function BusinessLeads({ setPage }) {
     if (!isProfessional) return undefined;
 
     let hasConfirmedOpportunities = false;
-    let hasConfirmedConversations = false;
     const refreshCoordinator =
       createEmergencyRefreshCoordinator({
         load: async () => {
-          const [opportunityResult, conversationResult] =
-            await Promise.all([
-              listProfessionalEmergencyOpportunities({
-                setPage,
-              }),
-              fetchCanonicalConversations("business", {
-                setPage,
-              }),
-            ]);
+          const opportunityResult =
+            await listProfessionalEmergencyOpportunities({
+              setPage,
+            });
 
-          if (!opportunityResult.ok && !conversationResult.ok) {
+          if (!opportunityResult.ok) {
             throw new Error(
               "Emergency professional work could not be refreshed."
             );
           }
 
-          return { opportunityResult, conversationResult };
+          return opportunityResult;
         },
-        onSuccess: ({
-          opportunityResult,
-          conversationResult,
-        }) => {
+        onSuccess: (opportunityResult) => {
           if (opportunityResult.ok) {
             hasConfirmedOpportunities = true;
             setEmergencyOpportunities(
@@ -333,18 +280,6 @@ function BusinessLeads({ setPage }) {
             setEmergencyStatus("ready");
           } else if (!hasConfirmedOpportunities) {
             setEmergencyStatus("unavailable");
-          }
-
-          if (conversationResult.ok) {
-            hasConfirmedConversations = true;
-            setActiveEmergencyConversations(
-              conversationResult.conversations.filter(
-                (conversation) =>
-                  conversation.sourceType === "emergency"
-              )
-            );
-          } else if (!hasConfirmedConversations) {
-            setActiveEmergencyConversations([]);
           }
         },
         onError: (_error, { hasConfirmedData }) => {
@@ -427,105 +362,6 @@ function BusinessLeads({ setPage }) {
         >
           {t("professionalEmergencyOpportunities", language)}
         </h2>
-
-        {currentEmergencyConversations.length > 0 && (
-          <div style={leadList}>
-            <h3 style={sectionSubheading}>
-              {t("professionalEmergencyActive", language)}
-            </h3>
-            {currentEmergencyConversations.map((conversation) => (
-              <article
-                key={`active-emergency-${conversation.conversationId}`}
-                style={emergencyLeadCard}
-              >
-                <span style={emergencyLeadStatus}>
-                  {t("messagesActiveEmergency", language)}
-                </span>
-                <h3 style={stateTitle}>
-                  {conversation.project_title}
-                </h3>
-                <p style={leadMeta}>
-                  {conversation.workflow?.status ||
-                    conversation.status}
-                </p>
-                <button
-                  type="button"
-                  style={leadActionButton}
-                  onClick={() =>
-                    openCanonicalEmergencyConversation(conversation)
-                  }
-                >
-                  {getConversationActionLabel(
-                    CONVERSATION_ACTION_STAGE.ACTIVE,
-                    language
-                  )}
-                </button>
-                {[
-                  "professional_arrived",
-                  "work_in_progress",
-                ].includes(conversation.workflow?.status) && (
-                  <button
-                    type="button"
-                    style={leadActionButton}
-                    onClick={() =>
-                      openCanonicalEmergencyEvaluation(conversation)
-                    }
-                  >
-                    Open Evaluation
-                  </button>
-                )}
-              </article>
-            ))}
-          </div>
-        )}
-
-        {completedEmergencyConversations.length > 0 && (
-          <div style={leadList}>
-            <h3 style={sectionSubheading}>
-              {t("messageLabelCompleted", language)}
-            </h3>
-            {completedEmergencyConversations.map((conversation) => (
-              <article
-                key={`completed-emergency-${conversation.conversationId}`}
-                style={emergencyLeadCard}
-              >
-                <span style={emergencyLeadStatus}>
-                  {t("messageLabelCompleted", language)}
-                </span>
-                <h3 style={stateTitle}>
-                  {conversation.project_title}
-                </h3>
-                <p style={leadMeta}>
-                  {conversation.workflow?.status ||
-                    conversation.status}
-                </p>
-                <button
-                  type="button"
-                  style={leadActionButton}
-                  onClick={() =>
-                    openCanonicalEmergencyConversation(conversation)
-                  }
-                >
-                  {getConversationActionLabel(
-                    CONVERSATION_ACTION_STAGE.HISTORY,
-                    language
-                  )}
-                </button>
-                {conversation.workflow?.status === "completed" && (
-                  <button
-                    type="button"
-                    style={leadActionButton}
-                    onClick={() =>
-                      openCanonicalEmergencyEvaluation(conversation)
-                    }
-                  >
-                    Open Evaluation
-                  </button>
-                )}
-              </article>
-            ))}
-          </div>
-        )}
 
         {emergencyStatus === "loading" ? (
           <div style={compactStateCard} role="status">
@@ -798,13 +634,6 @@ const sectionHeading = {
   margin: 0,
   color: "#111827",
   fontSize: "21px",
-};
-
-const sectionSubheading = {
-  margin: "2px 0 0",
-  color: "#475569",
-  fontSize: "14px",
-  fontWeight: "900",
 };
 
 const compactStateCard = {

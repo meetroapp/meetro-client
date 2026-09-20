@@ -64,6 +64,8 @@ const rows = [
   ['workPlan','Work Plan','Plan de trabajo','Plan de travail','Plano de trabalho'],
   ['completeJob','Complete Job','Completar trabajo','Terminer le travail','Concluir trabalho'],
   ['invoice','Invoice','Factura','Facture','Fatura'],
+  ['backToCommunicationCenter','Back to Communication Center','Volver al Centro de Comunicación','Retour au centre de communication','Voltar ao Centro de Comunicação'],
+  ['openInWorkCenter','Open in Work Center','Abrir en el Centro de Trabajo','Ouvrir dans le centre de travail','Abrir no Centro de Trabalho'],
 ];
 export const workCenterPresentationLanguage = Object.fromEntries(
   ['en','es','fr','pt-BR'].map((language,index)=>[language,Object.fromEntries(rows.map(([key,...labels])=>[`wc52${key}`,labels[index]]))])

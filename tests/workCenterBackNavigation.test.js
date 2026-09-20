@@ -88,3 +88,19 @@ test("simplified Work Center copy is localized in every supported language", () 
     }
   }
 });
+
+test("Communication Center return stays governed and localized", () => {
+  assert.match(
+    dashboardSource,
+    /\["notifications", "customerRelationshipsCenter", "messagesInbox"\]\.includes\(workCenterJobReturnSurface\)/
+  );
+  assert.match(
+    dashboardSource,
+    /workCenterJobReturnSurface === "messagesInbox"[\s\S]*wc52backToCommunicationCenter/
+  );
+
+  assert.equal(t("wc52backToCommunicationCenter", "en"), "Back to Communication Center");
+  assert.equal(t("wc52backToCommunicationCenter", "es"), "Volver al Centro de Comunicación");
+  assert.equal(t("wc52backToCommunicationCenter", "fr"), "Retour au centre de communication");
+  assert.equal(t("wc52backToCommunicationCenter", "pt-BR"), "Voltar ao Centro de Comunicação");
+});
