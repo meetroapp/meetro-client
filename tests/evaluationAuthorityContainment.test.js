@@ -153,7 +153,7 @@ test("ordinary Evaluation creation is available before a canonical Evaluation Vi
   }
 });
 
-test("production Evaluation path is guarded before both legacy writers and exposes no Quote authority", () => {
+test("production Evaluation remains canonically guarded while Leads own no post-selection Evaluation routing", () => {
   assert.match(
     dashboardSource,
     /function saveEvaluationRecord[\s\S]*if \(!canReadLegacyWorkflowStorage\(\)\) \{[\s\S]*persistCanonicalEvaluation/
@@ -163,11 +163,14 @@ test("production Evaluation path is guarded before both legacy writers and expos
     /const saveSarahPageEvaluationNotes[\s\S]*if \(!canReadLegacyWorkflowStorage\(\)\) \{[\s\S]*persistCanonicalEvaluation/
   );
   assert.match(dashboardSource, /loadCanonicalEvaluationForRecord/);
-  assert.match(leadsSource, /buildCanonicalEvaluationRoute/);
-  assert.match(
+  assert.doesNotMatch(leadsSource, /buildCanonicalEvaluationRoute/);
+  assert.doesNotMatch(leadsSource, /Open Evaluation/);
+  assert.doesNotMatch(
     leadsSource,
-    /professional_arrived[\s\S]*work_in_progress[\s\S]*completed[\s\S]*Open Evaluation/
+    /professional_arrived[\s\S]*Open Evaluation/
   );
+  assert.match(leadsSource, /listProfessionalEmergencyOpportunities/);
+  assert.match(leadsSource, /respondToEmergencyOpportunity/);
   assert.doesNotMatch(controllerSource, /localStorage|sessionStorage|Date\.now|Math\.random/);
   assert.equal(isCanonicalQuoteCreationAvailable(), false);
   assert.doesNotMatch(controllerSource, /\/quotes|\/authorizations|\/start-work/);
