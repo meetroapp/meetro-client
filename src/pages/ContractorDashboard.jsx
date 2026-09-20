@@ -10946,7 +10946,10 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
   }
 
   return (
-    <div className="app-page contractor-dashboard meetro-wide-page meetro-visual-page" style={page}>
+    <div
+      className={`app-page contractor-dashboard meetro-wide-page meetro-visual-page${!isWorkCenterSectionOpen && selectedWorkCenterJob ? " work-center-job-selected" : ""}`}
+      style={page}
+    >
       <style>
         {`
           .revenue-spark span {
@@ -10991,8 +10994,12 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 
       <div ref={workCenterPanelRef} className="work-center-content-lane">
         {!isWorkCenterSectionOpen ? (
-          <section className="work-center-dashboard work-center-overview" style={workCenterDashboard}>
-            {!selectedWorkCenterJob && <header className="work-center-overview__header">
+          <section
+            className={`work-center-dashboard work-center-overview${selectedWorkCenterJob ? " work-center-overview--detail" : ""}`}
+            style={workCenterDashboard}
+          >
+            <div className="work-center-master-pane">
+            <header className="work-center-overview__header">
               <h1>{translate("workCenter", activeLanguage)}</h1>
               <p>{translate("wc52subtitle", activeLanguage)}</p>
               {isPropertyManagementBusiness && (
@@ -11000,10 +11007,9 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                   {translate("propertyManagementWorkCenterNote")}
                 </p>
               )}
-            </header>}
+            </header>
 
-            {!selectedWorkCenterJob && (
-              <section className="work-center-opportunities-banner meetro-visual-surface" aria-label={translate("wc52opportunities", activeLanguage)}>
+            <section className="work-center-opportunities-banner meetro-visual-surface" aria-label={translate("wc52opportunities", activeLanguage)}>
                 <span className="work-center-opportunities-banner__icon" aria-hidden="true">
                   <MeetroIcon name="opportunities" size={30} decorative />
                 </span>
@@ -11017,8 +11023,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                   <button type="button" onClick={() => setPage(opportunityFilterRoute("awaiting-response"))}><strong>{opportunityTileCounts?.awaiting ?? "—"}</strong><span>{translate("wc52awaiting", activeLanguage)}</span><span aria-hidden="true">›</span></button>
                   <button type="button" onClick={() => openWorkTab("schedule")}><strong>{canonicalScheduleCounts ? canonicalScheduleCounts.today + canonicalScheduleCounts.upcoming : "—"}</strong><span>{translate("wc52scheduled", activeLanguage)}</span><span aria-hidden="true">›</span></button>
                 </div>
-              </section>
-            )}
+            </section>
 
             {workCenterLandingAlert && (
               <section className="meetro-visual-surface" style={workCenterAlertGuidanceCard}>
@@ -11059,8 +11064,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
               </section>
             )}
 
-            {!selectedWorkCenterJob && (
-              <section className="work-center-active-jobs" aria-labelledby="work-center-active-jobs-title">
+            <section className="work-center-active-jobs" aria-labelledby="work-center-active-jobs-title">
                 {canonicalWorkCenterHydration.status === 'error' && <div role="alert">Jobs could not be fully loaded. <button type="button" onClick={()=>setCanonicalWorkCenterRefreshKey(v=>v+1)}>Retry</button></div>}
                 <WorkCenterSourceFilter records={workCenterActiveJobs} value={workCenterSourceFilter} onChange={setWorkCenterSourceFilter} language={activeLanguage} />
                 <div className="work-center-active-jobs__toolbar">
@@ -11129,11 +11133,23 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                     const jobAlertCount = Number.isSafeInteger(jobAlertAttention?.unread) ? jobAlertAttention.unread : 0;
                     return (
                       <button
-                        key={getCanonicalCurrentJobIdentityKey(job) || job.id}
+                        key={getCanonicalCurrentJobIdentityKey(job) || String(job.id || "")}
                         type="button"
                         className="work-center-job-card meetro-visual-surface"
                         data-job-source={getWorkCenterSource(job)}
                         data-current-lifecycle-stage={lifecycle.currentStageKey}
+                        data-selected={selectedWorkCenterJob && (
+                          getCanonicalCurrentJobIdentityKey(job) || String(job.id || "")
+                        ) === (
+                          getCanonicalCurrentJobIdentityKey(selectedWorkCenterJob) ||
+                          String(selectedWorkCenterJob.id || "")
+                        ) ? "true" : "false"}
+                        aria-pressed={Boolean(selectedWorkCenterJob && (
+                          getCanonicalCurrentJobIdentityKey(job) || String(job.id || "")
+                        ) === (
+                          getCanonicalCurrentJobIdentityKey(selectedWorkCenterJob) ||
+                          String(selectedWorkCenterJob.id || "")
+                        ))}
                         onClick={() => {
                           setSelectedJobDetailView("");
                           setIsJobHistoryMode(false);
@@ -11177,10 +11193,10 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                     />
                   )}
                 </div>
-              </section>
-            )}
+            </section>
+            </div>
 
-            {selectedWorkCenterJob ? (() => {
+            {selectedWorkCenterJob ? <div className="work-center-detail-pane">{(() => {
               const isCanonicalReadOnlyJob =
                 isCanonicalWorkCenterEntry(selectedWorkCenterJob);
               const isEmergencyJob = selectedWorkCenterJob.sourceType === "emergency_request";
@@ -13590,7 +13606,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
                 )}
               </div>
               );
-            })() : null}
+            })()}</div> : null}
           </section>
         ) : ["currentJobs", "jobHistory"].includes(activeTab) ? (
           <section
