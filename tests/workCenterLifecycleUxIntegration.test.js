@@ -1,6 +1,9 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { createServer } from "vite";
 import { parseProfessionalWorkCenterRoute } from "../src/utils/professionalWorkCenterRoute.js";
 import {
   WORK_CENTER_LIFECYCLE,
@@ -59,7 +62,19 @@ test("30. voice transcript is visible and editable before save", () => { assert.
 test("31. AI does not silently save a finding", () => { assert.match(evaluationUi, /onAddFinding/); assert.match(findingsUi, /assistantFindingDraft/); assert.match(findingsUi, /onClick=\{\(\) => \{/); });
 test("32. contextual entry delegates suggestions and composition to Universal Ask", () => { assert.match(assistantUi, /UniversalAskMeetroEntry/); assert.doesNotMatch(assistantUi, /textarea|onRequest/); });
 test("33. retained Evaluation context prevents a false empty-assessment model", () => assert.match(buildEvaluationAssistantProfessionalInput({ evaluation }).notes, /Evaluation findings: Inspect mold risk/));
-test("34. compact Job header renders customer and service once", () => { assert.equal((header.match(/<h2>\{customer\}<\/h2>/g) || []).length, 1); assert.equal((header.match(/<p className="compact-current-job-header__service">\{service\}<\/p>/g) || []).length, 1); });
+test("34. compact Job header renders customer and service once for normal and Emergency Jobs", async () => {
+  const vite = await createServer({appType:'custom',logLevel:'silent',server:{middlewareMode:true,hmr:false}});
+  try {
+    const {default: Header} = await vite.ssrLoadModule('/src/components/CompactCurrentJobHeader.jsx');
+    for (const sourceType of ['', 'emergency_request']) {
+      const html = renderToStaticMarkup(React.createElement(Header,{sourceType,customer:'Customer Example',service:'Service Example'}));
+      assert.equal(html.split('Customer Example').length-1,1);
+      assert.equal(html.split('Service Example').length-1,1);
+      assert.ok(html.includes(sourceType ? '<h2>Service Example</h2>' : '<h2>Customer Example</h2>'));
+      if(sourceType) assert.ok(!html.includes('Customer concern'));
+    }
+  } finally {await vite.close();}
+});
 test("35. Job details use a compact responsive grid", () => { assert.match(header, /compact-current-job-header__primary/); assert.match(header, /compact-current-job-header__details/); });
 test("36. compact iPhone layout avoids fixed-width horizontal overflow", () => { assert.match(header, /compact-current-job-header__state/); assert.doesNotMatch(header, /width: [4-9]\d\d/); });
 test("37. lifecycle accordions remain touch friendly", () => { assert.match(workspaceSystem, /work-center-accordion__trigger/); assert.match(css, /work-center-accordion__trigger[\s\S]*min-height:\s*44px/); });

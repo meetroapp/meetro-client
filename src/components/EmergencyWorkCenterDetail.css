@@ -1,0 +1,12 @@
+.emergency-work-center { display:grid; gap:16px; min-width:0; color:#15334b; }
+.emergency-work-center section,.emergency-work-center article { min-width:0; padding:18px; border:1px solid #dbe5ec; border-radius:14px; background:#fff; overflow-wrap:anywhere; }
+.emergency-work-center h2,.emergency-work-center h3 { margin:0 0 12px; }
+.emergency-work-center label { display:grid; gap:6px; margin:14px 0; font-weight:600; }
+.emergency-work-center input,.emergency-work-center textarea { box-sizing:border-box; width:100%; min-width:0; padding:12px; border:1px solid #c9d8e3; border-radius:8px; font:inherit; }
+.emergency-work-center textarea { min-height:100px; resize:vertical; }
+.emergency-work-center button { min-height:44px; padding:10px 16px; margin:4px; border:1px solid #c9d8e3; border-radius:9px; background:#f4f8fc; color:#145ab6; font:inherit; cursor:pointer; }
+.emergency-work-center button:disabled { opacity:.55; cursor:default; }
+.emergency-work-center button:focus-visible { outline:3px solid #2185e5; outline-offset:2px; }
+.emergency-work-center button.emergency-work-center__primary { background:#116dd6; border-color:#116dd6; color:white; font-weight:600; }
+.emergency-work-center__actions { display:flex; flex-wrap:wrap; gap:8px; }
+@media(max-width:600px) { .emergency-work-center section { padding:14px; } .emergency-work-center button { max-width:100%; } }

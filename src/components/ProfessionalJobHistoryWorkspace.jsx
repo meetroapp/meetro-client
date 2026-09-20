@@ -1,3 +1,5 @@
+import { WorkCenterSourceBadge, WorkCenterSourceFilter } from "./WorkCenterSource.jsx";
+import { filterWorkCenterSources } from "../utils/workCenterSourcePresentation.js";
 import { useEffect, useState } from "react";
 import CanonicalInvoiceDetail from "./CanonicalInvoiceDetail.jsx";
 import {
@@ -34,6 +36,7 @@ export default function ProfessionalJobHistoryWorkspace({
   const invoiceCopy = getInvoiceCopy(language);
   const workspaceCopy = getWorkCenterWorkspaceCopy(language);
   const [selectedJobId, setSelectedJobId] = useState("");
+  const [sourceFilter, setSourceFilter] = useState("all");
   const [detailState, setDetailState] = useState({ status: "idle", detail: null, invoice: null, error: "" });
 
   useEffect(() => {
@@ -72,6 +75,7 @@ export default function ProfessionalJobHistoryWorkspace({
         {detailState.status === "error" && <p role="alert" style={styles.error}>{copy.historyUnavailable}</p>}
         {detail && (
           <>
+            <WorkCenterSourceBadge record={detail} language={language} />
             <WorkCenterPageHeader
               eyebrow={copy.workCompleted}
               title={detail.serviceTitle}
@@ -100,11 +104,11 @@ export default function ProfessionalJobHistoryWorkspace({
             )}
             <div style={styles.record}>
               <strong>{copy.preservedRecord}</strong>
-              <p style={styles.body}>{copy.preservedRecordBody}</p>
+              <p style={styles.body}>{detail.sourceType === "emergency_request" ? "Evaluation, findings, recommendations, and approved Quotes are preserved. Visits and Work Plan are not applicable to this Emergency." : copy.preservedRecordBody}</p>
             </div>
             {detailState.invoice && (
               <section style={styles.financialRecord} aria-label={invoiceCopy.invoice}>
-                <CanonicalInvoiceDetail invoice={detailState.invoice} language={language} />
+                <CanonicalInvoiceDetail invoice={detailState.invoice} language={language} sourceRecord={detail} />
               </section>
             )}
           </>
@@ -142,10 +146,12 @@ export default function ProfessionalJobHistoryWorkspace({
           body={workspaceCopy.historyEmptyBody}
         />
       )}
+      <WorkCenterSourceFilter records={history?.jobs || []} value={sourceFilter} onChange={setSourceFilter} language={language} />
       <div style={styles.list}>
-        {history?.jobs.map((job) => (
+        {filterWorkCenterSources(history?.jobs || [], sourceFilter).map((job) => (
           <button key={job.jobId} type="button" className="work-center-content-card" style={styles.row} onClick={() => setSelectedJobId(job.jobId)}>
             <span style={styles.rowMain}>
+              <WorkCenterSourceBadge record={job} language={language} />
               <strong style={styles.rowTitle}>{job.customerName}</strong>
               <span>{job.serviceTitle}</span>
               <span style={styles.meta}>{copy.completedOn} {displayDate(job.completedAt, language)}</span>

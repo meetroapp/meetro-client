@@ -78,6 +78,7 @@ function statusCopy(read) {
 
 export default function ProfessionalDepositCard({
   jobId,
+  sourceType,
   quoteId,
   visitAuthority = null,
   setPage,
@@ -85,6 +86,7 @@ export default function ProfessionalDepositCard({
   requestActionLabel = "Prepare Deposit Request",
   showRequestAction = true,
 }) {
+  const emergency = sourceType === "emergency_request";
   const [readState, setReadState] = useState({ status: "loading", read: null, error: "" });
   const [formOpen, setFormOpen] = useState(false);
   const [form, setForm] = useState(initialForm(null));
@@ -254,7 +256,7 @@ export default function ProfessionalDepositCard({
       };
 
       setNotice(
-        "Deposit reminder sent. No payment was recorded and Approved Work scheduling was not changed."
+        emergency ? "Deposit reminder sent. No payment was recorded." : "Deposit reminder sent. No payment was recorded and Approved Work scheduling was not changed."
       );
     } catch (error) {
       if (
@@ -352,7 +354,7 @@ export default function ProfessionalDepositCard({
       setNotice(
         result.deposit.state === "SATISFIED"
           ? "Deposit payment recorded. Scheduling status is refreshing."
-          : "Payment recorded. The remaining deposit is still due before scheduling."
+          : (emergency ? "Payment recorded. The remaining deposit is still due before work can start." : "Payment recorded. The remaining deposit is still due before scheduling.")
       );
       setFormOpen(false);
       attemptRef.current = { signature: "", key: "" };
@@ -375,12 +377,14 @@ export default function ProfessionalDepositCard({
       <section style={styles.card} aria-label="Deposit">
         <strong>Deposit</strong>
         <p role="alert" style={styles.error}>{readState.error}</p>
-        <p style={styles.guidance}>Scheduling remains governed by the server and is not unlocked here.</p>
+        <p style={styles.guidance}>{emergency ? "Refresh the Emergency status to confirm work readiness." : "Scheduling remains governed by the server and is not unlocked here."}</p>
       </section>
     );
   }
 
-  if (!deposit || deposit.state === "NOT_REQUIRED") return null;
+  if (!deposit || deposit.state === "NOT_REQUIRED") {
+    return emergency && deposit?.state === "NOT_REQUIRED" ? <p role="status">No deposit required by the approved Quote.</p> : null;
+  }
 
   return (
     <section style={styles.card} aria-labelledby={`deposit-title-${quoteId}`}>
@@ -416,9 +420,9 @@ export default function ProfessionalDepositCard({
       )}
 
       <p style={deposit.schedulingLocked ? styles.locked : styles.available}>
-        {schedulingCopy}
+        {emergency ? "Work readiness follows the current Emergency status." : schedulingCopy}
       </p>
-      {deposit.schedulingLocked && Number.isSafeInteger(deposit.remainingMinor) && (
+      {!emergency && deposit.schedulingLocked && Number.isSafeInteger(deposit.remainingMinor) && (
         <p style={styles.guidance}>
           {formatDepositMoney(deposit.remainingMinor, deposit.currency)} remains before Approved Work scheduling can begin.
         </p>
@@ -525,7 +529,7 @@ export default function ProfessionalDepositCard({
                   fontWeight: 800,
                 }}
               >
-                Reminder only — this does not record a payment or unlock Approved Work scheduling.
+                {emergency ? "Reminder only — this does not record a payment or authorize work." : "Reminder only — this does not record a payment or unlock Approved Work scheduling."}
               </p>
             </div>
 

@@ -1,3 +1,4 @@
+import { WorkCenterSourceBadge } from "./WorkCenterSource.jsx";
 import {
   projectQuoteToInvoiceWorkingDraft,
   parseQuoteInvoiceCommand,
@@ -828,6 +829,7 @@ function InvoicePreview({ invoice, preparation, canonicalInvoice = null, brandin
     : saved ? "SAVED DRAFT" : "DRAFT PREVIEW";
   return (
     <article className="business-live-document" aria-label="Live Invoice Preview">
+      <WorkCenterSourceBadge record={canonicalInvoice || preparation || {}} />
       <header className="business-document-preview-heading"><strong>{branding.businessName}</strong><div><b>INVOICE</b><span>{status}</span></div></header>
       <dl className="business-document-meta"><div><dt>Bill To</dt><dd>{invoice.customerName || "—"}</dd></div><div><dt>Job</dt><dd>{invoice.projectTitle || "—"}</dd></div><div><dt>Invoice #</dt><dd>{canonicalInvoice?.invoiceNumber || documentNumber || "Assigned on first save"}</dd></div><div><dt>Date</dt><dd>{canonicalInvoice?.invoiceDate || invoice.invoiceDate || "—"}</dd></div><div><dt>Quote reference</dt><dd>{invoice.quoteReference || "Not linked"}</dd></div></dl>
       <section className="business-document-copy"><h3>Work Completed</h3><p>{invoice.workPerformed || "Completion details have not been confirmed."}</p></section>

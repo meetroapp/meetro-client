@@ -33,7 +33,7 @@ export default function WorkCenterLifecycle({
           <span className="work-center-lifecycle__indicator" aria-hidden="true">
             {stage.state === "complete" ? "✓" : stage.index + 1}
           </span>
-          <span className="work-center-lifecycle__label">{t(`wc52${stage.key}`, language)}</span>
+          <span className="work-center-lifecycle__label">{presentation?.sourceType === "emergency_request" ? stage.label : t(`wc52${stage.key}`, language)}</span>
         </div>
         ))}
         </div>

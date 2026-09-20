@@ -752,6 +752,9 @@ function validateQuoteProjection(value, options) {
     decisionVersion === currentVersion &&
     Boolean(decidedAt) &&
     value.status === "ISSUED";
+  const emergencyIdentity = options.sourceContext?.sourceType === 'emergency_request' &&
+    options.sourceContext.jobId === jobId && options.sourceContext.relationshipId === relationshipId &&
+    positiveInteger(options.sourceContext.emergencyRequestId) && value.requestId === null && Boolean(relationshipId);
   const marketplaceIdentity = Boolean(requestId && relationshipId);
   const businessDocumentIdentity =
     requestId == null &&
@@ -765,8 +768,8 @@ function validateQuoteProjection(value, options) {
   if (
     !id ||
     !jobId ||
-    (!marketplaceIdentity && !businessDocumentIdentity) ||
-    ((requestId == null) !== (relationshipId == null)) ||
+    (!marketplaceIdentity && !businessDocumentIdentity && !emergencyIdentity) ||
+    (!emergencyIdentity && ((requestId == null) !== (relationshipId == null))) ||
     !issuerParticipantId ||
     (value.parentQuoteId != null && !parentQuoteId) ||
     parentQuoteId === id ||
@@ -872,8 +875,8 @@ function validateQuoteProjection(value, options) {
   };
 }
 
-export function validateCanonicalQuoteProjection(value) {
-  return validateQuoteProjection(value, { normalizedSource: false });
+export function validateCanonicalQuoteProjection(value, { sourceContext } = {}) {
+  return validateQuoteProjection(value, { normalizedSource: false, sourceContext });
 }
 
 export function validateNormalizedCanonicalQuoteProjection(value) {

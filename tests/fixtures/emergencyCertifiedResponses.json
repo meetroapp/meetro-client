@@ -1,0 +1,2984 @@
+{
+  "provenance": {
+    "serverCandidate": "8d5682384f66fb058bab5d896a25cda26e56de4c",
+    "source": "Actual service responses from disposable PostgreSQL; synthetic users; outer ROLLBACK"
+  },
+  "stages": {
+    "assigned": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "ASSIGNED",
+          "label": "Assigned"
+        },
+        "responsibility": {
+          "code": "PROFESSIONAL",
+          "label": "Professional"
+        },
+        "blocker": null,
+        "nextAction": {
+          "code": "MARK_EN_ROUTE",
+          "label": "Start Driving",
+          "description": "Start Driving",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "MARK_EN_ROUTE",
+            "label": "Start Driving"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [],
+        "dispatch": {
+          "status": "assigned",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": null,
+          "arrivedAt": null,
+          "workStartedAt": null,
+          "completedAt": null
+        },
+        "evaluation": {
+          "state": "REQUIRED",
+          "evaluationId": null
+        },
+        "quoteApprovalId": null,
+        "approvalSource": null,
+        "approvedQuoteDecisionId": null,
+        "quote": null,
+        "deposit": null,
+        "invoice": null,
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:16.204Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 0,
+          "quoteVersion": 0,
+          "depositVersion": 0,
+          "invoiceVersion": 0,
+          "completionVersion": 0
+        }
+      }
+    },
+    "onTheWay": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "ON_THE_WAY",
+          "label": "On the Way"
+        },
+        "responsibility": {
+          "code": "PROFESSIONAL",
+          "label": "Professional"
+        },
+        "blocker": null,
+        "nextAction": {
+          "code": "MARK_ARRIVED",
+          "label": "Mark Arrived",
+          "description": "Mark Arrived",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "MARK_ARRIVED",
+            "label": "Mark Arrived"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [],
+        "dispatch": {
+          "status": "professional_en_route",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": null,
+          "workStartedAt": null,
+          "completedAt": null
+        },
+        "evaluation": {
+          "state": "REQUIRED",
+          "evaluationId": null
+        },
+        "quoteApprovalId": null,
+        "approvalSource": null,
+        "approvedQuoteDecisionId": null,
+        "quote": null,
+        "deposit": null,
+        "invoice": null,
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:16.360Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 0,
+          "quoteVersion": 0,
+          "depositVersion": 0,
+          "invoiceVersion": 0,
+          "completionVersion": 0
+        }
+      }
+    },
+    "arrived": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "EVALUATION_NEEDED",
+          "label": "Arrived · Evaluation Required"
+        },
+        "responsibility": {
+          "code": "PROFESSIONAL",
+          "label": "Professional"
+        },
+        "blocker": {
+          "code": "EVALUATION_NOT_RECORDED",
+          "label": "Complete the Emergency Evaluation before preparing a Quote."
+        },
+        "nextAction": {
+          "code": "START_EVALUATION",
+          "label": "Open Evaluation",
+          "description": "Open Evaluation",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "START_EVALUATION",
+            "label": "Open Evaluation"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [
+          "EVALUATION_NOT_RECORDED"
+        ],
+        "dispatch": {
+          "status": "professional_arrived",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": null,
+          "completedAt": null
+        },
+        "evaluation": {
+          "state": "REQUIRED",
+          "evaluationId": null
+        },
+        "quoteApprovalId": null,
+        "approvalSource": null,
+        "approvedQuoteDecisionId": null,
+        "quote": null,
+        "deposit": null,
+        "invoice": null,
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:16.518Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 0,
+          "quoteVersion": 0,
+          "depositVersion": 0,
+          "invoiceVersion": 0,
+          "completionVersion": 0
+        }
+      }
+    },
+    "evaluationInProgress": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "EVALUATION_IN_PROGRESS",
+          "label": "Evaluation In Progress"
+        },
+        "responsibility": {
+          "code": "PROFESSIONAL",
+          "label": "Professional"
+        },
+        "blocker": {
+          "code": "EVALUATION_INCOMPLETE",
+          "label": "Complete the Emergency Evaluation before preparing a Quote."
+        },
+        "nextAction": {
+          "code": "EDIT_EVALUATION",
+          "label": "Continue Evaluation",
+          "description": "Continue Evaluation",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "EDIT_EVALUATION",
+            "label": "Continue Evaluation"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [
+          "EVALUATION_INCOMPLETE"
+        ],
+        "dispatch": {
+          "status": "professional_arrived",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": null,
+          "completedAt": null
+        },
+        "evaluation": {
+          "state": "IN_PROGRESS",
+          "evaluationId": "e9215788-1efc-401f-99f9-aa41febd8259"
+        },
+        "quoteApprovalId": null,
+        "approvalSource": null,
+        "approvedQuoteDecisionId": null,
+        "quote": null,
+        "deposit": null,
+        "invoice": null,
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:16.681Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 1,
+          "quoteVersion": 0,
+          "depositVersion": 0,
+          "invoiceVersion": 0,
+          "completionVersion": 0
+        }
+      }
+    },
+    "quoteRequired": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "QUOTE_NEEDED",
+          "label": "Quote Required"
+        },
+        "responsibility": {
+          "code": "PROFESSIONAL",
+          "label": "Professional"
+        },
+        "blocker": null,
+        "nextAction": {
+          "code": "CREATE_QUOTE",
+          "label": "Create Quote",
+          "description": "Create Quote",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "CREATE_QUOTE",
+            "label": "Create Quote"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [],
+        "dispatch": {
+          "status": "professional_arrived",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": null,
+          "completedAt": null
+        },
+        "evaluation": {
+          "state": "COMPLETE",
+          "evaluationId": "e9215788-1efc-401f-99f9-aa41febd8259"
+        },
+        "quoteApprovalId": null,
+        "approvalSource": null,
+        "approvedQuoteDecisionId": null,
+        "quote": null,
+        "deposit": null,
+        "invoice": null,
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:16.844Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 2,
+          "quoteVersion": 0,
+          "depositVersion": 0,
+          "invoiceVersion": 0,
+          "completionVersion": 0
+        }
+      }
+    },
+    "quoteDraft": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "QUOTE_DRAFT",
+          "label": "Quote Required"
+        },
+        "responsibility": {
+          "code": "PROFESSIONAL",
+          "label": "Professional"
+        },
+        "blocker": null,
+        "nextAction": {
+          "code": "REVIEW_QUOTE",
+          "label": "Continue Quote",
+          "description": "Continue Quote",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "REVIEW_QUOTE",
+            "label": "Continue Quote"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [],
+        "dispatch": {
+          "status": "professional_arrived",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": null,
+          "completedAt": null
+        },
+        "evaluation": {
+          "state": "COMPLETE",
+          "evaluationId": "e9215788-1efc-401f-99f9-aa41febd8259"
+        },
+        "quoteApprovalId": null,
+        "approvalSource": null,
+        "approvedQuoteDecisionId": null,
+        "quote": null,
+        "deposit": null,
+        "invoice": null,
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:17.022Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 2,
+          "quoteVersion": 1,
+          "depositVersion": 0,
+          "invoiceVersion": 0,
+          "completionVersion": 0
+        }
+      }
+    },
+    "awaitingApproval": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "WAITING_FOR_CUSTOMER_DECISION",
+          "label": "Awaiting Approval"
+        },
+        "responsibility": {
+          "code": "CUSTOMER",
+          "label": "Customer"
+        },
+        "blocker": {
+          "code": "CUSTOMER_DECISION_PENDING",
+          "label": "Customer approval of the issued Quote is required."
+        },
+        "nextAction": {
+          "code": "REVIEW_QUOTE",
+          "label": "View Quote",
+          "description": "View Quote",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "REVIEW_QUOTE",
+            "label": "View Quote"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [
+          "CUSTOMER_DECISION_PENDING"
+        ],
+        "dispatch": {
+          "status": "professional_arrived",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": null,
+          "completedAt": null
+        },
+        "evaluation": {
+          "state": "COMPLETE",
+          "evaluationId": "e9215788-1efc-401f-99f9-aa41febd8259"
+        },
+        "quoteApprovalId": null,
+        "approvalSource": null,
+        "approvedQuoteDecisionId": null,
+        "quote": {
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "version": 3,
+          "state": "AWAITING_APPROVAL"
+        },
+        "deposit": null,
+        "invoice": null,
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:17.304Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 2,
+          "quoteVersion": 3,
+          "depositVersion": 0,
+          "invoiceVersion": 0,
+          "completionVersion": 0
+        }
+      }
+    },
+    "depositDue": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "QUOTE_APPROVED_DEPOSIT_DUE",
+          "label": "Deposit Required"
+        },
+        "responsibility": {
+          "code": "PROFESSIONAL",
+          "label": "Professional"
+        },
+        "blocker": {
+          "code": "QUOTE_DEPOSIT_NOT_SATISFIED",
+          "label": "The required deposit must be fully satisfied before work can start."
+        },
+        "nextAction": {
+          "code": "VIEW_DEPOSIT",
+          "label": "View Deposit",
+          "description": "View Deposit",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "VIEW_DEPOSIT",
+            "label": "View Deposit"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [
+          "QUOTE_DEPOSIT_NOT_SATISFIED"
+        ],
+        "dispatch": {
+          "status": "professional_arrived",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": null,
+          "completedAt": null
+        },
+        "evaluation": {
+          "state": "COMPLETE",
+          "evaluationId": "e9215788-1efc-401f-99f9-aa41febd8259"
+        },
+        "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+        "approvalSource": "MEETRO_CUSTOMER",
+        "approvedQuoteDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+        "quote": {
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "version": 3,
+          "state": "APPROVED"
+        },
+        "deposit": {
+          "contractVersion": 1,
+          "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+          "relationshipId": 3,
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "issuedQuoteVersion": 3,
+          "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+          "approvalSource": "MEETRO_CUSTOMER",
+          "customerDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+          "obligationId": "bcbd156d-48b7-4b79-862c-8fac7de525a1",
+          "materialized": true,
+          "state": "DUE",
+          "currency": "USD",
+          "quoteTotalMinor": 10000,
+          "requiredMinor": 5000,
+          "appliedMinor": 0,
+          "remainingMinor": 5000,
+          "depositRule": {
+            "type": "PERCENT",
+            "percentBasisPoints": 5000,
+            "fixedMinor": null
+          },
+          "latestVersion": 1,
+          "paymentHistory": [],
+          "startWorkLocked": true
+        },
+        "invoice": null,
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:17.861Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 2,
+          "quoteVersion": 3,
+          "depositVersion": 1,
+          "invoiceVersion": 0,
+          "completionVersion": 0
+        }
+      }
+    },
+    "depositPartial": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "QUOTE_APPROVED_DEPOSIT_DUE",
+          "label": "Deposit Required"
+        },
+        "responsibility": {
+          "code": "PROFESSIONAL",
+          "label": "Professional"
+        },
+        "blocker": {
+          "code": "QUOTE_DEPOSIT_NOT_SATISFIED",
+          "label": "The required deposit must be fully satisfied before work can start."
+        },
+        "nextAction": {
+          "code": "VIEW_DEPOSIT",
+          "label": "View Deposit",
+          "description": "View Deposit",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "VIEW_DEPOSIT",
+            "label": "View Deposit"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [
+          "QUOTE_DEPOSIT_NOT_SATISFIED"
+        ],
+        "dispatch": {
+          "status": "professional_arrived",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": null,
+          "completedAt": null
+        },
+        "evaluation": {
+          "state": "COMPLETE",
+          "evaluationId": "e9215788-1efc-401f-99f9-aa41febd8259"
+        },
+        "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+        "approvalSource": "MEETRO_CUSTOMER",
+        "approvedQuoteDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+        "quote": {
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "version": 3,
+          "state": "APPROVED"
+        },
+        "deposit": {
+          "contractVersion": 1,
+          "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+          "relationshipId": 3,
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "issuedQuoteVersion": 3,
+          "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+          "approvalSource": "MEETRO_CUSTOMER",
+          "customerDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+          "obligationId": "bcbd156d-48b7-4b79-862c-8fac7de525a1",
+          "materialized": true,
+          "state": "PARTIALLY_SATISFIED",
+          "currency": "USD",
+          "quoteTotalMinor": 10000,
+          "requiredMinor": 5000,
+          "appliedMinor": 2000,
+          "remainingMinor": 3000,
+          "depositRule": {
+            "type": "PERCENT",
+            "percentBasisPoints": 5000,
+            "fixedMinor": null
+          },
+          "latestVersion": 2,
+          "paymentHistory": [],
+          "startWorkLocked": true
+        },
+        "invoice": null,
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:18.599Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 2,
+          "quoteVersion": 3,
+          "depositVersion": 2,
+          "invoiceVersion": 0,
+          "completionVersion": 0
+        }
+      }
+    },
+    "readyToStart": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "WORK_READY",
+          "label": "Ready to Start"
+        },
+        "responsibility": {
+          "code": "PROFESSIONAL",
+          "label": "Professional"
+        },
+        "blocker": null,
+        "nextAction": {
+          "code": "START_WORK",
+          "label": "Start Work",
+          "description": "Start Work",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "START_WORK",
+            "label": "Start Work"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [],
+        "dispatch": {
+          "status": "professional_arrived",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": null,
+          "completedAt": null
+        },
+        "evaluation": {
+          "state": "COMPLETE",
+          "evaluationId": "e9215788-1efc-401f-99f9-aa41febd8259"
+        },
+        "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+        "approvalSource": "MEETRO_CUSTOMER",
+        "approvedQuoteDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+        "quote": {
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "version": 3,
+          "state": "APPROVED"
+        },
+        "deposit": {
+          "contractVersion": 1,
+          "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+          "relationshipId": 3,
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "issuedQuoteVersion": 3,
+          "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+          "approvalSource": "MEETRO_CUSTOMER",
+          "customerDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+          "obligationId": "bcbd156d-48b7-4b79-862c-8fac7de525a1",
+          "materialized": true,
+          "state": "SATISFIED",
+          "currency": "USD",
+          "quoteTotalMinor": 10000,
+          "requiredMinor": 5000,
+          "appliedMinor": 5000,
+          "remainingMinor": 0,
+          "depositRule": {
+            "type": "PERCENT",
+            "percentBasisPoints": 5000,
+            "fixedMinor": null
+          },
+          "latestVersion": 3,
+          "paymentHistory": [],
+          "startWorkLocked": false
+        },
+        "invoice": null,
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:19.184Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 2,
+          "quoteVersion": 3,
+          "depositVersion": 3,
+          "invoiceVersion": 0,
+          "completionVersion": 0
+        }
+      }
+    },
+    "working": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "WORK_IN_PROGRESS",
+          "label": "Work In Progress"
+        },
+        "responsibility": {
+          "code": "PROFESSIONAL",
+          "label": "Professional"
+        },
+        "blocker": null,
+        "nextAction": {
+          "code": "COMPLETE_WORK",
+          "label": "Complete Work",
+          "description": "Complete Work",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "COMPLETE_WORK",
+            "label": "Complete Work"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [],
+        "dispatch": {
+          "status": "work_in_progress",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": "2026-09-20T01:59:15.937Z",
+          "completedAt": null
+        },
+        "evaluation": {
+          "state": "COMPLETE",
+          "evaluationId": "e9215788-1efc-401f-99f9-aa41febd8259"
+        },
+        "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+        "approvalSource": "MEETRO_CUSTOMER",
+        "approvedQuoteDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+        "quote": {
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "version": 3,
+          "state": "APPROVED"
+        },
+        "deposit": {
+          "contractVersion": 1,
+          "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+          "relationshipId": 3,
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "issuedQuoteVersion": 3,
+          "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+          "approvalSource": "MEETRO_CUSTOMER",
+          "customerDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+          "obligationId": "bcbd156d-48b7-4b79-862c-8fac7de525a1",
+          "materialized": true,
+          "state": "SATISFIED",
+          "currency": "USD",
+          "quoteTotalMinor": 10000,
+          "requiredMinor": 5000,
+          "appliedMinor": 5000,
+          "remainingMinor": 0,
+          "depositRule": {
+            "type": "PERCENT",
+            "percentBasisPoints": 5000,
+            "fixedMinor": null
+          },
+          "latestVersion": 3,
+          "paymentHistory": [],
+          "startWorkLocked": false
+        },
+        "invoice": null,
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:19.881Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 2,
+          "quoteVersion": 3,
+          "depositVersion": 3,
+          "invoiceVersion": 0,
+          "completionVersion": 0
+        }
+      }
+    },
+    "readyToInvoice": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "JOB_COMPLETED",
+          "label": "Ready to Invoice"
+        },
+        "responsibility": {
+          "code": "PROFESSIONAL",
+          "label": "Professional"
+        },
+        "blocker": null,
+        "nextAction": {
+          "code": "CREATE_FINAL_INVOICE",
+          "label": "Create Final Invoice",
+          "description": "Create Final Invoice",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "CREATE_FINAL_INVOICE",
+            "label": "Create Final Invoice"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [],
+        "dispatch": {
+          "status": "completed",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": "2026-09-20T01:59:15.937Z",
+          "completedAt": "2026-09-20T01:59:20.323Z"
+        },
+        "evaluation": {
+          "state": "COMPLETE",
+          "evaluationId": "e9215788-1efc-401f-99f9-aa41febd8259"
+        },
+        "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+        "approvalSource": "MEETRO_CUSTOMER",
+        "approvedQuoteDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+        "quote": {
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "version": 3,
+          "state": "APPROVED"
+        },
+        "deposit": {
+          "contractVersion": 1,
+          "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+          "relationshipId": 3,
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "issuedQuoteVersion": 3,
+          "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+          "approvalSource": "MEETRO_CUSTOMER",
+          "customerDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+          "obligationId": "bcbd156d-48b7-4b79-862c-8fac7de525a1",
+          "materialized": true,
+          "state": "SATISFIED",
+          "currency": "USD",
+          "quoteTotalMinor": 10000,
+          "requiredMinor": 5000,
+          "appliedMinor": 5000,
+          "remainingMinor": 0,
+          "depositRule": {
+            "type": "PERCENT",
+            "percentBasisPoints": 5000,
+            "fixedMinor": null
+          },
+          "latestVersion": 3,
+          "paymentHistory": [],
+          "startWorkLocked": false
+        },
+        "invoice": null,
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:20.610Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 2,
+          "quoteVersion": 3,
+          "depositVersion": 3,
+          "invoiceVersion": 0,
+          "completionVersion": 1
+        }
+      }
+    },
+    "invoiceDraft": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "FINAL_INVOICE",
+          "label": "Final Invoice"
+        },
+        "responsibility": {
+          "code": "PROFESSIONAL",
+          "label": "Professional"
+        },
+        "blocker": null,
+        "nextAction": {
+          "code": "VIEW_INVOICE",
+          "label": "View Invoice",
+          "description": "View Invoice",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "VIEW_INVOICE",
+            "label": "View Invoice"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [],
+        "dispatch": {
+          "status": "completed",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": "2026-09-20T01:59:15.937Z",
+          "completedAt": "2026-09-20T01:59:20.323Z"
+        },
+        "evaluation": {
+          "state": "COMPLETE",
+          "evaluationId": "e9215788-1efc-401f-99f9-aa41febd8259"
+        },
+        "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+        "approvalSource": "MEETRO_CUSTOMER",
+        "approvedQuoteDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+        "quote": {
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "version": 3,
+          "state": "APPROVED"
+        },
+        "deposit": {
+          "contractVersion": 1,
+          "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+          "relationshipId": 3,
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "issuedQuoteVersion": 3,
+          "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+          "approvalSource": "MEETRO_CUSTOMER",
+          "customerDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+          "obligationId": "bcbd156d-48b7-4b79-862c-8fac7de525a1",
+          "materialized": true,
+          "state": "SATISFIED",
+          "currency": "USD",
+          "quoteTotalMinor": 10000,
+          "requiredMinor": 5000,
+          "appliedMinor": 5000,
+          "remainingMinor": 0,
+          "depositRule": {
+            "type": "PERCENT",
+            "percentBasisPoints": 5000,
+            "fixedMinor": null
+          },
+          "latestVersion": 3,
+          "paymentHistory": [],
+          "startWorkLocked": false
+        },
+        "invoice": {
+          "invoiceId": "eccb32f6-85e5-400b-aa38-35a6ca62cfb6",
+          "status": "DRAFT",
+          "currency": "USD",
+          "totalMinor": 10000,
+          "paidMinor": 5000,
+          "balanceMinor": 5000
+        },
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:21.433Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 2,
+          "quoteVersion": 3,
+          "depositVersion": 3,
+          "invoiceVersion": 1,
+          "completionVersion": 1
+        }
+      }
+    },
+    "invoicePartial": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "PARTIALLY_PAID",
+          "label": "Partially Paid"
+        },
+        "responsibility": {
+          "code": "CUSTOMER",
+          "label": "Customer"
+        },
+        "blocker": null,
+        "nextAction": {
+          "code": "VIEW_INVOICE",
+          "label": "View Invoice",
+          "description": "View Invoice",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "VIEW_INVOICE",
+            "label": "View Invoice"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [],
+        "dispatch": {
+          "status": "completed",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": "2026-09-20T01:59:15.937Z",
+          "completedAt": "2026-09-20T01:59:20.323Z"
+        },
+        "evaluation": {
+          "state": "COMPLETE",
+          "evaluationId": "e9215788-1efc-401f-99f9-aa41febd8259"
+        },
+        "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+        "approvalSource": "MEETRO_CUSTOMER",
+        "approvedQuoteDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+        "quote": {
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "version": 3,
+          "state": "APPROVED"
+        },
+        "deposit": {
+          "contractVersion": 1,
+          "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+          "relationshipId": 3,
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "issuedQuoteVersion": 3,
+          "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+          "approvalSource": "MEETRO_CUSTOMER",
+          "customerDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+          "obligationId": "bcbd156d-48b7-4b79-862c-8fac7de525a1",
+          "materialized": true,
+          "state": "SATISFIED",
+          "currency": "USD",
+          "quoteTotalMinor": 10000,
+          "requiredMinor": 5000,
+          "appliedMinor": 5000,
+          "remainingMinor": 0,
+          "depositRule": {
+            "type": "PERCENT",
+            "percentBasisPoints": 5000,
+            "fixedMinor": null
+          },
+          "latestVersion": 3,
+          "paymentHistory": [],
+          "startWorkLocked": false
+        },
+        "invoice": {
+          "invoiceId": "eccb32f6-85e5-400b-aa38-35a6ca62cfb6",
+          "status": "PARTIALLY_PAID",
+          "currency": "USD",
+          "totalMinor": 10000,
+          "paidMinor": 5000,
+          "balanceMinor": 5000
+        },
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:21.922Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 2,
+          "quoteVersion": 3,
+          "depositVersion": 3,
+          "invoiceVersion": 2,
+          "completionVersion": 1
+        }
+      }
+    },
+    "paid": {
+      "success": true,
+      "code": "LIVE_JOB_STATE_LOADED",
+      "liveJob": {
+        "contractVersion": 1,
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "requestId": null,
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "conversationId": 3,
+        "serviceTitle": "Emergency leak",
+        "customerLabel": "homeowner",
+        "stage": {
+          "code": "PAID",
+          "label": "Paid"
+        },
+        "responsibility": {
+          "code": "NONE",
+          "label": "No current responsibility"
+        },
+        "blocker": null,
+        "nextAction": {
+          "code": "VIEW_JOB_HISTORY",
+          "label": "View History",
+          "description": "View History",
+          "available": true
+        },
+        "availableActions": [
+          {
+            "code": "VIEW_JOB_HISTORY",
+            "label": "View History"
+          },
+          {
+            "code": "MESSAGE_CUSTOMER",
+            "label": "Message Customer"
+          }
+        ],
+        "reasonCodes": [],
+        "dispatch": {
+          "status": "completed",
+          "assignedAt": "2026-09-20T01:59:15.937Z",
+          "enRouteAt": "2026-09-20T01:59:15.937Z",
+          "arrivedAt": "2026-09-20T01:59:15.937Z",
+          "workStartedAt": "2026-09-20T01:59:15.937Z",
+          "completedAt": "2026-09-20T01:59:20.323Z"
+        },
+        "evaluation": {
+          "state": "COMPLETE",
+          "evaluationId": "e9215788-1efc-401f-99f9-aa41febd8259"
+        },
+        "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+        "approvalSource": "MEETRO_CUSTOMER",
+        "approvedQuoteDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+        "quote": {
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "version": 3,
+          "state": "APPROVED"
+        },
+        "deposit": {
+          "contractVersion": 1,
+          "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+          "relationshipId": 3,
+          "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "issuedQuoteVersion": 3,
+          "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+          "approvalSource": "MEETRO_CUSTOMER",
+          "customerDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+          "obligationId": "bcbd156d-48b7-4b79-862c-8fac7de525a1",
+          "materialized": true,
+          "state": "SATISFIED",
+          "currency": "USD",
+          "quoteTotalMinor": 10000,
+          "requiredMinor": 5000,
+          "appliedMinor": 5000,
+          "remainingMinor": 0,
+          "depositRule": {
+            "type": "PERCENT",
+            "percentBasisPoints": 5000,
+            "fixedMinor": null
+          },
+          "latestVersion": 3,
+          "paymentHistory": [],
+          "startWorkLocked": false
+        },
+        "invoice": {
+          "invoiceId": "eccb32f6-85e5-400b-aa38-35a6ca62cfb6",
+          "status": "PAID",
+          "currency": "USD",
+          "totalMinor": 10000,
+          "paidMinor": 10000,
+          "balanceMinor": 0
+        },
+        "freshness": {
+          "derivedAt": "2026-09-20T01:59:22.455Z",
+          "jobCreatedAt": "2026-09-20T01:59:15.937Z",
+          "evaluationVersion": 2,
+          "quoteVersion": 3,
+          "depositVersion": 3,
+          "invoiceVersion": 3,
+          "completionVersion": 1
+        }
+      }
+    }
+  },
+  "identity": {
+    "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+    "emergencyRequestId": 3,
+    "relationshipId": 3,
+    "conversationId": 3
+  },
+  "picker": {
+    "success": true,
+    "code": "PROFESSIONAL_JOBS_LOADED",
+    "jobs": [
+      {
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "sourceType": "emergency_request",
+        "sourceLabel": "Emergency",
+        "relationshipId": 3,
+        "emergencyRequestId": 3,
+        "title": "Emergency leak",
+        "serviceDomain": "home_services",
+        "serviceSpecialty": "plumbing_repair",
+        "lifecycleStatus": "ACTIVE",
+        "customerLabel": "homeowner",
+        "city": null,
+        "serviceArea": null
+      }
+    ]
+  },
+  "enRoute": {
+    "success": true,
+    "code": "EMERGENCY_EN_ROUTE",
+    "alreadyApplied": false,
+    "emergencyRequest": {
+      "id": 3,
+      "status": "professional_en_route",
+      "assignedAt": "2026-09-20T01:59:15.937Z",
+      "enRouteAt": "2026-09-20T01:59:15.937Z",
+      "arrivedAt": null,
+      "workStartedAt": null,
+      "completedAt": null,
+      "updatedAt": "2026-09-20T01:59:15.937Z"
+    },
+    "relationship": {
+      "id": 3,
+      "status": "active"
+    },
+    "conversation": {
+      "id": 3,
+      "status": "active",
+      "updatedAt": "2026-09-20T01:59:15.937Z"
+    }
+  },
+  "arrived": {
+    "success": true,
+    "code": "EMERGENCY_ARRIVED",
+    "alreadyApplied": false,
+    "emergencyRequest": {
+      "id": 3,
+      "status": "professional_arrived",
+      "assignedAt": "2026-09-20T01:59:15.937Z",
+      "enRouteAt": "2026-09-20T01:59:15.937Z",
+      "arrivedAt": "2026-09-20T01:59:15.937Z",
+      "workStartedAt": null,
+      "completedAt": null,
+      "updatedAt": "2026-09-20T01:59:15.937Z"
+    },
+    "relationship": {
+      "id": 3,
+      "status": "active"
+    },
+    "conversation": {
+      "id": 3,
+      "status": "active",
+      "updatedAt": "2026-09-20T01:59:15.937Z"
+    }
+  },
+  "evaluationDraft": {
+    "ok": true,
+    "success": true,
+    "status": 201,
+    "code": "EVALUATION_CREATED",
+    "replayed": false,
+    "authoritySource": "canonical-commercial-authority",
+    "confirmed": true,
+    "aggregate": {
+      "id": "e9215788-1efc-401f-99f9-aa41febd8259",
+      "type": "evaluation",
+      "owningEngine": "authorization_engine",
+      "version": 1,
+      "sourceContext": {
+        "type": "emergency_request",
+        "emergencyRequestId": 3,
+        "relationshipId": 3
+      }
+    },
+    "evaluation": {
+      "id": "e9215788-1efc-401f-99f9-aa41febd8259",
+      "status": "draft",
+      "createdAt": "2026-09-20T01:59:15.937Z",
+      "updatedAt": "2026-09-20T01:59:15.937Z",
+      "completedAt": null,
+      "completionMode": null,
+      "content": {
+        "serviceType": "plumbing_repair",
+        "evaluationContext": "emergency_request",
+        "templateKey": null,
+        "observations": "Leaking supply seal.",
+        "measurements": [],
+        "findings": [
+          {
+            "summary": "Failed seal",
+            "severity": "high",
+            "customerShareable": true
+          }
+        ],
+        "diagnosisSummary": "",
+        "limitations": "",
+        "scopeRecommendations": [
+          "Replace seal."
+        ],
+        "relevantConditions": [],
+        "supportingMediaReferences": [],
+        "internalNotes": ""
+      },
+      "capabilities": {
+        "canEditDraft": true,
+        "canComplete": true,
+        "canRevise": false,
+        "canShareWithCustomer": false,
+        "quoteReady": false,
+        "authorizationAvailable": false,
+        "startWorkAvailable": false
+      },
+      "traceability": {
+        "governingCharterId": "MC-WORKFLOW-001C",
+        "governingProgramId": "MC-WORKFLOW-001D",
+        "foundationMilestoneId": "MC-WORKFLOW-002A",
+        "capabilityMilestoneId": "MC-WORKFLOW-002B",
+        "certificationTarget": "MC-WORKFLOW-002R"
+      }
+    },
+    "evidence": {
+      "type": "evaluation_created",
+      "aggregateVersion": 1,
+      "capabilityMilestoneId": "MC-WORKFLOW-002B"
+    }
+  },
+  "evaluationComplete": {
+    "ok": true,
+    "success": true,
+    "status": 200,
+    "code": "EVALUATION_COMPLETED",
+    "replayed": false,
+    "authoritySource": "canonical-commercial-authority",
+    "confirmed": true,
+    "aggregate": {
+      "id": "e9215788-1efc-401f-99f9-aa41febd8259",
+      "type": "evaluation",
+      "owningEngine": "authorization_engine",
+      "version": 2,
+      "sourceContext": {
+        "type": "emergency_request",
+        "emergencyRequestId": 3,
+        "relationshipId": 3
+      }
+    },
+    "evaluation": {
+      "id": "e9215788-1efc-401f-99f9-aa41febd8259",
+      "status": "completed",
+      "createdAt": "2026-09-20T01:59:15.937Z",
+      "updatedAt": "2026-09-20T01:59:15.937Z",
+      "completedAt": "2026-09-20T01:59:15.937Z",
+      "completionMode": null,
+      "content": {
+        "serviceType": "plumbing_repair",
+        "evaluationContext": "emergency_request",
+        "templateKey": null,
+        "observations": "Leaking supply seal.",
+        "measurements": [],
+        "findings": [
+          {
+            "summary": "Failed seal",
+            "severity": "high",
+            "customerShareable": true
+          }
+        ],
+        "diagnosisSummary": "",
+        "limitations": "",
+        "scopeRecommendations": [
+          "Replace seal."
+        ],
+        "relevantConditions": [],
+        "supportingMediaReferences": [],
+        "internalNotes": ""
+      },
+      "capabilities": {
+        "canEditDraft": false,
+        "canComplete": false,
+        "canRevise": true,
+        "canShareWithCustomer": false,
+        "quoteReady": false,
+        "authorizationAvailable": false,
+        "startWorkAvailable": false
+      },
+      "traceability": {
+        "governingCharterId": "MC-WORKFLOW-001C",
+        "governingProgramId": "MC-WORKFLOW-001D",
+        "foundationMilestoneId": "MC-WORKFLOW-002A",
+        "capabilityMilestoneId": "MC-WORKFLOW-002B",
+        "certificationTarget": "MC-WORKFLOW-002R"
+      }
+    },
+    "evidence": {
+      "type": "evaluation_completed",
+      "aggregateVersion": 2,
+      "capabilityMilestoneId": "MC-WORKFLOW-002B"
+    }
+  },
+  "quoteDraft": {
+    "ok": true,
+    "success": true,
+    "status": 201,
+    "code": "DRAFT_QUOTE_CREATED",
+    "authoritySource": "canonical-commercial-authority",
+    "quote": {
+      "id": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "requestId": null,
+      "relationshipId": 3,
+      "issuerParticipantId": "50f0a808-3a7f-4300-86c4-c823feadb68f",
+      "parentQuoteId": null,
+      "lineageType": null,
+      "lineageReasonCategory": null,
+      "status": "DRAFT",
+      "issuedAt": null,
+      "currency": "USD",
+      "currentVersion": 1,
+      "materialsSubtotalMinor": 0,
+      "laborServiceSubtotalMinor": 0,
+      "totalMinor": 0,
+      "scopeItemCount": 0,
+      "conditions": [],
+      "exclusions": [],
+      "customerTermsSnapshot": {
+        "agreement": {
+          "exclusions": [],
+          "warrantyTerms": "",
+          "acceptanceTerms": "",
+          "diagnosticTerms": "",
+          "cancellationTerms": "",
+          "additionalWorkTerms": "",
+          "hiddenConditionsTerms": "",
+          "customerResponsibilities": "",
+          "preauthorizedAdditionalWorkLimit": ""
+        },
+        "paymentTerms": "50% deposit",
+        "customerNotes": "",
+        "schemaVersion": 1,
+        "estimatedDuration": ""
+      },
+      "integrityVersion": 2,
+      "scopeItems": [],
+      "versions": [
+        {
+          "version": 1,
+          "status": "DRAFT",
+          "currency": "USD",
+          "materialsSubtotalMinor": 0,
+          "laborServiceSubtotalMinor": 0,
+          "totalMinor": 0,
+          "scopeItemCount": 0,
+          "conditions": [],
+          "exclusions": [],
+          "customerTermsSnapshot": {
+            "agreement": {
+              "exclusions": [],
+              "warrantyTerms": "",
+              "acceptanceTerms": "",
+              "diagnosticTerms": "",
+              "cancellationTerms": "",
+              "additionalWorkTerms": "",
+              "hiddenConditionsTerms": "",
+              "customerResponsibilities": "",
+              "preauthorizedAdditionalWorkLimit": ""
+            },
+            "paymentTerms": "50% deposit",
+            "customerNotes": "",
+            "schemaVersion": 1,
+            "estimatedDuration": ""
+          },
+          "issuedAt": null,
+          "integrityHash": "eb16d8920096e62bb6d746305ea5e70dc9bb1ee05e8c47fa4e1d2796ece7a285",
+          "integrityVersion": 2,
+          "createdAt": "2026-09-20T01:59:15.937Z"
+        }
+      ],
+      "createdAt": "2026-09-20T01:59:15.937Z",
+      "updatedAt": "2026-09-20T01:59:15.937Z",
+      "decisionState": null,
+      "decisionVersion": null,
+      "decidedAt": null,
+      "documentNumber": null,
+      "sourceBusinessDocument": null,
+      "customerParty": null,
+      "customerSnapshot": null,
+      "approval": null
+    }
+  },
+  "quoteScoped": {
+    "ok": true,
+    "success": true,
+    "status": 201,
+    "code": "QUOTE_SCOPE_ITEM_ADDED",
+    "authoritySource": "canonical-commercial-authority",
+    "quote": {
+      "id": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "requestId": null,
+      "relationshipId": 3,
+      "issuerParticipantId": "50f0a808-3a7f-4300-86c4-c823feadb68f",
+      "parentQuoteId": null,
+      "lineageType": null,
+      "lineageReasonCategory": null,
+      "status": "DRAFT",
+      "issuedAt": null,
+      "currency": "USD",
+      "currentVersion": 2,
+      "materialsSubtotalMinor": 0,
+      "laborServiceSubtotalMinor": 10000,
+      "totalMinor": 10000,
+      "scopeItemCount": 1,
+      "conditions": [],
+      "exclusions": [],
+      "customerTermsSnapshot": {
+        "agreement": {
+          "exclusions": [],
+          "warrantyTerms": "",
+          "acceptanceTerms": "",
+          "diagnosticTerms": "",
+          "cancellationTerms": "",
+          "additionalWorkTerms": "",
+          "hiddenConditionsTerms": "",
+          "customerResponsibilities": "",
+          "preauthorizedAdditionalWorkLimit": ""
+        },
+        "paymentTerms": "50% deposit",
+        "customerNotes": "",
+        "schemaVersion": 1,
+        "estimatedDuration": ""
+      },
+      "integrityVersion": 2,
+      "scopeItems": [
+        {
+          "scopeItemId": "721aeedc-e3c6-4d1d-bb3c-c35aecf45186",
+          "scopeItemRevision": 1,
+          "sequence": 1,
+          "classification": "LABOR_SERVICE",
+          "scopeSemantic": "FUTURE_WORK",
+          "materialResponsibility": "NOT_APPLICABLE",
+          "description": "Replace supply seal",
+          "quantity": 1,
+          "unitAmountMinor": 10000,
+          "lineTotalMinor": 10000,
+          "includedInTotal": true,
+          "source": {
+            "type": "MANUAL_PROFESSIONAL",
+            "version": null,
+            "findingId": null,
+            "recommendationId": null,
+            "workstreamId": null,
+            "activityId": null,
+            "obligationId": null
+          },
+          "createdAt": "2026-09-20T01:59:15.937Z"
+        }
+      ],
+      "versions": [
+        {
+          "version": 1,
+          "status": "DRAFT",
+          "currency": "USD",
+          "materialsSubtotalMinor": 0,
+          "laborServiceSubtotalMinor": 0,
+          "totalMinor": 0,
+          "scopeItemCount": 0,
+          "conditions": [],
+          "exclusions": [],
+          "customerTermsSnapshot": {
+            "agreement": {
+              "exclusions": [],
+              "warrantyTerms": "",
+              "acceptanceTerms": "",
+              "diagnosticTerms": "",
+              "cancellationTerms": "",
+              "additionalWorkTerms": "",
+              "hiddenConditionsTerms": "",
+              "customerResponsibilities": "",
+              "preauthorizedAdditionalWorkLimit": ""
+            },
+            "paymentTerms": "50% deposit",
+            "customerNotes": "",
+            "schemaVersion": 1,
+            "estimatedDuration": ""
+          },
+          "issuedAt": null,
+          "integrityHash": "eb16d8920096e62bb6d746305ea5e70dc9bb1ee05e8c47fa4e1d2796ece7a285",
+          "integrityVersion": 2,
+          "createdAt": "2026-09-20T01:59:15.937Z"
+        },
+        {
+          "version": 2,
+          "status": "DRAFT",
+          "currency": "USD",
+          "materialsSubtotalMinor": 0,
+          "laborServiceSubtotalMinor": 10000,
+          "totalMinor": 10000,
+          "scopeItemCount": 1,
+          "conditions": [],
+          "exclusions": [],
+          "customerTermsSnapshot": {
+            "agreement": {
+              "exclusions": [],
+              "warrantyTerms": "",
+              "acceptanceTerms": "",
+              "diagnosticTerms": "",
+              "cancellationTerms": "",
+              "additionalWorkTerms": "",
+              "hiddenConditionsTerms": "",
+              "customerResponsibilities": "",
+              "preauthorizedAdditionalWorkLimit": ""
+            },
+            "paymentTerms": "50% deposit",
+            "customerNotes": "",
+            "schemaVersion": 1,
+            "estimatedDuration": ""
+          },
+          "issuedAt": null,
+          "integrityHash": "e5f8a02fc216cccc6ecffcae0e0687d53e0eecd080ff26269382bf566b985578",
+          "integrityVersion": 2,
+          "createdAt": "2026-09-20T01:59:15.937Z"
+        }
+      ],
+      "createdAt": "2026-09-20T01:59:15.937Z",
+      "updatedAt": "2026-09-20T01:59:15.937Z",
+      "decisionState": null,
+      "decisionVersion": null,
+      "decidedAt": null,
+      "documentNumber": null,
+      "sourceBusinessDocument": null,
+      "customerParty": null,
+      "customerSnapshot": null,
+      "approval": null
+    },
+    "scopeItem": {
+      "scopeItemId": "721aeedc-e3c6-4d1d-bb3c-c35aecf45186",
+      "scopeItemRevision": 1,
+      "sequence": 1,
+      "classification": "LABOR_SERVICE",
+      "scopeSemantic": "FUTURE_WORK",
+      "materialResponsibility": "NOT_APPLICABLE",
+      "description": "Replace supply seal",
+      "quantity": 1,
+      "unitAmountMinor": 10000,
+      "lineTotalMinor": 10000,
+      "includedInTotal": true,
+      "source": {
+        "type": "MANUAL_PROFESSIONAL",
+        "version": null,
+        "findingId": null,
+        "recommendationId": null,
+        "workstreamId": null,
+        "activityId": null,
+        "obligationId": null
+      },
+      "createdAt": "2026-09-20T01:59:15.937Z"
+    }
+  },
+  "quoteIssued": {
+    "ok": true,
+    "success": true,
+    "status": 200,
+    "code": "QUOTE_ISSUED",
+    "authoritySource": "canonical-commercial-authority",
+    "quote": {
+      "id": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "requestId": null,
+      "relationshipId": 3,
+      "issuerParticipantId": "50f0a808-3a7f-4300-86c4-c823feadb68f",
+      "parentQuoteId": null,
+      "lineageType": null,
+      "lineageReasonCategory": null,
+      "status": "ISSUED",
+      "issuedAt": "2026-09-20T01:59:15.937Z",
+      "currency": "USD",
+      "currentVersion": 3,
+      "materialsSubtotalMinor": 0,
+      "laborServiceSubtotalMinor": 10000,
+      "totalMinor": 10000,
+      "scopeItemCount": 1,
+      "conditions": [],
+      "exclusions": [],
+      "customerTermsSnapshot": {
+        "agreement": {
+          "exclusions": [],
+          "warrantyTerms": "",
+          "acceptanceTerms": "",
+          "diagnosticTerms": "",
+          "cancellationTerms": "",
+          "additionalWorkTerms": "",
+          "hiddenConditionsTerms": "",
+          "customerResponsibilities": "",
+          "preauthorizedAdditionalWorkLimit": ""
+        },
+        "paymentTerms": "50% deposit",
+        "customerNotes": "",
+        "schemaVersion": 1,
+        "estimatedDuration": ""
+      },
+      "integrityVersion": 2,
+      "scopeItems": [
+        {
+          "scopeItemId": "721aeedc-e3c6-4d1d-bb3c-c35aecf45186",
+          "scopeItemRevision": 1,
+          "sequence": 1,
+          "classification": "LABOR_SERVICE",
+          "scopeSemantic": "FUTURE_WORK",
+          "materialResponsibility": "NOT_APPLICABLE",
+          "description": "Replace supply seal",
+          "quantity": 1,
+          "unitAmountMinor": 10000,
+          "lineTotalMinor": 10000,
+          "includedInTotal": true,
+          "source": {
+            "type": "MANUAL_PROFESSIONAL",
+            "version": null,
+            "findingId": null,
+            "recommendationId": null,
+            "workstreamId": null,
+            "activityId": null,
+            "obligationId": null
+          },
+          "createdAt": "2026-09-20T01:59:15.937Z"
+        }
+      ],
+      "versions": [
+        {
+          "version": 1,
+          "status": "DRAFT",
+          "currency": "USD",
+          "materialsSubtotalMinor": 0,
+          "laborServiceSubtotalMinor": 0,
+          "totalMinor": 0,
+          "scopeItemCount": 0,
+          "conditions": [],
+          "exclusions": [],
+          "customerTermsSnapshot": {
+            "agreement": {
+              "exclusions": [],
+              "warrantyTerms": "",
+              "acceptanceTerms": "",
+              "diagnosticTerms": "",
+              "cancellationTerms": "",
+              "additionalWorkTerms": "",
+              "hiddenConditionsTerms": "",
+              "customerResponsibilities": "",
+              "preauthorizedAdditionalWorkLimit": ""
+            },
+            "paymentTerms": "50% deposit",
+            "customerNotes": "",
+            "schemaVersion": 1,
+            "estimatedDuration": ""
+          },
+          "issuedAt": null,
+          "integrityHash": "eb16d8920096e62bb6d746305ea5e70dc9bb1ee05e8c47fa4e1d2796ece7a285",
+          "integrityVersion": 2,
+          "createdAt": "2026-09-20T01:59:15.937Z"
+        },
+        {
+          "version": 2,
+          "status": "DRAFT",
+          "currency": "USD",
+          "materialsSubtotalMinor": 0,
+          "laborServiceSubtotalMinor": 10000,
+          "totalMinor": 10000,
+          "scopeItemCount": 1,
+          "conditions": [],
+          "exclusions": [],
+          "customerTermsSnapshot": {
+            "agreement": {
+              "exclusions": [],
+              "warrantyTerms": "",
+              "acceptanceTerms": "",
+              "diagnosticTerms": "",
+              "cancellationTerms": "",
+              "additionalWorkTerms": "",
+              "hiddenConditionsTerms": "",
+              "customerResponsibilities": "",
+              "preauthorizedAdditionalWorkLimit": ""
+            },
+            "paymentTerms": "50% deposit",
+            "customerNotes": "",
+            "schemaVersion": 1,
+            "estimatedDuration": ""
+          },
+          "issuedAt": null,
+          "integrityHash": "e5f8a02fc216cccc6ecffcae0e0687d53e0eecd080ff26269382bf566b985578",
+          "integrityVersion": 2,
+          "createdAt": "2026-09-20T01:59:15.937Z"
+        },
+        {
+          "version": 3,
+          "status": "ISSUED",
+          "currency": "USD",
+          "materialsSubtotalMinor": 0,
+          "laborServiceSubtotalMinor": 10000,
+          "totalMinor": 10000,
+          "scopeItemCount": 1,
+          "conditions": [],
+          "exclusions": [],
+          "customerTermsSnapshot": {
+            "agreement": {
+              "exclusions": [],
+              "warrantyTerms": "",
+              "acceptanceTerms": "",
+              "diagnosticTerms": "",
+              "cancellationTerms": "",
+              "additionalWorkTerms": "",
+              "hiddenConditionsTerms": "",
+              "customerResponsibilities": "",
+              "preauthorizedAdditionalWorkLimit": ""
+            },
+            "paymentTerms": "50% deposit",
+            "customerNotes": "",
+            "schemaVersion": 1,
+            "estimatedDuration": ""
+          },
+          "issuedAt": "2026-09-20T01:59:15.937Z",
+          "integrityHash": "1fa32ea55a8918c6266a59d9232761855395ba473da31189cb6955108de1ab99",
+          "integrityVersion": 2,
+          "createdAt": "2026-09-20T01:59:15.937Z"
+        }
+      ],
+      "createdAt": "2026-09-20T01:59:15.937Z",
+      "updatedAt": "2026-09-20T01:59:15.937Z",
+      "decisionState": null,
+      "decisionVersion": null,
+      "decidedAt": null,
+      "documentNumber": null,
+      "sourceBusinessDocument": null,
+      "customerParty": null,
+      "customerSnapshot": null,
+      "approval": null
+    }
+  },
+  "quoteDeliveryRead": {
+    "ok": true,
+    "success": true,
+    "status": 200,
+    "code": "PROFESSIONAL_QUOTE_DELIVERY_LOADED",
+    "delivery": {
+      "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "expectedIssuedVersion": 3,
+      "messageType": "QUOTE_SHARED",
+      "snapshot": {
+        "schemaVersion": 1,
+        "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+        "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+        "quoteNumber": "Quote",
+        "lineageLabel": "Original",
+        "businessStatus": "WAITING_ON_CUSTOMER",
+        "totalMinor": 10000,
+        "currency": "USD",
+        "scopeItems": [
+          {
+            "description": "Replace supply seal",
+            "quantity": 1,
+            "amountMinor": 10000
+          }
+        ],
+        "conditions": [],
+        "exclusions": [],
+        "issuedAt": "2026-09-20T01:59:15.937Z",
+        "decidedAt": null,
+        "business": {
+          "displayName": "Emergency Test Professional"
+        },
+        "job": {
+          "title": "Emergency leak",
+          "service": "plumbing"
+        },
+        "customerTermsSnapshot": {
+          "schemaVersion": 1,
+          "paymentTerms": "50% deposit",
+          "estimatedDuration": "",
+          "customerNotes": "",
+          "agreement": {
+            "exclusions": [],
+            "additionalWorkTerms": "",
+            "hiddenConditionsTerms": "",
+            "diagnosticTerms": "",
+            "customerResponsibilities": "",
+            "warrantyTerms": "",
+            "cancellationTerms": "",
+            "acceptanceTerms": "",
+            "preauthorizedAdditionalWorkLimit": ""
+          }
+        }
+      },
+      "actions": {
+        "canSendInMeetro": true
+      },
+      "conversation": {
+        "id": 3
+      },
+      "existingDelivery": null
+    }
+  },
+  "quoteSent": {
+    "ok": true,
+    "success": true,
+    "status": 201,
+    "code": "QUOTE_SENT_IN_MEETRO",
+    "delivery": {
+      "messageId": 2,
+      "conversationId": 3,
+      "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "messageType": "QUOTE_SHARED",
+      "state": "SENT_IN_MEETRO",
+      "sentAt": "2026-09-20T01:59:15.937Z",
+      "replayed": false
+    }
+  },
+  "quoteApproved": {
+    "ok": true,
+    "success": true,
+    "status": 200,
+    "code": "QUOTE_CUSTOMER_DECISION_RECORDED",
+    "authoritySource": "canonical-commercial-authority",
+    "quote": {
+      "id": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "requestId": null,
+      "relationshipId": 3,
+      "issuerParticipantId": "50f0a808-3a7f-4300-86c4-c823feadb68f",
+      "parentQuoteId": null,
+      "lineageType": null,
+      "lineageReasonCategory": null,
+      "status": "ISSUED",
+      "issuedAt": "2026-09-20T01:59:15.937Z",
+      "currency": "USD",
+      "currentVersion": 3,
+      "materialsSubtotalMinor": 0,
+      "laborServiceSubtotalMinor": 10000,
+      "totalMinor": 10000,
+      "scopeItemCount": 1,
+      "conditions": [],
+      "exclusions": [],
+      "customerTermsSnapshot": {
+        "agreement": {
+          "exclusions": [],
+          "warrantyTerms": "",
+          "acceptanceTerms": "",
+          "diagnosticTerms": "",
+          "cancellationTerms": "",
+          "additionalWorkTerms": "",
+          "hiddenConditionsTerms": "",
+          "customerResponsibilities": "",
+          "preauthorizedAdditionalWorkLimit": ""
+        },
+        "paymentTerms": "50% deposit",
+        "customerNotes": "",
+        "schemaVersion": 1,
+        "estimatedDuration": ""
+      },
+      "integrityVersion": 2,
+      "scopeItems": [
+        {
+          "scopeItemId": "721aeedc-e3c6-4d1d-bb3c-c35aecf45186",
+          "scopeItemRevision": 1,
+          "sequence": 1,
+          "classification": "LABOR_SERVICE",
+          "scopeSemantic": "FUTURE_WORK",
+          "materialResponsibility": "NOT_APPLICABLE",
+          "description": "Replace supply seal",
+          "quantity": 1,
+          "unitAmountMinor": 10000,
+          "lineTotalMinor": 10000,
+          "includedInTotal": true,
+          "source": {
+            "type": "MANUAL_PROFESSIONAL",
+            "version": null,
+            "findingId": null,
+            "recommendationId": null,
+            "workstreamId": null,
+            "activityId": null,
+            "obligationId": null
+          },
+          "createdAt": "2026-09-20T01:59:15.937Z"
+        }
+      ],
+      "versions": [
+        {
+          "version": 1,
+          "status": "DRAFT",
+          "currency": "USD",
+          "materialsSubtotalMinor": 0,
+          "laborServiceSubtotalMinor": 0,
+          "totalMinor": 0,
+          "scopeItemCount": 0,
+          "conditions": [],
+          "exclusions": [],
+          "customerTermsSnapshot": {
+            "agreement": {
+              "exclusions": [],
+              "warrantyTerms": "",
+              "acceptanceTerms": "",
+              "diagnosticTerms": "",
+              "cancellationTerms": "",
+              "additionalWorkTerms": "",
+              "hiddenConditionsTerms": "",
+              "customerResponsibilities": "",
+              "preauthorizedAdditionalWorkLimit": ""
+            },
+            "paymentTerms": "50% deposit",
+            "customerNotes": "",
+            "schemaVersion": 1,
+            "estimatedDuration": ""
+          },
+          "issuedAt": null,
+          "integrityHash": "eb16d8920096e62bb6d746305ea5e70dc9bb1ee05e8c47fa4e1d2796ece7a285",
+          "integrityVersion": 2,
+          "createdAt": "2026-09-20T01:59:15.937Z"
+        },
+        {
+          "version": 2,
+          "status": "DRAFT",
+          "currency": "USD",
+          "materialsSubtotalMinor": 0,
+          "laborServiceSubtotalMinor": 10000,
+          "totalMinor": 10000,
+          "scopeItemCount": 1,
+          "conditions": [],
+          "exclusions": [],
+          "customerTermsSnapshot": {
+            "agreement": {
+              "exclusions": [],
+              "warrantyTerms": "",
+              "acceptanceTerms": "",
+              "diagnosticTerms": "",
+              "cancellationTerms": "",
+              "additionalWorkTerms": "",
+              "hiddenConditionsTerms": "",
+              "customerResponsibilities": "",
+              "preauthorizedAdditionalWorkLimit": ""
+            },
+            "paymentTerms": "50% deposit",
+            "customerNotes": "",
+            "schemaVersion": 1,
+            "estimatedDuration": ""
+          },
+          "issuedAt": null,
+          "integrityHash": "e5f8a02fc216cccc6ecffcae0e0687d53e0eecd080ff26269382bf566b985578",
+          "integrityVersion": 2,
+          "createdAt": "2026-09-20T01:59:15.937Z"
+        },
+        {
+          "version": 3,
+          "status": "ISSUED",
+          "currency": "USD",
+          "materialsSubtotalMinor": 0,
+          "laborServiceSubtotalMinor": 10000,
+          "totalMinor": 10000,
+          "scopeItemCount": 1,
+          "conditions": [],
+          "exclusions": [],
+          "customerTermsSnapshot": {
+            "agreement": {
+              "exclusions": [],
+              "warrantyTerms": "",
+              "acceptanceTerms": "",
+              "diagnosticTerms": "",
+              "cancellationTerms": "",
+              "additionalWorkTerms": "",
+              "hiddenConditionsTerms": "",
+              "customerResponsibilities": "",
+              "preauthorizedAdditionalWorkLimit": ""
+            },
+            "paymentTerms": "50% deposit",
+            "customerNotes": "",
+            "schemaVersion": 1,
+            "estimatedDuration": ""
+          },
+          "issuedAt": "2026-09-20T01:59:15.937Z",
+          "integrityHash": "1fa32ea55a8918c6266a59d9232761855395ba473da31189cb6955108de1ab99",
+          "integrityVersion": 2,
+          "createdAt": "2026-09-20T01:59:15.937Z"
+        }
+      ],
+      "createdAt": "2026-09-20T01:59:15.937Z",
+      "updatedAt": "2026-09-20T01:59:15.937Z",
+      "decisionState": "APPROVED",
+      "decisionVersion": 3,
+      "decidedAt": "2026-09-20T01:59:15.937Z",
+      "documentNumber": null,
+      "sourceBusinessDocument": null,
+      "customerParty": null,
+      "customerSnapshot": null,
+      "approval": {
+        "id": "508a2c9d-ebba-4630-8831-db3463019272",
+        "source": "MEETRO_CUSTOMER",
+        "issuedQuoteVersion": 3,
+        "approvedAt": "2026-09-20T01:59:15.937Z"
+      }
+    },
+    "customerDecision": {
+      "id": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+      "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+      "issuedQuoteVersion": 3,
+      "decision": "APPROVED",
+      "decidedAt": "2026-09-20T01:59:15.937Z",
+      "issuedIntegrityHash": "1fa32ea55a8918c6266a59d9232761855395ba473da31189cb6955108de1ab99"
+    }
+  },
+  "depositRead": {
+    "ok": true,
+    "success": true,
+    "status": 200,
+    "code": "PRE_WORK_DEPOSIT_FOUND",
+    "deposit": {
+      "contractVersion": 1,
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "relationshipId": 3,
+      "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+      "issuedQuoteVersion": 3,
+      "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+      "approvalSource": "MEETRO_CUSTOMER",
+      "customerDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+      "obligationId": "bcbd156d-48b7-4b79-862c-8fac7de525a1",
+      "materialized": true,
+      "state": "DUE",
+      "schedulingLocked": true,
+      "currency": "USD",
+      "quoteTotalMinor": 10000,
+      "requiredMinor": 5000,
+      "appliedMinor": 0,
+      "remainingMinor": 5000,
+      "depositRule": {
+        "type": "PERCENT",
+        "percentBasisPoints": 5000,
+        "fixedMinor": null
+      },
+      "latestVersion": 1,
+      "paymentHistory": []
+    }
+  },
+  "depositPartial": {
+    "ok": true,
+    "success": true,
+    "status": 201,
+    "code": "PRE_WORK_DEPOSIT_PAYMENT_CONFIRMED",
+    "payment": {
+      "receiptId": "e3a96b30-fba0-4f5c-8162-71274d32cdd4",
+      "allocationId": "8f11f4ee-4081-403c-b974-6578144efc4a",
+      "evidenceSource": "MANUAL_EXTERNAL",
+      "grossAmountMinor": 2000,
+      "allocatedMinor": 2000,
+      "unappliedMinor": 0,
+      "currency": "USD",
+      "receivedAt": "2026-09-18T12:00:00.000Z"
+    },
+    "deposit": {
+      "contractVersion": 1,
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "relationshipId": 3,
+      "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+      "issuedQuoteVersion": 3,
+      "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+      "approvalSource": "MEETRO_CUSTOMER",
+      "customerDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+      "obligationId": "bcbd156d-48b7-4b79-862c-8fac7de525a1",
+      "materialized": true,
+      "state": "PARTIALLY_SATISFIED",
+      "schedulingLocked": true,
+      "currency": "USD",
+      "quoteTotalMinor": 10000,
+      "requiredMinor": 5000,
+      "appliedMinor": 2000,
+      "remainingMinor": 3000,
+      "depositRule": {
+        "type": "PERCENT",
+        "percentBasisPoints": 5000,
+        "fixedMinor": null
+      },
+      "latestVersion": 2,
+      "paymentHistory": [
+        {
+          "receiptId": "e3a96b30-fba0-4f5c-8162-71274d32cdd4",
+          "grossAmountMinor": 2000,
+          "currency": "USD",
+          "evidenceSource": "MANUAL_EXTERNAL",
+          "normalizedMethod": "BUSINESS_TRANSFER_APP",
+          "displayMethod": "Business transfer app",
+          "externalReference": "382d3571-ccb9-4c44-9d01-266fee3b2abd",
+          "receivedAt": "2026-09-18T12:00:00.000Z",
+          "allocatedMinor": 2000,
+          "reversedMinor": 0,
+          "netAppliedMinor": 2000,
+          "unappliedMinor": 0
+        }
+      ]
+    }
+  },
+  "depositSatisfied": {
+    "ok": true,
+    "success": true,
+    "status": 201,
+    "code": "PRE_WORK_DEPOSIT_PAYMENT_CONFIRMED",
+    "payment": {
+      "receiptId": "152a6e29-8cd7-4775-a80c-81f5176251c3",
+      "allocationId": "602da930-30f7-4d7f-80db-2a01f08d69c0",
+      "evidenceSource": "MANUAL_EXTERNAL",
+      "grossAmountMinor": 3000,
+      "allocatedMinor": 3000,
+      "unappliedMinor": 0,
+      "currency": "USD",
+      "receivedAt": "2026-09-18T12:00:00.000Z"
+    },
+    "deposit": {
+      "contractVersion": 1,
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "relationshipId": 3,
+      "quoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+      "issuedQuoteVersion": 3,
+      "quoteApprovalId": "508a2c9d-ebba-4630-8831-db3463019272",
+      "approvalSource": "MEETRO_CUSTOMER",
+      "customerDecisionId": "d8174b40-de1c-4129-b21f-872cfbb7688c",
+      "obligationId": "bcbd156d-48b7-4b79-862c-8fac7de525a1",
+      "materialized": true,
+      "state": "SATISFIED",
+      "schedulingLocked": false,
+      "currency": "USD",
+      "quoteTotalMinor": 10000,
+      "requiredMinor": 5000,
+      "appliedMinor": 5000,
+      "remainingMinor": 0,
+      "depositRule": {
+        "type": "PERCENT",
+        "percentBasisPoints": 5000,
+        "fixedMinor": null
+      },
+      "latestVersion": 3,
+      "paymentHistory": [
+        {
+          "receiptId": "152a6e29-8cd7-4775-a80c-81f5176251c3",
+          "grossAmountMinor": 3000,
+          "currency": "USD",
+          "evidenceSource": "MANUAL_EXTERNAL",
+          "normalizedMethod": "BUSINESS_TRANSFER_APP",
+          "displayMethod": "Business transfer app",
+          "externalReference": "3dce0fda-c89f-4256-8f01-5471ca111821",
+          "receivedAt": "2026-09-18T12:00:00.000Z",
+          "allocatedMinor": 3000,
+          "reversedMinor": 0,
+          "netAppliedMinor": 3000,
+          "unappliedMinor": 0
+        },
+        {
+          "receiptId": "e3a96b30-fba0-4f5c-8162-71274d32cdd4",
+          "grossAmountMinor": 2000,
+          "currency": "USD",
+          "evidenceSource": "MANUAL_EXTERNAL",
+          "normalizedMethod": "BUSINESS_TRANSFER_APP",
+          "displayMethod": "Business transfer app",
+          "externalReference": "382d3571-ccb9-4c44-9d01-266fee3b2abd",
+          "receivedAt": "2026-09-18T12:00:00.000Z",
+          "allocatedMinor": 2000,
+          "reversedMinor": 0,
+          "netAppliedMinor": 2000,
+          "unappliedMinor": 0
+        }
+      ]
+    }
+  },
+  "started": {
+    "success": true,
+    "code": "EMERGENCY_WORK_STARTED",
+    "alreadyApplied": false,
+    "emergencyRequest": {
+      "id": 3,
+      "status": "work_in_progress",
+      "assignedAt": "2026-09-20T01:59:15.937Z",
+      "enRouteAt": "2026-09-20T01:59:15.937Z",
+      "arrivedAt": "2026-09-20T01:59:15.937Z",
+      "workStartedAt": "2026-09-20T01:59:15.937Z",
+      "completedAt": null,
+      "updatedAt": "2026-09-20T01:59:15.937Z"
+    },
+    "relationship": {
+      "id": 3,
+      "status": "active"
+    },
+    "conversation": {
+      "id": 3,
+      "status": "active",
+      "updatedAt": "2026-09-20T01:59:15.937Z"
+    }
+  },
+  "completionReview": {
+    "ok": true,
+    "success": true,
+    "status": 200,
+    "code": "JOB_COMPLETION_REVIEW_FOUND",
+    "completionReview": {
+      "contractVersion": 1,
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "sourceType": "emergency_request",
+      "sourceLabel": "Emergency",
+      "requestId": null,
+      "relationshipId": 3,
+      "currentVersion": 0,
+      "state": "ACTIVE",
+      "eligible": true,
+      "canComplete": true,
+      "reasons": [],
+      "work": {
+        "workstreamCount": 0,
+        "completedWorkstreamCount": 0,
+        "workItemCount": 0,
+        "completedWorkItemCount": 0
+      },
+      "outstanding": {
+        "workstreams": 0,
+        "workItems": 0,
+        "obligations": 0,
+        "findings": 0
+      },
+      "customerUpdates": {
+        "count": 0,
+        "status": "UP_TO_DATE"
+      },
+      "completedAt": null
+    }
+  },
+  "completed": {
+    "success": true,
+    "code": "EMERGENCY_COMPLETED",
+    "alreadyApplied": false,
+    "emergencyRequest": {
+      "id": 3,
+      "status": "completed",
+      "assignedAt": "2026-09-20T01:59:15.937Z",
+      "enRouteAt": "2026-09-20T01:59:15.937Z",
+      "arrivedAt": "2026-09-20T01:59:15.937Z",
+      "workStartedAt": "2026-09-20T01:59:15.937Z",
+      "completedAt": "2026-09-20T01:59:20.323Z",
+      "updatedAt": "2026-09-20T01:59:15.937Z"
+    },
+    "relationship": {
+      "id": 3,
+      "status": "active"
+    },
+    "conversation": {
+      "id": 3,
+      "status": "active",
+      "updatedAt": "2026-09-20T01:59:15.937Z"
+    }
+  },
+  "readyWorkspace": {
+    "ok": true,
+    "success": true,
+    "status": 200,
+    "code": "PROFESSIONAL_INVOICE_WORKSPACE_LOADED",
+    "workspace": {
+      "contractVersion": 1,
+      "summary": {
+        "readyToInvoice": 1,
+        "drafts": 0,
+        "waitingForPayment": 0,
+        "paid": 0,
+        "totalOutstandingMinor": null,
+        "currency": null
+      },
+      "readyJobs": [
+        {
+          "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+          "sourceType": "emergency_request",
+          "sourceLabel": "Emergency",
+          "requestId": null,
+          "relationshipId": 3,
+          "customerName": "homeowner",
+          "serviceTitle": "Emergency leak",
+          "completedAt": "2026-09-20T01:59:20.323Z",
+          "completionVersion": 1,
+          "approvedAmount": {
+            "currency": "USD",
+            "totalMinor": 10000
+          },
+          "paymentsReceivedMinor": 5000,
+          "amountStillDueMinor": 5000,
+          "paymentTerms": "50% deposit",
+          "approvedWork": [
+            {
+              "description": "Replace supply seal",
+              "quantity": 1,
+              "unitAmountMinor": 10000,
+              "lineTotalMinor": 10000
+            }
+          ]
+        }
+      ],
+      "invoices": [],
+      "limit": 20
+    }
+  },
+  "invoiceDraft": {
+    "ok": true,
+    "success": true,
+    "status": 201,
+    "code": "INVOICE_CREATED",
+    "invoice": {
+      "contractVersion": 1,
+      "invoiceId": "eccb32f6-85e5-400b-aa38-35a6ca62cfb6",
+      "invoiceNumber": "INV-ECCB32F685E5",
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "sourceType": "emergency_request",
+      "sourceLabel": "Emergency",
+      "requestId": null,
+      "relationshipId": 3,
+      "conversationId": 3,
+      "business": {
+        "displayName": "Emergency Test Professional"
+      },
+      "customer": {
+        "displayName": "homeowner"
+      },
+      "job": {
+        "title": "Emergency leak",
+        "service": "plumbing"
+      },
+      "status": "DRAFT",
+      "currency": "USD",
+      "invoiceDate": "2026-09-20",
+      "due": {
+        "mode": "DUE_ON_RECEIPT",
+        "date": null
+      },
+      "lineItems": [
+        {
+          "sequence": 1,
+          "type": "approvedWork",
+          "description": "Replace supply seal",
+          "quantity": 1,
+          "unitAmountMinor": 10000,
+          "lineTotalMinor": 10000,
+          "lineItemId": "dc117771-d7ba-4fe7-8b21-e1ab9e64036a",
+          "sourceQuoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "sourceQuoteVersion": 3,
+          "sourceScopeItemId": "721aeedc-e3c6-4d1d-bb3c-c35aecf45186",
+          "lineageLabel": "ORIGINAL"
+        }
+      ],
+      "subtotalMinor": 10000,
+      "totalMinor": 10000,
+      "paidMinor": 5000,
+      "balanceMinor": 5000,
+      "customerNotes": null,
+      "terms": "50% deposit",
+      "issuedAt": null,
+      "payments": [],
+      "actions": {
+        "canIssue": true,
+        "canRecordPayment": false,
+        "canShareExternal": false
+      },
+      "currentVersion": 1,
+      "customerParty": null
+    }
+  },
+  "invoicePartial": {
+    "ok": true,
+    "success": true,
+    "status": 201,
+    "code": "INVOICE_SENT_IN_MEETRO",
+    "invoice": {
+      "contractVersion": 1,
+      "invoiceId": "eccb32f6-85e5-400b-aa38-35a6ca62cfb6",
+      "invoiceNumber": "INV-ECCB32F685E5",
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "sourceType": "emergency_request",
+      "sourceLabel": "Emergency",
+      "requestId": null,
+      "relationshipId": 3,
+      "conversationId": 3,
+      "business": {
+        "displayName": "Emergency Test Professional"
+      },
+      "customer": {
+        "displayName": "homeowner"
+      },
+      "job": {
+        "title": "Emergency leak",
+        "service": "plumbing"
+      },
+      "status": "PARTIALLY_PAID",
+      "currency": "USD",
+      "invoiceDate": "2026-09-20",
+      "due": {
+        "mode": "DUE_ON_RECEIPT",
+        "date": null
+      },
+      "lineItems": [
+        {
+          "sequence": 1,
+          "type": "approvedWork",
+          "description": "Replace supply seal",
+          "quantity": 1,
+          "unitAmountMinor": 10000,
+          "lineTotalMinor": 10000,
+          "lineItemId": "dc117771-d7ba-4fe7-8b21-e1ab9e64036a",
+          "sourceQuoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "sourceQuoteVersion": 3,
+          "sourceScopeItemId": "721aeedc-e3c6-4d1d-bb3c-c35aecf45186",
+          "lineageLabel": "ORIGINAL"
+        }
+      ],
+      "subtotalMinor": 10000,
+      "totalMinor": 10000,
+      "paidMinor": 5000,
+      "balanceMinor": 5000,
+      "customerNotes": null,
+      "terms": "50% deposit",
+      "issuedAt": "2026-09-20T01:59:21.551Z",
+      "payments": [],
+      "actions": {
+        "canIssue": false,
+        "canRecordPayment": true,
+        "canShareExternal": true
+      },
+      "currentVersion": 2,
+      "customerParty": null
+    },
+    "delivery": {
+      "messageId": 5,
+      "conversationId": 3,
+      "invoiceId": "eccb32f6-85e5-400b-aa38-35a6ca62cfb6",
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "messageType": "INVOICE_SHARED",
+      "state": "SENT_IN_MEETRO",
+      "sentAt": "2026-09-20T01:59:15.937Z",
+      "replayed": false
+    }
+  },
+  "partialWorkspace": {
+    "ok": true,
+    "success": true,
+    "status": 200,
+    "code": "PROFESSIONAL_INVOICE_WORKSPACE_LOADED",
+    "workspace": {
+      "contractVersion": 1,
+      "summary": {
+        "readyToInvoice": 0,
+        "drafts": 0,
+        "waitingForPayment": 1,
+        "paid": 0,
+        "totalOutstandingMinor": 5000,
+        "currency": "USD"
+      },
+      "readyJobs": [],
+      "invoices": [
+        {
+          "invoiceId": "eccb32f6-85e5-400b-aa38-35a6ca62cfb6",
+          "invoiceNumber": "INV-ECCB32F685E5",
+          "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+          "sourceType": "emergency_request",
+          "sourceLabel": "Emergency",
+          "requestId": null,
+          "relationshipId": 3,
+          "customerName": "homeowner",
+          "serviceTitle": "Emergency leak",
+          "currentVersion": 2,
+          "status": "PARTIALLY_PAID",
+          "currency": "USD",
+          "totalMinor": 10000,
+          "paidMinor": 5000,
+          "balanceMinor": 5000,
+          "invoiceDate": "2026-09-20",
+          "due": {
+            "mode": "DUE_ON_RECEIPT",
+            "date": null
+          },
+          "issuedAt": "2026-09-20T01:59:21.551Z"
+        }
+      ],
+      "limit": 20
+    }
+  },
+  "invoicePaid": {
+    "ok": true,
+    "success": true,
+    "status": 201,
+    "code": "PAYMENT_RECORDED",
+    "invoice": {
+      "contractVersion": 1,
+      "invoiceId": "eccb32f6-85e5-400b-aa38-35a6ca62cfb6",
+      "invoiceNumber": "INV-ECCB32F685E5",
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "sourceType": "emergency_request",
+      "sourceLabel": "Emergency",
+      "requestId": null,
+      "relationshipId": 3,
+      "conversationId": 3,
+      "business": {
+        "displayName": "Emergency Test Professional"
+      },
+      "customer": {
+        "displayName": "homeowner"
+      },
+      "job": {
+        "title": "Emergency leak",
+        "service": "plumbing"
+      },
+      "status": "PAID",
+      "currency": "USD",
+      "invoiceDate": "2026-09-20",
+      "due": {
+        "mode": "DUE_ON_RECEIPT",
+        "date": null
+      },
+      "lineItems": [
+        {
+          "sequence": 1,
+          "type": "approvedWork",
+          "description": "Replace supply seal",
+          "quantity": 1,
+          "unitAmountMinor": 10000,
+          "lineTotalMinor": 10000,
+          "lineItemId": "dc117771-d7ba-4fe7-8b21-e1ab9e64036a",
+          "sourceQuoteId": "7ea8dc83-b59c-453d-8f24-84c15ae14c07",
+          "sourceQuoteVersion": 3,
+          "sourceScopeItemId": "721aeedc-e3c6-4d1d-bb3c-c35aecf45186",
+          "lineageLabel": "ORIGINAL"
+        }
+      ],
+      "subtotalMinor": 10000,
+      "totalMinor": 10000,
+      "paidMinor": 10000,
+      "balanceMinor": 0,
+      "customerNotes": null,
+      "terms": "50% deposit",
+      "issuedAt": "2026-09-20T01:59:21.551Z",
+      "payments": [
+        {
+          "amountMinor": 5000,
+          "currency": "USD",
+          "receivedDate": "2026-09-19",
+          "method": "CASH",
+          "customerReference": null,
+          "recordedAt": "2026-09-20T01:59:22.088Z",
+          "paymentId": "420cb3fb-8c2f-4fb0-a05d-57c32cffbf79"
+        }
+      ],
+      "actions": {
+        "canIssue": false,
+        "canRecordPayment": false,
+        "canShareExternal": true
+      },
+      "currentVersion": 3,
+      "customerParty": null
+    },
+    "payment": {
+      "amountMinor": 5000,
+      "currency": "USD",
+      "receivedDate": "2026-09-19",
+      "method": "CASH",
+      "customerReference": null,
+      "recordedAt": "2026-09-20T01:59:22.088Z",
+      "paymentId": "420cb3fb-8c2f-4fb0-a05d-57c32cffbf79"
+    }
+  },
+  "paidWorkspace": {
+    "ok": true,
+    "success": true,
+    "status": 200,
+    "code": "PROFESSIONAL_INVOICE_WORKSPACE_LOADED",
+    "workspace": {
+      "contractVersion": 1,
+      "summary": {
+        "readyToInvoice": 0,
+        "drafts": 0,
+        "waitingForPayment": 0,
+        "paid": 1,
+        "totalOutstandingMinor": null,
+        "currency": null
+      },
+      "readyJobs": [],
+      "invoices": [
+        {
+          "invoiceId": "eccb32f6-85e5-400b-aa38-35a6ca62cfb6",
+          "invoiceNumber": "INV-ECCB32F685E5",
+          "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+          "sourceType": "emergency_request",
+          "sourceLabel": "Emergency",
+          "requestId": null,
+          "relationshipId": 3,
+          "customerName": "homeowner",
+          "serviceTitle": "Emergency leak",
+          "currentVersion": 3,
+          "status": "PAID",
+          "currency": "USD",
+          "totalMinor": 10000,
+          "paidMinor": 10000,
+          "balanceMinor": 0,
+          "invoiceDate": "2026-09-20",
+          "due": {
+            "mode": "DUE_ON_RECEIPT",
+            "date": null
+          },
+          "issuedAt": "2026-09-20T01:59:21.551Z"
+        }
+      ],
+      "limit": 20
+    }
+  },
+  "professionalHistory": {
+    "ok": true,
+    "success": true,
+    "status": 200,
+    "code": "JOB_HISTORY_DETAIL_FOUND",
+    "jobHistory": {
+      "contractVersion": 1,
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "sourceType": "emergency_request",
+      "sourceLabel": "Emergency",
+      "requestId": null,
+      "relationshipId": 3,
+      "conversationId": 3,
+      "customerName": "homeowner",
+      "professionalName": "Emergency Test Professional",
+      "serviceTitle": "Emergency leak",
+      "status": "COMPLETED",
+      "completedAt": "2026-09-20T01:59:20.323Z",
+      "approvedQuote": {
+        "totalMinor": 10000,
+        "currency": "USD"
+      },
+      "completionSummary": {
+        "workstreamCount": 0,
+        "workItemCount": 0,
+        "customerUpdateCount": 0
+      },
+      "nextAction": {
+        "code": "READY_TO_INVOICE",
+        "label": "Ready to Invoice"
+      },
+      "audience": "professional",
+      "originalRequest": null,
+      "preservedRecords": {
+        "evaluation": true,
+        "findings": true,
+        "recommendations": true,
+        "approvedQuotes": true,
+        "visits": false,
+        "workPlan": false
+      },
+      "actions": {
+        "canViewJob": true
+      }
+    }
+  },
+  "customerHistory": {
+    "ok": true,
+    "success": true,
+    "status": 200,
+    "code": "JOB_HISTORY_DETAIL_FOUND",
+    "jobHistory": {
+      "contractVersion": 1,
+      "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+      "sourceType": "emergency_request",
+      "sourceLabel": "Emergency",
+      "requestId": null,
+      "relationshipId": 3,
+      "conversationId": 3,
+      "customerName": "homeowner",
+      "professionalName": "Emergency Test Professional",
+      "serviceTitle": "Emergency leak",
+      "status": "COMPLETED",
+      "completedAt": "2026-09-20T01:59:20.323Z",
+      "approvedQuote": {
+        "totalMinor": 10000,
+        "currency": "USD"
+      },
+      "completionSummary": {
+        "workstreamCount": 0,
+        "workItemCount": 0,
+        "customerUpdateCount": 0
+      },
+      "nextAction": {
+        "code": "READY_TO_INVOICE",
+        "label": "Ready to Invoice"
+      },
+      "audience": "customer",
+      "originalRequest": null,
+      "preservedRecords": {
+        "evaluation": true,
+        "findings": true,
+        "recommendations": true,
+        "approvedQuotes": true,
+        "visits": false,
+        "workPlan": false
+      },
+      "actions": {
+        "canMessageProfessional": true
+      }
+    }
+  },
+  "historyList": {
+    "ok": true,
+    "success": true,
+    "status": 200,
+    "code": "PROFESSIONAL_JOB_HISTORY_FOUND",
+    "jobHistory": {
+      "contractVersion": 1,
+      "totalCount": 1,
+      "jobs": [
+        {
+          "contractVersion": 1,
+          "jobId": "b3f3d5a9-bf95-4fec-a7f7-7ae76ec8dab8",
+          "sourceType": "emergency_request",
+          "sourceLabel": "Emergency",
+          "requestId": null,
+          "relationshipId": 3,
+          "conversationId": 3,
+          "customerName": "homeowner",
+          "professionalName": "Emergency Test Professional",
+          "serviceTitle": "Emergency leak",
+          "status": "COMPLETED",
+          "completedAt": "2026-09-20T01:59:20.323Z",
+          "approvedQuote": {
+            "totalMinor": 10000,
+            "currency": "USD"
+          },
+          "completionSummary": {
+            "workstreamCount": 0,
+            "workItemCount": 0,
+            "customerUpdateCount": 0
+          },
+          "nextAction": {
+            "code": "READY_TO_INVOICE",
+            "label": "Ready to Invoice"
+          }
+        }
+      ],
+      "pagination": {
+        "limit": 20,
+        "nextCursor": null
+      }
+    }
+  }
+}
