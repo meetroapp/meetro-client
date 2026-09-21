@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import { JSDOM } from 'jsdom';
 import React, { act } from 'react';
@@ -7,6 +8,10 @@ import { getAppLayoutSnapshot } from '../src/utils/appLayout.js';
 import { getCommunicationLayout } from '../src/utils/communicationLayout.js';
 
 const JOB = '4fb789c7-6bd4-4560-a71c-c8523536582f';
+const conversationSource = readFileSync(
+  'src/pages/ConversationThread.jsx',
+  'utf8'
+);
 let dom, vite, createRoot, Inbox, Thread, Panel;
 const saved = new Map();
 const pause = () => new Promise(resolve => setTimeout(resolve, 40));
@@ -261,6 +266,40 @@ for(const role of ['professional','homeowner']) {
     );
   });
 }
+
+test('canonical send owns final scrolling only after the confirmed message commits',()=>{
+  assert.match(
+    conversationSource,
+    /const pendingCanonicalSendScrollRef = useRef\(false\)/
+  );
+
+  assert.match(
+    conversationSource,
+    /pendingCanonicalSendScrollRef\.current = false;[\s\S]*requestAnimationFrame\(\(\) => \{[\s\S]*requestAnimationFrame\(\(\) => \{[\s\S]*viewport\.scrollTop = viewport\.scrollHeight/
+  );
+
+  const sendStart=conversationSource.indexOf(
+    'const sendCanonicalMessage = async'
+  );
+  const sendEnd=conversationSource.indexOf(
+    'const sendReviewedInvoice',
+    sendStart
+  );
+  const sendBlock=conversationSource.slice(sendStart,sendEnd);
+
+  assert.ok(sendStart>=0);
+  assert.ok(sendEnd>sendStart);
+
+  assert.match(
+    sendBlock,
+    /pendingCanonicalSendScrollRef\.current = true;[\s\S]*setMessages/
+  );
+
+  assert.doesNotMatch(
+    sendBlock,
+    /setMessages[\s\S]*requestAnimationFrame\(\(\) => \{[\s\S]*viewport\.scrollTop = viewport\.scrollHeight/
+  );
+});
 
 test('ordinary request keeps existing layout, message history and composer without Emergency treatment',async t=>{
   await mount(t,{type:'request',width:1180,height:820});

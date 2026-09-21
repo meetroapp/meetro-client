@@ -969,6 +969,7 @@ function ConversationThreadInner({
   const cameraInputRef = useRef(null);
   const bottomRef = useRef(null);
   const messagesScrollRef = useRef(null);
+  const pendingCanonicalSendScrollRef = useRef(false);
   const threadSearchInputRef = useRef(null);
   const hasInitialScrolledRef = useRef(false);
   const longPressTimerRef = useRef(null);
@@ -4024,6 +4025,29 @@ useEffect(() => {
     }
   }, [messages.length]);
 
+  useEffect(() => {
+    if (!pendingCanonicalSendScrollRef.current) return;
+
+    pendingCanonicalSendScrollRef.current = false;
+    let settledFrame = null;
+
+    const commitFrame = requestAnimationFrame(() => {
+      settledFrame = requestAnimationFrame(() => {
+        const viewport = messagesScrollRef.current;
+        if (viewport) {
+          viewport.scrollTop = viewport.scrollHeight;
+        }
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(commitFrame);
+      if (settledFrame !== null) {
+        cancelAnimationFrame(settledFrame);
+      }
+    };
+  }, [messages.length]);
+
   const stopAiSpeech = () => {
     window.speechSynthesis?.cancel();
     setAiSpeaking(false);
@@ -4358,6 +4382,7 @@ useEffect(() => {
         time: formatMessageTime(confirmedMessage.createdAt),
       };
 
+      pendingCanonicalSendScrollRef.current = true;
       setMessages((current) =>
         mergeConversationMessages(current, [visibleMessage])
       );
@@ -4365,10 +4390,6 @@ useEffect(() => {
       setReplyingTo(null);
       setActiveMessageId(null);
       resetTextareaHeight();
-      requestAnimationFrame(() => {
-        const viewport = messagesScrollRef.current;
-        if (viewport) viewport.scrollTop = viewport.scrollHeight;
-      });
       window.dispatchEvent(new Event("meetro-messages-updated"));
     } catch (error) {
       console.error("Failed to send canonical conversation message", error);
