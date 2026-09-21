@@ -247,6 +247,62 @@ const messagesMobileLayoutStyles = `
     > [data-emergency-context-panel="canonical"] {
     grid-column: 4;
   }
+
+  [data-emergency-context-panel="canonical"] {
+    min-width: 0 !important;
+    max-width: 100% !important;
+    overflow-x: hidden !important;
+    overflow-y: auto !important;
+  }
+
+  [data-emergency-context-panel="canonical"]
+    [data-emergency-conversation-context="canonical"] {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  [data-emergency-context-panel="canonical"]
+    [data-emergency-conversation-context="canonical"] * {
+    min-width: 0;
+    max-width: 100%;
+    box-sizing: border-box;
+    text-overflow: clip !important;
+  }
+
+  [data-emergency-context-panel="canonical"]
+    [data-emergency-conversation-context="canonical"] h1,
+  [data-emergency-context-panel="canonical"]
+    [data-emergency-conversation-context="canonical"] h2,
+  [data-emergency-context-panel="canonical"]
+    [data-emergency-conversation-context="canonical"] h3,
+  [data-emergency-context-panel="canonical"]
+    [data-emergency-conversation-context="canonical"] h4,
+  [data-emergency-context-panel="canonical"]
+    [data-emergency-conversation-context="canonical"] p,
+  [data-emergency-context-panel="canonical"]
+    [data-emergency-conversation-context="canonical"] span,
+  [data-emergency-context-panel="canonical"]
+    [data-emergency-conversation-context="canonical"] strong,
+  [data-emergency-context-panel="canonical"]
+    [data-emergency-conversation-context="canonical"] a,
+  [data-emergency-context-panel="canonical"]
+    [data-emergency-conversation-context="canonical"] time {
+    white-space: normal !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
+
+  [data-emergency-context-panel="canonical"]
+    [data-emergency-conversation-context="canonical"] address {
+    white-space: pre-wrap !important;
+    overflow: visible !important;
+    text-overflow: clip !important;
+    overflow-wrap: anywhere !important;
+    word-break: break-word !important;
+  }
 `;
 
 
@@ -6970,9 +7026,9 @@ const emergencyWorkspaceShell = {
 
 const extraWideEmergencyWorkspaceShell = {
   gridTemplateColumns:
-    "250px minmax(120px, 1fr) minmax(390px, 420px) minmax(280px, 300px)",
+    "250px minmax(80px, 1fr) minmax(390px, 420px) minmax(340px, 400px)",
   gap: "12px",
-  maxWidth: "1320px",
+  maxWidth: "1420px",
   margin: "0 auto 0 0",
 };
 

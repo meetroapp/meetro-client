@@ -153,12 +153,12 @@ test("extra-wide Emergency workspace anchors the conversation list left while ke
 
   assert.match(
     messagesSource,
-    /250px minmax\(120px, 1fr\) minmax\(390px, 420px\) minmax\(280px, 300px\)/
+    /250px minmax\(80px, 1fr\) minmax\(390px, 420px\) minmax\(340px, 400px\)/
   );
 
   assert.match(
     messagesSource,
-    /maxWidth: "1320px"/
+    /maxWidth: "1420px"/
   );
 
   assert.match(
@@ -194,5 +194,42 @@ test("extra-wide Emergency workspace anchors the conversation list left while ke
   assert.match(
     messagesSource,
     /grid-column: 4/
+  );
+});
+
+test("Emergency context always exposes full information without ellipsis", () => {
+  assert.match(
+    messagesSource,
+    /data-emergency-context-panel="canonical"/
+  );
+
+  assert.match(
+    messagesSource,
+    /overflow-y: auto !important/
+  );
+
+  assert.match(
+    messagesSource,
+    /text-overflow: clip !important/
+  );
+
+  assert.match(
+    messagesSource,
+    /white-space: normal !important/
+  );
+
+  assert.match(
+    messagesSource,
+    /overflow-wrap: anywhere !important/
+  );
+
+  assert.match(
+    messagesSource,
+    /word-break: break-word !important/
+  );
+
+  assert.match(
+    messagesSource,
+    /white-space: pre-wrap !important/
   );
 });
