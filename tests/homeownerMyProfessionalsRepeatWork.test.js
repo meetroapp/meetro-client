@@ -154,3 +154,43 @@ test("cancel and post-submit exit return repeat-work homeowner to My Professiona
     /existingCustomerRequestCopy\.returnLabel/
   );
 });
+
+test("repeat-work copy describes the already-selected professional instead of marketplace discovery", () => {
+  assert.match(
+    upload,
+    /serviceGuidance: \(name\) =>/
+  );
+
+  assert.match(
+    upload,
+    /Choose the service that best describes this new work for/
+  );
+
+  assert.match(
+    upload,
+    /categoryTitle:\s*"What type of work is this\?"/
+  );
+
+  assert.match(
+    upload,
+    /existingCustomerRequestCopy\.serviceGuidance/
+  );
+
+  assert.equal(
+    (
+      upload.match(
+        /existingCustomerRequestCopy\.categoryTitle/g
+      ) || []
+    ).length,
+    2
+  );
+
+  assert.equal(
+    (
+      upload.match(
+        /existingCustomerRequestCopy\.categoryHelp/g
+      ) || []
+    ).length,
+    2
+  );
+});

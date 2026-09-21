@@ -239,6 +239,12 @@ function getExistingCustomerRequestCopy(language) {
         `Nuevo trabajo con ${name || "tu profesional anterior"}`,
       text:
         "Esta es una solicitud completamente nueva. El alcance, las cotizaciones, aprobaciones, pagos, programación y estado del trabajo anterior no se transfieren.",
+      serviceGuidance: (name) =>
+        `Elige el servicio que mejor describa este nuevo trabajo para ${name || "tu profesional anterior"}.`,
+      categoryTitle:
+        "¿Qué tipo de trabajo es?",
+      categoryHelp: (name) =>
+        `Elige una categoría general para que Meetro organice esta nueva solicitud para ${name || "tu profesional anterior"}.`,
       invalidTitle:
         "No se pudo verificar esta solicitud de trabajo recurrente.",
       invalid:
@@ -251,6 +257,12 @@ function getExistingCustomerRequestCopy(language) {
         `Nouveau travail avec ${name || "votre professionnel précédent"}`,
       text:
         "Il s’agit d’une toute nouvelle demande. La portée, les devis, approbations, paiements, horaires et états du travail précédent ne sont pas transférés.",
+      serviceGuidance: (name) =>
+        `Choisissez le service qui décrit le mieux ce nouveau travail pour ${name || "votre professionnel précédent"}.`,
+      categoryTitle:
+        "Quel type de travail est-ce ?",
+      categoryHelp: (name) =>
+        `Choisissez une catégorie générale afin que Meetro organise cette nouvelle demande pour ${name || "votre professionnel précédent"}.`,
       invalidTitle:
         "Cette demande de nouveau travail n’a pas pu être vérifiée.",
       invalid:
@@ -263,6 +275,12 @@ function getExistingCustomerRequestCopy(language) {
         `Novo trabalho com ${name || "seu profissional anterior"}`,
       text:
         "Esta é uma solicitação totalmente nova. Escopo, orçamentos, aprovações, pagamentos, agenda e estado do trabalho anterior não são transferidos.",
+      serviceGuidance: (name) =>
+        `Escolha o serviço que melhor descreve este novo trabalho para ${name || "seu profissional anterior"}.`,
+      categoryTitle:
+        "Que tipo de trabalho é este?",
+      categoryHelp: (name) =>
+        `Escolha uma categoria geral para que o Meetro organize esta nova solicitação para ${name || "seu profissional anterior"}.`,
       invalidTitle:
         "Não foi possível verificar esta solicitação de novo trabalho.",
       invalid:
@@ -277,6 +295,12 @@ function getExistingCustomerRequestCopy(language) {
       `New work with ${name || "your previous professional"}`,
     text:
       "This is a completely new request. Previous scope, Quotes, approvals, payments, scheduling, and work state do not carry forward.",
+    serviceGuidance: (name) =>
+      `Choose the service that best describes this new work for ${name || "your previous professional"}.`,
+    categoryTitle:
+      "What type of work is this?",
+    categoryHelp: (name) =>
+      `Choose a broad category so Meetro can organize this new request for ${name || "your previous professional"}.`,
     invalidTitle:
       "This repeat-work request could not be verified.",
     invalid:
@@ -1581,7 +1605,13 @@ function Upload({ setPage }) {
                 : t("jobRequestDraftGuidanceTitle")}
             </strong>
             <p style={draftGuidanceText}>
-              {guidance?.messageKey
+              {existingCustomerRequestRoute.active &&
+              guidance?.messageKey ===
+                "jobRequestDraftGuidanceService"
+                ? existingCustomerRequestCopy.serviceGuidance(
+                    existingCustomerRequestRoute.professionalName
+                  )
+                : guidance?.messageKey
                 ? t(guidance.messageKey)
                 : t("jobRequestDraftGuidanceReady")}
             </p>
@@ -1610,10 +1640,16 @@ function Upload({ setPage }) {
                 htmlFor="job-request-category"
                 style={broadCategoryTitle}
               >
-                {t("jobRequestWhoCanHelp", language)}
+                {existingCustomerRequestRoute.active
+                  ? existingCustomerRequestCopy.categoryTitle
+                  : t("jobRequestWhoCanHelp", language)}
               </label>
               <p style={broadCategoryHelp}>
-                {t("jobRequestWhoCanHelpHelp", language)}
+                {existingCustomerRequestRoute.active
+                  ? existingCustomerRequestCopy.categoryHelp(
+                      existingCustomerRequestRoute.professionalName
+                    )
+                  : t("jobRequestWhoCanHelpHelp", language)}
               </p>
               <select
                 id="job-request-category"
@@ -1988,10 +2024,16 @@ function Upload({ setPage }) {
                   htmlFor="job-request-category"
                   style={broadCategoryTitle}
                 >
-                  {t("jobRequestWhoCanHelp", language)}
+                  {existingCustomerRequestRoute.active
+                  ? existingCustomerRequestCopy.categoryTitle
+                  : t("jobRequestWhoCanHelp", language)}
                 </label>
                 <p style={broadCategoryHelp}>
-                  {t("jobRequestWhoCanHelpHelp", language)}
+                  {existingCustomerRequestRoute.active
+                  ? existingCustomerRequestCopy.categoryHelp(
+                      existingCustomerRequestRoute.professionalName
+                    )
+                  : t("jobRequestWhoCanHelpHelp", language)}
                 </p>
                 <select
                   id="job-request-category"
