@@ -197,39 +197,24 @@ test("extra-wide Emergency workspace anchors the conversation list left while ke
   );
 });
 
-test("Emergency context always exposes full information without ellipsis", () => {
+test("Emergency detail width belongs to the split layout without owning canonical content presentation", () => {
+  assert.match(
+    messagesSource,
+    /minmax\(340px, 400px\)/
+  );
+
   assert.match(
     messagesSource,
     /data-emergency-context-panel="canonical"/
   );
 
-  assert.match(
-    messagesSource,
-    /overflow-y: auto !important/
-  );
-
-  assert.match(
+  assert.doesNotMatch(
     messagesSource,
     /text-overflow: clip !important/
   );
 
-  assert.match(
+  assert.doesNotMatch(
     messagesSource,
     /white-space: normal !important/
-  );
-
-  assert.match(
-    messagesSource,
-    /overflow-wrap: anywhere !important/
-  );
-
-  assert.match(
-    messagesSource,
-    /word-break: break-word !important/
-  );
-
-  assert.match(
-    messagesSource,
-    /white-space: pre-wrap !important/
   );
 });

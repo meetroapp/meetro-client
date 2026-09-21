@@ -1366,7 +1366,9 @@ useEffect(() => {
     ? "business"
     : "homeowner";
   const canonicalEmergencyWorkCenterRoute =
-    isCanonicalEmergencyThread && currentViewerRole === "business"
+    isCanonicalEmergencyThread &&
+    currentViewerRole === "business" &&
+    !embedded
       ? buildProfessionalWorkCenterRoute({
           jobId: canonicalConversationDetail?.relationship?.jobId,
           returnPage: "messagesInbox",
@@ -6452,7 +6454,11 @@ const handleImageUpload = (event) => {
               }
               style={{
                 ...emergencyBanner,
-                maxHeight: emergencyPanelExpanded ? "40%" : undefined,
+                maxHeight: emergencyPanelExpanded
+                  ? isCanonicalEmergencyThread && embedded
+                    ? "62%"
+                    : "40%"
+                  : undefined,
                 ...(emergencyDispatchStatus === "completed"
                   ? completedEmergencyBanner
                   : {}),
@@ -6532,6 +6538,17 @@ const handleImageUpload = (event) => {
 
               {emergencyPanelExpanded && !emergencyContextInSidePanel && (
                 <>
+                  {isCanonicalEmergencyThread &&
+                    embedded &&
+                    canonicalConversationDetail && (
+                      <EmergencyConversationContextPanel
+                        detail={canonicalConversationDetail}
+                        language={language}
+                      />
+                    )}
+
+                  {(!isCanonicalEmergencyThread || !embedded) && (
+                    <>
                   {isCanonicalEmergencyThread && emergencyServiceName && (
                     <div
                       data-emergency-job-detail="canonical"
@@ -6730,6 +6747,8 @@ const handleImageUpload = (event) => {
                       <div style={routePinEnd}></div>
                     </div>
                     </div>
+                  )}
+                    </>
                   )}
 
                 </>

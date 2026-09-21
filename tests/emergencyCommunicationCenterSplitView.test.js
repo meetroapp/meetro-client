@@ -304,6 +304,38 @@ test("narrow Emergency thread keeps Review Details and Hide behavior", () => {
   );
 });
 
+test("canonical Emergency detail uses the same renderer before and after the responsive split", () => {
+  assert.match(
+    inboxSource,
+    /data-emergency-context-panel="canonical"[\s\S]*EmergencyConversationContextPanel/
+  );
+
+  assert.match(
+    threadSource,
+    /emergencyPanelExpanded && !emergencyContextInSidePanel[\s\S]*isCanonicalEmergencyThread[\s\S]*embedded[\s\S]*canonicalConversationDetail[\s\S]*<EmergencyConversationContextPanel[\s\S]*detail=\{canonicalConversationDetail\}[\s\S]*language=\{language\}/
+  );
+
+  assert.match(
+    threadSource,
+    /\(!isCanonicalEmergencyThread \|\| !embedded\) && \([\s\S]*<>/
+  );
+
+  assert.match(
+    threadSource,
+    /isCanonicalEmergencyThread && embedded[\s\S]*\? "62%"[\s\S]*: "40%"/
+  );
+
+  assert.match(
+    threadSource,
+    /const canonicalEmergencyWorkCenterRoute =[\s\S]*isCanonicalEmergencyThread &&[\s\S]*currentViewerRole === "business" &&[\s\S]*!embedded/
+  );
+
+  assert.match(
+    threadSource,
+    /emergencyPanelExpanded &&[\s\S]*currentViewerRole === "business" &&[\s\S]*canonicalEmergencyWorkCenterRoute/
+  );
+});
+
 test("Emergency context renders through one responsive destination at a time", () => {
   assert.match(
     inboxSource,

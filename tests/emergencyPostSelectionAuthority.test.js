@@ -42,7 +42,10 @@ test("professional canonical Emergency navigation uses only normalized relations
   const routeBlock = conversationSource.slice(routeStart, routeEnd);
 
   assert.ok(routeStart >= 0);
-  assert.match(routeBlock, /isCanonicalEmergencyThread && currentViewerRole === "business"/);
+  assert.match(
+    routeBlock,
+    /isCanonicalEmergencyThread\s*&&\s*currentViewerRole === "business"\s*&&\s*!embedded/
+  );
   assert.match(routeBlock, /jobId: canonicalConversationDetail\?\.relationship\?\.jobId/);
   assert.match(routeBlock, /returnPage: "messagesInbox"/);
   assert.doesNotMatch(routeBlock, /emergencyRequestId|conversationId|relationship\.id|localStorage/);
