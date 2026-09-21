@@ -9,6 +9,12 @@ import {
 import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
+import { isProfessionalSession } from "../utils/session";
+import {
+  listHomeownerProfessionals,
+  removeHomeownerSavedProfessional,
+  saveHomeownerProfessional,
+} from "../utils/homeownerProfessionalsApi";
 import {
   saveProfessionalReview,
 } from "../utils/reviewStorage";
@@ -32,6 +38,16 @@ function ContractorDetails({ setPage, currentPage }) {
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [loading, setLoading] = useState(true);
 
+  const [
+    savedProfessionalState,
+    setSavedProfessionalState,
+  ] = useState({
+    phase: "idle",
+    saved: false,
+    pending: false,
+    error: "",
+  });
+
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [projectTitle, setProjectTitle] = useState("");
   const [projectDescription, setProjectDescription] = useState("");
@@ -49,6 +65,73 @@ function ContractorDetails({ setPage, currentPage }) {
     // This loader intentionally runs once for the selected public profile.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const contractorProfileId =
+      Number(profile?.id);
+
+    if (
+      isProfessionalSession() ||
+      !Number.isSafeInteger(
+        contractorProfileId
+      ) ||
+      contractorProfileId <= 0
+    ) {
+      setSavedProfessionalState({
+        phase: "not_applicable",
+        saved: false,
+        pending: false,
+        error: "",
+      });
+      return undefined;
+    }
+
+    let active = true;
+
+    setSavedProfessionalState({
+      phase: "loading",
+      saved: false,
+      pending: false,
+      error: "",
+    });
+
+    listHomeownerProfessionals({
+      setPage,
+    })
+      .then((directory) => {
+        if (!active) return;
+
+        const saved =
+          directory.saved.some(
+            (professional) =>
+              professional.contractorProfileId ===
+              contractorProfileId
+          );
+
+        setSavedProfessionalState({
+          phase: "ready",
+          saved,
+          pending: false,
+          error: "",
+        });
+      })
+      .catch((error) => {
+        if (!active) return;
+
+        setSavedProfessionalState({
+          phase: "unavailable",
+          saved: false,
+          pending: false,
+          error:
+            error?.message ||
+            "Saved Professional status is unavailable.",
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [profile?.id]);
 
   function safeJson(key, fallback = []) {
     try {
@@ -80,6 +163,11 @@ function ContractorDetails({ setPage, currentPage }) {
 
     if (returnPage === "home") {
       setPage("home");
+      return;
+    }
+
+    if (returnPage === "myProfessionals") {
+      setPage("myProfessionals");
       return;
     }
 
@@ -355,6 +443,66 @@ function ContractorDetails({ setPage, currentPage }) {
       alert(t("serverError"));
     } finally {
       setSubmittingReview(false);
+    }
+  }
+
+  async function toggleSavedProfessional() {
+    const contractorProfileId =
+      Number(profile?.id);
+
+    if (
+      !Number.isSafeInteger(
+        contractorProfileId
+      ) ||
+      contractorProfileId <= 0 ||
+      isProfessionalSession() ||
+      savedProfessionalState.pending
+    ) {
+      return;
+    }
+
+    const wasSaved =
+      savedProfessionalState.saved;
+
+    setSavedProfessionalState(
+      (current) => ({
+        ...current,
+        phase: "ready",
+        pending: true,
+        error: "",
+      })
+    );
+
+    try {
+      if (wasSaved) {
+        await removeHomeownerSavedProfessional({
+          contractorProfileId,
+          setPage,
+        });
+      } else {
+        await saveHomeownerProfessional({
+          contractorProfileId,
+          setPage,
+        });
+      }
+
+      setSavedProfessionalState({
+        phase: "ready",
+        saved: !wasSaved,
+        pending: false,
+        error: "",
+      });
+    } catch (error) {
+      setSavedProfessionalState({
+        phase: "ready",
+        saved: wasSaved,
+        pending: false,
+        error:
+          error?.message ||
+          (isSpanish
+            ? "No se pudo actualizar el profesional guardado."
+            : "The Saved Professional change could not be completed."),
+      });
     }
   }
 
@@ -737,6 +885,45 @@ function ContractorDetails({ setPage, currentPage }) {
             ? "Estas acciones usan los flujos actuales de Meetro."
             : "These actions use Meetro's existing safe flows."}
         </p>
+
+        {!isProfessionalSession() &&
+          savedProfessionalState.phase !==
+            "not_applicable" && (
+            <>
+              <button
+                type="button"
+                data-homeowner-saved-professional-action="canonical"
+                onClick={toggleSavedProfessional}
+                disabled={
+                  savedProfessionalState.pending ||
+                  savedProfessionalState.phase ===
+                    "loading"
+                }
+                style={secondaryButton}
+              >
+                {savedProfessionalState.pending
+                  ? isSpanish
+                    ? "Guardando…"
+                    : "Saving…"
+                  : savedProfessionalState.saved
+                  ? isSpanish
+                    ? "Quitar de guardados"
+                    : "Remove Saved"
+                  : isSpanish
+                  ? "Guardar profesional"
+                  : "Save Professional"}
+              </button>
+
+              {savedProfessionalState.error && (
+                <p
+                  style={savedProfessionalError}
+                  role="alert"
+                >
+                  {savedProfessionalState.error}
+                </p>
+              )}
+            </>
+          )}
 
         <button
           onClick={() => setShowQuoteForm(!showQuoteForm)}
@@ -1317,6 +1504,14 @@ const inputStyle = {
   boxSizing: "border-box",
   background: "var(--meetro-surface-paper)",
   color: "var(--meetro-color-ink)",
+};
+
+const savedProfessionalError = {
+  margin: "9px 0 0",
+  color: "#991b1b",
+  fontSize: "12px",
+  lineHeight: 1.4,
+  fontWeight: "800",
 };
 
 const primaryButton = {

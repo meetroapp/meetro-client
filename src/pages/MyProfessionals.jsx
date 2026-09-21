@@ -4,7 +4,52 @@ import MeetroIcon from "../components/MeetroIcon";
 import useLanguage from "../hooks/useLanguage";
 import {
   listHomeownerProfessionals,
+  removeHomeownerSavedProfessional,
+  saveHomeownerProfessional,
 } from "../utils/homeownerProfessionalsApi";
+
+const ACTION_COPY = {
+  en: {
+    viewProfile: "View Profile",
+    save: "Save Professional",
+    saved: "Saved",
+    remove: "Remove Saved",
+    saving: "Saving…",
+    removing: "Removing…",
+    failed:
+      "The Saved Professional change could not be completed.",
+  },
+  es: {
+    viewProfile: "Ver perfil",
+    save: "Guardar profesional",
+    saved: "Guardado",
+    remove: "Quitar de guardados",
+    saving: "Guardando…",
+    removing: "Quitando…",
+    failed:
+      "No se pudo completar el cambio del profesional guardado.",
+  },
+  fr: {
+    viewProfile: "Voir le profil",
+    save: "Enregistrer",
+    saved: "Enregistré",
+    remove: "Retirer",
+    saving: "Enregistrement…",
+    removing: "Suppression…",
+    failed:
+      "La modification du professionnel enregistré n’a pas pu être effectuée.",
+  },
+  "pt-BR": {
+    viewProfile: "Ver perfil",
+    save: "Salvar profissional",
+    saved: "Salvo",
+    remove: "Remover salvo",
+    saving: "Salvando…",
+    removing: "Removendo…",
+    failed:
+      "Não foi possível concluir a alteração do profissional salvo.",
+  },
+};
 
 const COPY = {
   en: {
@@ -109,6 +154,7 @@ function ProfessionalIdentity({
   professional,
   meta,
   badge = "",
+  children = null,
 }) {
   const imageUrl =
     String(professional.imageUrl || "").trim();
@@ -156,6 +202,12 @@ function ProfessionalIdentity({
           {badge}
         </span>
       )}
+
+      {children && (
+        <div style={professionalActions}>
+          {children}
+        </div>
+      )}
     </article>
   );
 }
@@ -165,11 +217,21 @@ function MyProfessionals({ setPage }) {
   const copy =
     COPY[language] || COPY.en;
 
+  const actions =
+    ACTION_COPY[language] ||
+    ACTION_COPY.en;
+
   const [reload, setReload] = useState(0);
   const [state, setState] = useState({
     phase: "loading",
     workedWith: [],
     saved: [],
+    error: "",
+  });
+
+  const [mutation, setMutation] = useState({
+    contractorProfileId: null,
+    operation: "",
     error: "",
   });
 
@@ -213,6 +275,109 @@ function MyProfessionals({ setPage }) {
     };
   }, [reload]);
 
+  function openProfessionalProfile(
+    professional
+  ) {
+    localStorage.setItem(
+      "selectedContractor",
+      JSON.stringify({
+        id:
+          professional.contractorProfileId,
+        user_id:
+          professional.professionalUserId,
+        business_name:
+          professional.businessName,
+        name:
+          professional.businessName,
+        category:
+          professional.category || "",
+        image_url:
+          professional.imageUrl || "",
+        imageUrl:
+          professional.imageUrl || "",
+      })
+    );
+
+    localStorage.setItem(
+      "contractorDetailsReturnPage",
+      "myProfessionals"
+    );
+
+    setPage("contractorDetails");
+  }
+
+  async function saveProfessional(
+    professional
+  ) {
+    const contractorProfileId =
+      professional.contractorProfileId;
+
+    setMutation({
+      contractorProfileId,
+      operation: "save",
+      error: "",
+    });
+
+    try {
+      await saveHomeownerProfessional({
+        contractorProfileId,
+        setPage,
+      });
+
+      setMutation({
+        contractorProfileId: null,
+        operation: "",
+        error: "",
+      });
+
+      setReload((value) => value + 1);
+    } catch (error) {
+      setMutation({
+        contractorProfileId: null,
+        operation: "",
+        error:
+          error?.message ||
+          actions.failed,
+      });
+    }
+  }
+
+  async function removeSavedProfessional(
+    professional
+  ) {
+    const contractorProfileId =
+      professional.contractorProfileId;
+
+    setMutation({
+      contractorProfileId,
+      operation: "remove",
+      error: "",
+    });
+
+    try {
+      await removeHomeownerSavedProfessional({
+        contractorProfileId,
+        setPage,
+      });
+
+      setMutation({
+        contractorProfileId: null,
+        operation: "",
+        error: "",
+      });
+
+      setReload((value) => value + 1);
+    } catch (error) {
+      setMutation({
+        contractorProfileId: null,
+        operation: "",
+        error:
+          error?.message ||
+          actions.failed,
+      });
+    }
+  }
+
   function openProfessionalDiscovery() {
     setPage("discover");
   }
@@ -251,6 +416,15 @@ function MyProfessionals({ setPage }) {
           <span>{copy.find}</span>
         </button>
       </header>
+
+      {mutation.error && (
+        <div
+          style={mutationError}
+          role="alert"
+        >
+          {mutation.error}
+        </div>
+      )}
 
       {state.phase === "loading" && (
         <section
@@ -314,7 +488,42 @@ function MyProfessionals({ setPage }) {
                       }
                       professional={professional}
                       meta={`${professional.requestCount} ${copy.requests} · ${professional.jobCount} ${copy.jobs}`}
-                    />
+                    >
+                      <button
+                        type="button"
+                        style={secondaryAction}
+                        onClick={() =>
+                          openProfessionalProfile(
+                            professional
+                          )
+                        }
+                      >
+                        {actions.viewProfile}
+                      </button>
+
+                      <button
+                        type="button"
+                        style={primaryAction}
+                        disabled={
+                          professional.saved ||
+                          mutation.contractorProfileId ===
+                            professional.contractorProfileId
+                        }
+                        onClick={() =>
+                          saveProfessional(
+                            professional
+                          )
+                        }
+                      >
+                        {mutation.contractorProfileId ===
+                          professional.contractorProfileId &&
+                        mutation.operation === "save"
+                          ? actions.saving
+                          : professional.saved
+                          ? actions.saved
+                          : actions.save}
+                      </button>
+                    </ProfessionalIdentity>
                   )
                 )
               ) : (
@@ -361,7 +570,39 @@ function MyProfessionals({ setPage }) {
                           ? copy.alsoWorkedWith
                           : ""
                       }
-                    />
+                    >
+                      <button
+                        type="button"
+                        style={secondaryAction}
+                        onClick={() =>
+                          openProfessionalProfile(
+                            professional
+                          )
+                        }
+                      >
+                        {actions.viewProfile}
+                      </button>
+
+                      <button
+                        type="button"
+                        style={removeAction}
+                        disabled={
+                          mutation.contractorProfileId ===
+                          professional.contractorProfileId
+                        }
+                        onClick={() =>
+                          removeSavedProfessional(
+                            professional
+                          )
+                        }
+                      >
+                        {mutation.contractorProfileId ===
+                          professional.contractorProfileId &&
+                        mutation.operation === "remove"
+                          ? actions.removing
+                          : actions.remove}
+                      </button>
+                    </ProfessionalIdentity>
                   )
                 )
               ) : (
@@ -531,9 +772,7 @@ const cardStack = {
 };
 
 const professionalCard = {
-  display: "flex",
-  justifyContent: "space-between",
-  alignItems: "center",
+  display: "grid",
   gap: "12px",
   minWidth: 0,
   padding: "13px",
@@ -612,6 +851,59 @@ const relationshipBadge = {
   lineHeight: 1.25,
   fontWeight: "900",
   textAlign: "center",
+};
+
+const professionalActions = {
+  display: "grid",
+  gridTemplateColumns:
+    "repeat(auto-fit, minmax(130px, 1fr))",
+  gap: "8px",
+};
+
+const actionBase = {
+  minHeight: "42px",
+  borderRadius: "14px",
+  padding: "9px 12px",
+  fontSize: "12px",
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const primaryAction = {
+  ...actionBase,
+  border: "none",
+  background:
+    "var(--meetro-color-forest)",
+  color: "#fff",
+};
+
+const secondaryAction = {
+  ...actionBase,
+  border:
+    "1px solid var(--meetro-color-line)",
+  background:
+    "var(--meetro-surface-paper)",
+  color:
+    "var(--meetro-color-forest)",
+};
+
+const removeAction = {
+  ...actionBase,
+  border: "1px solid #fecaca",
+  background: "#fff7f7",
+  color: "#991b1b",
+};
+
+const mutationError = {
+  marginBottom: "14px",
+  padding: "12px 14px",
+  border: "1px solid #fecaca",
+  borderRadius: "14px",
+  background: "#fff7f7",
+  color: "#991b1b",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: "800",
 };
 
 const emptyCard = {
