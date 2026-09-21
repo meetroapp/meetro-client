@@ -6503,6 +6503,9 @@ const handleImageUpload = (event) => {
                   <div className="emergency-thread-context__title" style={emergencyBannerTitle}>
                     {emergencyDispatchStatus === "completed"
                       ? t("conversationServiceCompleted", language)
+                      : isCanonicalEmergencyThread
+                      ? emergencyStatusSubtitle ||
+                        t("messagesEmergencyService", language)
                       : emergencyServiceName}
                   </div>
 
@@ -6510,9 +6513,14 @@ const handleImageUpload = (event) => {
                     {currentViewerRole === "business" &&
                     emergencyDispatchStatus !== "completed"
                       ? `${t("messagesContactType_customer", language)}: ${emergencyCustomerName}`
+                      : isCanonicalEmergencyThread &&
+                        emergencyDispatchStatus !== "completed"
+                      ? emergencyBusinessName
                       : `${emergencyBusinessName} • ${emergencyStatusSubtitle || ""}`}
                   </div>
-                  {isPhoneComposerFocused && emergencyStatusSubtitle && (
+                  {isPhoneComposerFocused &&
+                    emergencyStatusSubtitle &&
+                    !isCanonicalEmergencyThread && (
                     <div
                       className="emergency-thread-context__focus-status"
                       style={emergencyComposerStatus}
@@ -6541,6 +6549,15 @@ const handleImageUpload = (event) => {
 
               {emergencyPanelExpanded && !emergencyContextInSidePanel && (
                 <>
+                  {isCanonicalEmergencyThread && emergencyServiceName && (
+                    <div
+                      data-emergency-job-detail="canonical"
+                      style={canonicalEmergencyJobCard}
+                    >
+                      <strong>{emergencyServiceName}</strong>
+                    </div>
+                  )}
+
                   <div style={emergencyPillRow}>
                     {emergencyDispatchStatus === "completed" ? (
                       isCanonicalEmergencyThread ? (
@@ -9753,6 +9770,23 @@ const completeFromChatBtn = {
 
 const emergencyChatActions = {
   marginTop: "12px",
+};
+
+const canonicalEmergencyJobCard = {
+  display: "grid",
+  gap: "4px",
+  minWidth: 0,
+  marginTop: "12px",
+  padding: "12px 14px",
+  border: "1px solid rgba(239,68,68,0.14)",
+  borderRadius: "16px",
+  background: "#ffffff",
+  color: "#991b1b",
+  fontSize: "12px",
+  lineHeight: 1.45,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  boxSizing: "border-box",
 };
 
 const canonicalEmergencyLocationCard = {

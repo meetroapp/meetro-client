@@ -118,8 +118,13 @@ for(const [name,width,height] of [['iPad portrait',820,1180],['iPhone',390,844]]
   assert.equal(document.querySelector('[data-communication-columns]'),null);
   assert.equal(document.querySelector('aside[data-emergency-context-panel]'),null);
   const context=document.querySelector('[data-emergency-thread-context="stacked"]');assert.ok(context);
+  assert.doesNotMatch(context.textContent,/Synthetic Emergency/i);
+  assert.match(context.textContent,/Professional Arrived/i);
   const toggle=[...context.querySelectorAll('button')].find(b=>/Review Details/i.test(b.textContent));assert.ok(toggle);
   await act(async()=>toggle.click());assert.equal(context.style.maxHeight,'40%');assert.equal(context.style.overflowY,'auto');
+  const jobDetail=context.querySelector('[data-emergency-job-detail="canonical"]');
+  assert.ok(jobDetail);
+  assert.match(jobDetail.textContent,/Synthetic Emergency/i);
   assert.match(document.querySelector('.chat-messages').textContent,/Received message/);assert.ok(document.querySelector('.chat-composer textarea'));
   assertNoAuthority(document);
 });
@@ -133,6 +138,8 @@ for(const width of [390,393,430]) {
       const input=document.querySelector('.chat-composer textarea');
       const expand=[...context.querySelectorAll('button')].find(button=>/Review Details/i.test(button.textContent));
       assert.ok(thread&&context&&history&&input&&expand);
+      assert.doesNotMatch(context.textContent,/Synthetic Emergency/i);
+      assert.match(context.textContent,/Professional Arrived/i);
       if(role==='professional') {
         assert.match(document.body.textContent,/Send completion update/);
         assert.doesNotMatch(context.textContent,/Open in Work Center/i);
@@ -141,6 +148,8 @@ for(const width of [390,393,430]) {
       }
       await act(async()=>expand.click());
       assert.match(context.textContent,/Requested/);
+      assert.match(context.textContent,/Synthetic Emergency/i);
+      assert.ok(context.querySelector('[data-emergency-job-detail="canonical"]'));
       if(role==='professional') {
         const workCenter=[...context.querySelectorAll('button')].find(button=>/Open in Work Center/i.test(button.textContent));
         assert.ok(workCenter);
@@ -158,6 +167,7 @@ for(const width of [390,393,430]) {
       assert.equal(document.querySelector('.chat-messages').scrollTop,1400);
       assert.equal(document.documentElement.scrollTop,0);
       assert.doesNotMatch(context.textContent,/Requested/);
+      assert.doesNotMatch(context.textContent,/Synthetic Emergency/i);
       assert.match(context.textContent,/Professional Arrived/i);
       assert.match(context.textContent,/Review Details/i);
       assert.doesNotMatch(context.textContent,/Open in Work Center/i);
@@ -169,6 +179,7 @@ for(const width of [390,393,430]) {
       assert.ok(restored);
       await act(async()=>restored.click());
       assert.match(context.textContent,/Requested/);
+      assert.match(context.textContent,/Synthetic Emergency/i);
     });
   }
 }
