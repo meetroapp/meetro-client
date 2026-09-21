@@ -228,6 +228,10 @@ const messagesMobileLayoutStyles = `
       max-width: 100% !important;
     }
   }
+
+  [data-communication-route-thread="narrow"] > :first-child {
+    display: none !important;
+  }
 `;
 
 
@@ -716,6 +720,15 @@ function MessagesInbox({ setPage, currentPage }) {
         CANONICAL_CONVERSATION_COMMUNICATION_SHELL)
       ? canonicalRouteContext.conversationId
       : "";
+
+  const isNarrowRoutedThread = Boolean(
+    routeRequestsCommunicationShell &&
+      appLayoutMetrics.layoutMode === "mobile" &&
+      routedConversationId
+  );
+
+  const shouldKeepEmbeddedThread =
+    isSplitPane || isNarrowRoutedThread;
 
   const [quotes, setQuotes] = useState([]);
   const [requestResponses, setRequestResponses] = useState([]);
@@ -6490,10 +6503,16 @@ function MessagesInbox({ setPage, currentPage }) {
       {!savedHistoryVisible && (
       <div
         data-communication-columns={isWideWorkspace ? "three" : isSplitPane ? "two" : "one"}
+        data-communication-route-thread={
+          isNarrowRoutedThread ? "narrow" : undefined
+        }
         style={
-          isSplitPane
+          shouldKeepEmbeddedThread
             ? {
                 ...splitShell,
+                ...(isNarrowRoutedThread
+                  ? narrowRoutedThreadShell
+                  : {}),
                 ...(isWideWorkspace ? wideWorkspaceShell : {}),
                 ...(isWideWorkspace && activeEmergencyContextMatchesConversation
                   ? emergencyWorkspaceShell : {}),
@@ -6794,7 +6813,7 @@ function MessagesInbox({ setPage, currentPage }) {
 	          </div>
 	        </div>
 
-        {isSplitPane && (
+        {shouldKeepEmbeddedThread && (
           <div style={splitThreadPane}>
             {activeSplitConversation ? (
               <ConversationThread
@@ -6892,6 +6911,11 @@ const splitShell = {
   minWidth: 0,
   minBlockSize: 0,
   overflow: "hidden",
+};
+
+const narrowRoutedThreadShell = {
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: 0,
 };
 
 const wideWorkspaceShell = {

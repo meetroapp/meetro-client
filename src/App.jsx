@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import {
   getAccountModeForPage,
@@ -335,9 +335,66 @@ function withAssistantAccessOnly(component, currentPage, setPage) {
   );
 }
 
+function ResponsiveConversationThreadRoute({
+  setPage,
+  currentPage,
+}) {
+  const appLayoutMetrics = useAppLayoutMetrics();
+  const canonicalConversationRoute =
+    parseCanonicalConversationRoute(
+      typeof window === "undefined"
+        ? ""
+        : window.location.hash
+    );
+
+  const routeKey = [
+    canonicalConversationRoute.valid
+      ? canonicalConversationRoute.conversationId
+      : "",
+    canonicalConversationRoute.returnPage || "",
+    canonicalConversationRoute.shell || "",
+  ].join(":");
+
+  const shellOwnershipRef = useRef({
+    routeKey: "",
+    claimed: false,
+  });
+
+  if (
+    shellOwnershipRef.current.routeKey !==
+    routeKey
+  ) {
+    shellOwnershipRef.current = {
+      routeKey,
+      claimed: false,
+    };
+  }
+
+  const canUseCommunicationCenterShellNow =
+    shouldUseCommunicationCenterConversationRoute(
+      canonicalConversationRoute,
+      appLayoutMetrics
+    );
+
+  if (canUseCommunicationCenterShellNow) {
+    shellOwnershipRef.current.claimed = true;
+  }
+
+  const useCommunicationCenterShell =
+    shellOwnershipRef.current.claimed;
+
+  return useCommunicationCenterShell ? (
+    <MessagesInbox
+      setPage={setPage}
+      currentPage={currentPage}
+    />
+  ) : (
+    <ConversationThread setPage={setPage} />
+  );
+}
+
 function App() {
   const language = useLanguage();
-  const appLayoutMetrics = useAppLayoutMetrics();
 
   useEffect(() => {
     const root = document.getElementById("root");
@@ -1422,22 +1479,13 @@ if (page === "quoteRequests") {
 }
 
 if (page === "conversationThread") {
-  const canonicalConversationRoute = parseCanonicalConversationRoute(
-    typeof window === "undefined" ? "" : window.location.hash
-  );
-  const useCommunicationCenterShell =
-    shouldUseCommunicationCenterConversationRoute(
-      canonicalConversationRoute,
-      appLayoutMetrics
-    );
-  const conversationThreadRoute = useCommunicationCenterShell
-    ? withSuspense(
-        <MessagesInbox setPage={setPage} currentPage={page} />
-      )
-    : withSuspense(<ConversationThread setPage={setPage} />);
-
   return withStartupChrome(withAssistantLayer(
-    conversationThreadRoute,
+    withSuspense(
+      <ResponsiveConversationThreadRoute
+        setPage={setPage}
+        currentPage={page}
+      />
+    ),
     page,
     setPage
   ), updateNotice);

@@ -41,7 +41,8 @@ test("Spotlight hero and carousel are responsive without page-width expansion", 
   assert.match(homeSource, /width: min\(88vw, 374px\) !important/);
   assert.match(homeSource, /overflowX: "auto"/);
   assert.match(homeSource, /overscrollBehaviorX: "contain"/);
-  assert.match(homeSource, /scrollSnapType: "x mandatory"/);
+  assert.match(homeSource, /scrollSnapType: "x proximity"/);
+  assert.doesNotMatch(homeSource, /scrollSnapType: "x mandatory"/);
   assert.match(homeSource, /overflowX: "hidden"/);
 
   for (const viewportWidth of [390, 393, 430]) {

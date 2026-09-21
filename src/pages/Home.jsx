@@ -3063,7 +3063,7 @@ const spotlightRow = {
   WebkitOverflowScrolling: "touch",
   overscrollBehaviorX: "contain",
   scrollbarWidth: "none",
-  scrollSnapType: "x mandatory",
+  scrollSnapType: "x proximity",
   padding: "4px 2px 14px",
   boxSizing: "border-box",
 };
@@ -3645,7 +3645,8 @@ const activeProjectsCarousel = {
   gap: "14px",
   overflowX: "auto",
   WebkitOverflowScrolling: "touch",
-  scrollSnapType: "x mandatory",
+  overscrollBehaviorX: "contain",
+  scrollSnapType: "x proximity",
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
