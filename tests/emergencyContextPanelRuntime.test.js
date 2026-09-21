@@ -130,15 +130,18 @@ for(const width of [390,393,430]) {
       assert.ok(thread&&context&&history&&input&&expand);
       if(role==='professional') {
         assert.match(document.body.textContent,/Send completion update/);
-        const workCenter=[...context.querySelectorAll('button')].find(button=>/Open in Work Center/i.test(button.textContent));
-        assert.ok(workCenter);
-        await act(async()=>workCenter.click());
-        assert.equal(routes.at(-1),`workCenter?jobId=${JOB}&returnPage=messagesInbox`);
+        assert.doesNotMatch(context.textContent,/Open in Work Center/i);
       } else {
         assert.doesNotMatch(context.textContent,/Open in Work Center/i);
       }
       await act(async()=>expand.click());
       assert.match(context.textContent,/Requested/);
+      if(role==='professional') {
+        const workCenter=[...context.querySelectorAll('button')].find(button=>/Open in Work Center/i.test(button.textContent));
+        assert.ok(workCenter);
+        await act(async()=>workCenter.click());
+        assert.equal(routes.at(-1),`workCenter?jobId=${JOB}&returnPage=messagesInbox`);
+      }
       const originalScrollHeight=Object.getOwnPropertyDescriptor(globalThis.HTMLElement.prototype,'scrollHeight');
       Object.defineProperty(globalThis.HTMLElement.prototype,'scrollHeight',{configurable:true,get(){return this.classList?.contains('chat-messages')?1400:0;}});
       t.after(()=>originalScrollHeight?Object.defineProperty(globalThis.HTMLElement.prototype,'scrollHeight',originalScrollHeight):delete globalThis.HTMLElement.prototype.scrollHeight);
@@ -152,6 +155,7 @@ for(const width of [390,393,430]) {
       assert.doesNotMatch(context.textContent,/Requested/);
       assert.match(context.textContent,/Professional Arrived/i);
       assert.match(context.textContent,/Review Details/i);
+      assert.doesNotMatch(context.textContent,/Open in Work Center/i);
       assert.ok(document.querySelector('.chat-composer'));
       assert.equal(document.querySelector('.quick-replies'),null);
       assertNoAuthority(document);
@@ -186,6 +190,78 @@ test('canonical sent message appears immediately; only history is scrolled; sear
   await act(async()=>{Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype,'value').set.call(search,'Received message');search.dispatchEvent(new Event('input',{bubbles:true}));});
   assert.match(viewport.textContent,/Received message/);assert.doesNotMatch(viewport.textContent,/New local test message/);
 });
+for(const role of ['professional','homeowner']) {
+  test(`${role} iPhone: first Send tap is preserved through composer focus and sends exactly once`,async t=>{
+    const {calls}=await mount(t,{width:390,height:844,role});
+    const history=document.querySelector('.chat-messages');
+    const input=document.querySelector('.chat-composer textarea');
+    const send=document.querySelector('.chat-send-button');
+
+    assert.ok(history&&input&&send);
+
+    await act(async()=>{
+      input.focus();
+      Object.getOwnPropertyDescriptor(
+        window.HTMLTextAreaElement.prototype,
+        'value'
+      ).set.call(input,'Single tap send test');
+      input.dispatchEvent(new Event('input',{bubbles:true}));
+    });
+
+    assert.equal(document.activeElement,input);
+    assert.equal(send.disabled,false);
+
+    const pointerDown=new Event(
+      'pointerdown',
+      {bubbles:true,cancelable:true}
+    );
+
+    await act(async()=>{
+      send.dispatchEvent(pointerDown);
+    });
+
+    assert.equal(
+      pointerDown.defaultPrevented,
+      true,
+      'iPhone Send pointerdown preserves composer focus'
+    );
+    assert.equal(document.activeElement,input);
+
+    await act(async()=>{
+      send.click();
+      await pause();
+    });
+    await act(pause);
+
+    const posts=calls.filter(
+      call=>
+        call.path==='/conversations/354/messages' &&
+        call.method==='POST'
+    );
+
+    assert.equal(posts.length,1,'first Send interaction creates exactly one message');
+    assert.match(history.textContent,/Single tap send test/);
+    assert.equal(input.value,'');
+
+    await act(async()=>{
+      send.click();
+      await pause();
+    });
+
+    const postsAfterSecondClick=calls.filter(
+      call=>
+        call.path==='/conversations/354/messages' &&
+        call.method==='POST'
+    );
+
+    assert.equal(
+      postsAfterSecondClick.length,
+      1,
+      'empty composer cannot duplicate the message'
+    );
+  });
+}
+
 test('ordinary request keeps existing layout, message history and composer without Emergency treatment',async t=>{
   await mount(t,{type:'request',width:1180,height:820});
   assert.equal(document.querySelector('[data-communication-columns]')?.dataset.communicationColumns,'two');

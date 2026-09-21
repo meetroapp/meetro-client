@@ -6502,7 +6502,8 @@ const handleImageUpload = (event) => {
                 </div>
               </div>
 
-              {currentViewerRole === "business" &&
+              {emergencyPanelExpanded &&
+                currentViewerRole === "business" &&
                 canonicalEmergencyWorkCenterRoute && (
                   <div className="emergency-thread-context__work-center" style={emergencyChatActions}>
                     <button
@@ -8282,6 +8283,11 @@ const handleImageUpload = (event) => {
                 canonicalSendPending ||
                 (isCanonicalThread && !messageText.trim())
               }
+              onPointerDown={(event) => {
+                if (isPhoneConversationLayout) {
+                  event.preventDefault();
+                }
+              }}
               onClick={() => sendMessage()}
             >
               <IconSend />

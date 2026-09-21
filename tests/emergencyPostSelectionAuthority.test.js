@@ -48,14 +48,19 @@ test("professional canonical Emergency navigation uses only normalized relations
   assert.doesNotMatch(routeBlock, /emergencyRequestId|conversationId|relationship\.id|localStorage/);
 
   const actionStart = conversationSource.indexOf(
-    '{currentViewerRole === "business" &&\n                canonicalEmergencyWorkCenterRoute'
+    '{emergencyPanelExpanded &&\n                currentViewerRole === "business" &&\n                canonicalEmergencyWorkCenterRoute'
   );
   const actionEnd = conversationSource.indexOf(
-    "{emergencyPanelExpanded",
+    "{emergencyPanelExpanded && !emergencyContextInSidePanel",
     actionStart
   );
   const actionBlock = conversationSource.slice(actionStart, actionEnd);
+
   assert.ok(actionStart >= 0);
+  assert.match(
+    actionBlock,
+    /emergencyPanelExpanded[\s\S]*currentViewerRole === "business"[\s\S]*canonicalEmergencyWorkCenterRoute/
+  );
   assert.match(actionBlock, /wc52openInWorkCenter/);
   assert.match(actionBlock, /setPage\(canonicalEmergencyWorkCenterRoute\)/);
 });
