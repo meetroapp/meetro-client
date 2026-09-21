@@ -232,6 +232,21 @@ const messagesMobileLayoutStyles = `
   [data-communication-route-thread="narrow"] > :first-child {
     display: none !important;
   }
+
+  [data-communication-wide-emergency="true"]
+    > [data-communication-list-pane="true"] {
+    grid-column: 1;
+  }
+
+  [data-communication-wide-emergency="true"]
+    > [data-communication-thread-pane="true"] {
+    grid-column: 3;
+  }
+
+  [data-communication-wide-emergency="true"]
+    > [data-emergency-context-panel="canonical"] {
+    grid-column: 4;
+  }
 `;
 
 
@@ -2439,6 +2454,12 @@ function MessagesInbox({ setPage, currentPage }) {
   const isWideWorkspace = getCommunicationLayout(appLayoutMetrics, {
     emergency: activeEmergencyContextMatchesConversation,
   }).columns === 3;
+
+  const isExtraWideEmergencyWorkspace = Boolean(
+    isWideWorkspace &&
+      activeEmergencyContextMatchesConversation &&
+      appLayoutMetrics.contentWidth >= 1280
+  );
   const activeWorkspaceRelationship = activeWorkspaceConversation
     ? getRelationshipForConversation(activeWorkspaceConversation)
     : null;
@@ -6506,6 +6527,9 @@ function MessagesInbox({ setPage, currentPage }) {
         data-communication-route-thread={
           isNarrowRoutedThread ? "narrow" : undefined
         }
+        data-communication-wide-emergency={
+          isExtraWideEmergencyWorkspace ? "true" : undefined
+        }
         style={
           shouldKeepEmbeddedThread
             ? {
@@ -6516,11 +6540,17 @@ function MessagesInbox({ setPage, currentPage }) {
                 ...(isWideWorkspace ? wideWorkspaceShell : {}),
                 ...(isWideWorkspace && activeEmergencyContextMatchesConversation
                   ? emergencyWorkspaceShell : {}),
+                ...(isExtraWideEmergencyWorkspace
+                  ? extraWideEmergencyWorkspaceShell
+                  : {}),
               }
             : undefined
         }
       >
-        <div style={isSplitPane ? splitListPane : undefined}>
+        <div
+          data-communication-list-pane="true"
+          style={isSplitPane ? splitListPane : undefined}
+        >
           {messageSection === "conversations" && isSplitPane && (
             <div style={splitInboxTools}>
               <div style={splitInboxSearchWrap}>
@@ -6814,7 +6844,10 @@ function MessagesInbox({ setPage, currentPage }) {
 	        </div>
 
         {shouldKeepEmbeddedThread && (
-          <div style={splitThreadPane}>
+          <div
+            data-communication-thread-pane="true"
+            style={splitThreadPane}
+          >
             {activeSplitConversation ? (
               <ConversationThread
                 canonicalConversationId={activeSplitCanonicalConversationId}
@@ -6933,6 +6966,14 @@ const emergencyWorkspaceShell = {
   gap: "12px",
   maxWidth: "1180px",
   margin: "0 auto",
+};
+
+const extraWideEmergencyWorkspaceShell = {
+  gridTemplateColumns:
+    "250px minmax(120px, 1fr) minmax(390px, 420px) minmax(280px, 300px)",
+  gap: "12px",
+  maxWidth: "1320px",
+  margin: "0 auto 0 0",
 };
 
 const compactContextToggle = {

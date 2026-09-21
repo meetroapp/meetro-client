@@ -182,7 +182,12 @@ test("Emergency row selection retains the left list and activates the embedded t
   );
   assert.match(
     inboxSource,
-    /<div style=\{isSplitPane \? splitListPane : undefined\}>[\s\S]*<ConversationThread[\s\S]*embedded/
+    /data-communication-list-pane="true"[\s\S]*style=\{isSplitPane \? splitListPane : undefined\}/
+  );
+
+  assert.match(
+    inboxSource,
+    /data-communication-thread-pane="true"[\s\S]*<ConversationThread[\s\S]*embedded/
   );
 });
 

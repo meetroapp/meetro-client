@@ -139,3 +139,60 @@ test("App keeps canonical conversation routing behind the shared Communication s
     /useCommunicationCenterShell[\s\S]*<MessagesInbox[\s\S]*<ConversationThread/
   );
 });
+
+test("extra-wide Emergency workspace anchors the conversation list left while keeping thread and context bounded", () => {
+  assert.match(
+    messagesSource,
+    /const isExtraWideEmergencyWorkspace = Boolean/
+  );
+
+  assert.match(
+    messagesSource,
+    /appLayoutMetrics\.contentWidth >= 1280/
+  );
+
+  assert.match(
+    messagesSource,
+    /250px minmax\(120px, 1fr\) minmax\(390px, 420px\) minmax\(280px, 300px\)/
+  );
+
+  assert.match(
+    messagesSource,
+    /maxWidth: "1320px"/
+  );
+
+  assert.match(
+    messagesSource,
+    /margin: "0 auto 0 0"/
+  );
+
+  assert.match(
+    messagesSource,
+    /data-communication-wide-emergency=/
+  );
+
+  assert.match(
+    messagesSource,
+    /data-communication-list-pane="true"/
+  );
+
+  assert.match(
+    messagesSource,
+    /data-communication-thread-pane="true"/
+  );
+
+  assert.match(
+    messagesSource,
+    /grid-column: 1/
+  );
+
+  assert.match(
+    messagesSource,
+    /grid-column: 3/
+  );
+
+  assert.match(
+    messagesSource,
+    /grid-column: 4/
+  );
+});
