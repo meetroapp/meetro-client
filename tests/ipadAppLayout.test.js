@@ -827,7 +827,17 @@ test("major application areas use desktop structure at iPad width", () => {
 
   assert.match(
     messagesSource,
-    /const isSplitPane = communicationLayout\.mode === "desktop"/
+    /const routeRequestsCommunicationShell =/
+  );
+
+  assert.match(
+    messagesSource,
+    /const isSplitPane =\s*communicationLayout\.mode === "desktop" \|\|/
+  );
+
+  assert.match(
+    messagesSource,
+    /routeRequestsCommunicationShell &&\s*appLayoutMetrics\.layoutMode === "tablet"/
   );
 
   assert.match(

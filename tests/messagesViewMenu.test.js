@@ -487,7 +487,10 @@ test("Emergency relationship rows open conversations and Messages restores saved
   assert.match(messagesSource, /setActiveSplitConversationId\(""\);[\s\S]*setPage\("conversationThread"\)/);
   assert.match(messagesSource, /record\.conversationId,[\s\S]*record\.threadId,[\s\S]*record\.sourceConversationId,[\s\S]*record\.id,/);
   assert.match(messagesSource, /const appLayoutMetrics = useAppLayoutMetrics\(\)/);
-  assert.match(messagesSource, /const isSplitPane = communicationLayout\.mode === "desktop"/);
+  assert.match(
+    messagesSource,
+    /const isSplitPane =\s*communicationLayout\.mode === "desktop" \|\|/
+  );
   assert.match(messagesSource, /function readJsonArray\(key\)/);
   assert.match(messagesSource, /onClick=\{\(\) => openConversationRow\(conversation, options\)\}/);
   assert.match(messagesSource, /type="button"[\s\S]*onClick=\{\(\) => openConversationRow\(conversation, options\)\}/);
@@ -507,11 +510,32 @@ test("Emergency relationship rows open conversations and Messages restores saved
 test("Messages renders an adaptive workspace without changing mobile conversation routing", () => {
   assert.match(messagesSource, /const appLayoutMetrics = useAppLayoutMetrics\(\)/);
   assert.match(messagesSource, /const communicationLayout = getCommunicationLayout\(appLayoutMetrics\)/);
-  assert.match(messagesSource, /const isSplitPane = communicationLayout\.mode === "desktop"/);
+  assert.match(
+    messagesSource,
+    /const routeRequestsCommunicationShell =/
+  );
+
+  assert.match(
+    messagesSource,
+    /const isSplitPane =\s*communicationLayout\.mode === "desktop" \|\|/
+  );
+
+  assert.match(
+    messagesSource,
+    /routeRequestsCommunicationShell &&\s*appLayoutMetrics\.layoutMode === "tablet"/
+  );
   assert.match(messagesSource, /const isWideWorkspace = getCommunicationLayout\(appLayoutMetrics, \{\s*emergency: activeEmergencyContextMatchesConversation,\s*\}\)\.columns === 3/);
   assert.doesNotMatch(messagesSource, /setIsSplitPane|setIsWideWorkspace/);
   assert.match(messagesSource, /const wideWorkspaceShell = \{/);
-  assert.match(messagesSource, /gridTemplateColumns:\s*\n\s+"minmax\(280px, 0\.28fr\) minmax\(420px, 0\.44fr\) minmax\(280px, 0\.28fr\)"/);
+  assert.match(
+    messagesSource,
+    /gridTemplateColumns:\s*\n\s+"minmax\(230px, 0\.8fr\) minmax\(390px, 1\.35fr\) minmax\(270px, 1fr\)"/
+  );
+
+  assert.match(
+    messagesSource,
+    /maxWidth: "1240px"/
+  );
   assert.match(messagesSource, /isWideWorkspace \? wideWorkspaceShell : \{\}/);
   assert.match(messagesSource, /isWideWorkspace && renderWorkspaceContextPanel\(\)/);
   assert.match(messagesSource, /function renderWorkspaceContextPanel\(\)/);

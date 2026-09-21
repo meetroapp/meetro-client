@@ -20,12 +20,21 @@ export function shouldUseCommunicationCenterConversationRoute(
   route = {},
   snapshot = {}
 ) {
+  if (route.valid !== true) return false;
+
   const layout = getCommunicationLayout(snapshot);
+  const explicitCommunicationShell =
+    route.shell === "communicationCenter";
+  const shellLayoutEligible =
+    snapshot.layoutMode === "desktop" ||
+    snapshot.layoutMode === "tablet";
+
+  if (explicitCommunicationShell) {
+    return shellLayoutEligible;
+  }
 
   return Boolean(
     layout.mode === "desktop" &&
-      route.valid === true &&
-      (route.returnPage === "messagesInbox" ||
-        route.shell === "communicationCenter")
+      route.returnPage === "messagesInbox"
   );
 }

@@ -688,6 +688,13 @@ function MessagesInbox({ setPage, currentPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
   const appLayoutMetrics = useAppLayoutMetrics();
   const communicationLayout = getCommunicationLayout(appLayoutMetrics);
+  const canonicalRouteContext = parseCanonicalConversationRoute(
+    typeof window === "undefined" ? "" : window.location.hash
+  );
+  const routeRequestsCommunicationShell =
+    canonicalRouteContext.valid === true &&
+    canonicalRouteContext.shell ===
+      CANONICAL_CONVERSATION_COMMUNICATION_SHELL;
   const [alertCountSnapshot, setAlertCountSnapshot] = useState(getAlertCountSnapshot);
   const attentionIdentity = String(getAuthenticatedIdentitySnapshot()?.userId || "");
   const communicationAttention = getCommunicationAttention(
@@ -696,10 +703,12 @@ function MessagesInbox({ setPage, currentPage }) {
   );
 
   useEffect(() => subscribeAlertCounts(setAlertCountSnapshot), []);
-  const isSplitPane = communicationLayout.mode === "desktop";
-  const canonicalRouteContext = parseCanonicalConversationRoute(
-    typeof window === "undefined" ? "" : window.location.hash
-  );
+  const isSplitPane =
+    communicationLayout.mode === "desktop" ||
+    (
+      routeRequestsCommunicationShell &&
+      appLayoutMetrics.layoutMode === "tablet"
+    );
   const routedConversationId =
     canonicalRouteContext.valid &&
     (canonicalRouteContext.returnPage === "messagesInbox" ||
@@ -6887,14 +6896,19 @@ const splitShell = {
 
 const wideWorkspaceShell = {
   gridTemplateColumns:
-    "minmax(280px, 0.28fr) minmax(420px, 0.44fr) minmax(280px, 0.28fr)",
+    "minmax(230px, 0.8fr) minmax(390px, 1.35fr) minmax(270px, 1fr)",
   gap: "20px",
   height: "min(780px, calc(100dvh - 300px))",
+  maxWidth: "1240px",
+  margin: "0 auto",
 };
 
 const emergencyWorkspaceShell = {
-  gridTemplateColumns: "minmax(180px, 0.24fr) minmax(340px, 1fr) minmax(220px, 0.29fr)",
+  gridTemplateColumns:
+    "minmax(190px, 0.75fr) minmax(350px, 1.35fr) minmax(260px, 1fr)",
   gap: "12px",
+  maxWidth: "1180px",
+  margin: "0 auto",
 };
 
 const compactContextToggle = {
