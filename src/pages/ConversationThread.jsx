@@ -1,6 +1,7 @@
 import { Component, memo, useEffect, useId, useMemo, useCallback, useRef, useState } from "react";
 import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
 import useLanguage from "../hooks/useLanguage";
+import { EmergencyConversationContextPanel } from "../components/EmergencyRelationshipDetail";
 import MeetroIcon from "../components/MeetroIcon";
 import { getLanguage, t } from "../utils/language";
 import {
@@ -967,6 +968,7 @@ function ConversationThreadInner({
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const bottomRef = useRef(null);
+  const messagesScrollRef = useRef(null);
   const threadSearchInputRef = useRef(null);
   const hasInitialScrolledRef = useRef(false);
   const longPressTimerRef = useRef(null);
@@ -1158,9 +1160,12 @@ function ConversationThreadInner({
   const isCanonicalEmergencyThread =
     isCanonicalThread &&
     canonicalConversationDetail?.type === "emergency";
+  const standaloneEmergencySidePanel =
+    isCanonicalEmergencyThread && !embedded && isLandscape &&
+    appLayoutMetrics.layoutMode !== "mobile" && appLayoutMetrics.contentWidth >= 700;
   const emergencyContextInSidePanel =
     isCanonicalEmergencyThread &&
-    emergencyContextMode === "panel";
+    (emergencyContextMode === "panel" || standaloneEmergencySidePanel);
   const isLegacyEmergencyThread =
     legacyWorkflowStorageEnabled &&
     !isCanonicalThread &&
@@ -4007,7 +4012,8 @@ useEffect(() => {
     if (!hasInitialScrolledRef.current && messages.length > 0) {
       hasInitialScrolledRef.current = true;
       requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "auto" });
+        const viewport = messagesScrollRef.current;
+        if (viewport) viewport.scrollTop = viewport.scrollHeight;
       });
     }
   }, [messages.length]);
@@ -4121,7 +4127,8 @@ useEffect(() => {
     }
 
     requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "auto" });
+      const viewport = messagesScrollRef.current;
+      if (viewport) viewport.scrollTop = viewport.scrollHeight;
     });
 
     const selectedQuoteRequestId =
@@ -4353,7 +4360,8 @@ useEffect(() => {
       setActiveMessageId(null);
       resetTextareaHeight();
       requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "auto" });
+        const viewport = messagesScrollRef.current;
+        if (viewport) viewport.scrollTop = viewport.scrollHeight;
       });
       window.dispatchEvent(new Event("meetro-messages-updated"));
     } catch (error) {
@@ -5782,11 +5790,11 @@ const handleImageUpload = (event) => {
   return (
     <div
       className="conversation-thread-page chat-thread-page meetro-visual-page"
-      style={embedded ? embeddedPage : page}
+      style={embedded ? embeddedPage : { ...page, ...(standaloneEmergencySidePanel ? { flexDirection: "row" } : {}) }}
     >
       <style>{animations}</style>
 
-      <div style={embedded ? embeddedPhone : phone}>
+      <div style={embedded ? embeddedPhone : { ...phone, ...(standaloneEmergencySidePanel ? { flex: "1 1 0", minWidth: 0 } : {}) }}>
         <div className="chat-header" style={header}>
           <button
             style={headerBtn}
@@ -6425,13 +6433,14 @@ const handleImageUpload = (event) => {
 
         <div style={chatArea} onClick={closeMenus}>
 
-          {hasActiveEmergencyJob && (
+          {hasActiveEmergencyJob && !emergencyContextInSidePanel && (
             <div
               data-emergency-thread-context={
                 emergencyContextInSidePanel ? "side-panel" : "stacked"
               }
               style={{
                 ...emergencyBanner,
+                maxHeight: emergencyPanelExpanded ? "40%" : undefined,
                 ...(emergencyDispatchStatus === "completed"
                   ? completedEmergencyBanner
                   : {}),
@@ -6826,7 +6835,7 @@ const handleImageUpload = (event) => {
             />
           ) : (
           <>
-          <div className="chat-messages conversation-messages" style={messagesScroll}>
+          <div ref={messagesScrollRef} className="chat-messages conversation-messages" style={messagesScroll}>
             <div style={threadSearchRow}>
               <div style={threadSearchInputWrap}>
                 <span style={threadSearchIcon} aria-hidden="true">
@@ -8718,6 +8727,11 @@ const handleImageUpload = (event) => {
           </div>
         )}
       </div>
+      {standaloneEmergencySidePanel && (
+        <aside style={standaloneEmergencyContextPane} data-emergency-context-panel="canonical" aria-label={t("messagesContextAria", language)}>
+          <EmergencyConversationContextPanel detail={canonicalConversationDetail} language={language} />
+        </aside>
+      )}
     </div>
   );
 }
@@ -8906,6 +8920,18 @@ const delegatedAuthorPill = {
   fontSize: "9px",
   fontWeight: "900",
   letterSpacing: "0.05em",
+};
+
+const standaloneEmergencyContextPane = {
+  flex: "0 0 240px",
+  height: "100%",
+  minHeight: 0,
+  padding: "16px",
+  boxSizing: "border-box",
+  overflowY: "auto",
+  overscrollBehavior: "contain",
+  borderLeft: "1px solid #fca5a5",
+  background: "var(--meetro-surface-paper, #ffffff)",
 };
 
 const messagesScroll = {
@@ -9438,8 +9464,9 @@ const menuSectionTitle = {
 
 
 const emergencyBanner = {
-  position: "sticky",
-  top: "8px",
+  flex: "0 0 auto",
+  overflowY: "auto",
+  overscrollBehavior: "contain",
   zIndex: 20,
   marginBottom: "12px",
   padding: "14px",

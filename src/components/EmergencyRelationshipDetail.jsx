@@ -1,3 +1,5 @@
+import { buildProfessionalWorkCenterRoute } from "../utils/professionalWorkCenterRoute";
+import { t } from "../utils/language";
 import EmergencyTimeline from "./EmergencyTimeline";
 import RelationshipIdentityPage from "./RelationshipIdentityPage";
 import {
@@ -83,6 +85,9 @@ export function EmergencyConversationContextPanel({
         customerFallback: "Customer",
       };
   const relationship = detail.relationship || {};
+  const workCenterRoute = detail.participants?.viewer?.role === "professional"
+    ? buildProfessionalWorkCenterRoute({ jobId: relationship.jobId, returnPage: "messagesInbox" })
+    : null;
   const source = relationship.source || {};
   const workflow = detail.workflow || {};
   const participants = detail.participants || {};
@@ -117,6 +122,11 @@ export function EmergencyConversationContextPanel({
         <h2 style={conversationContextTitle}>{title}</h2>
         {statusLabel && (
           <strong style={conversationContextStatus}>{statusLabel}</strong>
+        )}
+        {workCenterRoute && (
+          <a href={`#${workCenterRoute}`} style={conversationContextWorkCenterLink}>
+            {t("wc52openInWorkCenter", language)}
+          </a>
         )}
       </header>
 
@@ -673,6 +683,18 @@ const conversationContextStatus = {
   fontSize: "12px",
   lineHeight: 1.3,
   overflowWrap: "anywhere",
+};
+
+const conversationContextWorkCenterLink = {
+  display: "block",
+  padding: "12px 14px",
+  borderRadius: "14px",
+  background: "#991b1b",
+  color: "#ffffff",
+  fontSize: "13px",
+  fontWeight: "800",
+  textAlign: "center",
+  textDecoration: "none",
 };
 
 const conversationContextSection = {

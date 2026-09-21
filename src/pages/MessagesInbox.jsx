@@ -696,7 +696,6 @@ function MessagesInbox({ setPage, currentPage }) {
 
   useEffect(() => subscribeAlertCounts(setAlertCountSnapshot), []);
   const isSplitPane = communicationLayout.mode === "desktop";
-  const isWideWorkspace = communicationLayout.columns === 3;
   const canonicalRouteContext = parseCanonicalConversationRoute(
     typeof window === "undefined" ? "" : window.location.hash
   );
@@ -2422,6 +2421,10 @@ function MessagesInbox({ setPage, currentPage }) {
   const activeEmergencyContextMatchesConversation = Boolean(
     eligibleActiveEmergencyContext
   );
+  // Reuse the existing right pane at iPad landscape widths for Emergency context.
+  const isWideWorkspace = getCommunicationLayout(appLayoutMetrics, {
+    emergency: activeEmergencyContextMatchesConversation,
+  }).columns === 3;
   const activeWorkspaceRelationship = activeWorkspaceConversation
     ? getRelationshipForConversation(activeWorkspaceConversation)
     : null;
@@ -6491,6 +6494,8 @@ function MessagesInbox({ setPage, currentPage }) {
             ? {
                 ...splitShell,
                 ...(isWideWorkspace ? wideWorkspaceShell : {}),
+                ...(isWideWorkspace && activeEmergencyContextMatchesConversation
+                  ? emergencyWorkspaceShell : {}),
               }
             : undefined
         }
@@ -6893,6 +6898,11 @@ const wideWorkspaceShell = {
     "minmax(280px, 0.28fr) minmax(420px, 0.44fr) minmax(280px, 0.28fr)",
   gap: "20px",
   height: "min(780px, calc(100dvh - 300px))",
+};
+
+const emergencyWorkspaceShell = {
+  gridTemplateColumns: "minmax(180px, 0.24fr) minmax(340px, 1fr) minmax(220px, 0.29fr)",
+  gap: "12px",
 };
 
 const compactContextToggle = {

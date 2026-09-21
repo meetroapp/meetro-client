@@ -115,7 +115,7 @@ test("Visit context preserves canonical identity and privacy-safe location meani
 
 test("Visit card is a normal child of the one conversation scroll owner before Quote history", () => {
   const scrollStart = threadSource.indexOf(
-    '<div className="chat-messages conversation-messages"'
+    'className="chat-messages conversation-messages"'
   );
   const visit = threadSource.indexOf(
     'data-conversation-timeline-item="canonical-visit"'

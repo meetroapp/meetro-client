@@ -508,7 +508,7 @@ test("Messages renders an adaptive workspace without changing mobile conversatio
   assert.match(messagesSource, /const appLayoutMetrics = useAppLayoutMetrics\(\)/);
   assert.match(messagesSource, /const communicationLayout = getCommunicationLayout\(appLayoutMetrics\)/);
   assert.match(messagesSource, /const isSplitPane = communicationLayout\.mode === "desktop"/);
-  assert.match(messagesSource, /const isWideWorkspace = communicationLayout\.columns === 3/);
+  assert.match(messagesSource, /const isWideWorkspace = getCommunicationLayout\(appLayoutMetrics, \{\s*emergency: activeEmergencyContextMatchesConversation,\s*\}\)\.columns === 3/);
   assert.doesNotMatch(messagesSource, /setIsSplitPane|setIsWideWorkspace/);
   assert.match(messagesSource, /const wideWorkspaceShell = \{/);
   assert.match(messagesSource, /gridTemplateColumns:\s*\n\s+"minmax\(280px, 0\.28fr\) minmax\(420px, 0\.44fr\) minmax\(280px, 0\.28fr\)"/);
