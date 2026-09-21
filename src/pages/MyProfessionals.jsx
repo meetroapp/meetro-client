@@ -7,10 +7,17 @@ import {
   removeHomeownerSavedProfessional,
   saveHomeownerProfessional,
 } from "../utils/homeownerProfessionalsApi";
+import {
+  clearAssistantRequestDraft,
+} from "../utils/assistantRequestDraft";
+import {
+  buildExistingCustomerRequestRoute,
+} from "../utils/existingCustomerRequestRoute";
 
 const ACTION_COPY = {
   en: {
     viewProfile: "View Profile",
+    requestNewWork: "Request New Work",
     save: "Save Professional",
     saved: "Saved",
     remove: "Remove Saved",
@@ -21,6 +28,7 @@ const ACTION_COPY = {
   },
   es: {
     viewProfile: "Ver perfil",
+    requestNewWork: "Solicitar nuevo trabajo",
     save: "Guardar profesional",
     saved: "Guardado",
     remove: "Quitar de guardados",
@@ -31,6 +39,7 @@ const ACTION_COPY = {
   },
   fr: {
     viewProfile: "Voir le profil",
+    requestNewWork: "Demander un nouveau travail",
     save: "Enregistrer",
     saved: "Enregistré",
     remove: "Retirer",
@@ -41,6 +50,7 @@ const ACTION_COPY = {
   },
   "pt-BR": {
     viewProfile: "Ver perfil",
+    requestNewWork: "Solicitar novo trabalho",
     save: "Salvar profissional",
     saved: "Salvo",
     remove: "Remover salvo",
@@ -275,6 +285,44 @@ function MyProfessionals({ setPage }) {
     };
   }, [reload]);
 
+  function requestNewWork(
+    professional
+  ) {
+    // Repeat work starts as a completely fresh Job Request.
+    // Only the prior canonical Meetro relationship survives.
+    clearAssistantRequestDraft(
+      sessionStorage
+    );
+    clearAssistantRequestDraft(
+      localStorage
+    );
+
+    [
+      "directRequestMode",
+      "directRequestSource",
+      "directRequestProfessionalName",
+      "directRequestProfessionalCategory",
+      "directRequestProfessionalConversationId",
+      "directRequestId",
+      "requestProfessionalContext",
+      "selectedRequestProfessionalContext",
+      "selectedProfessionalId",
+      "selectedProfessionalName",
+      "selectedProfessionalCategory",
+    ].forEach((key) =>
+      localStorage.removeItem(key)
+    );
+
+    setPage(
+      buildExistingCustomerRequestRoute({
+        meetroRelationshipId:
+          professional.meetroRelationshipId,
+        businessName:
+          professional.businessName,
+      })
+    );
+  }
+
   function openProfessionalProfile(
     professional
   ) {
@@ -499,6 +547,18 @@ function MyProfessionals({ setPage }) {
                         }
                       >
                         {actions.viewProfile}
+                      </button>
+
+                      <button
+                        type="button"
+                        style={primaryAction}
+                        onClick={() =>
+                          requestNewWork(
+                            professional
+                          )
+                        }
+                      >
+                        {actions.requestNewWork}
                       </button>
 
                       <button

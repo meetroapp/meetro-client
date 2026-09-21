@@ -82,6 +82,10 @@ import {
 import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage";
 import WorkflowMicrophoneInput from "../components/WorkflowMicrophoneInput.jsx";
 import {
+  applyExistingCustomerRequestAuthority,
+  readExistingCustomerRequestRoute,
+} from "../utils/existingCustomerRequestRoute.js";
+import {
   JOB_REQUEST_INTERPRETATION_FAILURE,
   applyHomeownerConversationText,
   classifyInterpretationFailure,
@@ -228,6 +232,60 @@ function getRequestHelpCopy(language) {
   };
 }
 
+function getExistingCustomerRequestCopy(language) {
+  const copy = {
+    es: {
+      title: (name) =>
+        `Nuevo trabajo con ${name || "tu profesional anterior"}`,
+      text:
+        "Esta es una solicitud completamente nueva. El alcance, las cotizaciones, aprobaciones, pagos, programación y estado del trabajo anterior no se transfieren.",
+      invalidTitle:
+        "No se pudo verificar esta solicitud de trabajo recurrente.",
+      invalid:
+        "Vuelve a Mis profesionales e inicia Solicitar nuevo trabajo otra vez.",
+      returnLabel:
+        "Volver a Mis profesionales",
+    },
+    fr: {
+      title: (name) =>
+        `Nouveau travail avec ${name || "votre professionnel précédent"}`,
+      text:
+        "Il s’agit d’une toute nouvelle demande. La portée, les devis, approbations, paiements, horaires et états du travail précédent ne sont pas transférés.",
+      invalidTitle:
+        "Cette demande de nouveau travail n’a pas pu être vérifiée.",
+      invalid:
+        "Retournez à Mes professionnels et recommencez la demande.",
+      returnLabel:
+        "Retour à Mes professionnels",
+    },
+    "pt-BR": {
+      title: (name) =>
+        `Novo trabalho com ${name || "seu profissional anterior"}`,
+      text:
+        "Esta é uma solicitação totalmente nova. Escopo, orçamentos, aprovações, pagamentos, agenda e estado do trabalho anterior não são transferidos.",
+      invalidTitle:
+        "Não foi possível verificar esta solicitação de novo trabalho.",
+      invalid:
+        "Volte para Meus profissionais e inicie Solicitar novo trabalho novamente.",
+      returnLabel:
+        "Voltar para Meus profissionais",
+    },
+  };
+
+  return copy[language] || {
+    title: (name) =>
+      `New work with ${name || "your previous professional"}`,
+    text:
+      "This is a completely new request. Previous scope, Quotes, approvals, payments, scheduling, and work state do not carry forward.",
+    invalidTitle:
+      "This repeat-work request could not be verified.",
+    invalid:
+      "Return to My Professionals and start Request New Work again.",
+    returnLabel:
+      "Back to My Professionals",
+  };
+}
+
 function Upload({ setPage }) {
   const [language, updateLanguage] = useState(getLanguage());
   const photoInputRef = useRef(null);
@@ -240,6 +298,14 @@ function Upload({ setPage }) {
   const mediaUploadDeferred =
     isFriendsAndFamilyMediaDeferred() && !requestPhotoUploadEnabled;
   const mediaDeferredCopy = getMediaDeferredCopy(language);
+  const existingCustomerRequestRoute =
+    readExistingCustomerRequestRoute(
+      typeof window !== "undefined"
+        ? window.location.hash
+        : ""
+    );
+  const existingCustomerRequestCopy =
+    getExistingCustomerRequestCopy(language);
 
   const [initialAssistantDraft] = useState(() => {
     const transientDraft = readAssistantRequestDraft(sessionStorage);
@@ -949,7 +1015,19 @@ function Upload({ setPage }) {
 
   async function handleCreatePost(event) {
     event?.preventDefault();
+
     if (submissionAttemptRef.current) return;
+
+    if (
+      existingCustomerRequestRoute.active &&
+      !existingCustomerRequestRoute.valid
+    ) {
+      setSubmissionError(
+        existingCustomerRequestCopy.invalid
+      );
+      return;
+    }
+
     submissionAttemptRef.current = true;
     setCreating(true);
 
@@ -1045,6 +1123,12 @@ function Upload({ setPage }) {
       uploadedMediaForCleanup = submittedPayloadSnapshot.uploadedMedia;
       shouldCleanupUploadedMedia = true;
 
+      const requestBody =
+        applyExistingCustomerRequestAuthority(
+          submittedPayloadSnapshot.body,
+          existingCustomerRequestRoute
+        );
+
       const result = await authFetch(
         "/posts",
         {
@@ -1052,7 +1136,7 @@ function Upload({ setPage }) {
           headers: {
             "Idempotency-Key": submissionIntentKey,
           },
-          body: JSON.stringify(submittedPayloadSnapshot.body),
+          body: JSON.stringify(requestBody),
         },
         setPage
       );
@@ -1154,7 +1238,11 @@ function Upload({ setPage }) {
     setSubmissionError("");
     clearAssistantRequestDraft(sessionStorage);
 
-    setPage("home");
+    setPage(
+      existingCustomerRequestRoute.active
+        ? "myProfessionals"
+        : "home"
+    );
   }
 
   function handleReviewEdit(target) {
@@ -1391,9 +1479,17 @@ function Upload({ setPage }) {
             <button
               type="button"
               style={cancelRequestButton}
-              onClick={() => setPage("home")}
+              onClick={() =>
+                setPage(
+                  existingCustomerRequestRoute.active
+                    ? "myProfessionals"
+                    : "home"
+                )
+              }
             >
-              {t("jobRequestReturnHome", language)}
+              {existingCustomerRequestRoute.active
+                ? existingCustomerRequestCopy.returnLabel
+                : t("jobRequestReturnHome", language)}
             </button>
           </div>
         </section>
@@ -1423,6 +1519,41 @@ function Upload({ setPage }) {
           <h1 style={requestPageTitle}>{t("newProject")}</h1>
           <p style={requestPageSubtitle}>{t("newProjectSubtitle")}</p>
         </header>
+
+        {existingCustomerRequestRoute.active && (
+          <div
+            style={{
+              ...existingCustomerRequestBanner,
+              ...(existingCustomerRequestRoute.valid
+                ? {}
+                : existingCustomerRequestBannerInvalid),
+            }}
+            role={
+              existingCustomerRequestRoute.valid
+                ? "status"
+                : "alert"
+            }
+            data-existing-customer-request={
+              existingCustomerRequestRoute.valid
+                ? "verified"
+                : "invalid"
+            }
+          >
+            <strong>
+              {existingCustomerRequestRoute.valid
+                ? existingCustomerRequestCopy.title(
+                    existingCustomerRequestRoute.professionalName
+                  )
+                : existingCustomerRequestCopy.invalidTitle}
+            </strong>
+
+            <p>
+              {existingCustomerRequestRoute.valid
+                ? existingCustomerRequestCopy.text
+                : existingCustomerRequestCopy.invalid}
+            </p>
+          </div>
+        )}
 
         {assistantDraftMetadata && (
           <div style={preparedRequestBanner}>
@@ -2921,6 +3052,28 @@ const backButton = {
   marginBottom: "12px",
   boxShadow: "var(--meetro-shadow-soft)",
   cursor: "pointer",
+};
+
+const existingCustomerRequestBanner = {
+  display: "grid",
+  gap: "6px",
+  marginBottom: "16px",
+  padding: "14px 16px",
+  border:
+    "1px solid var(--meetro-color-line)",
+  borderRadius: "18px",
+  background:
+    "var(--meetro-surface-sage)",
+  color:
+    "var(--meetro-color-ink)",
+  fontSize: "13px",
+  lineHeight: 1.45,
+};
+
+const existingCustomerRequestBannerInvalid = {
+  border: "1px solid #fecaca",
+  background: "#fff7f7",
+  color: "#991b1b",
 };
 
 const preparedRequestBanner = {
