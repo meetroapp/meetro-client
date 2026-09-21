@@ -20,8 +20,8 @@ const api =
     "utf8"
   );
 
-test("Worked With and Saved use canonical Save and Remove commands", () => {
-  assert.match(
+test("Worked With is already durable and does not expose Save Professional", () => {
+  assert.doesNotMatch(
     myProfessionals,
     /saveHomeownerProfessional/
   );
@@ -42,15 +42,40 @@ test("Worked With and Saved use canonical Save and Remove commands", () => {
   );
 });
 
-test("Worked With Save does not create or imitate relationship authority", () => {
+test("Worked With exposes Request New Work without bookmark authority", () => {
+  const workedWithStart =
+    myProfessionals.indexOf(
+      "state.workedWith.map"
+    );
+
+  const savedStart =
+    myProfessionals.indexOf(
+      "state.saved.length",
+      workedWithStart
+    );
+
+  const workedWithBlock =
+    myProfessionals.slice(
+      workedWithStart,
+      savedStart
+    );
+
+  assert.ok(workedWithStart >= 0);
+  assert.ok(savedStart > workedWithStart);
+
   assert.match(
-    myProfessionals,
-    /professional\.saved/
+    workedWithBlock,
+    /requestNewWork/
   );
 
   assert.doesNotMatch(
-    myProfessionals,
-    /request_selection|professional_response|relationshipId\s*=|createRelationship/i
+    workedWithBlock,
+    /saveProfessional|actions\.save|actions\.saved/
+  );
+
+  assert.doesNotMatch(
+    workedWithBlock,
+    /request_selection|professional_response|createRelationship/i
   );
 });
 
@@ -88,10 +113,15 @@ test("professional profile returns to My Professionals when opened from that wor
   );
 });
 
-test("public professional profile exposes canonical homeowner Save and Remove", () => {
+test("public professional profile does not offer a new Save after Worked With", () => {
   assert.match(
     contractorDetails,
     /listHomeownerProfessionals/
+  );
+
+  assert.match(
+    contractorDetails,
+    /directory\.workedWith\.some/
   );
 
   assert.match(
@@ -102,6 +132,16 @@ test("public professional profile exposes canonical homeowner Save and Remove", 
   assert.match(
     contractorDetails,
     /removeHomeownerSavedProfessional/
+  );
+
+  assert.match(
+    contractorDetails,
+    /savedProfessionalState\.workedWith\s*&&\s*!savedProfessionalState\.saved/
+  );
+
+  assert.match(
+    contractorDetails,
+    /!savedProfessionalState\.workedWith\s*\|\|\s*savedProfessionalState\.saved/
   );
 
   assert.match(
@@ -124,5 +164,30 @@ test("Saved Professional interaction does not use browser storage as authority",
   assert.doesNotMatch(
     contractorDetails,
     /localStorage\.setItem\(\s*"favoriteProfessionals"/
+  );
+});
+
+test("My Professionals exposes exactly one Find Professionals action", () => {
+  assert.equal(
+    (
+      myProfessionals.match(
+        /\{copy\.find\}/g
+      ) || []
+    ).length,
+    1
+  );
+
+  assert.equal(
+    (
+      myProfessionals.match(
+        /onClick=\{openProfessionalDiscovery\}/g
+      ) || []
+    ).length,
+    1
+  );
+
+  assert.doesNotMatch(
+    myProfessionals,
+    /emptyFindButton/
   );
 });

@@ -5,7 +5,6 @@ import useLanguage from "../hooks/useLanguage";
 import {
   listHomeownerProfessionals,
   removeHomeownerSavedProfessional,
-  saveHomeownerProfessional,
 } from "../utils/homeownerProfessionalsApi";
 import {
   clearAssistantRequestDraft,
@@ -354,42 +353,6 @@ function MyProfessionals({ setPage }) {
     setPage("contractorDetails");
   }
 
-  async function saveProfessional(
-    professional
-  ) {
-    const contractorProfileId =
-      professional.contractorProfileId;
-
-    setMutation({
-      contractorProfileId,
-      operation: "save",
-      error: "",
-    });
-
-    try {
-      await saveHomeownerProfessional({
-        contractorProfileId,
-        setPage,
-      });
-
-      setMutation({
-        contractorProfileId: null,
-        operation: "",
-        error: "",
-      });
-
-      setReload((value) => value + 1);
-    } catch (error) {
-      setMutation({
-        contractorProfileId: null,
-        operation: "",
-        error:
-          error?.message ||
-          actions.failed,
-      });
-    }
-  }
-
   async function removeSavedProfessional(
     professional
   ) {
@@ -561,28 +524,6 @@ function MyProfessionals({ setPage }) {
                         {actions.requestNewWork}
                       </button>
 
-                      <button
-                        type="button"
-                        style={primaryAction}
-                        disabled={
-                          professional.saved ||
-                          mutation.contractorProfileId ===
-                            professional.contractorProfileId
-                        }
-                        onClick={() =>
-                          saveProfessional(
-                            professional
-                          )
-                        }
-                      >
-                        {mutation.contractorProfileId ===
-                          professional.contractorProfileId &&
-                        mutation.operation === "save"
-                          ? actions.saving
-                          : professional.saved
-                          ? actions.saved
-                          : actions.save}
-                      </button>
                     </ProfessionalIdentity>
                   )
                 )
@@ -668,14 +609,6 @@ function MyProfessionals({ setPage }) {
               ) : (
                 <div style={emptyCard}>
                   <span>{copy.emptySaved}</span>
-
-                  <button
-                    type="button"
-                    style={emptyFindButton}
-                    onClick={openProfessionalDiscovery}
-                  >
-                    {copy.find}
-                  </button>
                 </div>
               )}
             </div>
@@ -978,20 +911,6 @@ const emptyCard = {
   fontSize: "13px",
   lineHeight: 1.45,
   fontWeight: "750",
-};
-
-const emptyFindButton = {
-  justifySelf: "start",
-  minHeight: "42px",
-  padding: "9px 12px",
-  border: "none",
-  borderRadius: "999px",
-  background:
-    "var(--meetro-color-forest)",
-  color: "#fff",
-  fontSize: "12px",
-  fontWeight: "900",
-  cursor: "pointer",
 };
 
 const statusCard = {

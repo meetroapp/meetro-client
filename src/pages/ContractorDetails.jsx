@@ -44,6 +44,7 @@ function ContractorDetails({ setPage, currentPage }) {
   ] = useState({
     phase: "idle",
     saved: false,
+    workedWith: false,
     pending: false,
     error: "",
   });
@@ -80,6 +81,7 @@ function ContractorDetails({ setPage, currentPage }) {
       setSavedProfessionalState({
         phase: "not_applicable",
         saved: false,
+        workedWith: false,
         pending: false,
         error: "",
       });
@@ -91,6 +93,7 @@ function ContractorDetails({ setPage, currentPage }) {
     setSavedProfessionalState({
       phase: "loading",
       saved: false,
+      workedWith: false,
       pending: false,
       error: "",
     });
@@ -108,9 +111,17 @@ function ContractorDetails({ setPage, currentPage }) {
               contractorProfileId
           );
 
+        const workedWith =
+          directory.workedWith.some(
+            (professional) =>
+              professional.contractorProfileId ===
+              contractorProfileId
+          );
+
         setSavedProfessionalState({
           phase: "ready",
           saved,
+          workedWith,
           pending: false,
           error: "",
         });
@@ -121,6 +132,7 @@ function ContractorDetails({ setPage, currentPage }) {
         setSavedProfessionalState({
           phase: "unavailable",
           saved: false,
+          workedWith: false,
           pending: false,
           error:
             error?.message ||
@@ -456,7 +468,11 @@ function ContractorDetails({ setPage, currentPage }) {
       ) ||
       contractorProfileId <= 0 ||
       isProfessionalSession() ||
-      savedProfessionalState.pending
+      savedProfessionalState.pending ||
+      (
+        savedProfessionalState.workedWith &&
+        !savedProfessionalState.saved
+      )
     ) {
       return;
     }
@@ -489,6 +505,8 @@ function ContractorDetails({ setPage, currentPage }) {
       setSavedProfessionalState({
         phase: "ready",
         saved: !wasSaved,
+        workedWith:
+          savedProfessionalState.workedWith,
         pending: false,
         error: "",
       });
@@ -496,6 +514,8 @@ function ContractorDetails({ setPage, currentPage }) {
       setSavedProfessionalState({
         phase: "ready",
         saved: wasSaved,
+        workedWith:
+          savedProfessionalState.workedWith,
         pending: false,
         error:
           error?.message ||
@@ -888,7 +908,11 @@ function ContractorDetails({ setPage, currentPage }) {
 
         {!isProfessionalSession() &&
           savedProfessionalState.phase !==
-            "not_applicable" && (
+            "not_applicable" &&
+          (
+            !savedProfessionalState.workedWith ||
+            savedProfessionalState.saved
+          ) && (
             <>
               <button
                 type="button"
