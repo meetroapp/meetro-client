@@ -49,6 +49,16 @@ test("Profile and Home dashboard open the same My Professionals workspace", () =
     home,
     /setPage\("myProfessionals"\)/
   );
+
+  assert.match(
+    home,
+    /className="home-my-professionals-entry"/
+  );
+
+  assert.doesNotMatch(
+    home,
+    /className="home-community-entry"/
+  );
 });
 
 test("desktop and iPad sidebar expose My Professionals without changing mobile bottom navigation", () => {

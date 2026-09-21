@@ -351,9 +351,6 @@ const homeLayoutMediaStyles = `
     }
   }
 
-  #root[data-app-layout="desktop"] .home-community-entry {
-    display: none !important;
-  }
 `;
 
 function Home({ setPage }) {
@@ -1341,29 +1338,6 @@ function Home({ setPage }) {
 
           <span style={communityEntryAction}>
             {t("open", language)} →
-          </span>
-        </button>
-      </section>
-
-      <section className="home-community-entry" style={communityEntrySection}>
-        <button
-          type="button"
-          style={communityEntryCard}
-          onClick={() => setPage("discover")}
-        >
-          <span style={communityEntryIcon}>
-            <MeetroIcon name="discover" size={24} decorative />
-          </span>
-          <span style={communityEntryCopy}>
-            <strong style={communityEntryTitle}>
-              {t("communityEntryTitle", language)}
-            </strong>
-            <span style={communityEntryText}>
-              {t("communityEntryHomeCopy", language)}
-            </span>
-          </span>
-          <span style={communityEntryAction}>
-            {t("communityOpenAction", language)} →
           </span>
         </button>
       </section>

@@ -34,13 +34,45 @@ test("Home adopts the Meetro Community Visual Constitution tokens", () => {
 });
 
 test("Home visual adoption preserves protected navigation and workflow hooks", () => {
-  assert.match(homeSource, /home-community-entry/);
-  assert.match(homeSource, /setPage\("discover"\)/);
-  assert.match(homeSource, /getCanonicalConversationActionTarget\(decision/);
-  assert.match(homeSource, /setPage\(target\.route\)/);
-  assert.match(homeSource, /t\("continueConversation", language\)/);
-  assert.match(homeSource, /t\("homeMyProjects", language\)/);
-  assert.match(homeSource, /myProjectsTab === "history"/);
+  assert.match(
+    homeSource,
+    /home-my-professionals-entry/
+  );
+
+  assert.match(
+    homeSource,
+    /setPage\("myProfessionals"\)/
+  );
+
+  assert.doesNotMatch(
+    homeSource,
+    /home-community-entry/
+  );
+
+  assert.match(
+    homeSource,
+    /getCanonicalConversationActionTarget\(decision/
+  );
+
+  assert.match(
+    homeSource,
+    /setPage\(target\.route\)/
+  );
+
+  assert.match(
+    homeSource,
+    /t\("continueConversation", language\)/
+  );
+
+  assert.match(
+    homeSource,
+    /t\("homeMyProjects", language\)/
+  );
+
+  assert.match(
+    homeSource,
+    /myProjectsTab === "history"/
+  );
 });
 
 test("Visual Constitution documents the Home adoption pass as scoped visual work", () => {

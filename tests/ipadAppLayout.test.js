@@ -815,14 +815,50 @@ test("iPad navigation labels and brand copy never split inside words", () => {
 });
 
 test("major application areas use desktop structure at iPad width", () => {
-  assert.match(homeSource, /#root\[data-app-layout="desktop"\] \.home-community-entry/);
-  assert.match(messagesSource, /const isSplitPane = communicationLayout\.mode === "desktop"/);
-  assert.match(homeDashboardStyles, /#root\[data-app-layout="tablet"\] \.business-dashboard/);
-  assert.match(homeDashboardStyles, /#root\[data-app-layout="desktop"\] \.business-dashboard/);
-  assert.doesNotMatch(dashboardSource, /@media \(min-width: 1100px\)/);
-  assert.match(profileSource, /#root\[data-app-layout="desktop"\] \.app-page\.business-profile-page/);
-  assert.match(companionSource, /data-companion-layout=\{companionLayoutMode\}/);
-  assert.doesNotMatch(messagesSource, /pointer: fine/);
+  assert.match(
+    homeSource,
+    /home-my-professionals-entry/
+  );
+
+  assert.doesNotMatch(
+    homeSource,
+    /home-community-entry/
+  );
+
+  assert.match(
+    messagesSource,
+    /const isSplitPane = communicationLayout\.mode === "desktop"/
+  );
+
+  assert.match(
+    homeDashboardStyles,
+    /#root\[data-app-layout="tablet"\] \.business-dashboard/
+  );
+
+  assert.match(
+    homeDashboardStyles,
+    /#root\[data-app-layout="desktop"\] \.business-dashboard/
+  );
+
+  assert.doesNotMatch(
+    dashboardSource,
+    /@media \(min-width: 1100px\)/
+  );
+
+  assert.match(
+    profileSource,
+    /#root\[data-app-layout="desktop"\] \.app-page\.business-profile-page/
+  );
+
+  assert.match(
+    companionSource,
+    /data-companion-layout=\{companionLayoutMode\}/
+  );
+
+  assert.doesNotMatch(
+    messagesSource,
+    /pointer: fine/
+  );
 });
 
 test("layout selection never depends on a device family or user agent", () => {

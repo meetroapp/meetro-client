@@ -772,6 +772,50 @@ function ContractorDetails({ setPage, currentPage }) {
           )}
         </div>
 
+        {!isProfessionalSession() &&
+          savedProfessionalState.phase !==
+            "not_applicable" &&
+          (
+            !savedProfessionalState.workedWith ||
+            savedProfessionalState.saved
+          ) && (
+            <>
+              <button
+                type="button"
+                data-homeowner-profile-bookmark="canonical"
+                data-homeowner-saved-professional-action="canonical"
+                onClick={toggleSavedProfessional}
+                disabled={
+                  savedProfessionalState.pending ||
+                  savedProfessionalState.phase ===
+                    "loading"
+                }
+                style={secondaryButton}
+              >
+                {savedProfessionalState.pending
+                  ? isSpanish
+                    ? "Guardando…"
+                    : "Saving…"
+                  : savedProfessionalState.saved
+                  ? isSpanish
+                    ? "Quitar de guardados"
+                    : "Remove Saved"
+                  : isSpanish
+                  ? "Guardar profesional"
+                  : "Save Professional"}
+              </button>
+
+              {savedProfessionalState.error && (
+                <p
+                  style={savedProfessionalError}
+                  role="alert"
+                >
+                  {savedProfessionalState.error}
+                </p>
+              )}
+            </>
+          )}
+
         <p style={bioStyle}>{description}</p>
       </div>
 
@@ -905,49 +949,6 @@ function ContractorDetails({ setPage, currentPage }) {
             ? "Estas acciones usan los flujos actuales de Meetro."
             : "These actions use Meetro's existing safe flows."}
         </p>
-
-        {!isProfessionalSession() &&
-          savedProfessionalState.phase !==
-            "not_applicable" &&
-          (
-            !savedProfessionalState.workedWith ||
-            savedProfessionalState.saved
-          ) && (
-            <>
-              <button
-                type="button"
-                data-homeowner-saved-professional-action="canonical"
-                onClick={toggleSavedProfessional}
-                disabled={
-                  savedProfessionalState.pending ||
-                  savedProfessionalState.phase ===
-                    "loading"
-                }
-                style={secondaryButton}
-              >
-                {savedProfessionalState.pending
-                  ? isSpanish
-                    ? "Guardando…"
-                    : "Saving…"
-                  : savedProfessionalState.saved
-                  ? isSpanish
-                    ? "Quitar de guardados"
-                    : "Remove Saved"
-                  : isSpanish
-                  ? "Guardar profesional"
-                  : "Save Professional"}
-              </button>
-
-              {savedProfessionalState.error && (
-                <p
-                  style={savedProfessionalError}
-                  role="alert"
-                >
-                  {savedProfessionalState.error}
-                </p>
-              )}
-            </>
-          )}
 
         <button
           onClick={() => setShowQuoteForm(!showQuoteForm)}

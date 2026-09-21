@@ -24,6 +24,10 @@ const homeSource = readFileSync(
   new URL("../src/pages/Home.jsx", import.meta.url),
   "utf8"
 );
+const myProfessionalsSource = readFileSync(
+  new URL("../src/pages/MyProfessionals.jsx", import.meta.url),
+  "utf8"
+);
 const businessDashboardSource = readFileSync(
   new URL("../src/pages/BusinessDashboard.jsx", import.meta.url),
   "utf8"
@@ -362,35 +366,93 @@ test("Community preview layout remains responsive and mobile safe", () => {
   );
 });
 
-test("Home renders a phone-first Explore Community entry that opens Community", () => {
-  assert.match(homeSource, /className="home-community-entry"/);
-  assert.match(homeSource, /t\("communityEntryTitle", language\)/);
-  assert.match(homeSource, /t\("communityEntryHomeCopy", language\)/);
-  assert.match(homeSource, /t\("communityOpenAction", language\)/);
-  assert.equal(t("communityEntryTitle", "en"), "Explore Community");
-  assert.equal(
-    t("communityEntryHomeCopy", "en"),
-    "Discover trusted businesses, opportunities, and local stories around you."
-  );
-  assert.equal(t("communityOpenAction", "en"), "Open Community");
-  assert.match(homeSource, /onClick=\{\(\) => setPage\("discover"\)\}/);
+test("Home routes homeowner professional discovery through My Professionals", () => {
   assert.match(
     homeSource,
-    /\.home-community-entry \{\s*display: none !important;/
+    /className="home-my-professionals-entry"/
+  );
+
+  assert.match(
+    homeSource,
+    /onClick=\{\(\) => setPage\("myProfessionals"\)\}/
+  );
+
+  assert.doesNotMatch(
+    homeSource,
+    /className="home-community-entry"/
+  );
+
+  assert.match(
+    myProfessionalsSource,
+    /function openProfessionalDiscovery\(\)/
+  );
+
+  assert.match(
+    myProfessionalsSource,
+    /setPage\("discover"\)/
+  );
+
+  assert.match(
+    myProfessionalsSource,
+    /Find Professionals/
   );
 });
 
-test("iPhone Community certification keeps one shared destination for both role entry surfaces", () => {
-  assert.match(homeSource, /className="home-community-entry"/);
-  assert.match(homeSource, /onClick=\{\(\) => setPage\("discover"\)\}/);
-  assert.match(businessDashboardSource, /className="business-dashboard-community-entry"/);
-  assert.match(businessDashboardSource, /t\("communityEntryTitle", language\)/);
-  assert.match(businessDashboardSource, /t\("communityEntryBusinessCopy", language\)/);
-  assert.match(businessDashboardSource, /t\("communityOpenAction", language\)/);
-  assert.match(businessDashboardSource, /onClick=\{\(\) => setPage\("discover"\)\}/);
-  assert.match(discoverSource, /function Discover\(\{ setPage \}\)/);
-  assert.match(discoverSource, /useState\("communityHub"\)/);
-  assert.equal(existsSync(duplicateCommunityPageUrl), false);
+test("iPhone Community certification preserves one shared Community destination without duplicate homeowner entry", () => {
+  assert.match(
+    homeSource,
+    /className="home-my-professionals-entry"/
+  );
+
+  assert.doesNotMatch(
+    homeSource,
+    /className="home-community-entry"/
+  );
+
+  assert.match(
+    myProfessionalsSource,
+    /setPage\("discover"\)/
+  );
+
+  assert.match(
+    businessDashboardSource,
+    /className="business-dashboard-community-entry"/
+  );
+
+  assert.match(
+    businessDashboardSource,
+    /t\("communityEntryTitle", language\)/
+  );
+
+  assert.match(
+    businessDashboardSource,
+    /t\("communityEntryBusinessCopy", language\)/
+  );
+
+  assert.match(
+    businessDashboardSource,
+    /t\("communityOpenAction", language\)/
+  );
+
+  assert.match(
+    businessDashboardSource,
+    /onClick=\{\(\) => setPage\("discover"\)\}/
+  );
+
+  assert.match(
+    discoverSource,
+    /function Discover\(\{ setPage \}\)/
+  );
+
+  assert.match(
+    discoverSource,
+    /useState\("communityHub"\)/
+  );
+
+  assert.equal(
+    existsSync(duplicateCommunityPageUrl),
+    false
+  );
 });
 
 test("iPhone Community certification preserves account role from entry to destination", () => {

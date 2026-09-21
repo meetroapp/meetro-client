@@ -148,6 +148,37 @@ test("public professional profile does not offer a new Save after Worked With", 
     contractorDetails,
     /data-homeowner-saved-professional-action="canonical"/
   );
+
+  assert.equal(
+    (
+      contractorDetails.match(
+        /data-homeowner-saved-professional-action="canonical"/g
+      ) || []
+    ).length,
+    1
+  );
+
+  assert.equal(
+    (
+      contractorDetails.match(
+        /data-homeowner-profile-bookmark="canonical"/g
+      ) || []
+    ).length,
+    1
+  );
+
+  const bookmarkIndex =
+    contractorDetails.indexOf(
+      'data-homeowner-profile-bookmark="canonical"'
+    );
+
+  const contactOptionsIndex =
+    contractorDetails.indexOf(
+      "Existing contact options"
+    );
+
+  assert.ok(bookmarkIndex >= 0);
+  assert.ok(contactOptionsIndex > bookmarkIndex);
 });
 
 test("Saved Professional interaction does not use browser storage as authority", () => {
