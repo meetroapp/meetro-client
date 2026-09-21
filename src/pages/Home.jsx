@@ -1312,6 +1312,39 @@ function Home({ setPage }) {
         )}
       </section>
 
+      <section
+        className="home-my-professionals-entry"
+        style={communityEntrySection}
+      >
+        <button
+          type="button"
+          style={communityEntryCard}
+          onClick={() => setPage("myProfessionals")}
+        >
+          <span style={communityEntryIcon}>
+            <MeetroIcon
+              name="customerRelationships"
+              size={24}
+              decorative
+            />
+          </span>
+
+          <span style={communityEntryCopy}>
+            <strong style={communityEntryTitle}>
+              {t("myProfessionals", language)}
+            </strong>
+
+            <span style={communityEntryText}>
+              {t("myProfessionalsSubtitle", language)}
+            </span>
+          </span>
+
+          <span style={communityEntryAction}>
+            {t("open", language)} →
+          </span>
+        </button>
+      </section>
+
       <section className="home-community-entry" style={communityEntrySection}>
         <button
           type="button"

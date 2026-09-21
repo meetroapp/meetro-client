@@ -398,6 +398,13 @@ function BottomNav({ setPage, currentPage = "" }) {
       sub: t("navigationChat", language),
     },
     {
+      page: "myProfessionals",
+      aliases: ["myProfessionals"],
+      icon: "people",
+      label: t("myProfessionals", language),
+      sub: t("relationshipResource", language),
+    },
+    {
       page: "meetroMoments",
       aliases: ["meetroMoments"],
       icon: "history",

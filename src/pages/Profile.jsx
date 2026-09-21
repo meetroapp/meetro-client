@@ -1039,35 +1039,21 @@ function Profile({ setPage, currentPage, embedded = false }) {
           icon="customerRelationships"
           open={activeSection === "professionals"}
           onClick={() => toggleSection("professionals")}
-          summary={
-            trustedProfessionals.length
-              ? `${trustedProfessionals.length} ${t("trusted")}`
-              : t("trustedProfessionalsEmpty")
-          }
+          summary={t("relationshipResource")}
         >
-          {trustedProfessionals.length > 0 ? (
-            trustedProfessionals.slice(0, 3).map((professional) => (
-              <SettingRow
-                key={professional.name}
-                icon="businessProfile"
-                label={professional.name}
-                value={professional.category || t("recentlyUsed")}
-                onClick={() => setMyProfessionalsOpen(true)}
-              />
-            ))
-          ) : (
-            <div className="meetro-visual-empty-state" style={identityEmptyState}>
-              <strong>{t("trustedProfessionalsEmpty")}</strong>
-              <button
-                type="button"
-                className="meetro-visual-primary-button"
-                style={inlineSectionAction}
-                onClick={() => setPage("discover")}
-              >
-                {t("findProfessionals")}
-              </button>
-            </div>
-          )}
+          <SettingRow
+            icon="customerRelationships"
+            label={t("myProfessionals")}
+            value={t("open")}
+            onClick={() => setPage("myProfessionals")}
+          />
+
+          <SettingRow
+            icon="discover"
+            label={t("findProfessionals")}
+            value={t("navigationCommunity")}
+            onClick={() => setPage("discover")}
+          />
         </SettingsSection>
 
         <SettingsSection

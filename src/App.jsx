@@ -61,6 +61,7 @@ import Assistant from "./pages/Assistant";
 const Discover = lazy(() => import("./pages/Discover"));
 const Upload = lazy(() => import("./pages/Upload"));
 const Profile = lazy(() => import("./pages/Profile"));
+const MyProfessionals = lazy(() => import("./pages/MyProfessionals"));
 const MeetroMoments = lazy(() => import("./pages/MeetroMoments"));
 const MeetroMomentDetails = lazy(() => import("./pages/MeetroMomentDetails"));
 import ContractorProfile from "./pages/ContractorProfile";
@@ -1333,6 +1334,17 @@ if (page === "upload") {
 
 if (page === "profile") {
   return withStartupChrome(withAssistantLayer(withSuspense(<Profile setPage={setPage} />), page, setPage), updateNotice);
+}
+
+if (page === "myProfessionals") {
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      withSuspense(<MyProfessionals setPage={setPage} />),
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "meetroMoments") {

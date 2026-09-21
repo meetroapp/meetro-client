@@ -118,7 +118,14 @@ test("Homeowner projects, functional Active/History controls and service entries
   await act(async () => tabs[1].click());
   assert.equal(tabs[1].getAttribute("aria-pressed"), "true");
   assert.equal(tabs[0].getAttribute("aria-pressed"), "false");
-  assert.match(document.querySelector(".home-help-action-grid").textContent, /Request Service.*Emergency.*Ask Meetro/i);
+  assert.match(
+    document.querySelector(".home-help-action-grid").textContent,
+    /Request Service.*Emergency.*Ask Meetro/i
+  );
+  assert.match(
+    document.querySelector(".home-my-professionals-entry").textContent,
+    /My Professionals/i
+  );
   assert.equal(document.querySelector(".home-dashboard-welcome h1").textContent, "Good morning!");
   assert.ok(document.querySelector(".home-top-bar .home-dashboard-ask-button"));
   assert.ok(document.querySelector(".home-top-bar .home-dashboard-notification"));
@@ -145,7 +152,18 @@ test("dashboard layout protects narrow phones and scales metrics/tools without c
   const nav = readFileSync("src/components/BottomNav.jsx", "utf8");
   assert.match(nav, /background: "#F7F6F2"/); assert.match(nav, /borderRight: "1px solid #E5E7EB"/);
   const personal = nav.slice(nav.indexOf("const personalDesktopNavItems"), nav.indexOf("const businessDesktopNavItems"));
-  assert.deepEqual([...personal.matchAll(/page: "([^"]+)"/g)].map((m) => m[1]), ["home", "myRequests", "messagesInbox", "meetroMoments", "discover", "profile"]);
+  assert.deepEqual(
+    [...personal.matchAll(/page: "([^"]+)"/g)].map((m) => m[1]),
+    [
+      "home",
+      "myRequests",
+      "messagesInbox",
+      "myProfessionals",
+      "meetroMoments",
+      "discover",
+      "profile",
+    ]
+  );
 });
 
 test("Professional iPhone composition stays compact across the approved portrait and landscape matrices", () => {
