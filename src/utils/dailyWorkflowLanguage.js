@@ -700,7 +700,7 @@ const rows = [
   ["conversationReplyCompleteJob", "Complete Job", "Completar trabajo", "Terminer le travail", "Concluir trabalho"],
   ["conversationReplySendUpdate", "Send update", "Enviar actualización", "Envoyer une mise à jour", "Enviar atualização"],
   ["conversationReplyNeedParts", "Need parts", "Necesito piezas", "J'ai besoin de pièces", "Preciso de peças"],
-  ["conversationReplyWorkCompleted", "Work completed", "Trabajo completado", "Travail terminé", "Trabalho concluído"],
+  ["conversationReplyWorkCompleted", "Send completion update", "Enviar actualización de finalización", "Envoyer une mise à jour de fin", "Enviar atualização de conclusão"],
   ["conversationReplyAnythingElse", "Anything else needed?", "¿Necesitas algo más?", "Avez-vous besoin d'autre chose ?", "Precisa de mais alguma coisa?"],
   ["conversationReplyOnTheWay", "On the way", "Voy en camino", "En route", "A caminho"],
   ["conversationReplyCalling", "I’m calling", "Te llamo", "Je vous appelle", "Estou ligando"],

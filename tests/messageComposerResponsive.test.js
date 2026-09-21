@@ -137,3 +137,26 @@ test("Employee chat height contract responds to normal and keyboard-reduced view
     assert.ok(availableHeight < workspaceHeight(700, 0), `${viewportHeight}px shrinks the chat workspace`);
   }
 });
+
+test("iPhone conversation focus reuses the shared VisualViewport boundary and compacts Emergency context", () => {
+  assert.match(
+    conversationSource,
+    /data-composer-focused=\{isPhoneComposerFocused \? "true" : "false"\}/
+  );
+  assert.match(
+    conversationSource,
+    /var\(--meetro-visual-viewport-height, 100dvh\)[\s\S]*var\(--meetro-visual-viewport-offset-top, 0px\)/
+  );
+  assert.match(
+    conversationSource,
+    /if \(isPhoneConversationLayout\) \{[\s\S]*setEmergencyPanelExpanded\(false\)[\s\S]*viewport\.scrollTop = viewport\.scrollHeight/
+  );
+  assert.match(
+    conversationSource,
+    /data-composer-focused="true"[\s\S]*\.emergency-thread-context[\s\S]*max-block-size: 82px/
+  );
+  assert.doesNotMatch(
+    conversationSource,
+    /data-composer-focused="true"[\s\S]{0,900}(?:window\.scrollTo|scrollIntoView)/
+  );
+});

@@ -1172,6 +1172,12 @@ function ConversationThreadInner({
     conversationType === "emergency";
   const isEmergencyThread =
     isCanonicalEmergencyThread || isLegacyEmergencyThread;
+  const isPhoneConversationLayout =
+    !embedded &&
+    appLayoutMetrics.layoutMode === "mobile" &&
+    appLayoutMetrics.contentWidth <= 520;
+  const isPhoneComposerFocused =
+    isPhoneConversationLayout && isComposerFocused;
   const isHiringThread = isHiringConversationType(conversationType);
   const isRequestOpportunityReadOnly =
     conversationType === CONVERSATION_THREAD_TYPES.REQUEST_OPPORTUNITY;
@@ -5790,6 +5796,7 @@ const handleImageUpload = (event) => {
   return (
     <div
       className="conversation-thread-page chat-thread-page meetro-visual-page"
+      data-composer-focused={isPhoneComposerFocused ? "true" : "false"}
       style={embedded ? embeddedPage : { ...page, ...(standaloneEmergencySidePanel ? { flexDirection: "row" } : {}) }}
     >
       <style>{animations}</style>
@@ -5884,7 +5891,7 @@ const handleImageUpload = (event) => {
           >
             <div style={name}>{activeHeaderName}</div>
 
-            <div style={chatProjectLabel}>
+            <div className="chat-header-project" style={chatProjectLabel}>
               <span style={chatProjectTitleText}>
                  {isHiringThread
                    ? `${t("messagesSectionHiring", language)} · ${activeHeaderProject}`
@@ -5906,7 +5913,7 @@ const handleImageUpload = (event) => {
               </div>
             )}
 
-            <div style={statusRow}>
+            <div className="chat-header-status" style={statusRow}>
               {(!isCanonicalThread ||
                 canonicalConversationState.status === "active") && (
                 <span style={greenDot}></span>
@@ -6435,6 +6442,7 @@ const handleImageUpload = (event) => {
 
           {hasActiveEmergencyJob && !emergencyContextInSidePanel && (
             <div
+              className="emergency-thread-context"
               data-emergency-thread-context={
                 emergencyContextInSidePanel ? "side-panel" : "stacked"
               }
@@ -6446,7 +6454,7 @@ const handleImageUpload = (event) => {
                   : {}),
               }}
             >
-              <div style={emergencyBannerTop}>
+              <div className="emergency-thread-context__summary" style={emergencyBannerTop}>
 
                 {!emergencyContextInSidePanel && (
                   <button
@@ -6470,25 +6478,33 @@ const handleImageUpload = (event) => {
                   }}
                 ></div>
 
-                <div>
-                  <div style={emergencyBannerTitle}>
+                <div className="emergency-thread-context__identity">
+                  <div className="emergency-thread-context__title" style={emergencyBannerTitle}>
                     {emergencyDispatchStatus === "completed"
                       ? t("conversationServiceCompleted", language)
                       : emergencyServiceName}
                   </div>
 
-                  <div style={emergencyBannerSubtitle}>
+                  <div className="emergency-thread-context__subtitle" style={emergencyBannerSubtitle}>
                     {currentViewerRole === "business" &&
                     emergencyDispatchStatus !== "completed"
                       ? `${t("messagesContactType_customer", language)}: ${emergencyCustomerName}`
                       : `${emergencyBusinessName} • ${emergencyStatusSubtitle || ""}`}
                   </div>
+                  {isPhoneComposerFocused && emergencyStatusSubtitle && (
+                    <div
+                      className="emergency-thread-context__focus-status"
+                      style={emergencyComposerStatus}
+                    >
+                      {emergencyStatusSubtitle}
+                    </div>
+                  )}
                 </div>
               </div>
 
               {currentViewerRole === "business" &&
                 canonicalEmergencyWorkCenterRoute && (
-                  <div style={emergencyChatActions}>
+                  <div className="emergency-thread-context__work-center" style={emergencyChatActions}>
                     <button
                       type="button"
                       style={emergencyPrimaryAction}
@@ -8209,7 +8225,16 @@ const handleImageUpload = (event) => {
                   isCanonicalThread ? CANONICAL_MESSAGE_MAX_LENGTH : undefined
                 }
                 disabled={canonicalSendPending}
-                onFocus={() => setIsComposerFocused(true)}
+                onFocus={() => {
+                  setIsComposerFocused(true);
+                  if (isPhoneConversationLayout) {
+                    setEmergencyPanelExpanded(false);
+                    requestAnimationFrame(() => {
+                      const viewport = messagesScrollRef.current;
+                      if (viewport) viewport.scrollTop = viewport.scrollHeight;
+                    });
+                  }
+                }}
                 onBlur={() => setIsComposerFocused(false)}
                 onChange={(e) => {
                   setMessageText(e.target.value);
@@ -8787,6 +8812,95 @@ const animations = `
 @media (max-width: 520px) {
   .meetro-message-enter {
     animation-duration: 160ms;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"] {
+    block-size:
+      calc(
+        var(--meetro-visual-viewport-height, 100dvh) +
+        var(--meetro-visual-viewport-offset-top, 0px)
+      ) !important;
+    min-block-size: 0 !important;
+    min-height: 0 !important;
+    max-block-size:
+      calc(
+        var(--meetro-visual-viewport-height, 100dvh) +
+        var(--meetro-visual-viewport-offset-top, 0px)
+      ) !important;
+    overflow: hidden !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"] .chat-header {
+    padding-top: max(4px, env(safe-area-inset-top, 0px)) !important;
+    padding-bottom: 4px !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    :is(.chat-header-project, .chat-header-status) {
+    display: none !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context {
+    max-block-size: 82px !important;
+    margin-bottom: 4px !important;
+    padding: 6px 8px !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__summary {
+    gap: 6px !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__summary > button {
+    min-width: 88px !important;
+    min-height: 30px !important;
+    height: 30px !important;
+    padding-inline: 8px !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__identity {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__subtitle {
+    display: none !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__work-center {
+    margin-top: 4px !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__work-center button {
+    min-height: 30px !important;
+    margin: 0 !important;
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .chat-bottom-stack {
+    padding-bottom: 0 !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .chat-composer {
+    padding-bottom: 8px !important;
   }
 }
 
@@ -9534,6 +9648,17 @@ const emergencyBannerSubtitle = {
   color: "#7f1d1d",
   opacity: 0.82,
   marginTop: "2px",
+};
+
+const emergencyComposerStatus = {
+  marginTop: "2px",
+  color: "#991b1b",
+  fontSize: "10px",
+  fontWeight: "900",
+  lineHeight: 1.2,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
 };
 
 const emergencyPillRow = {

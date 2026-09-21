@@ -118,6 +118,51 @@ for(const [name,width,height] of [['iPad portrait',820,1180],['iPhone',390,844]]
   assert.match(document.querySelector('.chat-messages').textContent,/Received message/);assert.ok(document.querySelector('.chat-composer textarea'));
   assertNoAuthority(document);
 });
+for(const width of [390,393,430]) {
+  for(const role of ['professional','homeowner']) {
+    test(`${role} ${width}px iPhone: keyboard focus preserves message viewport and collapses Emergency details`,async t=>{
+      const {routes}=await mount(t,{width,height:844,role});
+      const thread=document.querySelector('.conversation-thread-page');
+      const context=document.querySelector('[data-emergency-thread-context="stacked"]');
+      const history=document.querySelector('.chat-messages');
+      const input=document.querySelector('.chat-composer textarea');
+      const expand=[...context.querySelectorAll('button')].find(button=>/Review Details/i.test(button.textContent));
+      assert.ok(thread&&context&&history&&input&&expand);
+      if(role==='professional') {
+        assert.match(document.body.textContent,/Send completion update/);
+        const workCenter=[...context.querySelectorAll('button')].find(button=>/Open in Work Center/i.test(button.textContent));
+        assert.ok(workCenter);
+        await act(async()=>workCenter.click());
+        assert.equal(routes.at(-1),`workCenter?jobId=${JOB}&returnPage=messagesInbox`);
+      } else {
+        assert.doesNotMatch(context.textContent,/Open in Work Center/i);
+      }
+      await act(async()=>expand.click());
+      assert.match(context.textContent,/Requested/);
+      const originalScrollHeight=Object.getOwnPropertyDescriptor(globalThis.HTMLElement.prototype,'scrollHeight');
+      Object.defineProperty(globalThis.HTMLElement.prototype,'scrollHeight',{configurable:true,get(){return this.classList?.contains('chat-messages')?1400:0;}});
+      t.after(()=>originalScrollHeight?Object.defineProperty(globalThis.HTMLElement.prototype,'scrollHeight',originalScrollHeight):delete globalThis.HTMLElement.prototype.scrollHeight);
+      history.scrollTop=0;
+      globalThis.__contextLayout={...globalThis.__contextLayout,visualHeight:470,contentHeight:470};
+      document.getElementById('root').style.setProperty('--meetro-visual-viewport-height','470px');
+      await act(async()=>{input.focus();await pause();});
+      assert.equal(thread.dataset.composerFocused,'true');
+      assert.equal(document.querySelector('.chat-messages').scrollTop,1400);
+      assert.equal(document.documentElement.scrollTop,0);
+      assert.doesNotMatch(context.textContent,/Requested/);
+      assert.match(context.textContent,/Professional Arrived/i);
+      assert.match(context.textContent,/Review Details/i);
+      assert.ok(document.querySelector('.chat-composer'));
+      assert.equal(document.querySelector('.quick-replies'),null);
+      assertNoAuthority(document);
+      await act(async()=>input.blur());
+      const restored=[...context.querySelectorAll('button')].find(button=>/Review Details/i.test(button.textContent));
+      assert.ok(restored);
+      await act(async()=>restored.click());
+      assert.match(context.textContent,/Requested/);
+    });
+  }
+}
 test('small iPad landscape reuses right context beside standalone messages without forcing a narrow list column',async t=>{
   await mount(t,{width:1024,height:768});
   assert.equal(document.querySelector('[data-communication-columns]'),null);
