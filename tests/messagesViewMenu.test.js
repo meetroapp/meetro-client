@@ -652,8 +652,14 @@ test("Saved emergency history preview uses final workflow state before stale des
   assert.match(messagesSource, /function isFinalConversationState\(quote = \{\}\)/);
   assert.match(messagesSource, /messagesCompletedEmergencyService/);
   assert.match(messagesSource, /messagesEmergencyConversationSaved/);
-  assert.match(messagesSource, /<p style=\{conversationRowPreview\}>\s*\{getConversationPreviewText\(conversation\)\}\s*<\/p>/);
-  assert.doesNotMatch(messagesSource, /<p style=\{conversationRowPreview\}>\s*\{conversation\.lastMessage \|\|/);
+  assert.match(
+    messagesSource,
+    /<p[\s\S]{0,220}\.\.\.conversationRowPreview[\s\S]{0,220}\{getConversationPreviewText\(conversation\)\}\s*<\/p>/
+  );
+  assert.doesNotMatch(
+    messagesSource,
+    /<p[\s\S]{0,220}\.\.\.conversationRowPreview[\s\S]{0,220}\{conversation\.lastMessage \|\|/
+  );
 });
 
 test("ConversationThread opens a full-page relationship identity without leaving the thread", () => {

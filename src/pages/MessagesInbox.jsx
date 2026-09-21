@@ -3957,8 +3957,14 @@ function MessagesInbox({ setPage, currentPage }) {
         <div style={conversationRowBody}>
           <div style={conversationRowTop}>
             <div style={conversationRowTitleBlock}>
-              <h2 style={conversationRowName}>{rowIdentity.displayName}</h2>
-              <p style={conversationRowMeta}>
+              <h2 style={{
+                        ...conversationRowName,
+                        ...(isSplitPane ? splitConversationRowText : {}),
+                      }}>{rowIdentity.displayName}</h2>
+              <p style={{
+                        ...conversationRowMeta,
+                        ...(isSplitPane ? splitConversationRowText : {}),
+                      }}>
                 {[
                   rowIdentity.typeLabel,
                   getCommunicationIntent(conversation).trim() || "",
@@ -3977,13 +3983,17 @@ function MessagesInbox({ setPage, currentPage }) {
           </div>
 
           <div style={conversationRowBottom}>
-            <p style={conversationRowPreview}>
+            <p style={{
+                        ...conversationRowPreview,
+                        ...(isSplitPane ? splitConversationRowText : {}),
+                      }}>
               {getConversationPreviewText(conversation)}
             </p>
             {statusChip && (
               <span
                 style={{
                   ...conversationStatusChip,
+                  ...(isSplitPane ? splitConversationStatusChip : {}),
                   ...(isEmergencyRow ? emergencyStatusBadge : {}),
                   ...(rowUnread > 0 ? unreadStatusBadge : {}),
                 }}
@@ -6797,8 +6807,14 @@ function MessagesInbox({ setPage, currentPage }) {
                 <div style={conversationRowBody}>
                   <div style={conversationRowTop}>
                     <div style={conversationRowTitleBlock}>
-                      <h2 style={conversationRowName}>{rowIdentity.displayName}</h2>
-                      <p style={conversationRowMeta}>
+                      <h2 style={{
+                        ...conversationRowName,
+                        ...(isSplitPane ? splitConversationRowText : {}),
+                      }}>{rowIdentity.displayName}</h2>
+                      <p style={{
+                        ...conversationRowMeta,
+                        ...(isSplitPane ? splitConversationRowText : {}),
+                      }}>
                         {inactiveImportedContact
                           ? rowIdentity.typeLabel
                           : [
@@ -6822,13 +6838,17 @@ function MessagesInbox({ setPage, currentPage }) {
                   </div>
 
                   <div style={conversationRowBottom}>
-                    <p style={conversationRowPreview}>
+                    <p style={{
+                        ...conversationRowPreview,
+                        ...(isSplitPane ? splitConversationRowText : {}),
+                      }}>
                       {getRelationshipPreviewText(relationship)}
                     </p>
                     {statusChip && (
                       <span
                         style={{
                           ...conversationStatusChip,
+                          ...(isSplitPane ? splitConversationStatusChip : {}),
                           ...(hasEmergencyConversation ? emergencyStatusBadge : {}),
                           ...((counts.unread || 0) > 0 ? unreadStatusBadge : {}),
                         }}
@@ -6971,7 +6991,7 @@ const emergencyWorkspaceShell = {
 
 const extraWideEmergencyWorkspaceShell = {
   gridTemplateColumns:
-    "250px minmax(80px, 1fr) minmax(390px, 420px) minmax(340px, 400px)",
+    "clamp(300px, 20vw, 360px) minmax(48px, 1fr) minmax(390px, 420px) minmax(340px, 400px)",
   gap: "12px",
   maxWidth: "1420px",
   margin: "0 auto 0 0",
@@ -8719,6 +8739,25 @@ const conversationStatusChip = {
   overflow: "hidden",
   textOverflow: "ellipsis",
   flexShrink: 0,
+};
+
+const splitConversationRowText = {
+  whiteSpace: "normal",
+  overflow: "visible",
+  textOverflow: "clip",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+};
+
+const splitConversationStatusChip = {
+  whiteSpace: "normal",
+  maxWidth: "55%",
+  overflow: "visible",
+  textOverflow: "clip",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  textAlign: "right",
+  lineHeight: 1.25,
 };
 
 const avatarImage = {

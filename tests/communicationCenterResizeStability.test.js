@@ -153,7 +153,7 @@ test("extra-wide Emergency workspace anchors the conversation list left while ke
 
   assert.match(
     messagesSource,
-    /250px minmax\(80px, 1fr\) minmax\(390px, 420px\) minmax\(340px, 400px\)/
+    /clamp\(300px, 20vw, 360px\) minmax\(48px, 1fr\) minmax\(390px, 420px\) minmax\(340px, 400px\)/
   );
 
   assert.match(
@@ -216,5 +216,42 @@ test("Emergency detail width belongs to the split layout without owning canonica
   assert.doesNotMatch(
     messagesSource,
     /white-space: normal !important/
+  );
+});
+
+test("extra-wide left conversation lane grows and split rows expose full information", () => {
+  assert.match(
+    messagesSource,
+    /clamp\(300px, 20vw, 360px\)/
+  );
+
+  assert.match(
+    messagesSource,
+    /const splitConversationRowText = \{[\s\S]*whiteSpace: "normal"[\s\S]*textOverflow: "clip"[\s\S]*overflowWrap: "anywhere"[\s\S]*wordBreak: "break-word"/
+  );
+
+  assert.match(
+    messagesSource,
+    /const splitConversationStatusChip = \{[\s\S]*whiteSpace: "normal"[\s\S]*maxWidth: "55%"[\s\S]*textOverflow: "clip"/
+  );
+
+  assert.match(
+    messagesSource,
+    /conversationRowName[\s\S]*isSplitPane \? splitConversationRowText/
+  );
+
+  assert.match(
+    messagesSource,
+    /conversationRowMeta[\s\S]*isSplitPane \? splitConversationRowText/
+  );
+
+  assert.match(
+    messagesSource,
+    /conversationRowPreview[\s\S]*isSplitPane \? splitConversationRowText/
+  );
+
+  assert.match(
+    messagesSource,
+    /conversationStatusChip[\s\S]*isSplitPane \? splitConversationStatusChip/
   );
 });
