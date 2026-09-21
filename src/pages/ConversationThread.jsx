@@ -883,7 +883,7 @@ function ConversationThreadInner({
 }) {
   const appLayoutMetrics = useAppLayoutMetrics();
   const isLandscape = appLayoutMetrics.layoutWidth > appLayoutMetrics.layoutHeight;
-  const [language, setLanguageState] = useState(getLanguage());
+  const language = useLanguage();
   const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
   const [messageText, setMessageText] = useState("");
   const [messages, setMessages] = useState([]);
@@ -3128,23 +3128,6 @@ useEffect(() => {
   useEffect(() => {
     return () => {
       window.speechSynthesis?.cancel();
-    };
-  }, []);
-
-  useEffect(() => {
-    const refreshLanguage = () => setLanguageState(getLanguage());
-
-    refreshLanguage();
-    window.addEventListener("storage", refreshLanguage);
-    window.addEventListener("focus", refreshLanguage);
-    window.addEventListener("meetroLanguageChanged", refreshLanguage);
-    window.addEventListener("meetro-language-change", refreshLanguage);
-
-    return () => {
-      window.removeEventListener("storage", refreshLanguage);
-      window.removeEventListener("focus", refreshLanguage);
-      window.removeEventListener("meetroLanguageChanged", refreshLanguage);
-      window.removeEventListener("meetro-language-change", refreshLanguage);
     };
   }, []);
 

@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
 import API_URL from "../api";
@@ -38,7 +39,7 @@ function Discover({ setPage }) {
     if (pendingQuery) localStorage.removeItem("meetroCommunityDiscoveryQuery");
     return pendingQuery;
   });
-  const [language, updateLanguage] = useState(getLanguage());
+  const language = useLanguage();
   const [selectedDiscoveryInterests, setSelectedDiscoveryInterests] = useState(
     () => {
       try {
@@ -406,20 +407,6 @@ function Discover({ setPage }) {
       ? communityBusinessResults.length
       : COMMUNITY_PREVIEW_LIMIT
   );
-  useEffect(() => {
-    const handleLanguageChange = () => {
-      updateLanguage(getLanguage());
-    };
-
-    window.addEventListener("languageChanged", handleLanguageChange);
-    window.addEventListener("meetro-language-change", handleLanguageChange);
-
-    return () => {
-      window.removeEventListener("languageChanged", handleLanguageChange);
-      window.removeEventListener("meetro-language-change", handleLanguageChange);
-    };
-  }, []);
-
   useEffect(() => {
     const handleCommunityDiscovery = (event) => {
       const detail = event.detail || {};

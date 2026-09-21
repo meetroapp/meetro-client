@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import GuidedWorkspaceCard from "../components/GuidedWorkspaceCard";
 import ServiceSelectorSheet from "../components/ServiceSelectorSheet";
@@ -311,7 +312,7 @@ function getExistingCustomerRequestCopy(language) {
 }
 
 function Upload({ setPage }) {
-  const [language, updateLanguage] = useState(getLanguage());
+  const language = useLanguage();
   const photoInputRef = useRef(null);
   const serviceSearchInputRef = useRef(null);
   const titleInputRef = useRef(null);
@@ -417,18 +418,6 @@ function Upload({ setPage }) {
   const [requestMode, setRequestMode] = useState("conversation");
   const [activeGuidedCard, setActiveGuidedCard] = useState("work");
   const [photoFirstPromptShown, setPhotoFirstPromptShown] = useState(false);
-
-  useEffect(() => {
-    const handleLanguageChange = () => {
-      updateLanguage(getLanguage());
-    };
-
-    window.addEventListener("languageChanged", handleLanguageChange);
-
-    return () => {
-      window.removeEventListener("languageChanged", handleLanguageChange);
-    };
-  }, []);
 
   useEffect(() => {
     selectedRequestPhotosRef.current = selectedRequestPhotos;

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import CustomerQuoteReviewPanel from "../components/CustomerQuoteReviewPanel.jsx";
 import CustomerProjectAssessment from "../components/CustomerProjectAssessment.jsx";
@@ -164,7 +165,7 @@ function ProjectDetails({ setPage }) {
   const [expandedPhotoIndex, setExpandedPhotoIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState(null);
   const [showGalleryGrid, setShowGalleryGrid] = useState(false);
-  const [language, setLanguage] = useState(getLanguage());
+  const language = useLanguage();
   const [workflowUnavailableNotice, setWorkflowUnavailableNotice] = useState(false);
   const [customerQuoteDiscovery, setCustomerQuoteDiscovery] = useState({
     status: "idle",
@@ -234,18 +235,6 @@ function ProjectDetails({ setPage }) {
   };
 
   const latestActivity = truthfulJobRecords[0] || null;
-
-  useEffect(() => {
-    const handleLanguageChange = () => setLanguage(getLanguage());
-
-    window.addEventListener("languageChanged", handleLanguageChange);
-    window.addEventListener("meetro-language-change", handleLanguageChange);
-
-    return () => {
-      window.removeEventListener("languageChanged", handleLanguageChange);
-      window.removeEventListener("meetro-language-change", handleLanguageChange);
-    };
-  }, []);
 
   function openProjectConversation() {
     if (restoreConversationOriginContext(setPage)) return;

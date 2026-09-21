@@ -1,5 +1,6 @@
 import "../styles/homeDashboard.css";
 import { useCallback, useEffect, useRef, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import MeetroDetailsButton from "../components/MeetroDetailsButton";
 import MeetroIcon from "../components/MeetroIcon";
@@ -354,7 +355,7 @@ const homeLayoutMediaStyles = `
 `;
 
 function Home({ setPage }) {
-  const [language, updateLanguage] = useState(getLanguage());
+  const language = useLanguage();
   const [activeMode, setActiveMode] = useState("personal");
   const [homeView, setHomeView] = useState("landing");
   const [myProjectsTab, setMyProjectsTab] = useState("active");
@@ -421,8 +422,6 @@ function Home({ setPage }) {
     : [];
 
   useEffect(() => {
-    const handleLanguageChange = () => updateLanguage(getLanguage());
-
     const handleModeChange = () => {
       setActiveMode("personal");
     };
@@ -431,14 +430,10 @@ function Home({ setPage }) {
     };
 
     setActiveAccountMode("personal");
-    window.addEventListener("languageChanged", handleLanguageChange);
-    window.addEventListener("meetro-language-change", handleLanguageChange);
     window.addEventListener("accountModeChanged", handleModeChange);
     window.addEventListener("meetroHomeResetToLanding", resetHomeLanding);
 
     return () => {
-      window.removeEventListener("languageChanged", handleLanguageChange);
-      window.removeEventListener("meetro-language-change", handleLanguageChange);
       window.removeEventListener("accountModeChanged", handleModeChange);
       window.removeEventListener("meetroHomeResetToLanding", resetHomeLanding);
     };

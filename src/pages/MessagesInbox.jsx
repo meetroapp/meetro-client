@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import { getCommunicationLayout } from "../utils/communicationLayout";
 import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
@@ -716,7 +717,7 @@ function MessagesInbox({ setPage, currentPage }) {
   const [accountConnectionState, setAccountConnectionState] = useState(() =>
     getStoredAccountConnectionState()
   );
-  const [language, updateLanguage] = useState(getLanguage());
+  const language = useLanguage();
   const requesterResponseLabels = getRequesterResponseInboxCopy(language);
   const [activeAccountMode, setActiveAccountMode] = useState(
     localStorage.getItem("activeAccountMode") || "personal"
@@ -1013,9 +1014,6 @@ function MessagesInbox({ setPage, currentPage }) {
   }
 
   useEffect(() => {
-    const handleLanguageChange = () => {
-      updateLanguage(getLanguage());
-    };
     const handleAccountModeChange = () => {
       setActiveAccountMode(localStorage.getItem("activeAccountMode") || "personal");
     };
@@ -1041,9 +1039,6 @@ function MessagesInbox({ setPage, currentPage }) {
       setSavedHistoryOpen(false);
     };
 
-    window.addEventListener("languageChanged", handleLanguageChange);
-    window.addEventListener("meetroLanguageChanged", handleLanguageChange);
-    window.addEventListener("meetro-language-change", handleLanguageChange);
     window.addEventListener("accountModeChanged", handleAccountModeChange);
     window.addEventListener(
       "meetroAccountConnectionIssue",
@@ -1052,9 +1047,6 @@ function MessagesInbox({ setPage, currentPage }) {
     window.addEventListener("storage", handleAccountModeChange);
 
     return () => {
-      window.removeEventListener("languageChanged", handleLanguageChange);
-      window.removeEventListener("meetroLanguageChanged", handleLanguageChange);
-      window.removeEventListener("meetro-language-change", handleLanguageChange);
       window.removeEventListener("accountModeChanged", handleAccountModeChange);
       window.removeEventListener(
         "meetroAccountConnectionIssue",
@@ -1100,7 +1092,7 @@ function MessagesInbox({ setPage, currentPage }) {
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAccountMode, language]);
+  }, [activeAccountMode]);
 
   useEffect(() => {
     const timeoutId = window.setTimeout(() => {

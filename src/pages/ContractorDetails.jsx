@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import {
@@ -58,7 +59,7 @@ function ContractorDetails({ setPage, currentPage }) {
   const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
-  const language = getLanguage();
+  const language = useLanguage();
   const isSpanish = language === "es";
 
   useEffect(() => {

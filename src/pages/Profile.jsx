@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
 import PersonalAddressManager from "../components/PersonalAddressManager";
@@ -86,7 +87,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const sharedReturnPage = localStorage.getItem("meetroSharedPageReturn") || "";
   const isBusinessToolsReturn = sharedReturnPage === "businessCommandCenter";
   const [user, setUser] = useState(null);
-  const [language, updateLanguage] = useState(getLanguage());
+  const language = useLanguage();
   const [languagePickerOpen, setLanguagePickerOpen] = useState(false);
   const [addressManagerOpen, setAddressManagerOpen] = useState(false);
   const [accountSecurityOpen, setAccountSecurityOpen] = useState(false);
@@ -260,18 +261,6 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const canShowTeamMembers = Boolean(teamMembersMembership);
 
   useEffect(() => {
-    const handleLanguageChange = () => {
-      updateLanguage(getLanguage());
-    };
-
-    window.addEventListener("languageChanged", handleLanguageChange);
-
-    return () => {
-      window.removeEventListener("languageChanged", handleLanguageChange);
-    };
-  }, []);
-
-  useEffect(() => {
     localStorage.removeItem("meetroProfileOpenSection");
   }, []);
 
@@ -314,7 +303,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
     }
 
     fetchUser();
-  }, [activeMode, language, setPage]);
+  }, [activeMode, setPage]);
 
   async function handleProfilePhotoUpload(event) {
     const file = event.target.files?.[0];
@@ -406,7 +395,6 @@ function Profile({ setPage, currentPage, embedded = false }) {
   function handleLanguageSelect(languageCode) {
     const nextLanguage = normalizeLanguage(languageCode);
     setLanguage(nextLanguage);
-    updateLanguage(nextLanguage);
     setLanguagePickerOpen(false);
   }
 

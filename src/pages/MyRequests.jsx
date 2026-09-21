@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import {
   WorkCenterAttentionBadge,
@@ -739,7 +740,7 @@ function EmergencyRequestCard({
 }
 
 function MyRequests({ setPage, view = "list" }) {
-  const language = getLanguage();
+  const language = useLanguage();
   const isDetailView = view === "detail";
   const requestPhotoUploadEnabled = isRequestPhotoUploadEnabled();
   const mediaUploadDeferred =
