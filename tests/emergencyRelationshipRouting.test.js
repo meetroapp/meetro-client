@@ -279,7 +279,7 @@ test("all preserved mutations settle through current route ownership", () => {
     /const mutationOwnership = controller\.capture\(\)/g
   );
 
-  assert.equal(ownershipCaptures?.length, 5);
+  assert.equal(ownershipCaptures?.length, 6);
   assert.match(requestSource, /updateEmergencyDraft/);
   assert.match(requestSource, /saveEmergencySafetyAssessment/);
   assert.match(requestSource, /prepareEmergencyRequest/);

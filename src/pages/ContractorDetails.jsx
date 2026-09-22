@@ -28,6 +28,9 @@ import { getBusinessIdentityProjection } from "../utils/businessIdentity";
 import { getBusinessServicesProjection } from "../utils/businessServiceProfile";
 import { getBusinessVerificationProjection } from "../utils/businessVerification";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import {
+  parseEmergencyRequestRoute,
+} from "../utils/emergencyRoutes";
 
 const PORTFOLIO_PREVIEW_MAX_IMAGES = 5;
 
@@ -161,6 +164,27 @@ function ContractorDetails({ setPage, currentPage }) {
     return new URLSearchParams(query).get("profileId") || "";
   }
 
+  function getLinkedReturnPage() {
+    const hash =
+      window.location.hash.replace(
+        "#",
+        ""
+      );
+
+    const query =
+      hash.includes("?")
+        ? hash.slice(
+            hash.indexOf("?") + 1
+          )
+        : "";
+
+    return (
+      new URLSearchParams(
+        query
+      ).get("returnPage") || ""
+    );
+  }
+
   function getStoredPublicProfile(profileId) {
     if (!profileId) return null;
 
@@ -169,10 +193,30 @@ function ContractorDetails({ setPage, currentPage }) {
   }
 
   function returnToBusinessDirectory() {
+    const linkedReturnPage =
+      getLinkedReturnPage();
+
     const returnPage =
-      localStorage.getItem("contractorDetailsReturnPage") || "discover";
+      linkedReturnPage ||
+      localStorage.getItem(
+        "contractorDetailsReturnPage"
+      ) ||
+      "discover";
 
     localStorage.removeItem("contractorDetailsReturnPage");
+
+    const emergencyReturn =
+      parseEmergencyRequestRoute(
+        returnPage
+      );
+
+    if (
+      emergencyReturn.valid &&
+      emergencyReturn.hasRequestId
+    ) {
+      setPage(returnPage);
+      return;
+    }
 
     if (returnPage === "home") {
       setPage("home");
@@ -272,7 +316,13 @@ function ContractorDetails({ setPage, currentPage }) {
       const linkedContractor = getStoredPublicProfile(linkedProfileId);
       const savedContractor =
         linkedContractor ||
-        JSON.parse(localStorage.getItem("selectedContractor") || "{}");
+        (!linkedProfileId
+          ? JSON.parse(
+              localStorage.getItem(
+                "selectedContractor"
+              ) || "{}"
+            )
+          : {});
 
       if (savedContractor.name || savedContractor.business_name) {
         localStorage.setItem("selectedContractor", JSON.stringify(savedContractor));

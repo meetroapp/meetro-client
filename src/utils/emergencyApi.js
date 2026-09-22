@@ -16,6 +16,13 @@ export const EMERGENCY_API_ENDPOINTS = Object.freeze({
     `/emergency-requests/${emergencyRequestId}/responses`,
   selectResponse: (emergencyRequestId, relationshipId) =>
     `/emergency-requests/${emergencyRequestId}/responses/${relationshipId}/select`,
+  availableProfessionals: (emergencyRequestId) =>
+    `/emergency-requests/${emergencyRequestId}/available-professionals`,
+  selectAvailableProfessional: (
+    emergencyRequestId,
+    contractorProfileId
+  ) =>
+    `/emergency-requests/${emergencyRequestId}/available-professionals/${contractorProfileId}/select`,
   safetyAssessment: (emergencyRequestId) =>
     `/emergency-requests/${emergencyRequestId}/safety-assessment`,
   prepare: (emergencyRequestId) =>
@@ -729,6 +736,107 @@ export function normalizeHomeownerEmergencyResponsesResult(result) {
   };
 }
 
+export function normalizeHomeownerAvailableEmergencyProfessionalsResult(
+  result
+) {
+  const normalized = normalizeTransportResult(
+    result,
+    "Available Emergency professionals could not be loaded."
+  );
+  const source = normalized.data?.professionals;
+  const requestId = normalizeEmergencyRequestId(
+    normalized.data?.emergencyRequest?.id
+  );
+
+  if (
+    !normalized.ok ||
+    !requestId ||
+    !Array.isArray(source)
+  ) {
+    return {
+      ...normalized,
+      ok: false,
+      emergencyRequest: null,
+      professionals: [],
+    };
+  }
+
+  const professionals = source
+    .map((professional) => {
+      if (!isRecord(professional)) {
+        return null;
+      }
+
+      const contractorProfileId =
+        normalizeEmergencyRequestId(
+          professional.contractorProfileId
+        );
+      const businessName = cleanText(
+        professional.businessName
+      );
+      const serviceSpecialties =
+        professional.serviceSpecialties;
+
+      if (
+        !contractorProfileId ||
+        !businessName ||
+        !Array.isArray(serviceSpecialties) ||
+        serviceSpecialties.some(
+          (value) => typeof value !== "string"
+        ) ||
+        professional.availableNow !== true ||
+        professional.dispatchReady !== true
+      ) {
+        return null;
+      }
+
+      return {
+        contractorProfileId,
+        businessName,
+        category: cleanText(
+          professional.category
+        ),
+        serviceSpecialties:
+          serviceSpecialties
+            .map((value) => value.trim())
+            .filter(Boolean),
+        profileImageUrl:
+          cleanText(
+            professional.profileImageUrl
+          ) || null,
+        serviceArea: cleanText(
+          professional.serviceArea
+        ),
+        availableNow: true,
+        dispatchReady: true,
+      };
+    })
+    .filter(Boolean);
+
+  if (professionals.length !== source.length) {
+    return {
+      ...normalized,
+      ok: false,
+      code: EMERGENCY_CLIENT_ERROR.INVALID_RESPONSE,
+      message:
+        "The Available Now professional list was invalid.",
+      emergencyRequest: null,
+      professionals: [],
+    };
+  }
+
+  return {
+    ...normalized,
+    emergencyRequest: {
+      id: requestId,
+      status: cleanText(
+        normalized.data.emergencyRequest.status
+      ),
+    },
+    professionals,
+  };
+}
+
 export function normalizeEmergencySelectionResult(result) {
   const normalized = normalizeTransportResult(
     result,
@@ -950,6 +1058,79 @@ export function listHomeownerEmergencyResponses(
     setPage,
     normalizeResult:
       normalizeHomeownerEmergencyResponsesResult,
+  });
+}
+
+export function listHomeownerAvailableEmergencyProfessionals(
+  emergencyRequestId,
+  {
+    authFetchImpl = authFetch,
+    setPage,
+  } = {}
+) {
+  const normalizedId =
+    normalizeEmergencyRequestId(emergencyRequestId);
+
+  if (!normalizedId) {
+    return Promise.resolve(
+      invalidEmergencyRequestIdResult()
+    );
+  }
+
+  return executeEmergencyRequest({
+    endpoint:
+      EMERGENCY_API_ENDPOINTS.availableProfessionals(
+        normalizedId
+      ),
+    method: "GET",
+    authFetchImpl,
+    setPage,
+    normalizeResult:
+      normalizeHomeownerAvailableEmergencyProfessionalsResult,
+  });
+}
+
+export function selectHomeownerAvailableEmergencyProfessional(
+  emergencyRequestId,
+  contractorProfileId,
+  {
+    authFetchImpl = authFetch,
+    setPage,
+  } = {}
+) {
+  const normalizedRequestId =
+    normalizeEmergencyRequestId(emergencyRequestId);
+  const normalizedContractorProfileId =
+    normalizeEmergencyRequestId(contractorProfileId);
+
+  if (!normalizedRequestId) {
+    return Promise.resolve(
+      invalidEmergencyRequestIdResult()
+    );
+  }
+
+  if (!normalizedContractorProfileId) {
+    return Promise.resolve(
+      buildEmergencyClientFailure({
+        code: "INVALID_CONTRACTOR_PROFILE_ID",
+        message:
+          "A valid professional profile ID is required.",
+        status: 400,
+      })
+    );
+  }
+
+  return executeEmergencyRequest({
+    endpoint:
+      EMERGENCY_API_ENDPOINTS.selectAvailableProfessional(
+        normalizedRequestId,
+        normalizedContractorProfileId
+      ),
+    method: "POST",
+    body: {},
+    authFetchImpl,
+    setPage,
+    normalizeResult: normalizeEmergencySelectionResult,
   });
 }
 

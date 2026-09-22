@@ -2,13 +2,16 @@ import { useEffect, useMemo, useRef, useState } from "react";
 
 import BottomNav from "../components/BottomNav";
 import EmergencyRelationshipDetail from "../components/EmergencyRelationshipDetail";
+import EmergencyAvailableNow from "../components/EmergencyAvailableNow";
 import {
   cancelEmergencyRequest,
   createEmergencyDraft,
   getEmergencyRequest,
+  listHomeownerAvailableEmergencyProfessionals,
   listHomeownerEmergencyResponses,
   prepareEmergencyRequest,
   saveEmergencySafetyAssessment,
+  selectHomeownerAvailableEmergencyProfessional,
   selectHomeownerEmergencyResponse,
   updateEmergencyDraft,
 } from "../utils/emergencyApi";
@@ -245,6 +248,16 @@ function EmergencyRequest({ setPage }) {
     useState(false);
   const [responsesPhase, setResponsesPhase] = useState("idle");
   const [responses, setResponses] = useState([]);
+  const [availableNowPhase, setAvailableNowPhase] =
+    useState("idle");
+  const [availableProfessionals, setAvailableProfessionals] =
+    useState([]);
+  const [availableNowError, setAvailableNowError] =
+    useState("");
+  const [
+    selectedAvailableProfessional,
+    setSelectedAvailableProfessional,
+  ] = useState(null);
   const [selectedResponse, setSelectedResponse] = useState(null);
   const [canonicalConversationId, setCanonicalConversationId] =
     useState(null);
@@ -342,6 +355,10 @@ function EmergencyRequest({ setPage }) {
       setSubmissionConfirmationOpen(false);
       setResponsesPhase("idle");
       setResponses([]);
+      setAvailableNowPhase("idle");
+      setAvailableProfessionals([]);
+      setAvailableNowError("");
+      setSelectedAvailableProfessional(null);
       setSelectedResponse(null);
       setCanonicalConversationId(null);
       setSelectionPending(false);
@@ -417,6 +434,10 @@ function EmergencyRequest({ setPage }) {
       setSubmissionConfirmationOpen(false);
       setResponsesPhase("idle");
       setResponses([]);
+      setAvailableNowPhase("idle");
+      setAvailableProfessionals([]);
+      setAvailableNowError("");
+      setSelectedAvailableProfessional(null);
       setSelectedResponse(null);
       setCanonicalConversationId(null);
       setSelectionPending(false);
@@ -646,6 +667,8 @@ function EmergencyRequest({ setPage }) {
     "completed",
     "resolved",
   ].includes(canonicalRequestStatus);
+  const shouldLoadAvailableNow =
+    canonicalRequestStatus === "ready_for_distribution";
 
   useEffect(() => {
     if (phase !== "safety" || !canonicalRequestId) {
@@ -1050,6 +1073,102 @@ function EmergencyRequest({ setPage }) {
     EMERGENCY_SERVICE_OPTIONS.find(
       (option) => option.value === form.service
     );
+
+  useEffect(() => {
+    const controller = routeSessionController;
+    const discoveryOwnership =
+      captureEmergencyRouteOwnership(routeSession);
+
+    if (
+      !canonicalRequestId ||
+      !shouldLoadAvailableNow
+    ) {
+      let active = true;
+
+      Promise.resolve().then(() => {
+        if (
+          !active ||
+          !controller.owns(discoveryOwnership)
+        ) {
+          return;
+        }
+
+        setAvailableProfessionals([]);
+        setAvailableNowPhase("idle");
+        setAvailableNowError("");
+      });
+
+      return () => {
+        active = false;
+      };
+    }
+
+    let active = true;
+
+    async function loadAvailableNowProfessionals() {
+      await Promise.resolve();
+
+      if (
+        !active ||
+        !controller.owns(discoveryOwnership)
+      ) {
+        return;
+      }
+
+      setAvailableProfessionals([]);
+      setAvailableNowPhase("loading");
+      setAvailableNowError("");
+
+      const operation =
+        await settleEmergencyRouteOperation(
+          controller,
+          discoveryOwnership,
+          listHomeownerAvailableEmergencyProfessionals(
+            canonicalRequestId,
+            { setPage }
+          )
+        );
+
+      if (
+        !active ||
+        !controller.owns(discoveryOwnership) ||
+        operation.status === "stale"
+      ) {
+        return;
+      }
+
+      const result = operation.value;
+
+      if (
+        operation.status === "rejected" ||
+        !result?.ok
+      ) {
+        setAvailableProfessionals([]);
+        setAvailableNowPhase("error");
+        setAvailableNowError(
+          result?.message || ""
+        );
+        return;
+      }
+
+      setAvailableProfessionals(
+        result.professionals
+      );
+      setAvailableNowPhase("ready");
+    }
+
+    void loadAvailableNowProfessionals();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    canonicalRequestId,
+    routeSession,
+    routeSessionController,
+    setPage,
+    shouldLoadAvailableNow,
+  ]);
 
   const canonicalStatus = getRequestStatus(canonicalRequest);
   const editableDraft = isEditableEmergencyDraft(canonicalRequest);
@@ -1553,6 +1672,164 @@ function EmergencyRequest({ setPage }) {
     await refreshCanonicalRequestAfterMutation();
   }
 
+  function openAvailableProfessionalProfile(
+    contractorProfileId
+  ) {
+    if (
+      !canonicalRequestId ||
+      selectionPending
+    ) {
+      return;
+    }
+
+    const professional =
+      availableProfessionals.find(
+        (candidate) =>
+          candidate.contractorProfileId ===
+          contractorProfileId
+      );
+
+    if (!professional) return;
+
+    const returnRoute =
+      buildEmergencyRequestRoute(
+        canonicalRequestId
+      );
+
+    setPage(
+      `contractorDetails?profileId=${encodeURIComponent(
+        String(
+          professional.contractorProfileId
+        )
+      )}&returnPage=${encodeURIComponent(
+        returnRoute
+      )}`
+    );
+  }
+
+  function requestAvailableProfessionalSelectionById(
+    contractorProfileId
+  ) {
+    if (selectionPending) return;
+
+    const professional =
+      availableProfessionals.find(
+        (candidate) =>
+          candidate.contractorProfileId ===
+          contractorProfileId
+      );
+
+    if (!professional) return;
+
+    setSelectedResponse(null);
+    setSelectedAvailableProfessional(
+      professional
+    );
+    setSelectionError("");
+  }
+
+  async function confirmAvailableProfessionalSelection() {
+    if (
+      !canonicalRequestId ||
+      !selectedAvailableProfessional?.contractorProfileId ||
+      selectionPending
+    ) {
+      return;
+    }
+
+    const controller = routeSessionController;
+    const mutationOwnership = controller.capture();
+
+    setSelectionPending(true);
+    setSelectionError("");
+
+    const operation =
+      await settleEmergencyRouteOperation(
+        controller,
+        mutationOwnership,
+        selectHomeownerAvailableEmergencyProfessional(
+          canonicalRequestId,
+          selectedAvailableProfessional.contractorProfileId,
+          {
+            setPage,
+          }
+        )
+      );
+
+    if (operation.status === "stale") {
+      return;
+    }
+
+    setSelectionPending(false);
+
+    if (operation.status === "rejected") {
+      setSelectionError(
+        t("emergencySelectionFailed", language)
+      );
+      return;
+    }
+
+    const result = operation.value;
+
+    if (
+      !result.ok ||
+      !result.emergencyRequest ||
+      !result.conversation?.id
+    ) {
+      setSelectionError(
+        result.message ||
+          t(
+            "emergencySelectionFailed",
+            language
+          )
+      );
+      return;
+    }
+
+    const nextOwnedRequest =
+      ownCanonicalRequestForSession({
+        ...(canonicalRequest || {}),
+        ...result.emergencyRequest,
+      });
+
+    if (!nextOwnedRequest) {
+      setSelectionError(
+        t("emergencySelectionFailed", language)
+      );
+      return;
+    }
+
+    setOwnedCanonicalRequest(nextOwnedRequest);
+    setResponses((current) =>
+      current.map((response) =>
+        response.status === "pending"
+          ? {
+              ...response,
+              status: "declined",
+            }
+          : response
+      )
+    );
+    setAvailableProfessionals([]);
+    setAvailableNowPhase("idle");
+    setAvailableNowError("");
+    setCanonicalConversationId(
+      result.conversation.id
+    );
+    setSelectedAvailableProfessional(null);
+
+    await refreshCanonicalRequestAfterMutation();
+
+    setPage(
+      buildCanonicalConversationRoute(
+        result.conversation.id,
+        buildEmergencyRequestRoute(
+          canonicalRequestId
+        )
+      )
+    );
+  }
+
   function requestProfessionalSelection(response) {
     if (
       selectionPending ||
@@ -1561,6 +1838,7 @@ function EmergencyRequest({ setPage }) {
       return;
     }
 
+    setSelectedAvailableProfessional(null);
     setSelectedResponse(response);
     setSelectionError("");
   }
@@ -1578,6 +1856,7 @@ function EmergencyRequest({ setPage }) {
   function keepWaitingForProfessional() {
     if (selectionPending) return;
     setSelectedResponse(null);
+    setSelectedAvailableProfessional(null);
     setSelectionError("");
   }
 
@@ -2165,7 +2444,35 @@ function EmergencyRequest({ setPage }) {
           canonicalRequest &&
           !showDraftWorkflow && (
             emergencyRelationshipDetail ? (
-              <EmergencyRelationshipDetail
+              <>
+                <EmergencyAvailableNow
+                  visible={
+                    canonicalStatus ===
+                    "ready_for_distribution"
+                  }
+                  phase={availableNowPhase}
+                  professionals={
+                    availableProfessionals
+                  }
+                  selectionPending={
+                    selectionPending
+                  }
+                  errorMessage={
+                    availableNowError
+                  }
+                  language={language}
+                  onViewProfile={
+                    openAvailableProfessionalProfile
+                  }
+                  onChooseProfessional={
+                    requestAvailableProfessionalSelectionById
+                  }
+                  onKeepWaiting={() =>
+                    setPage(detailReturnPage)
+                  }
+                />
+
+                <EmergencyRelationshipDetail
                 detail={emergencyRelationshipDetail}
                 language={language}
                 responsesPhase={
@@ -2193,6 +2500,7 @@ function EmergencyRequest({ setPage }) {
                     : null
                 }
               />
+              </>
             ) : (
               <section style={formCard} role="alert">
                 <p style={recoveryMessage}>
@@ -2316,6 +2624,71 @@ function EmergencyRequest({ setPage }) {
               disabled={selectionPending}
             >
               {t("emergencyKeepWaiting", language)}
+            </button>
+          </section>
+        )}
+
+        {selectedAvailableProfessional && (
+          <section
+            style={submissionConfirmationCard}
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="emergency-available-selection-title"
+          >
+            <h2
+              id="emergency-available-selection-title"
+              style={sectionTitle}
+            >
+              {language === "es"
+                ? "¿Elegir este profesional?"
+                : "Choose this professional?"}
+            </h2>
+
+            <p style={completeBody}>
+              {language === "es"
+                ? `${selectedAvailableProfessional.businessName} está Disponible Ahora y habilitó la selección directa de Emergencia. Meetro te conectará si todavía está disponible. Esto no significa que el profesional ya esté en camino.`
+                : `${selectedAvailableProfessional.businessName} is Available Now and has enabled direct Emergency selection. Meetro will connect you if the selection is still available. This does not mean the professional is already on the way.`}
+            </p>
+
+            {selectionError && (
+              <div
+                style={errorNotice}
+                role="alert"
+              >
+                {selectionError}
+              </div>
+            )}
+
+            <button
+              type="button"
+              style={{
+                ...primaryButton,
+                ...(selectionPending
+                  ? disabledButton
+                  : {}),
+              }}
+              onClick={
+                confirmAvailableProfessionalSelection
+              }
+              disabled={selectionPending}
+            >
+              {selectionPending
+                ? copy.submitting
+                : language === "es"
+                  ? "Elegir Profesional"
+                  : "Choose Professional"}
+            </button>
+
+            <button
+              type="button"
+              style={secondaryButton}
+              onClick={keepWaitingForProfessional}
+              disabled={selectionPending}
+            >
+              {t(
+                "emergencyKeepWaiting",
+                language
+              )}
             </button>
           </section>
         )}

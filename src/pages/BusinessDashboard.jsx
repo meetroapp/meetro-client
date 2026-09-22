@@ -74,6 +74,7 @@ function BusinessDashboard({ setPage }) {
   );
 
   const [availableNow, setAvailableNow] = useState(false);
+  const [dispatchReady, setDispatchReady] = useState(false);
   const [leadStatus, setLeadStatus] = useState(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
   const [authoritativeLeads, setAuthoritativeLeads] = useState([]);
   const [canonicalSchedule, setCanonicalSchedule] = useState(null);
@@ -240,7 +241,14 @@ function BusinessDashboard({ setPage }) {
 
         setProfile(backendProfile);
         setAvailableNow(backendProfile.available_now === true);
+        setDispatchReady(backendProfile.dispatch_ready === true);
         setBusinessAvailability(backendProfile.available_now === true);
+        localStorage.setItem(
+          "meetroDispatchReady",
+          String(
+            backendProfile.dispatch_ready === true
+          )
+        );
 
         localStorage.setItem(
           "contractorProfile",
@@ -295,6 +303,60 @@ function BusinessDashboard({ setPage }) {
     setProfile(confirmedProfile);
     setAvailableNow(confirmedProfile.available_now === true);
     setBusinessAvailability(confirmedProfile.available_now === true);
+  }
+
+  async function updateDispatchReady(
+    nextValue
+  ) {
+    if (!profile?.id) return;
+
+    const result = await authFetch(
+      `/contractor-profiles/${profile.id}`,
+      {
+        method: "PUT",
+        body: JSON.stringify(
+          buildBusinessProfilePayloadFromCanonical(
+            profile,
+            {
+              dispatch_ready: nextValue,
+            }
+          )
+        ),
+      },
+      setPage
+    );
+
+    const confirmedProfile =
+      getConfirmedBusinessProfile(
+        result
+      );
+
+    if (!confirmedProfile) return;
+
+    setProfile(confirmedProfile);
+
+    setAvailableNow(
+      confirmedProfile.available_now ===
+        true
+    );
+
+    setDispatchReady(
+      confirmedProfile.dispatch_ready ===
+        true
+    );
+
+    setBusinessAvailability(
+      confirmedProfile.available_now ===
+        true
+    );
+
+    localStorage.setItem(
+      "meetroDispatchReady",
+      String(
+        confirmedProfile.dispatch_ready ===
+          true
+      )
+    );
   }
 
   function formatCategory(value) {
@@ -976,6 +1038,44 @@ function BusinessDashboard({ setPage }) {
               <div>
                 <strong>{availableNow ? text.online : text.offline}</strong>
                 <p>{availableNow ? text.available : text.notAvailable}</p>
+              </div>
+            </button>
+
+            <button
+              style={statusItem}
+              onClick={() =>
+                updateDispatchReady(
+                  !dispatchReady
+                )
+              }
+            >
+              <span
+                style={statusDot(
+                  availableNow &&
+                    dispatchReady
+                )}
+              />
+
+              <div>
+                <strong>
+                  {language === "es"
+                    ? "Selección directa de Emergencia"
+                    : "Allow Direct Emergency Selection"}
+                </strong>
+
+                <p>
+                  {dispatchReady
+                    ? availableNow
+                      ? language === "es"
+                        ? "Los propietarios pueden elegir tu negocio directamente."
+                        : "Homeowners may choose your business directly."
+                      : language === "es"
+                        ? "Activado — enciende Disponible Ahora para aparecer."
+                        : "Enabled — turn on Available Now to appear."
+                    : language === "es"
+                      ? "La selección directa está desactivada."
+                      : "Direct selection is off."}
+                </p>
               </div>
             </button>
 
