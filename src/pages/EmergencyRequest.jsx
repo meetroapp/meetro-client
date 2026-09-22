@@ -78,6 +78,57 @@ function createEmptyEmergencyIntake() {
   };
 }
 
+function buildAskMeetroDisplayMessage({
+  stage,
+  intake,
+  language,
+  copy,
+}) {
+  if (stage === "describe") {
+    const specialty =
+      clean(intake?.service?.specialty);
+
+    const service =
+      EMERGENCY_SERVICE_OPTIONS.find(
+        (option) =>
+          option.value === specialty
+      );
+
+    const serviceLabel = service
+      ? copy.serviceLabels?.[service.value] ||
+        service.label[
+          language === "es" ? "es" : "en"
+        ] ||
+        service.label.en
+      : "";
+
+    if (serviceLabel) {
+      return language === "es"
+        ? `Esto parece una emergencia que necesita ${serviceLabel}.`
+        : `This sounds like a ${serviceLabel} emergency.`;
+    }
+
+    return language === "es"
+      ? "Necesito un detalle más para identificar el tipo de ayuda de emergencia."
+      : "I need one more detail to identify the right kind of emergency help.";
+  }
+
+  const area =
+    buildEmergencyGeneralArea(
+      intake?.location
+    );
+
+  if (area) {
+    return language === "es"
+      ? `Puedo usar ${area} como el área general de servicio.`
+      : `I can use ${area} as the general service area.`;
+  }
+
+  return language === "es"
+    ? "Necesito un detalle más del área general."
+    : "I need one more general-area detail.";
+}
+
 function getRequestId(record) {
   if (!record) return null;
 
@@ -100,7 +151,16 @@ function isEditableEmergencyDraft(record = {}) {
 }
 
 function canCancelEmergencyRequest(record = {}) {
-  return getRequestStatus(record) === "draft";
+  if (!getRequestId(record)) return false;
+
+  return [
+    "draft",
+    "ready_for_distribution",
+    "active",
+    "selection_pending",
+  ].includes(
+    getRequestStatus(record)
+  );
 }
 
 function getRecoveredPhase(record = {}) {
@@ -1350,8 +1410,19 @@ function EmergencyRequest({ setPage }) {
       );
       const nextIntake = applied.intake;
       const nextMessages = [
-        { role: "homeowner", text: homeownerText },
-        { role: "assistant", text: result.interpretation.summary },
+        {
+          role: "homeowner",
+          text: homeownerText,
+        },
+        {
+          role: "assistant",
+          text: buildAskMeetroDisplayMessage({
+            stage: interpretationStage,
+            intake: nextIntake,
+            language,
+            copy,
+          }),
+        },
       ];
       let nextClarifications = result.interpretation.clarifications;
 
@@ -2969,15 +3040,6 @@ function EmergencyRequest({ setPage }) {
           <>
             <button
               type="button"
-              style={navigationButton}
-              onClick={() => setPage("emergency")}
-              disabled={pending}
-            >
-              {copy.back}
-            </button>
-
-            <button
-              type="button"
               style={homeButton}
               onClick={() => setPage("home")}
               disabled={pending}
@@ -3516,11 +3578,6 @@ const completeBody = {
   color: "#4b5563",
   fontSize: "15px",
   lineHeight: 1.6,
-};
-
-const navigationButton = {
-  ...secondaryButton,
-  marginTop: "20px",
 };
 
 const homeButton = {

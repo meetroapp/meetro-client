@@ -120,6 +120,52 @@ test("Emergency Ask copy remains truthful and available in English and Spanish",
   assert.doesNotMatch(requestSource, /closest|nearest|fastest|best/i);
 });
 
+test("Ask Meetro renders controlled homeowner copy instead of raw provider summaries", () => {
+  assert.match(
+    requestSource,
+    /function buildAskMeetroDisplayMessage/
+  );
+
+  assert.match(
+    requestSource,
+    /This sounds like a \$\{serviceLabel\} emergency\./
+  );
+
+  assert.doesNotMatch(
+    requestSource,
+    /text:\s*result\.interpretation\.summary/
+  );
+});
+
+test("new Emergency intake hides cancellation until canonical identity exists and keeps one real Home destination", () => {
+  assert.match(
+    requestSource,
+    /if \(!getRequestId\(record\)\) return false/
+  );
+
+  for (const status of [
+    "draft",
+    "ready_for_distribution",
+    "active",
+    "selection_pending",
+  ]) {
+    assert.match(
+      requestSource,
+      new RegExp(`"${status}"`)
+    );
+  }
+
+  assert.doesNotMatch(
+    requestSource,
+    /onClick=\{\(\) => setPage\("emergency"\)\}/
+  );
+
+  assert.match(
+    requestSource,
+    /onClick=\{\(\) => setPage\("home"\)\}/
+  );
+});
+
 test("canonical draft creation remains backend owned", () => {
   assert.match(requestSource, /createEmergencyDraft\(payload/);
   assert.match(requestSource, /updateEmergencyDraft\(requestId, payload/);
