@@ -44,6 +44,12 @@ import {
   findCanonicalEmergencyConversation,
 } from "../utils/requestCommunication";
 import { getLanguage, t } from "../utils/language";
+import {
+  applyEmergencyRequestInterpretation,
+  buildEmergencyGeneralArea,
+  confirmEmergencyRequestInterpretation,
+  requestEmergencyRequestInterpretation,
+} from "../utils/emergencyRequestInterpret";
 
 const INITIAL_SAFETY = Object.freeze({
   immediateDanger: false,
@@ -62,6 +68,14 @@ const INITIAL_SAFETY = Object.freeze({
 
 function clean(value) {
   return String(value ?? "").trim();
+}
+
+function createEmptyEmergencyIntake() {
+  return {
+    description: "",
+    service: { specialty: "" },
+    location: { city: "", region: "", postalCode: "" },
+  };
 }
 
 function getRequestId(record) {
@@ -300,6 +314,16 @@ function EmergencyRequest({ setPage }) {
     unitNumber: "",
     accessNotes: "",
   }));
+  const [intakeMode, setIntakeMode] = useState(() =>
+    emergencyRoute.hasRequestId ? "manual" : "ask"
+  );
+  const [askInput, setAskInput] = useState("");
+  const [askStage, setAskStage] = useState("describe");
+  const [askIntake, setAskIntake] = useState(createEmptyEmergencyIntake);
+  const [askMessages, setAskMessages] = useState([]);
+  const [askClarifications, setAskClarifications] = useState([]);
+  const [askPending, setAskPending] = useState(false);
+  const [askError, setAskError] = useState("");
 
   const [safety, setSafety] = useState({
     ...INITIAL_SAFETY,
@@ -374,6 +398,14 @@ function EmergencyRequest({ setPage }) {
         unitNumber: "",
         accessNotes: "",
       });
+      setIntakeMode(nextRoute.hasRequestId ? "manual" : "ask");
+      setAskInput("");
+      setAskStage("describe");
+      setAskIntake(createEmptyEmergencyIntake());
+      setAskMessages([]);
+      setAskClarifications([]);
+      setAskPending(false);
+      setAskError("");
       setSafety({ ...INITIAL_SAFETY });
       setRecoveryState(
         nextRoute.hasRequestId
@@ -450,6 +482,14 @@ function EmergencyRequest({ setPage }) {
         unitNumber: "",
         accessNotes: "",
       });
+      setIntakeMode(emergencyRoute.hasRequestId ? "manual" : "ask");
+      setAskInput("");
+      setAskStage("describe");
+      setAskIntake(createEmptyEmergencyIntake());
+      setAskMessages([]);
+      setAskClarifications([]);
+      setAskPending(false);
+      setAskError("");
       setSafety({
         ...INITIAL_SAFETY,
       });
@@ -807,6 +847,30 @@ function EmergencyRequest({ setPage }) {
         "If anyone is in immediate danger, call 911 or contact local emergency services now.",
       limitation:
         "Meetro helps you connect with an available professional. It does not replace 911 or local emergency responders.",
+      fillManually: "Fill manually",
+      returnToAskMeetro: "Return to Ask Meetro",
+      askIntakeTitle: "Ask Meetro Emergency Help",
+      askIntakeIntro:
+        "Tell me what’s happening. I’ll help you understand the issue and find the right kind of help.",
+      askIntakePlaceholder: "Tell Ask Meetro what is happening…",
+      askFindHelpOffer:
+        "Would you like me to help you find available professionals serving your area?",
+      askFindHelpYes: "Yes, find help",
+      askFindHelpNotNow: "Not now",
+      askFindHelpDeclined:
+        "No problem. You can keep describing the issue or choose Fill manually.",
+      askLocationPrompt:
+        "What city or ZIP code should I use to find professionals serving your area?",
+      askLocationPlaceholder: "City or ZIP code",
+      askIntakeSend: "Send",
+      askIntakeThinking: "Preparing guidance…",
+      askIntakeReviewTitle: "Review Emergency details",
+      askIntakeReviewIntro:
+        "Confirm these details before Meetro creates your Emergency request.",
+      askIntakeAssistant: "Ask Meetro",
+      askIntakeHomeowner: "You",
+      askIntakeFailed:
+        "Ask Meetro could not safely prepare these details. You can try again or fill them manually.",
       service: "Choose the type of help you need",
       serviceLabels: {
         emergency_plumbing: "Emergency Plumbing",
@@ -909,6 +973,30 @@ function EmergencyRequest({ setPage }) {
         "Si alguien está en peligro inmediato, llama al 911 o comunícate ahora con los servicios de emergencia locales.",
       limitation:
         "Meetro te ayuda a conectar con un profesional disponible. No reemplaza al 911 ni a los servicios de emergencia locales.",
+      fillManually: "Completar manualmente",
+      returnToAskMeetro: "Volver a Preguntar a Meetro",
+      askIntakeTitle: "Ayuda de Emergencia con Meetro",
+      askIntakeIntro:
+        "Cuéntame qué está ocurriendo. Te ayudaré a entender el problema y a encontrar el tipo de ayuda adecuado.",
+      askIntakePlaceholder: "Cuéntale a Meetro qué está ocurriendo…",
+      askFindHelpOffer:
+        "¿Quieres que te ayude a encontrar profesionales disponibles que atiendan tu área?",
+      askFindHelpYes: "Sí, buscar ayuda",
+      askFindHelpNotNow: "Ahora no",
+      askFindHelpDeclined:
+        "No hay problema. Puedes seguir describiendo el problema o elegir Completar manualmente.",
+      askLocationPrompt:
+        "¿Qué ciudad o código postal debo usar para buscar profesionales que atiendan tu área?",
+      askLocationPlaceholder: "Ciudad o código postal",
+      askIntakeSend: "Enviar",
+      askIntakeThinking: "Preparando orientación…",
+      askIntakeReviewTitle: "Revisa los detalles de Emergencia",
+      askIntakeReviewIntro:
+        "Confirma estos detalles antes de que Meetro cree tu solicitud de Emergencia.",
+      askIntakeAssistant: "Meetro",
+      askIntakeHomeowner: "Tú",
+      askIntakeFailed:
+        "Meetro no pudo preparar estos detalles de forma segura. Inténtalo de nuevo o complétalos manualmente.",
       service: "Elige el tipo de ayuda que necesitas",
       serviceLabels: {
         emergency_plumbing: "Emergencia de plomería",
@@ -1025,6 +1113,24 @@ function EmergencyRequest({ setPage }) {
       selectedService.label[language] ||
       selectedService.label.en
     : "";
+  const askSelectedService = EMERGENCY_SERVICE_OPTIONS.find(
+    (option) => option.value === askIntake.service.specialty
+  );
+  const askSelectedServiceLabel = askSelectedService
+    ? copy.serviceLabels?.[askSelectedService.value] ||
+      askSelectedService.label[language] ||
+      askSelectedService.label.en
+    : "";
+  const askDescribeReady = Boolean(
+    askIntake.description && askIntake.service.specialty
+  );
+  const askGeneralArea = buildEmergencyGeneralArea(
+    askIntake.location
+  );
+  const askLocationReady = Boolean(askGeneralArea);
+  const askIntakeReady = Boolean(
+    askDescribeReady && askLocationReady
+  );
 
   useEffect(() => {
     const controller = routeSessionController;
@@ -1211,6 +1317,197 @@ function EmergencyRequest({ setPage }) {
     if (errorMessage) {
       setErrorMessage("");
     }
+  }
+
+  async function submitAskMeetroIntake(event) {
+    event.preventDefault();
+    const homeownerText = clean(askInput);
+    const interpretationStage =
+      askStage === "describe" || askStage === "location"
+        ? askStage
+        : "";
+    if (
+      !homeownerText ||
+      !interpretationStage ||
+      askPending ||
+      canonicalRequest
+    ) return;
+
+    setAskPending(true);
+    setAskError("");
+    try {
+      const result = await requestEmergencyRequestInterpretation({
+        text: homeownerText,
+        stage: interpretationStage,
+        intake: askIntake,
+        locale: language === "es" ? "es-US" : "en-US",
+        setPage,
+      });
+      const applied = applyEmergencyRequestInterpretation(
+        askIntake,
+        result.interpretation,
+        { stage: interpretationStage }
+      );
+      const nextIntake = applied.intake;
+      const nextMessages = [
+        { role: "homeowner", text: homeownerText },
+        { role: "assistant", text: result.interpretation.summary },
+      ];
+      let nextClarifications = result.interpretation.clarifications;
+
+      if (
+        interpretationStage === "describe" &&
+        nextIntake.description &&
+        nextIntake.service.specialty &&
+        nextClarifications.length === 0
+      ) {
+        nextMessages.push({
+          role: "assistant",
+          text: copy.askFindHelpOffer,
+        });
+        nextClarifications = [];
+        setAskStage("consent");
+      } else if (
+        interpretationStage === "location" &&
+        buildEmergencyGeneralArea(nextIntake.location) &&
+        nextClarifications.length === 0
+      ) {
+        nextClarifications = [];
+        setAskStage("review");
+      }
+
+      setAskIntake(nextIntake);
+      setAskMessages((current) => [
+        ...current,
+        ...nextMessages,
+      ]);
+      setAskClarifications(nextClarifications);
+      setAskInput("");
+    } catch {
+      setAskError(copy.askIntakeFailed);
+    } finally {
+      setAskPending(false);
+    }
+  }
+
+  function acceptAskMeetroFindHelp() {
+    if (
+      askStage !== "consent" ||
+      askPending ||
+      pending ||
+      canonicalRequest
+    ) return;
+
+    setAskStage("location");
+    setAskClarifications([]);
+    setAskInput("");
+    setAskError("");
+    setAskMessages((current) => [
+      ...current,
+      { role: "homeowner", text: copy.askFindHelpYes },
+      { role: "assistant", text: copy.askLocationPrompt },
+    ]);
+  }
+
+  function declineAskMeetroFindHelp() {
+    if (
+      askStage !== "consent" ||
+      askPending ||
+      pending ||
+      canonicalRequest
+    ) return;
+
+    setAskStage("describe");
+    setAskClarifications([]);
+    setAskInput("");
+    setAskError("");
+    setAskMessages((current) => [
+      ...current,
+      { role: "homeowner", text: copy.askFindHelpNotNow },
+      { role: "assistant", text: copy.askFindHelpDeclined },
+    ]);
+  }
+
+  async function confirmAskMeetroIntake() {
+    if (!askIntakeReady || pending || canonicalRequest) return;
+
+    let confirmed;
+    try {
+      confirmed = confirmEmergencyRequestInterpretation(askIntake);
+    } catch {
+      setAskError(copy.askIntakeFailed);
+      return;
+    }
+
+    const service = EMERGENCY_SERVICE_OPTIONS.find(
+      (option) => option.value === confirmed.serviceSpecialty
+    );
+    const serviceLabel = service
+      ? copy.serviceLabels?.[service.value] || service.label.en
+      : "";
+    const payload = {
+      category: "home_repair",
+      serviceDomain: service?.domain || "",
+      serviceSpecialty: confirmed.serviceSpecialty,
+      title: buildEmergencyRequestTitle(
+        serviceLabel,
+        confirmed.description
+      ),
+      description: confirmed.description,
+      locationText: confirmed.locationText,
+      unitNumber: "",
+      accessNotes: "",
+    };
+    const controller = routeSessionController;
+    const mutationOwnership = controller.capture();
+
+    setPending(true);
+    setAskError("");
+    setErrorMessage("");
+    const operation = await settleEmergencyRouteOperation(
+      controller,
+      mutationOwnership,
+      createEmergencyDraft(payload, { setPage })
+    );
+    if (operation.status === "stale") return;
+    setPending(false);
+    if (
+      operation.status === "rejected" ||
+      !operation.value?.ok ||
+      !operation.value.emergencyRequest
+    ) {
+      setAskError(operation.value?.message || copy.requestFailed);
+      return;
+    }
+
+    const canonicalRequestId = getRequestId(
+      operation.value.emergencyRequest
+    );
+    const owningSession = synchronizeCreatedEmergencyRequest(
+      canonicalRequestId
+    );
+    const nextOwnedRequest = owningSession
+      ? ownCanonicalRequestForSession(
+          operation.value.emergencyRequest,
+          owningSession
+        )
+      : null;
+    if (!nextOwnedRequest) {
+      setAskError(copy.requestFailed);
+      return;
+    }
+
+    setOwnedCanonicalRequest(nextOwnedRequest);
+    setForm(buildDraftForm(operation.value.emergencyRequest, {
+      service: confirmed.serviceSpecialty,
+      description: confirmed.description,
+      locationText: confirmed.locationText,
+      unitNumber: "",
+      accessNotes: "",
+    }));
+    setRecoveryState("loaded");
+    setMessage("");
+    setPhase("safety");
   }
 
   function synchronizeCreatedEmergencyRequest(requestId) {
@@ -1929,7 +2226,28 @@ function EmergencyRequest({ setPage }) {
               {copy.limitation}
             </div>
 
-            {phase === "details" && (
+            {phase === "details" &&
+              !canonicalRequest &&
+              !emergencyRoute.hasRequestId && (
+              <button
+                type="button"
+                style={secondaryEntryButton}
+                disabled={pending || askPending}
+                onClick={() => {
+                  setIntakeMode((current) =>
+                    current === "ask" ? "manual" : "ask"
+                  );
+                  setAskError("");
+                  setErrorMessage("");
+                }}
+              >
+                {intakeMode === "ask"
+                  ? copy.fillManually
+                  : copy.returnToAskMeetro}
+              </button>
+            )}
+
+            {phase !== "details" && canonicalRequest && (
               <ContextualAskMeetro
                 language={language}
                 context={{ page: "emergencyRequest" }}
@@ -1992,14 +2310,157 @@ function EmergencyRequest({ setPage }) {
           !message && (
             <div style={successNotice} role="status">
               {copy.recovered}
-            </div>
-          )}
+          </div>
+        )}
 
         {recoveryState !== "loading" &&
           recoveryState !== "failed" &&
           showDraftWorkflow &&
           editableDraft &&
-          phase === "details" && (
+          phase === "details" &&
+          !canonicalRequest &&
+          !emergencyRoute.hasRequestId &&
+          intakeMode === "ask" && (
+          <section style={askIntakeCard} aria-labelledby="emergency-ask-intake-title">
+            <h2 id="emergency-ask-intake-title" style={sectionTitle}>
+              {copy.askIntakeTitle}
+            </h2>
+            <p style={askIntakeIntro}>{copy.askIntakeIntro}</p>
+
+            {askMessages.length > 0 && (
+              <div style={askTranscript} aria-live="polite">
+                {askMessages.map((entry, index) => (
+                  <div
+                    key={`${entry.role}-${index}`}
+                    style={entry.role === "assistant" ? askAssistantMessage : askHomeownerMessage}
+                  >
+                    <strong>
+                      {entry.role === "assistant"
+                        ? copy.askIntakeAssistant
+                        : copy.askIntakeHomeowner}
+                    </strong>
+                    <span>{entry.text}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {askClarifications.map((clarification) => (
+              <p key={`${clarification.fieldPath || "general"}-${clarification.question}`} style={askClarification}>
+                {clarification.question}
+              </p>
+            ))}
+
+            {askError && (
+              <div style={errorNotice} role="alert">
+                {askError}
+              </div>
+            )}
+
+            {askStage === "consent" && (
+              <div style={askConsentActions}>
+                <button
+                  type="button"
+                  style={askConsentPrimaryButton}
+                  disabled={askPending || pending}
+                  onClick={acceptAskMeetroFindHelp}
+                >
+                  {copy.askFindHelpYes}
+                </button>
+                <button
+                  type="button"
+                  style={askConsentSecondaryButton}
+                  disabled={askPending || pending}
+                  onClick={declineAskMeetroFindHelp}
+                >
+                  {copy.askFindHelpNotNow}
+                </button>
+              </div>
+            )}
+
+            {(askStage === "describe" || askStage === "location") && (
+              <form onSubmit={submitAskMeetroIntake}>
+                <FieldLabel
+                  htmlFor="emergency-ask-input"
+                  label={
+                    askStage === "location"
+                      ? copy.location
+                      : copy.description
+                  }
+                />
+                <textarea
+                  id="emergency-ask-input"
+                  style={textarea}
+                  rows={askStage === "location" ? 2 : 4}
+                  value={askInput}
+                  placeholder={
+                    askStage === "location"
+                      ? copy.askLocationPlaceholder
+                      : copy.askIntakePlaceholder
+                  }
+                  disabled={askPending || pending}
+                  onChange={(event) => {
+                    setAskInput(event.target.value);
+                    if (askError) setAskError("");
+                  }}
+                />
+                <div style={askComposerActions}>
+                  <button
+                    type="submit"
+                    style={{
+                      ...primaryButton,
+                      ...((askPending || !clean(askInput)) ? disabledButton : {}),
+                    }}
+                    disabled={askPending || pending || !clean(askInput)}
+                  >
+                    {askPending ? copy.askIntakeThinking : copy.askIntakeSend}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {askStage === "review" && askIntakeReady && (
+              <section style={askReviewCard} aria-labelledby="emergency-ask-review-title">
+                <h3 id="emergency-ask-review-title" style={askReviewTitle}>
+                  {copy.askIntakeReviewTitle}
+                </h3>
+                <p style={askReviewIntro}>{copy.askIntakeReviewIntro}</p>
+                <dl style={askReviewList}>
+                  <div>
+                    <dt style={askReviewLabel}>{copy.service}</dt>
+                    <dd style={askReviewValue}>{askSelectedServiceLabel}</dd>
+                  </div>
+                  <div>
+                    <dt style={askReviewLabel}>{copy.location}</dt>
+                    <dd style={askReviewValue}>{askGeneralArea}</dd>
+                  </div>
+                  <div>
+                    <dt style={askReviewLabel}>{copy.description}</dt>
+                    <dd style={askReviewValue}>{askIntake.description}</dd>
+                  </div>
+                </dl>
+                <button
+                  type="button"
+                  style={{
+                    ...primaryButton,
+                    ...(pending ? disabledButton : {}),
+                  }}
+                  disabled={pending}
+                  onClick={() => void confirmAskMeetroIntake()}
+                >
+                  {pending ? copy.saving : copy.continueToSafety}
+                </button>
+              </section>
+            )}
+          </section>
+        )}
+
+        {recoveryState !== "loading" &&
+          recoveryState !== "failed" &&
+          showDraftWorkflow &&
+          editableDraft &&
+          phase === "details" &&
+          (canonicalRequest || emergencyRoute.hasRequestId || intakeMode === "manual") && (
           <form style={formCard} onSubmit={submitDetails} noValidate>
             <fieldset style={serviceChoices}>
               <legend style={serviceChoicesLegend}>{copy.service}</legend>
@@ -2648,6 +3109,142 @@ const limitationNotice = {
   color: "#1e3a8a",
   fontSize: "14px",
   lineHeight: 1.5,
+};
+
+const secondaryEntryButton = {
+  minHeight: "40px",
+  marginBottom: "14px",
+  padding: "8px 12px",
+  border: "1px solid #a7b8aa",
+  borderRadius: "12px",
+  background: "white",
+  color: "#174b2c",
+  font: "inherit",
+  fontSize: "14px",
+  fontWeight: "800",
+  cursor: "pointer",
+};
+
+const askIntakeCard = {
+  minWidth: 0,
+  padding: "22px",
+  border: "1px solid #bbd5c2",
+  borderRadius: "22px",
+  borderColor: "#bbd5c2",
+  background: "#f8fcf8",
+  boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
+};
+
+const askIntakeIntro = {
+  margin: "0 0 16px",
+  color: "#4b5563",
+  lineHeight: 1.55,
+};
+
+const askTranscript = {
+  display: "grid",
+  gap: "10px",
+  marginBottom: "14px",
+};
+
+const askMessage = {
+  display: "grid",
+  gap: "4px",
+  maxWidth: "92%",
+  padding: "11px 13px",
+  borderRadius: "14px",
+  lineHeight: 1.45,
+};
+
+const askAssistantMessage = {
+  ...askMessage,
+  background: "#e8f4ea",
+  color: "#174b2c",
+};
+
+const askHomeownerMessage = {
+  ...askMessage,
+  justifySelf: "end",
+  background: "#eef2f7",
+  color: "#1f2937",
+};
+
+const askClarification = {
+  margin: "0 0 12px",
+  padding: "10px 12px",
+  borderLeft: "3px solid #4f7d5b",
+  background: "white",
+  color: "#274d31",
+  lineHeight: 1.5,
+};
+
+const askComposerActions = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  flexWrap: "wrap",
+  gap: "10px",
+  marginTop: "12px",
+};
+
+const askConsentActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: "10px",
+  marginTop: "16px",
+};
+
+const askConsentPrimaryButton = {
+  ...primaryButton,
+  marginTop: 0,
+};
+
+const askConsentSecondaryButton = {
+  ...secondaryEntryButton,
+  width: "100%",
+  minHeight: "50px",
+  marginBottom: 0,
+};
+
+const askReviewCard = {
+  marginTop: "18px",
+  padding: "18px",
+  border: "1px solid #86b391",
+  borderRadius: "16px",
+  background: "white",
+};
+
+const askReviewTitle = {
+  margin: "0 0 6px",
+  color: "#174b2c",
+  fontSize: "19px",
+};
+
+const askReviewIntro = {
+  margin: "0 0 14px",
+  color: "#4b5563",
+  lineHeight: 1.5,
+};
+
+const askReviewList = {
+  display: "grid",
+  gap: "12px",
+  margin: "0 0 18px",
+};
+
+const askReviewLabel = {
+  marginBottom: "3px",
+  color: "#64748b",
+  fontSize: "12px",
+  fontWeight: "800",
+  textTransform: "uppercase",
+};
+
+const askReviewValue = {
+  margin: 0,
+  color: "#111827",
+  fontWeight: "700",
+  lineHeight: 1.45,
 };
 
 const formCard = {

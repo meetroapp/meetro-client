@@ -59,6 +59,67 @@ test("What’s happening preserves all five canonical services, description, and
   assert.doesNotMatch(requestSource, /formatPersonalAddress|resolveDefaultPersonalAddress/);
 });
 
+test("Ask Meetro is the default Emergency entry and manual intake remains secondary", () => {
+  assert.match(requestSource, /useState\(\(\) =>\s*emergencyRoute\.hasRequestId \? "manual" : "ask"/);
+  assert.match(requestSource, /const \[askStage, setAskStage\] = useState\("describe"\)/);
+  assert.match(requestSource, /copy\.fillManually/);
+  assert.match(requestSource, /copy\.returnToAskMeetro/);
+  assert.match(requestSource, /intakeMode === "ask"/);
+  assert.match(requestSource, /intakeMode === "manual"/);
+  assert.match(requestSource, /requestEmergencyRequestInterpretation/);
+  assert.match(requestSource, /confirmEmergencyRequestInterpretation/);
+});
+
+test("Ask Meetro intake preserves the explicit consent boundary before location", () => {
+  const submitBlock = requestSource.slice(
+    requestSource.indexOf("async function submitAskMeetroIntake"),
+    requestSource.indexOf("function acceptAskMeetroFindHelp")
+  );
+  const consentBlock = requestSource.slice(
+    requestSource.indexOf("function acceptAskMeetroFindHelp"),
+    requestSource.indexOf("async function confirmAskMeetroIntake")
+  );
+
+  assert.match(submitBlock, /stage: interpretationStage/);
+  assert.match(submitBlock, /setAskStage\("consent"\)/);
+  assert.doesNotMatch(submitBlock, /setAskStage\("location"\)/);
+  assert.match(consentBlock, /askStage !== "consent"/);
+  assert.match(consentBlock, /setAskStage\("location"\)/);
+  assert.match(consentBlock, /copy\.askLocationPrompt/);
+  assert.match(requestSource, /setAskStage\("review"\)/);
+  assert.match(requestSource, /askStage === "review" && askIntakeReady/);
+});
+
+test("Ask Meetro review creates one canonical draft and then enters the certified Safety Check", () => {
+  const handler = requestSource.slice(
+    requestSource.indexOf("async function confirmAskMeetroIntake"),
+    requestSource.indexOf("async function submitDetails")
+  );
+  assert.equal((handler.match(/createEmergencyDraft\(/g) || []).length, 1);
+  assert.match(handler, /unitNumber: ""/);
+  assert.match(handler, /accessNotes: ""/);
+  assert.match(handler, /synchronizeCreatedEmergencyRequest/);
+  assert.match(handler, /setPhase\("safety"\)/);
+  assert.doesNotMatch(handler, /saveEmergencySafetyAssessment|prepareEmergencyRequest|selectHomeowner/);
+});
+
+test("Emergency Ask copy remains truthful and available in English and Spanish", () => {
+  for (const phrase of [
+    "Ask Meetro Emergency Help",
+    "Fill manually",
+    "Return to Ask Meetro",
+    "Would you like me to help you find available professionals serving your area?",
+    "Yes, find help",
+    "What city or ZIP code should I use to find professionals serving your area?",
+    "Ayuda de Emergencia con Meetro",
+    "Completar manualmente",
+    "Volver a Preguntar a Meetro",
+    "Sí, buscar ayuda",
+    "ciudad o código postal",
+  ]) assert.match(requestSource, new RegExp(phrase));
+  assert.doesNotMatch(requestSource, /closest|nearest|fastest|best/i);
+});
+
 test("canonical draft creation remains backend owned", () => {
   assert.match(requestSource, /createEmergencyDraft\(payload/);
   assert.match(requestSource, /updateEmergencyDraft\(requestId, payload/);
