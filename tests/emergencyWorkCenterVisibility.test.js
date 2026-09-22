@@ -41,7 +41,7 @@ const emergencyCardSource = myRequestsSource.slice(
 );
 
 const approvedActiveLabels = new Map([
-  ["draft", "Continue Emergency Draft"],
+  ["draft", "Continue Emergency Request"],
   ["safety_blocked", "Safety Action Required"],
   [
     "ready_for_distribution",
@@ -498,11 +498,7 @@ test("Emergency page title follows deterministic lifecycle state", () => {
   );
   assert.match(
     emergencyRequestSource,
-    /!editableDraft[\s\S]*copy\.requestPageTitle/
-  );
-  assert.match(
-    emergencyRequestSource,
-    /\["safety", "complete"\]\.includes\(phase\)[\s\S]*copy\.safetyTitle/
+    /editableDraft[\s\S]*copy\.title[\s\S]*copy\.requestPageTitle/
   );
 });
 

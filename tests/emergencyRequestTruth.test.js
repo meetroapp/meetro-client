@@ -34,27 +34,15 @@ const appSource = readFileSync(
 );
 
 test("Emergency entry opens the canonical request and matching workflow", () => {
-  assert.match(emergencySource, /Emergency requests available/);
-  assert.match(
-    emergencySource,
-    /buildEmergencyDraftRoute\(service\.value\)/
-  );
-  assert.match(
-    emergencySource,
-    /connect with a compatible professional/
-  );
-  assert.match(emergencySource, /call 911/);
-
-  assert.doesNotMatch(emergencySource, /Available now/);
-  assert.doesNotMatch(
-    emergencySource,
-    /setPage\("emergencyBusinessSelection"\)/
-  );
+  assert.match(emergencySource, /setPage\("emergencyRequest"\)/);
+  assert.doesNotMatch(emergencySource, /EMERGENCY_SERVICE_OPTIONS/);
+  assert.doesNotMatch(emergencySource, /Start Emergency Draft/);
   assert.doesNotMatch(emergencySource, /localStorage/);
 });
 
-test("Emergency card selection uses bounded URL context without browser authority", () => {
-  assert.match(emergencySource, /buildEmergencyDraftRoute/);
+test("Emergency service selection stays inside the canonical request without browser authority", () => {
+  assert.match(requestSource, /EMERGENCY_SERVICE_OPTIONS\.map/);
+  assert.doesNotMatch(requestSource, /HOMEOWNER_EMERGENCY_SERVICE_(?:VALUES|OPTIONS)/);
   assert.match(
     requestSource,
     /service:\s*emergencyRoute\.serviceSpecialty \|\| ""/
@@ -147,49 +135,27 @@ test("Emergency cancellation requires explicit confirmation and backend success"
   );
 });
 
-test("Emergency submission requires explicit acknowledgment and backend prepare success", () => {
-  assert.match(
-    requestSource,
-    /submissionConfirmationOpen/
+test("Safety Continue prepares only after backend-authorized safety success", () => {
+  const handler = requestSource.slice(
+    requestSource.indexOf("async function submitSafety"),
+    requestSource.indexOf("function editDetails")
   );
-  assert.match(
-    requestSource,
-    /requestSubmission/
+  assert.ok(handler.indexOf("saveEmergencySafetyAssessment(") >= 0);
+  assert.ok(
+    handler.indexOf("prepareEmergencyRequest(") >
+      handler.indexOf("hasBackendSafetyPermissionToPrepare")
   );
-  assert.match(
-    requestSource,
-    /confirmSubmission/
-  );
-  assert.match(
-    requestSource,
-    /prepareEmergencyRequest/
-  );
-  assert.match(
-    requestSource,
-    /I understand that submitting this request/
-  );
-  assert.match(
-    requestSource,
-    /Yes, Submit Request/
-  );
-  assert.match(
-    requestSource,
-    /Keep Editing/
-  );
+  assert.doesNotMatch(requestSource, /submissionConfirmationOpen/);
 });
 
-test("Emergency submission becomes read-only and available for compatible responses", () => {
+test("Emergency preparation requires ready-for-distribution before Find Help", () => {
   assert.match(
     summarySource,
     /Waiting for Professional Responses/
   );
   assert.match(
     requestSource,
-    /available to compatible professionals/
-  );
-  assert.match(
-    requestSource,
-    /phase !== "complete"/
+    /ready_for_distribution/
   );
   assert.match(
     requestSource,
@@ -238,10 +204,6 @@ test("non-draft Emergency records render read-only canonical lifecycle state", (
   assert.match(
     summarySource,
     /Safety Action Required/
-  );
-  assert.match(
-    requestSource,
-    /Emergency Request Submitted/
   );
   assert.match(
     requestSource,
@@ -330,17 +292,15 @@ test("Emergency safety review carries all governed safety fields", () => {
   }
 });
 
-test("Emergency safety review confirms canonical draft progress only after success", () => {
-  assert.match(requestSource, /Step 1 complete/);
-  assert.match(requestSource, /Emergency draft saved\./);
-  assert.match(requestSource, /Step 2/);
+test("Emergency details advance to Safety Check only after canonical save success", () => {
+  assert.match(requestSource, /Continue to Safety Check/);
   assert.match(
     requestSource,
     /if \(!result\.ok \|\| !result\.emergencyRequest\) \{[\s\S]*?return;[\s\S]*?setOwnedCanonicalRequest\(nextOwnedRequest\);[\s\S]*?setPhase\("safety"\);/
   );
   assert.match(
     requestSource,
-    /phase === "safety"[\s\S]*?role="status" aria-live="polite"/
+    /phase === "safety"[\s\S]*?onSubmit=\{submitSafety\}/
   );
 });
 
@@ -365,8 +325,8 @@ test("Emergency safety review permits no listed hazards without inventing author
   );
 });
 
-test("Emergency safety review preserves canonical blocking and truthful action", () => {
-  assert.match(requestSource, /Save Safety Review/);
+test("Emergency Safety Check preserves canonical blocking and truthful action", () => {
+  assert.match(requestSource, /Continue to Find Help/);
   assert.match(requestSource, /safety_blocked/);
   assert.match(
     requestSource,
@@ -419,7 +379,7 @@ test("Emergency Request creates no browser workflow authority", () => {
 test("Emergency Request exposes canonical distribution, selection, and conversation entry", () => {
   assert.match(
     requestSource,
-    /Saving this draft does not dispatch a professional/
+    /Meetro helps you connect with an available professional/
   );
   assert.match(
     requestSource,
@@ -437,14 +397,11 @@ test("Emergency Request exposes canonical distribution, selection, and conversat
     requestSource,
     /buildCanonicalConversationRoute/
   );
-  assert.match(
-    requestSource,
-    /location and access notes remain private until I select a professional/
-  );
+  assert.match(requestSource, /unitNumber: ""/);
+  assert.match(requestSource, /accessNotes: ""/);
 });
 
 test("Emergency Request preserves safe navigation", () => {
-  assert.match(requestSource, /setPage\("emergency"\)/);
   assert.match(requestSource, /setPage\("home"\)/);
   assert.match(
     requestSource,

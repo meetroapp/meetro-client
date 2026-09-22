@@ -40,12 +40,7 @@ test("Emergency exposes exactly the five approved canonical specialties", () => 
   );
 });
 
-test("all five landing cards carry their own canonical values", () => {
-  assert.match(
-    emergencySource,
-    /buildEmergencyDraftRoute\(service\.value\)/
-  );
-
+test("all five backend specialties retain their canonical values", () => {
   for (const specialty of CANONICAL_VALUES) {
     assert.equal(
       normalizeCanonicalEmergencySpecialty(specialty),
@@ -69,17 +64,10 @@ test("navigation hints never accept legacy display aliases", () => {
   }
 });
 
-test("landing page and request selector consume one curated inventory", () => {
-  assert.match(
-    emergencySource,
-    /EMERGENCY_SERVICE_OPTIONS\.map/
-  );
-  assert.match(
-    requestSource,
-    /EMERGENCY_SERVICE_OPTIONS\.map/
-  );
-  assert.doesNotMatch(emergencySource, /services:\s*\[/);
-  assert.doesNotMatch(requestSource, /const SERVICE_OPTIONS/);
+test("landing redirects and the request workspace renders the complete canonical inventory", () => {
+  assert.match(emergencySource, /setPage\("emergencyRequest"\)/);
+  assert.match(requestSource, /EMERGENCY_SERVICE_OPTIONS\.map/);
+  assert.doesNotMatch(requestSource, /HOMEOWNER_EMERGENCY_SERVICE_(?:VALUES|OPTIONS)/);
 });
 
 test("unsupported and broad legacy identifiers are not selectable", () => {
@@ -98,12 +86,20 @@ test("unsupported and broad legacy identifiers are not selectable", () => {
   }
 });
 
-test("Emergency Lockout submits the canonical lockout specialty", () => {
-  const lockout = EMERGENCY_SERVICE_OPTIONS.find(
-    (option) => option.label.en === "Emergency Lockout"
-  );
-
-  assert.equal(lockout?.value, "emergency_lockout");
+test("Emergency Lockout and Other Urgent Property Issue remain homeowner-selectable", () => {
+  for (const [value, label] of [
+    ["emergency_lockout", "Emergency Lockout"],
+    ["handyman", "Other Urgent Property Issue"],
+  ]) {
+    assert.equal(
+      EMERGENCY_SERVICE_OPTIONS.find((option) => option.value === value)?.label.en,
+      label
+    );
+    assert.match(
+      requestSource,
+      new RegExp(`${value}: \\"${label}\\"`)
+    );
+  }
   assert.match(
     requestSource,
     /serviceSpecialty:\s*selectedService\?\.value/
@@ -113,7 +109,7 @@ test("Emergency Lockout submits the canonical lockout specialty", () => {
 test("preselection stays editable and payload follows the current selection", () => {
   assert.match(
     requestSource,
-    /value=\{form\.service\}[\s\S]*?onChange=\{\(event\) =>[\s\S]*?updateForm\("service", event\.target\.value\)/
+    /aria-pressed=\{selected\}[\s\S]*?onClick=\{\(\) => updateForm\("service", option\.value\)\}/
   );
   assert.match(
     requestSource,
@@ -121,7 +117,7 @@ test("preselection stays editable and payload follows the current selection", ()
   );
   assert.doesNotMatch(
     requestSource,
-    /id="emergency-service"[\s\S]{0,200}disabled=\{true\}/
+    /aria-pressed=\{selected\}[\s\S]{0,200}disabled=\{true\}/
   );
 });
 

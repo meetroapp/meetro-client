@@ -53,15 +53,16 @@ test("conversation actions use one presentation-only three-stage standard", () =
   );
 });
 
-test("active Emergency, Project, Quote, and Invoice actions continue the relationship", () => {
+test("active relationship actions use their approved presentation language", () => {
   assert.match(
     myRequestsSource,
     /HISTORY_EMERGENCY_SUMMARY_STATUSES\.includes\([\s\S]*CONVERSATION_ACTION_STAGE\.HISTORY[\s\S]*CONVERSATION_ACTION_STAGE\.ACTIVE/
   );
   assert.match(
     emergencyDetailSource,
-    /detail\.completed[\s\S]*CONVERSATION_ACTION_STAGE\.HISTORY[\s\S]*CONVERSATION_ACTION_STAGE\.ACTIVE/
+    /detail\.completed[\s\S]*CONVERSATION_ACTION_STAGE\.HISTORY[\s\S]*copy\.messageProfessional/
   );
+  assert.match(emergencyDetailSource, /messageProfessional: "Message Professional"/);
   assert.match(
     projectDetailsSource,
     /CONVERSATION_ACTION_STAGE\.ACTIVE/

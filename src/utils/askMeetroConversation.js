@@ -979,6 +979,10 @@ async function finalizeAskMeetroConversation({
 
 export function askConversationRecord(context = {}) {
   if (context.blocked && context.page) throw new Error("The exact record context could not be verified. Reopen Ask Meetro from the record.");
+  // Emergency is page-only advisory context until Retrieval has a distinct,
+  // canonical Emergency record type. Never reinterpret its numeric ID as a
+  // JOB_REQUEST pointer.
+  if (context.page === "emergencyRequest") return {};
   const pair = context.page === "conversationThread" && context.conversationId ? ["CONVERSATION", context.conversationId]
     : context.draftId && ["quoteBuilder", "invoiceBuilder", "depositRequestBuilder"].includes(context.page) ? ["DOCUMENT_DRAFT", context.draftId]
       : context.invoiceId ? ["INVOICE", context.invoiceId]

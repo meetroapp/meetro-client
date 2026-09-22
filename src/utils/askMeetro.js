@@ -8,7 +8,7 @@ import { isExplicitStandaloneNewQuoteIntent, resolveAssistantQuoteNavigation } f
 const uuid = (value) => typeof value === "string" && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value) ? value.toLowerCase() : "";
 const numericIdentity = (value) => /^[1-9]\d*$/.test(String(value || "")) && Number.isSafeInteger(Number(value)) ? String(value) : "";
 const identity = (value) => uuid(value) || numericIdentity(value);
-const pages = new Set(["home", "businessDashboard", "contractorDashboard", "workCenter", "myRequests", "homeownerRequestDetails", "projectDetails", "completedJobDetails", "businessLeads", "quoteRequests", "quoteBuilder", "invoiceBuilder", "customerQuoteReview", "customerInvoiceReview", "depositRequestBuilder", "schedule", "conversationThread", "messagesInbox", "customerRelationshipsCenter", "projectGallery"]);
+const pages = new Set(["home", "businessDashboard", "contractorDashboard", "workCenter", "myRequests", "homeownerRequestDetails", "projectDetails", "completedJobDetails", "businessLeads", "quoteRequests", "quoteBuilder", "invoiceBuilder", "customerQuoteReview", "customerInvoiceReview", "depositRequestBuilder", "schedule", "conversationThread", "messagesInbox", "customerRelationshipsCenter", "projectGallery", "emergencyRequest"]);
 
 // A navigation pointer is context, never permission or evidence of a lifecycle state.
 // Ignore display text and browser caches; preserve only exact bounded route identities.
@@ -17,6 +17,10 @@ export function captureAskMeetroContext(route = "", explicit = {}) {
   if (!pages.has(page)) return Object.freeze({ page: "", blocked: true });
   const params = new URLSearchParams(query);
   const context = { page: pages.has(page) ? page : "", label: String(explicit.label || "").slice(0, 160) };
+  // Emergency request IDs belong to the Emergency domain. Retrieval V1 has no
+  // Emergency record type, so this page is advisory context only and must not
+  // reuse the numeric ID as ordinary JOB_REQUEST authority.
+  if (page === "emergencyRequest") return Object.freeze(context);
   for (const key of ["jobId", "draftId", "quoteId", "invoiceId", "evaluationId", "visitId", "requestId", "conversationId", "relationshipId", "businessContactId"]) {
     const normalize = ["jobId", "draftId", "quoteId", "invoiceId", "evaluationId", "visitId", "businessContactId"].includes(key) ? uuid : ["requestId", "conversationId"].includes(key) ? numericIdentity : identity;
     const fromRoute = normalize(params.get(key));
@@ -29,6 +33,7 @@ export function captureAskMeetroContext(route = "", explicit = {}) {
 
 export function askMeetroRecordRoute(context, kind, role = "personal") {
   if (!context || context.blocked) return "";
+  if (context.page === "emergencyRequest") return "";
   const { jobId, draftId, invoiceId, requestId, conversationId } = context;
   if (kind === "QUOTE" && role === "personal") return buildCustomerQuoteReviewRoute(context);
   if (kind === "QUOTE" && role === "business") return resolveAssistantQuoteNavigation({ context: { jobId, draftId: context.page === "quoteBuilder" ? draftId : undefined }, intent: "CONTINUE" }).route;

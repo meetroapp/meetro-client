@@ -164,15 +164,16 @@ test("Work Center View Emergency Request remains canonical and status-independen
   );
 });
 
-test("draft workflow, Safety Review, and preparation remain separate actions", () => {
-  assert.match(requestSource, /Continue Emergency Draft/);
-  assert.match(requestSource, /Complete Safety Review/);
-  assert.match(requestSource, /Prepare Request/);
+test("Emergency Request hides draft mechanics and chains Safety Check into Find Help", () => {
+  assert.match(requestSource, /Continue Emergency Request/);
+  assert.match(requestSource, /Continue to Safety Check/);
+  assert.match(requestSource, /Continue to Find Help/);
   assert.match(requestSource, /function openDraftWorkflow\(\)/);
   assert.match(requestSource, /phase === "safety"/);
   assert.match(requestSource, /onSubmit=\{submitSafety\}/);
   assert.match(requestSource, /saveEmergencySafetyAssessment/);
   assert.match(requestSource, /prepareEmergencyRequest/);
+  assert.doesNotMatch(requestSource, /submissionConfirmationOpen/);
   assert.match(
     requestSource,
     /workflowAction=\{[\s\S]*label: draftWorkflowActionLabel[\s\S]*onClick: openDraftWorkflow/
@@ -212,7 +213,6 @@ test("every request-specific state is cleared before a new canonical load", () =
     'setMessage("")',
     'setErrorMessage("")',
     "setCancelConfirmationOpen(false)",
-    "setSubmissionConfirmationOpen(false)",
     'setResponsesPhase("idle")',
     "setResponses([])",
     "setSelectedResponse(null)",
@@ -279,7 +279,7 @@ test("all preserved mutations settle through current route ownership", () => {
     /const mutationOwnership = controller\.capture\(\)/g
   );
 
-  assert.equal(ownershipCaptures?.length, 6);
+  assert.equal(ownershipCaptures?.length, 5);
   assert.match(requestSource, /updateEmergencyDraft/);
   assert.match(requestSource, /saveEmergencySafetyAssessment/);
   assert.match(requestSource, /prepareEmergencyRequest/);

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import BottomNav from "../components/BottomNav";
+import ContextualAskMeetro from "../components/ContextualAskMeetro";
 import EmergencyRelationshipDetail from "../components/EmergencyRelationshipDetail";
 import EmergencyAvailableNow from "../components/EmergencyAvailableNow";
 import {
@@ -30,6 +31,7 @@ import {
   isUnsupportedLegacyEmergencySpecialty,
   normalizeEmergencySpecialtyForDisplay,
 } from "../utils/emergencySpecialties";
+import { getSimplifiedEmergencyProgressStage } from "../utils/emergencySummary";
 import {
   buildCanonicalConversationRoute,
 } from "../utils/canonicalConversationMessaging";
@@ -42,10 +44,6 @@ import {
   findCanonicalEmergencyConversation,
 } from "../utils/requestCommunication";
 import { getLanguage, t } from "../utils/language";
-import {
-  formatPersonalAddress,
-  resolveDefaultPersonalAddress,
-} from "../utils/personalAddresses";
 
 const INITIAL_SAFETY = Object.freeze({
   immediateDanger: false,
@@ -96,9 +94,21 @@ function getRecoveredPhase(record = {}) {
     return "lifecycle";
   }
 
-  return getCanonicalSafetyAssessment(record)
-    ? "complete"
-    : "details";
+  return getCanonicalSafetyAssessment(record) ? "safety" : "details";
+}
+
+function buildEmergencyRequestTitle(serviceLabel, description) {
+  const summary = clean(description).replace(/\s+/g, " ");
+  return `${clean(serviceLabel)}: ${summary}`.slice(0, 120);
+}
+
+function hasBackendSafetyPermissionToPrepare(record = {}) {
+  const assessment = getCanonicalSafetyAssessment(record);
+  const disposition = clean(
+    assessment?.disposition || assessment?.safetyDisposition
+  ).toLowerCase();
+
+  return getRequestStatus(record) === "draft" && disposition === "continue";
 }
 
 function buildDraftForm(record = {}, fallback = {}) {
@@ -244,8 +254,6 @@ function EmergencyRequest({ setPage }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [cancelConfirmationOpen, setCancelConfirmationOpen] =
     useState(false);
-  const [submissionConfirmationOpen, setSubmissionConfirmationOpen] =
-    useState(false);
   const [responsesPhase, setResponsesPhase] = useState("idle");
   const [responses, setResponses] = useState([]);
   const [availableNowPhase, setAvailableNowPhase] =
@@ -284,16 +292,11 @@ function EmergencyRequest({ setPage }) {
       : "idle"
   );
 
-  const defaultAddress = useMemo(
-    () => formatPersonalAddress(resolveDefaultPersonalAddress() || {}),
-    []
-  );
-
   const [form, setForm] = useState(() => ({
     service: emergencyRoute.serviceSpecialty || "",
     title: "",
     description: "",
-    locationText: defaultAddress,
+    locationText: "",
     unitNumber: "",
     accessNotes: "",
   }));
@@ -352,7 +355,6 @@ function EmergencyRequest({ setPage }) {
       setMessage("");
       setErrorMessage("");
       setCancelConfirmationOpen(false);
-      setSubmissionConfirmationOpen(false);
       setResponsesPhase("idle");
       setResponses([]);
       setAvailableNowPhase("idle");
@@ -368,9 +370,7 @@ function EmergencyRequest({ setPage }) {
         service: nextRoute.serviceSpecialty || "",
         title: "",
         description: "",
-        locationText: nextRoute.hasRequestId
-          ? ""
-          : defaultAddress,
+        locationText: "",
         unitNumber: "",
         accessNotes: "",
       });
@@ -401,7 +401,7 @@ function EmergencyRequest({ setPage }) {
         handleEmergencyRouteChange
       );
     };
-  }, [defaultAddress, routeSessionController]);
+  }, [routeSessionController]);
 
   useEffect(() => {
     const controller = routeSessionController;
@@ -431,7 +431,6 @@ function EmergencyRequest({ setPage }) {
       setMessage("");
       setErrorMessage("");
       setCancelConfirmationOpen(false);
-      setSubmissionConfirmationOpen(false);
       setResponsesPhase("idle");
       setResponses([]);
       setAvailableNowPhase("idle");
@@ -447,9 +446,7 @@ function EmergencyRequest({ setPage }) {
         service: emergencyRoute.serviceSpecialty || "",
         title: "",
         description: "",
-        locationText: emergencyRoute.hasRequestId
-          ? ""
-          : defaultAddress,
+        locationText: "",
         unitNumber: "",
         accessNotes: "",
       });
@@ -553,7 +550,6 @@ function EmergencyRequest({ setPage }) {
       setSafety(buildSafetyForm(recoveredRequest));
       setPhase(getRecoveredPhase(recoveredRequest));
       setCancelConfirmationOpen(false);
-      setSubmissionConfirmationOpen(false);
       setRecoveryState("loaded");
     }
 
@@ -564,7 +560,6 @@ function EmergencyRequest({ setPage }) {
     };
   }, [
     canonicalRequest,
-    defaultAddress,
     emergencyRoute.hasRequestId,
     emergencyRoute.requestId,
     emergencyRoute.serviceSpecialty,
@@ -802,40 +797,32 @@ function EmergencyRequest({ setPage }) {
 
   const text = {
     en: {
-      title: "Emergency Draft",
+      title: "Emergency Help",
       requestPageTitle: "Emergency Request",
       completedPageTitle: "Completed Emergency Request",
       cancelledPageTitle: "Cancelled Emergency Request",
       intro:
-        "Describe the urgent service need. Meetro will save a private draft before the safety review.",
+        "Tell us what is happening and the general area where you need help.",
       emergencyWarning:
         "If anyone is in immediate danger, call 911 or contact local emergency services now.",
       limitation:
-        "Saving this draft does not dispatch a professional or notify emergency responders.",
-      service: "Service needed",
-      chooseService: "Choose a service",
-      requestTitle: "Short title",
-      requestTitlePlaceholder: "Example: Active pipe leak",
-      description: "What is happening?",
+        "Meetro helps you connect with an available professional. It does not replace 911 or local emergency responders.",
+      service: "Choose the type of help you need",
+      serviceLabels: {
+        emergency_plumbing: "Emergency Plumbing",
+        emergency_electrical_service: "Emergency Electrical",
+        roof_leak_repair: "Roof Leak Repair",
+        emergency_lockout: "Emergency Lockout",
+        handyman: "Other Urgent Property Issue",
+      },
+      description: "What’s happening?",
       descriptionPlaceholder:
         "Describe the problem, affected area, current conditions, and anything already attempted.",
-      location: "Service location",
-      locationPlaceholder: "Street address, city, state, ZIP",
-      unit: "Unit / Apt / Suite",
-      unitPlaceholder: "Optional",
-      access: "Access notes",
-      accessPlaceholder:
-        "Gate code, tenant instructions, pets, or safe access details",
-      saveDraft: "Save Emergency Draft",
-      updateDraft: "Save Draft Changes",
+      location: "General service area",
+      locationPlaceholder: "City, area, or ZIP",
+      continueToSafety: "Continue to Safety Check",
       saving: "Saving…",
-      draftSaved:
-        "Your Emergency draft is saved privately. Complete the safety review next.",
-      draftUpdated: "Your Emergency draft changes were saved.",
-      stepOneComplete: "Step 1 complete",
-      draftSavedShort: "Emergency draft saved.",
-      stepTwo: "Step 2",
-      safetyTitle: "Safety Review",
+      safetyTitle: "Safety Check",
       safetyIntro:
         "Select every listed hazard that is currently true. Select only what is true; do not select an item merely to continue.",
       noListedHazards:
@@ -862,41 +849,23 @@ function EmergencyRequest({ setPage }) {
       additionalSafety: "Additional safety context",
       additionalSafetyPlaceholder:
         "Optional information about hazards or precautions",
-      saveSafety: "Save Safety Review",
-      safetySaving: "Saving Safety Review…",
-      safetySaved:
-        "Safety review saved. Submit when you are ready to notify compatible professionals.",
-      submissionTitle: "Submit Emergency Request",
-      submissionIntro:
-        "Your request and safety review are complete. Review the acknowledgment below before submitting.",
-      submissionAcknowledgment:
-        "I understand that submitting this request makes it read-only and shares its service summary with compatible professionals. My location and access notes remain private until I select a professional.",
-      openSubmissionConfirmation: "Submit Emergency Request",
-      submissionConfirmTitle: "Submit this Emergency request?",
-      submissionConfirmBody:
-        "After submission, this request becomes read-only and available to compatible professionals. No professional is assigned until you select one.",
-      confirmSubmission: "Yes, Submit Request",
-      keepEditing: "Keep Editing",
-      submitting: "Submitting…",
-      submissionFailed:
-        "The Emergency request could not be submitted. Try again.",
-      submittedTitle: "Emergency Request Submitted",
-      submittedBody:
-        "This Emergency request is active and available to compatible professionals. Select a response to create the canonical conversation and begin dispatch.",
-      editDetails: "Edit Draft Details",
-      continueDraft: "Continue Emergency Draft",
-      completeSafetyReview: "Complete Safety Review",
-      prepareRequest: "Prepare Request",
-      back: "Back to Emergency Help",
+      continueToFindHelp: "Continue to Find Help",
+      safetySaving: "Continuing…",
+      submitting: "Connecting…",
+      preparationFailed:
+        "Your Safety Check was saved, but Meetro could not open Find Help. Try again.",
+      editDetails: "Edit Details",
+      continueRequest: "Continue Emergency Request",
+      back: "Back Home",
       home: "Back Home",
       viewMyEmergencyRequests: "View My Emergency Requests",
       required:
-        "Service, title, description, and location are required.",
+        "Choose a service, describe what is happening, and enter a general service area.",
       requestFailed:
-        "The Emergency draft could not be saved. Try again.",
-      recoveryLoading: "Loading your Emergency draft…",
+        "The Emergency request could not be saved. Try again.",
+      recoveryLoading: "Loading your Emergency request…",
       recoveryFailed:
-        "This Emergency draft could not be loaded. It may be unavailable or you may not have access.",
+        "This Emergency request could not be loaded. It may be unavailable or you may not have access.",
       recoveryInvalid:
         "This Emergency request link is invalid. Return to My Requests and choose the request again.",
       recoveryUnauthorized:
@@ -906,15 +875,17 @@ function EmergencyRequest({ setPage }) {
       recoveryUnavailable:
         "This Emergency request is temporarily unavailable. Try again from My Requests.",
       recovered:
-        "Your canonical Emergency draft was loaded from Meetro.",
+        "Your Emergency request was loaded from Meetro.",
       safetyFailed:
         "The safety review could not be saved. Try again.",
-      canonicalId: "Emergency draft",
-      status: "Status",
-      distributionUnavailable: "Matching compatible professionals",
-      completeTitle: "Draft and Safety Review Saved",
-      completeBody:
-        "Your information is stored as a private canonical Emergency draft. No professional can see it until you submit.",
+      askMeetroContext: "Emergency Help",
+      progress: "Emergency request progress",
+      stages: {
+        details: "What’s happening?",
+        safety: "Safety Check",
+        find: "Find Help",
+        connected: "Connected",
+      },
       cancelRequest: "Cancel Emergency Request",
       cancelConfirmTitle: "Cancel this Emergency request?",
       cancelConfirmBody:
@@ -928,40 +899,32 @@ function EmergencyRequest({ setPage }) {
         "This canonical Emergency request can no longer be edited from this screen.",
     },
     es: {
-      title: "Borrador de Emergencia",
+      title: "Ayuda de Emergencia",
       requestPageTitle: "Solicitud de Emergencia",
       completedPageTitle: "Solicitud de Emergencia Completada",
       cancelledPageTitle: "Solicitud de Emergencia Cancelada",
       intro:
-        "Describe la necesidad urgente. Meetro guardará un borrador privado antes de la revisión de seguridad.",
+        "Cuéntanos qué está ocurriendo y el área general donde necesitas ayuda.",
       emergencyWarning:
         "Si alguien está en peligro inmediato, llama al 911 o comunícate ahora con los servicios de emergencia locales.",
       limitation:
-        "Guardar este borrador no despacha a un profesional ni notifica a los servicios de emergencia.",
-      service: "Servicio necesario",
-      chooseService: "Selecciona un servicio",
-      requestTitle: "Título corto",
-      requestTitlePlaceholder: "Ejemplo: Fuga activa de tubería",
+        "Meetro te ayuda a conectar con un profesional disponible. No reemplaza al 911 ni a los servicios de emergencia locales.",
+      service: "Elige el tipo de ayuda que necesitas",
+      serviceLabels: {
+        emergency_plumbing: "Emergencia de plomería",
+        emergency_electrical_service: "Emergencia eléctrica",
+        roof_leak_repair: "Reparación de fuga en el techo",
+        emergency_lockout: "Cerrajería de emergencia",
+        handyman: "Otro problema urgente de la propiedad",
+      },
       description: "¿Qué está ocurriendo?",
       descriptionPlaceholder:
         "Describe el problema, el área afectada, las condiciones actuales y lo que ya intentaste.",
-      location: "Ubicación del servicio",
-      locationPlaceholder: "Dirección, ciudad, estado y código postal",
-      unit: "Unidad / Apartamento / Suite",
-      unitPlaceholder: "Opcional",
-      access: "Notas de acceso",
-      accessPlaceholder:
-        "Código de entrada, instrucciones, mascotas o detalles de acceso seguro",
-      saveDraft: "Guardar Borrador",
-      updateDraft: "Guardar Cambios",
+      location: "Área general de servicio",
+      locationPlaceholder: "Ciudad, área o código postal",
+      continueToSafety: "Continuar a Verificación de Seguridad",
       saving: "Guardando…",
-      draftSaved:
-        "Tu borrador de Emergencia se guardó de forma privada. Completa ahora la revisión de seguridad.",
-      draftUpdated: "Los cambios del borrador fueron guardados.",
-      stepOneComplete: "Paso 1 completado",
-      draftSavedShort: "Borrador de Emergencia guardado.",
-      stepTwo: "Paso 2",
-      safetyTitle: "Revisión de Seguridad",
+      safetyTitle: "Verificación de Seguridad",
       safetyIntro:
         "Selecciona cada peligro de la lista que sea verdadero en este momento. Selecciona solo lo que sea cierto; no marques una opción únicamente para continuar.",
       noListedHazards:
@@ -988,42 +951,24 @@ function EmergencyRequest({ setPage }) {
       additionalSafety: "Contexto adicional de seguridad",
       additionalSafetyPlaceholder:
         "Información opcional sobre peligros o precauciones",
-      saveSafety: "Guardar Revisión",
-      safetySaving: "Guardando Revisión…",
-      safetySaved:
-        "Revisión guardada. Envía la solicitud cuando estés listo para notificar a profesionales compatibles.",
-      submissionTitle: "Enviar Solicitud de Emergencia",
-      submissionIntro:
-        "Tu solicitud y revisión de seguridad están completas. Revisa el reconocimiento antes de enviarla.",
-      submissionAcknowledgment:
-        "Entiendo que enviar esta solicitud la convierte en un registro de solo lectura y comparte el resumen del servicio con profesionales compatibles. Mi ubicación y notas de acceso permanecen privadas hasta que seleccione un profesional.",
-      openSubmissionConfirmation: "Enviar Solicitud de Emergencia",
-      submissionConfirmTitle: "¿Enviar esta solicitud de Emergencia?",
-      submissionConfirmBody:
-        "Después de enviarla, esta solicitud será de solo lectura y estará disponible para profesionales compatibles. Nadie será asignado hasta que selecciones un profesional.",
-      confirmSubmission: "Sí, Enviar Solicitud",
-      keepEditing: "Continuar Editando",
-      submitting: "Enviando…",
-      submissionFailed:
-        "No se pudo enviar la solicitud de Emergencia. Inténtalo nuevamente.",
-      submittedTitle: "Solicitud de Emergencia Enviada",
-      submittedBody:
-        "Esta solicitud de Emergencia está activa y disponible para profesionales compatibles. Selecciona una respuesta para crear la conversación canónica e iniciar el despacho.",
+      continueToFindHelp: "Continuar a Buscar Ayuda",
+      safetySaving: "Continuando…",
+      submitting: "Conectando…",
+      preparationFailed:
+        "Tu Verificación de Seguridad se guardó, pero Meetro no pudo abrir Buscar Ayuda. Inténtalo nuevamente.",
       editDetails: "Editar Detalles",
-      continueDraft: "Continuar Borrador de Emergencia",
-      completeSafetyReview: "Completar Revisión de Seguridad",
-      prepareRequest: "Preparar Solicitud",
-      back: "Regresar a Ayuda de Emergencia",
+      continueRequest: "Continuar Solicitud de Emergencia",
+      back: "Regresar al Inicio",
       home: "Regresar al Inicio",
       viewMyEmergencyRequests:
         "Ver Mis Solicitudes de Emergencia",
       required:
-        "El servicio, título, descripción y ubicación son obligatorios.",
+        "Elige un servicio, describe qué está ocurriendo e ingresa un área general de servicio.",
       requestFailed:
-        "No se pudo guardar el borrador. Inténtalo nuevamente.",
-      recoveryLoading: "Cargando tu borrador de Emergencia…",
+        "No se pudo guardar la solicitud. Inténtalo nuevamente.",
+      recoveryLoading: "Cargando tu solicitud de Emergencia…",
       recoveryFailed:
-        "No se pudo cargar este borrador de Emergencia. Puede no estar disponible o quizás no tengas acceso.",
+        "No se pudo cargar esta solicitud de Emergencia. Puede no estar disponible o quizás no tengas acceso.",
       recoveryInvalid:
         "Este enlace de solicitud de Emergencia no es válido. Vuelve a Mis Solicitudes y selecciona la solicitud otra vez.",
       recoveryUnauthorized:
@@ -1033,15 +978,17 @@ function EmergencyRequest({ setPage }) {
       recoveryUnavailable:
         "Esta solicitud de Emergencia no está disponible temporalmente. Inténtalo de nuevo desde Mis Solicitudes.",
       recovered:
-        "Tu borrador canónico de Emergencia fue cargado desde Meetro.",
+        "Tu solicitud de Emergencia fue cargada desde Meetro.",
       safetyFailed:
         "No se pudo guardar la revisión. Inténtalo nuevamente.",
-      canonicalId: "Borrador de Emergencia",
-      status: "Estado",
-      distributionUnavailable: "Buscando profesionales compatibles",
-      completeTitle: "Borrador y Revisión Guardados",
-      completeBody:
-        "Tu información está guardada como un borrador canónico privado. Ningún profesional puede verla hasta que la envíes.",
+      askMeetroContext: "Ayuda de Emergencia",
+      progress: "Progreso de la solicitud de Emergencia",
+      stages: {
+        details: "¿Qué está ocurriendo?",
+        safety: "Verificación de Seguridad",
+        find: "Buscar Ayuda",
+        connected: "Conectado",
+      },
       cancelRequest: "Cancelar Solicitud de Emergencia",
       cancelConfirmTitle: "¿Cancelar esta solicitud de Emergencia?",
       cancelConfirmBody:
@@ -1073,6 +1020,11 @@ function EmergencyRequest({ setPage }) {
     EMERGENCY_SERVICE_OPTIONS.find(
       (option) => option.value === form.service
     );
+  const selectedServiceLabel = selectedService
+    ? copy.serviceLabels?.[selectedService.value] ||
+      selectedService.label[language] ||
+      selectedService.label.en
+    : "";
 
   useEffect(() => {
     const controller = routeSessionController;
@@ -1180,11 +1132,7 @@ function EmergencyRequest({ setPage }) {
       )
   );
   const draftWorkflowActionLabel =
-    phase === "complete"
-      ? copy.prepareRequest
-      : phase === "safety"
-        ? copy.completeSafetyReview
-        : copy.continueDraft;
+    copy.continueRequest;
   const cancellationAvailable =
     canCancelEmergencyRequest(canonicalRequest);
   const pageTitle =
@@ -1194,11 +1142,13 @@ function EmergencyRequest({ setPage }) {
         ? copy.completedPageTitle
         : canonicalStatus === "safety_blocked"
           ? copy.safetyTitle
-          : !editableDraft
-            ? copy.requestPageTitle
-            : ["safety", "complete"].includes(phase)
-              ? copy.safetyTitle
-              : copy.title;
+          : editableDraft
+            ? copy.title
+            : copy.requestPageTitle;
+  const simplifiedStage = getSimplifiedEmergencyProgressStage(
+    canonicalStatus,
+    { phase, recoveryState }
+  );
   const showWorkCenterAction = [
     "ready_for_distribution",
     "active",
@@ -1326,16 +1276,18 @@ function EmergencyRequest({ setPage }) {
       category: "home_repair",
       serviceDomain: selectedService?.domain || "",
       serviceSpecialty: selectedService?.value || "",
-      title: clean(form.title),
+      title: buildEmergencyRequestTitle(
+        selectedServiceLabel,
+        form.description
+      ),
       description: clean(form.description),
       locationText: clean(form.locationText),
-      unitNumber: clean(form.unitNumber),
-      accessNotes: clean(form.accessNotes),
+      unitNumber: "",
+      accessNotes: "",
     };
 
     if (
       !payload.serviceSpecialty ||
-      !payload.title ||
       !payload.description ||
       !payload.locationText
     ) {
@@ -1415,7 +1367,7 @@ function EmergencyRequest({ setPage }) {
     }
 
     setRecoveryState("loaded");
-    setMessage(requestId ? copy.draftUpdated : copy.draftSaved);
+    setMessage("");
     setPhase("safety");
   }
 
@@ -1463,32 +1415,86 @@ function EmergencyRequest({ setPage }) {
       return;
     }
 
-    setPending(false);
-
     if (operation.status === "rejected") {
+      setPending(false);
       setErrorMessage(copy.safetyFailed);
       return;
     }
 
-    const result = operation.value;
+    const safetyResult = operation.value;
 
-    if (!result.ok || !result.emergencyRequest) {
-      setErrorMessage(result.message || copy.safetyFailed);
+    if (!safetyResult.ok || !safetyResult.emergencyRequest) {
+      setPending(false);
+      setErrorMessage(safetyResult.message || copy.safetyFailed);
       return;
     }
 
-    const nextOwnedRequest = ownCanonicalRequestForSession(
-      result.emergencyRequest
+    const safetyOwnedRequest = ownCanonicalRequestForSession(
+      safetyResult.emergencyRequest
     );
 
-    if (!nextOwnedRequest) {
+    if (!safetyOwnedRequest) {
+      setPending(false);
       setErrorMessage(copy.safetyFailed);
       return;
     }
 
-    setOwnedCanonicalRequest(nextOwnedRequest);
-    setMessage(copy.safetySaved);
-    setPhase("complete");
+    setOwnedCanonicalRequest(safetyOwnedRequest);
+
+    if (!hasBackendSafetyPermissionToPrepare(safetyResult.emergencyRequest)) {
+      setPending(false);
+      setPhase("lifecycle");
+      setDraftWorkflowOpen(false);
+      setRecoveryState("loaded");
+      return;
+    }
+
+    const prepareOperation = await settleEmergencyRouteOperation(
+      controller,
+      mutationOwnership,
+      prepareEmergencyRequest(requestId, { setPage })
+    );
+
+    if (prepareOperation.status === "stale") {
+      return;
+    }
+
+    setPending(false);
+
+    if (prepareOperation.status === "rejected") {
+      setErrorMessage(copy.preparationFailed);
+      return;
+    }
+
+    const prepareResult = prepareOperation.value;
+
+    if (
+      !prepareResult.ok ||
+      !prepareResult.emergencyRequest ||
+      getRequestStatus(prepareResult.emergencyRequest) !==
+        "ready_for_distribution"
+    ) {
+      setErrorMessage(
+        prepareResult.message || copy.preparationFailed
+      );
+      return;
+    }
+
+    const preparedOwnedRequest = ownCanonicalRequestForSession(
+      prepareResult.emergencyRequest
+    );
+
+    if (!preparedOwnedRequest) {
+      setErrorMessage(copy.preparationFailed);
+      return;
+    }
+
+    setOwnedCanonicalRequest(preparedOwnedRequest);
+    setPhase("lifecycle");
+    setDraftWorkflowOpen(false);
+    setCancelConfirmationOpen(false);
+    setRecoveryState("loaded");
+    await refreshCanonicalRequestAfterMutation();
   }
 
   function editDetails() {
@@ -1511,91 +1517,6 @@ function EmergencyRequest({ setPage }) {
     setMessage("");
     setErrorMessage("");
     setCancelConfirmationOpen(false);
-    setSubmissionConfirmationOpen(false);
-  }
-
-
-  function requestSubmission() {
-    if (
-      !editableDraft ||
-      phase !== "complete" ||
-      pending ||
-      !getRequestId(canonicalRequest)
-    ) {
-      return;
-    }
-
-    setSubmissionConfirmationOpen(true);
-    setCancelConfirmationOpen(false);
-    setMessage("");
-    setErrorMessage("");
-  }
-
-  function keepEditingEmergencyRequest() {
-    if (pending) return;
-
-    setSubmissionConfirmationOpen(false);
-    setErrorMessage("");
-  }
-
-  async function confirmSubmission() {
-    const requestId = getRequestId(canonicalRequest);
-
-    if (
-      !requestId ||
-      !editableDraft ||
-      phase !== "complete" ||
-      pending
-    ) {
-      return;
-    }
-
-    const controller = routeSessionController;
-    const mutationOwnership = controller.capture();
-
-    setPending(true);
-    setMessage("");
-    setErrorMessage("");
-
-    const operation = await settleEmergencyRouteOperation(
-      controller,
-      mutationOwnership,
-      prepareEmergencyRequest(requestId, { setPage })
-    );
-
-    if (operation.status === "stale") {
-      return;
-    }
-
-    setPending(false);
-
-    if (operation.status === "rejected") {
-      setErrorMessage(copy.submissionFailed);
-      return;
-    }
-
-    const result = operation.value;
-
-    if (!result.ok || !result.emergencyRequest) {
-      setErrorMessage(result.message || copy.submissionFailed);
-      return;
-    }
-
-    const nextOwnedRequest = ownCanonicalRequestForSession(
-      result.emergencyRequest
-    );
-
-    if (!nextOwnedRequest) {
-      setErrorMessage(copy.submissionFailed);
-      return;
-    }
-
-    setOwnedCanonicalRequest(nextOwnedRequest);
-    setPhase("lifecycle");
-    setSubmissionConfirmationOpen(false);
-    setCancelConfirmationOpen(false);
-    setRecoveryState("loaded");
-    await refreshCanonicalRequestAfterMutation();
   }
 
   function requestCancellation() {
@@ -1604,7 +1525,6 @@ function EmergencyRequest({ setPage }) {
     }
 
     setCancelConfirmationOpen(true);
-    setSubmissionConfirmationOpen(false);
     setMessage("");
     setErrorMessage("");
   }
@@ -1985,7 +1905,9 @@ function EmergencyRequest({ setPage }) {
               onClick={() => setPage(
                 emergencyRoute.returnPage === "notifications"
                   ? "notifications"
-                  : "emergency"
+                  : emergencyRoute.hasRequestId
+                    ? "myRequests"
+                    : "home"
               )}
               aria-label={copy.back}
               disabled={pending}
@@ -2006,18 +1928,22 @@ function EmergencyRequest({ setPage }) {
             <div style={limitationNotice} role="status">
               {copy.limitation}
             </div>
+
+            {phase === "details" && (
+              <ContextualAskMeetro
+                language={language}
+                context={{ page: "emergencyRequest" }}
+                contextName={copy.askMeetroContext}
+              />
+            )}
           </>
         )}
 
-        {canonicalRequest && showDraftWorkflow && (
-          <section style={canonicalCard} aria-label={copy.canonicalId}>
-            <div>
-              <span style={canonicalLabel}>{copy.status}</span>
-              <strong style={canonicalValue}>
-                {canonicalRequest.status || "draft"}
-              </strong>
-            </div>
-          </section>
+        {simplifiedStage && (
+          <EmergencyProgress
+            copy={copy}
+            currentStage={simplifiedStage}
+          />
         )}
 
         {message && (
@@ -2075,46 +2001,29 @@ function EmergencyRequest({ setPage }) {
           editableDraft &&
           phase === "details" && (
           <form style={formCard} onSubmit={submitDetails} noValidate>
-            <FieldLabel
-              htmlFor="emergency-service"
-              label={copy.service}
-            />
-
-            <select
-              id="emergency-service"
-              style={input}
-              value={form.service}
-              disabled={pending}
-              onChange={(event) =>
-                updateForm("service", event.target.value)
-              }
-            >
-              <option value="" disabled>
-                {copy.chooseService}
-              </option>
-
-              {EMERGENCY_SERVICE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label[language] || option.label.en}
-                </option>
-              ))}
-            </select>
-
-            <FieldLabel
-              htmlFor="emergency-title"
-              label={copy.requestTitle}
-            />
-
-            <input
-              id="emergency-title"
-              style={input}
-              value={form.title}
-              placeholder={copy.requestTitlePlaceholder}
-              disabled={pending}
-              onChange={(event) =>
-                updateForm("title", event.target.value)
-              }
-            />
+            <fieldset style={serviceChoices}>
+              <legend style={serviceChoicesLegend}>{copy.service}</legend>
+              <div style={serviceChoiceGrid}>
+                {EMERGENCY_SERVICE_OPTIONS.map((option) => {
+                  const selected = form.service === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      style={{
+                        ...serviceChoice,
+                        ...(selected ? selectedServiceChoice : {}),
+                      }}
+                      aria-pressed={selected}
+                      disabled={pending}
+                      onClick={() => updateForm("service", option.value)}
+                    >
+                      {copy.serviceLabels[option.value]}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
 
             <FieldLabel
               htmlFor="emergency-description"
@@ -2124,7 +2033,7 @@ function EmergencyRequest({ setPage }) {
             <textarea
               id="emergency-description"
               style={textarea}
-              rows={6}
+              rows={5}
               value={form.description}
               placeholder={copy.descriptionPlaceholder}
               disabled={pending}
@@ -2141,45 +2050,12 @@ function EmergencyRequest({ setPage }) {
             <textarea
               id="emergency-location"
               style={textarea}
-              rows={3}
+              rows={2}
               value={form.locationText}
               placeholder={copy.locationPlaceholder}
               disabled={pending}
               onChange={(event) =>
                 updateForm("locationText", event.target.value)
-              }
-            />
-
-            <FieldLabel
-              htmlFor="emergency-unit"
-              label={copy.unit}
-            />
-
-            <input
-              id="emergency-unit"
-              style={input}
-              value={form.unitNumber}
-              placeholder={copy.unitPlaceholder}
-              disabled={pending}
-              onChange={(event) =>
-                updateForm("unitNumber", event.target.value)
-              }
-            />
-
-            <FieldLabel
-              htmlFor="emergency-access"
-              label={copy.access}
-            />
-
-            <textarea
-              id="emergency-access"
-              style={textarea}
-              rows={4}
-              value={form.accessNotes}
-              placeholder={copy.accessPlaceholder}
-              disabled={pending}
-              onChange={(event) =>
-                updateForm("accessNotes", event.target.value)
               }
             />
 
@@ -2191,11 +2067,7 @@ function EmergencyRequest({ setPage }) {
               }}
               disabled={pending}
             >
-              {pending
-                ? copy.saving
-                : canonicalRequest
-                  ? copy.updateDraft
-                  : copy.saveDraft}
+              {pending ? copy.saving : copy.continueToSafety}
             </button>
           </form>
         )}
@@ -2206,16 +2078,6 @@ function EmergencyRequest({ setPage }) {
           editableDraft &&
           phase === "safety" && (
           <form style={formCard} onSubmit={submitSafety} noValidate>
-            <div style={stepStatus} role="status" aria-live="polite">
-              <span style={stepEyebrow}>{copy.stepOneComplete}</span>
-              <strong style={stepConfirmation}>
-                {copy.draftSavedShort}
-              </strong>
-              <span style={stepNext}>
-                {copy.stepTwo} · {copy.safetyTitle}
-              </span>
-            </div>
-
             <h2
               ref={safetyReviewHeadingRef}
               tabIndex={-1}
@@ -2374,7 +2236,9 @@ function EmergencyRequest({ setPage }) {
               }}
               disabled={pending}
             >
-              {pending ? copy.safetySaving : copy.saveSafety}
+              {pending
+                ? copy.safetySaving
+                : copy.continueToFindHelp}
             </button>
 
             <button
@@ -2386,57 +2250,6 @@ function EmergencyRequest({ setPage }) {
               {copy.editDetails}
             </button>
           </form>
-        )}
-
-        {recoveryState !== "loading" &&
-          recoveryState !== "failed" &&
-          showDraftWorkflow &&
-          editableDraft &&
-          phase === "complete" && (
-          <section style={completeCard}>
-            <h2 style={sectionTitle}>{copy.submissionTitle}</h2>
-            <p style={completeBody}>{copy.submissionIntro}</p>
-
-            <div style={acknowledgmentNotice}>
-              {copy.submissionAcknowledgment}
-            </div>
-
-            <div style={distributionPill}>
-              {copy.distributionUnavailable}
-            </div>
-
-            <button
-              type="button"
-              style={{
-                ...primaryButton,
-                ...(pending ? disabledButton : {}),
-              }}
-              onClick={requestSubmission}
-              disabled={pending}
-            >
-              {copy.openSubmissionConfirmation}
-            </button>
-
-            <button
-              type="button"
-              style={secondaryButton}
-              onClick={editDetails}
-              disabled={pending}
-            >
-              {copy.editDetails}
-            </button>
-
-            {cancellationAvailable && (
-              <button
-                type="button"
-                style={dangerButton}
-                onClick={requestCancellation}
-                disabled={pending}
-              >
-                {copy.cancelRequest}
-              </button>
-            )}
-          </section>
         )}
 
         {recoveryState !== "loading" &&
@@ -2519,9 +2332,7 @@ function EmergencyRequest({ setPage }) {
             )
           )}
 
-        {showDraftWorkflow &&
-          phase !== "complete" &&
-          cancellationAvailable && (
+        {showDraftWorkflow && cancellationAvailable && (
             <button
               type="button"
               style={dangerButton}
@@ -2532,52 +2343,9 @@ function EmergencyRequest({ setPage }) {
             </button>
           )}
 
-        {submissionConfirmationOpen && (
-          <section
-            style={submissionConfirmationCard}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="emergency-submission-title"
-          >
-            <h2
-              id="emergency-submission-title"
-              style={sectionTitle}
-            >
-              {copy.submissionConfirmTitle}
-            </h2>
-
-            <p style={completeBody}>
-              {copy.submissionConfirmBody}
-            </p>
-
-            <button
-              type="button"
-              style={{
-                ...primaryButton,
-                ...(pending ? disabledButton : {}),
-              }}
-              onClick={confirmSubmission}
-              disabled={pending}
-            >
-              {pending
-                ? copy.submitting
-                : copy.confirmSubmission}
-            </button>
-
-            <button
-              type="button"
-              style={secondaryButton}
-              onClick={keepEditingEmergencyRequest}
-              disabled={pending}
-            >
-              {copy.keepEditing}
-            </button>
-          </section>
-        )}
-
         {selectedResponse && (
           <section
-            style={submissionConfirmationCard}
+            style={selectionConfirmationCard}
             role="dialog"
             aria-modal="true"
             aria-labelledby="emergency-selection-title"
@@ -2630,7 +2398,7 @@ function EmergencyRequest({ setPage }) {
 
         {selectedAvailableProfessional && (
           <section
-            style={submissionConfirmationCard}
+            style={selectionConfirmationCard}
             role="dialog"
             aria-modal="true"
             aria-labelledby="emergency-available-selection-title"
@@ -2764,6 +2532,27 @@ function EmergencyRequest({ setPage }) {
   );
 }
 
+function EmergencyProgress({ copy, currentStage }) {
+  const stages = ["details", "safety", "find", "connected"];
+
+  return (
+    <ol style={progressList} aria-label={copy.progress}>
+      {stages.map((stage) => (
+        <li
+          key={stage}
+          style={{
+            ...progressItem,
+            ...(stage === currentStage ? progressItemCurrent : {}),
+          }}
+          aria-current={stage === currentStage ? "step" : undefined}
+        >
+          {copy.stages[stage]}
+        </li>
+      ))}
+    </ol>
+  );
+}
+
 function FieldLabel({ htmlFor, label }) {
   return (
     <label htmlFor={htmlFor} style={fieldLabel}>
@@ -2861,34 +2650,6 @@ const limitationNotice = {
   lineHeight: 1.5,
 };
 
-const canonicalCard = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-  gap: "12px",
-  marginBottom: "16px",
-  padding: "16px",
-  border: "1px solid #d1fae5",
-  borderRadius: "16px",
-  background: "#ecfdf5",
-};
-
-const canonicalLabel = {
-  display: "block",
-  marginBottom: "4px",
-  color: "#047857",
-  fontSize: "12px",
-  fontWeight: "800",
-  textTransform: "uppercase",
-  letterSpacing: "0.04em",
-};
-
-const canonicalValue = {
-  display: "block",
-  overflowWrap: "anywhere",
-  color: "#064e3b",
-  fontSize: "15px",
-};
-
 const formCard = {
   minWidth: 0,
   padding: "22px",
@@ -2896,6 +2657,74 @@ const formCard = {
   borderRadius: "22px",
   background: "white",
   boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
+};
+
+const progressList = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: "6px",
+  margin: "18px 0",
+  padding: 0,
+  listStyle: "none",
+};
+
+const progressItem = {
+  minWidth: 0,
+  padding: "8px 6px",
+  borderRadius: "10px",
+  background: "#f1f5f9",
+  color: "#64748b",
+  fontSize: "11px",
+  fontWeight: "800",
+  lineHeight: 1.25,
+  textAlign: "center",
+};
+
+const progressItemCurrent = {
+  background: "#dcfce7",
+  color: "#166534",
+  boxShadow: "inset 0 0 0 1px #86efac",
+};
+
+const serviceChoices = {
+  minWidth: 0,
+  margin: 0,
+  padding: 0,
+  border: 0,
+};
+
+const serviceChoicesLegend = {
+  width: "100%",
+  marginBottom: "10px",
+  padding: 0,
+  color: "#111827",
+  fontSize: "14px",
+  fontWeight: "800",
+};
+
+const serviceChoiceGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: "10px",
+};
+
+const serviceChoice = {
+  minHeight: "52px",
+  padding: "12px",
+  border: "1px solid #cbd5e1",
+  borderRadius: "14px",
+  background: "#fff",
+  color: "#1f2937",
+  font: "inherit",
+  fontWeight: "800",
+  cursor: "pointer",
+};
+
+const selectedServiceChoice = {
+  borderColor: "#166534",
+  background: "#ecfdf5",
+  color: "#166534",
+  boxShadow: "0 0 0 2px rgba(22, 101, 52, 0.12)",
 };
 
 const fieldLabel = {
@@ -2953,35 +2782,6 @@ const sectionIntro = {
   color: "#4b5563",
   fontSize: "15px",
   lineHeight: 1.55,
-};
-
-const stepStatus = {
-  display: "grid",
-  gap: "4px",
-  marginBottom: "20px",
-  padding: "16px",
-  border: "1px solid #a7f3d0",
-  borderRadius: "16px",
-  background: "#ecfdf5",
-  color: "#065f46",
-};
-
-const stepEyebrow = {
-  fontSize: "12px",
-  fontWeight: "900",
-  letterSpacing: "0.04em",
-  textTransform: "uppercase",
-};
-
-const stepConfirmation = {
-  fontSize: "17px",
-  lineHeight: 1.35,
-};
-
-const stepNext = {
-  color: "#047857",
-  fontSize: "14px",
-  fontWeight: "800",
 };
 
 const noHazardsNotice = {
@@ -3107,23 +2907,11 @@ const confirmationCard = {
   background: "#fffafa",
 };
 
-const submissionConfirmationCard = {
+const selectionConfirmationCard = {
   ...completeCard,
   marginTop: "16px",
   border: "2px solid #bfdbfe",
   background: "#f8fbff",
-};
-
-const acknowledgmentNotice = {
-  marginBottom: "16px",
-  padding: "16px",
-  border: "1px solid #bfdbfe",
-  borderRadius: "14px",
-  background: "#eff6ff",
-  color: "#1e3a8a",
-  fontSize: "14px",
-  lineHeight: 1.55,
-  fontWeight: "700",
 };
 
 const completeBody = {
@@ -3131,16 +2919,6 @@ const completeBody = {
   color: "#4b5563",
   fontSize: "15px",
   lineHeight: 1.6,
-};
-
-const distributionPill = {
-  display: "inline-flex",
-  padding: "9px 12px",
-  borderRadius: "999px",
-  background: "#fff7ed",
-  color: "#9a3412",
-  fontSize: "13px",
-  fontWeight: "900",
 };
 
 const navigationButton = {

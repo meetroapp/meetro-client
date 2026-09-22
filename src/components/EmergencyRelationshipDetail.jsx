@@ -241,14 +241,15 @@ function EmergencyRelationshipDetail({
       status: "Current status",
       businessCategory: "Business category",
       selectedType: "Selected Professional",
-      selectedStatus: "Connected to this Emergency request",
+      selectedStatus: "Professional Connected",
+      messageProfessional: "Message Professional",
       selectedIntro:
         "This identity comes from the active professional relationship for this Emergency request.",
       waitingName: "Waiting for a Professional",
       waitingType: "Relationship Status",
       waitingIntro:
         "No professional relationship is shown until Meetro confirms a selection.",
-      lifecycle: "Emergency progress",
+      lifecycle: "View Emergency Status",
       nextStep: "What happens next",
       location: "Service location and access",
       unit: "Unit / Apt / Suite",
@@ -274,15 +275,15 @@ function EmergencyRelationshipDetail({
       status: "Estado actual",
       businessCategory: "Categoría del negocio",
       selectedType: "Profesional Seleccionado",
-      selectedStatus:
-        "Conectado a esta solicitud de Emergencia",
+      selectedStatus: "Profesional Conectado",
+      messageProfessional: "Enviar Mensaje al Profesional",
       selectedIntro:
         "Esta identidad proviene de la relación profesional activa para esta solicitud de Emergencia.",
       waitingName: "Esperando a un Profesional",
       waitingType: "Estado de la Relación",
       waitingIntro:
         "No se muestra una relación profesional hasta que Meetro confirme una selección.",
-      lifecycle: "Progreso de Emergencia",
+      lifecycle: "Ver Estado de Emergencia",
       nextStep: "Qué sucede después",
       location: "Ubicación y acceso al servicio",
       unit: "Unidad / Apartamento / Suite",
@@ -311,12 +312,12 @@ function EmergencyRelationshipDetail({
     typeof onOpenConversation === "function"
       ? [
           {
-            label: getConversationActionLabel(
-              detail.completed
-                ? CONVERSATION_ACTION_STAGE.HISTORY
-                : CONVERSATION_ACTION_STAGE.ACTIVE,
-              language
-            ),
+            label: detail.completed
+              ? getConversationActionLabel(
+                  CONVERSATION_ACTION_STAGE.HISTORY,
+                  language
+                )
+              : copy.messageProfessional,
             primary: true,
             onClick: onOpenConversation,
           },
