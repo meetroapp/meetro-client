@@ -141,6 +141,29 @@ test("provider prose containing an action is inert display text", async () => {
   const answer = await resolveAskMeetroRequest("Explain the next step", { requestConversation: async () => text });
   assert.equal(answer.text, text); assert.deepEqual(answer.actions, []); assert.equal(answer.route, undefined);
 });
+test("audience validation remains fail-closed for Emergency advisory context", async () => {
+  await assert.rejects(
+    resolveAskMeetroRequest("What details should I include?", {
+      context: { page: "emergencyRequest", label: "Emergency Help" },
+      role: "personal",
+      requestConversation: async () => ({
+        text: "Professional-only response",
+        resolution: {
+          version: 1,
+          status: "NO_RECORD_REQUIRED",
+          audience: "professional",
+          records: [],
+          truncated: false,
+          reviewRequired: false,
+          continuation: null,
+          answerSource: "DETERMINISTIC_RETRIEVAL",
+          providerInvoked: false,
+        },
+      }),
+    }),
+    (error) => error?.code === "ASK_CONVERSATION_AUDIENCE_INVALID"
+  );
+});
 test("provider failure rejects without fake fallback actions", async () => {
   await assert.rejects(resolveAskMeetroRequest("Help", { authFetchImpl: async () => ({ response: { ok: false }, data: { code: "INTELLIGENCE_PROVIDER_TIMEOUT" } }) }), /could not complete/);
 });

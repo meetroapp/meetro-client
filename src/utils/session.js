@@ -508,6 +508,7 @@ const personalModePages = new Set([
   "myRequests",
   "assistant",
   "emergency",
+  "emergencyRequest",
 ]);
 
 export function getAccountModeForPage(page = "", fallbackMode = "personal") {

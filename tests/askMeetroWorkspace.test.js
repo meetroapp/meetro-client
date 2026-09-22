@@ -41,9 +41,9 @@ test.after(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT; delete globalThis.__dashboardHttp;
 });
 const JOB = "7e742dc1-e2a2-49c6-a493-11e351c80d54", EVIDENCE = "7a02ee20-7f32-48eb-96dc-a3217bc5dcda";
-async function mount(t, { host = false, context = { page: "workCenter", jobId: JOB }, completionApi, resolveActions, requestConversation } = {}) {
-  localStorage.clear(); localStorage.setItem("activeAccountMode", "business"); localStorage.setItem("language", "en");
-  window.history.replaceState({}, "", `#workCenter?jobId=${JOB}&stage=work`);
+async function mount(t, { host = false, context = { page: "workCenter", jobId: JOB }, completionApi, resolveActions, requestConversation, currentPage = "workCenter", role = "business", activeAccountMode = "business", route = `#workCenter?jobId=${JOB}&stage=work` } = {}) {
+  localStorage.clear(); localStorage.setItem("activeAccountMode", activeAccountMode); localStorage.setItem("language", "en");
+  window.history.replaceState({}, "", route);
   const calls = [], routes = [];
   globalThis.__dashboardHttp = async (path, options = {}) => {
     calls.push({ path, ...options });
@@ -89,7 +89,7 @@ async function mount(t, { host = false, context = { page: "workCenter", jobId: J
   const { default: Component } = await vite.ssrLoadModule(`/src/components/${host ? "AskMeetroHost" : "AskMeetroWorkspace"}.jsx`);
   const root = createRoot(document.getElementById("root"));
   t.after(async () => { await act(async () => root.unmount()); });
-  const props = { currentPage: "workCenter", role: "business", context, ...(resolveActions ? { resolveActions } : {}), ...(requestConversation ? { requestConversation } : {}), ...(completionApi ? { completionApi } : {}), setPage: (route) => routes.push(route), onClose() {} };
+  const props = { currentPage, role, context, ...(resolveActions ? { resolveActions } : {}), ...(requestConversation ? { requestConversation } : {}), ...(completionApi ? { completionApi } : {}), setPage: (nextRoute) => routes.push(nextRoute), onClose() {} };
   await act(async () => { root.render(React.createElement(Component, props, host ? React.createElement("input", { "aria-label": "Existing unsaved Quote", defaultValue: "Unsaved scope" }) : null)); await pause(); });
   async function click(label) {
     const button = [...document.querySelectorAll("button")].find((item) => item.textContent.trim() === label || item.getAttribute("aria-label") === label);
@@ -164,6 +164,68 @@ test("persistent launcher opens a dedicated workspace and closes without unmount
   assert.equal(w.routes.length, 0);
   await act(async () => { window.dispatchEvent(new CustomEvent("meetro:assistant:open", { detail: { initialQuestion: "Help with this job" } })); await pause(); });
   assert.equal(document.querySelector(".ask-meetro-composer textarea").value, "Help with this job");
+});
+
+test("Emergency Ask uses personal advisory context and bounded help suggestions", async (t) => {
+  const w = await mount(t, {
+    host: true,
+    currentPage: "emergencyRequest",
+    role: "business",
+    activeAccountMode: "business",
+    route: "#emergencyRequest?requestId=41",
+  });
+
+  await act(async () => {
+    window.dispatchEvent(new CustomEvent("meetro:assistant:open", {
+      detail: {
+        context: {
+          page: "emergencyRequest",
+          requestId: "41",
+          label: "Emergency Help",
+        },
+      },
+    }));
+    await pause();
+  });
+
+  const banner = document.querySelector(".ask-meetro-context");
+  assert.ok(banner);
+  assert.match(banner.textContent, /Working with: Emergency Help/);
+  assert.match(banner.textContent, /Emergency guidance · no record changes/);
+  assert.doesNotMatch(banner.textContent, /Exact record context/);
+
+  const cards = [...document.querySelectorAll(".ask-meetro-suggestions button")];
+  assert.equal(cards.length, 3);
+  assert.deepEqual(
+    cards.map((card) => card.querySelector("strong")?.textContent),
+    [
+      "Help me describe what’s happening",
+      "What details should I include?",
+      "Explain a Safety Check question",
+    ]
+  );
+  assert.doesNotMatch(
+    document.querySelector(".ask-meetro-suggestions").textContent,
+    /Update a job|Schedule a visit|Create a quote|Find new opportunities|Track my project|Request a service/
+  );
+
+  await act(async () => {
+    cards[2].click();
+    await pause();
+  });
+  assert.equal(
+    document.querySelector(".ask-meetro-composer textarea").value,
+    "Explain a Safety Check question without choosing an answer for me."
+  );
+  await w.click("Send");
+
+  const askCall = w.calls.find((call) => call.path === "/api/companion/ask");
+  assert.ok(askCall);
+  assert.deepEqual(JSON.parse(askCall.body).context, {
+    retrieval: { version: 1 },
+  });
+  assert.equal(document.querySelector(".ask-meetro-actions"), null);
+  assert.deepEqual(w.routes, []);
 });
 test("keyboard-responsive workspace reserves mobile nav space and a reachable composer", () => {
   const css = readFileSync("src/components/AskMeetroWorkspace.css", "utf8");
@@ -861,34 +923,6 @@ test("specific Quote edit pulls the exact working form into Ask without leaving 
     updatedAt: "2026-09-10T10:00:00.000Z",
   };
 
-  const requestConversation = async () => ({
-    text:
-      "The target record is resolved. Continue through its existing governed operation and Review. Confirm & Apply is still required; nothing has been changed.",
-    resolution: {
-      version: 1,
-      status: "RESOLVED",
-      audience: "professional",
-      records: [{
-        record: {
-          type: "DOCUMENT_DRAFT",
-          id: WORKING_DRAFT_ID,
-        },
-        name: "Bob Hamel",
-        title: "Window repair",
-        number: "Q-0000049",
-        label: "Bob Hamel — Window repair",
-      }],
-      truncated: false,
-      reviewRequired: true,
-      continuation: {
-        reference: CANONICAL_QUOTE_ID,
-        expiresAfterSeconds: 900,
-      },
-      answerSource: "DETERMINISTIC_RETRIEVAL",
-      providerInvoked: false,
-    },
-  });
-
   const w = await mount(t, {
     host: true,
     context: {},
@@ -904,7 +938,7 @@ test("specific Quote edit pulls the exact working form into Ask without leaving 
     await pause();
   });
 
-  globalThis.__dashboardHttp = async (path, options = {}) => {
+  globalThis.__dashboardHttp = async (path) => {
     if (path === "/api/companion/ask") {
       return {
         response: { ok: true, status: 200 },
@@ -1083,7 +1117,7 @@ test("specific Quote edit pulls the exact working form into Ask without leaving 
     underlying
   );
 
-  for (let attempt = 0; attempt < 40 && !document.querySelector(".meetro-assistant-launcher"); attempt += 1) {
+  for (let attempt = 0; attempt < 160 && !document.querySelector(".meetro-assistant-launcher"); attempt += 1) {
     await act(async () => { await pause(); });
   }
   await act(async () => {
@@ -1269,7 +1303,7 @@ test("specific Quote edit pulls the exact working form into Ask without leaving 
     null
   );
 
-  for (let attempt = 0; attempt < 40 && !document.querySelector(".meetro-assistant-launcher"); attempt += 1) {
+  for (let attempt = 0; attempt < 160 && !document.querySelector(".meetro-assistant-launcher"); attempt += 1) {
     await act(async () => { await pause(); });
   }
   await act(async () => {

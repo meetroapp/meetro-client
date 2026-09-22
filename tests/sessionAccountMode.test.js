@@ -190,6 +190,23 @@ test("Discover preserves business account mode for professional users", () => {
   assert.equal(localStorage.getItem("userRole"), "handyman");
 });
 
+test("Emergency Request forces personal mode for a dual-role professional", () => {
+  installStorage();
+  localStorage.setItem("isProfessional", "true");
+  localStorage.setItem("accountType", "professional");
+  localStorage.setItem("userRole", "handyman");
+  localStorage.setItem("businessCategory", "handyman");
+  localStorage.setItem("activeAccountMode", "business");
+
+  assert.equal(
+    getAccountModeForPage("emergencyRequest", "business"),
+    "personal"
+  );
+  assert.equal(syncAccountModeForPage("emergencyRequest"), true);
+  assert.equal(localStorage.getItem("activeAccountMode"), "personal");
+  assert.equal(isProfessionalSession(), true);
+});
+
 test("Discover preserves personal account mode for standard users", () => {
   installStorage();
   localStorage.setItem("accountType", "homeowner");

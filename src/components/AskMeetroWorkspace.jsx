@@ -47,6 +47,7 @@ function syncAskMeetroComposerHeight(element) {
 const suggestions = {
   business: [["Update a job", "Mark this job as completed."], ["Schedule a visit", "Schedule a consultation for Friday at 10 AM."], ["Create a quote", "Create a quote for interior painting."], ["Find new opportunities", "Show me new leads near Cape Coral."]],
   personal: [["Track my project", "Show me the next step for this project."], ["Continue a conversation", "Open my conversations."], ["Request a service", "Help me describe a new service request."], ["Review a quote", "Help me understand this quote."]],
+  emergency: [["Help me describe what’s happening", "Help me describe what’s happening."], ["What details should I include?", "What details should I include?"], ["Explain a Safety Check question", "Explain a Safety Check question without choosing an answer for me."]],
 };
 
 export default function AskMeetroWorkspace({ context = {}, role = "personal", initialQuestion = "", currentPage = "home", onClose, setPage, session, onSessionChange, resolveActions = resolveAskMeetroActions, requestConversation, completionApi = { review: reviewAskMeetroCompletion, apply: applyAskMeetroCompletion } }) {
@@ -429,12 +430,16 @@ export default function AskMeetroWorkspace({ context = {}, role = "personal", in
   // Voice fallback is informational; failed actions retain their alert presentation.
   const isVoiceNotice = Object.values(ASK_VOICE_NOTICE).includes(error);
   const subject = context.label || context.draftId || context.jobId || context.invoiceId || context.requestId || context.conversationId || context.relationshipId;
+  const isEmergencyAdvisory = context.page === "emergencyRequest";
+  const activeSuggestions = isEmergencyAdvisory
+    ? suggestions.emergency
+    : suggestions[role === "business" ? "business" : "personal"];
   return <div className={`ask-meetro-shell${viewport?.keyboard ? " is-keyboard-open" : ""}`} style={viewport ? { height: viewport.height, top: viewport.top } : undefined}>
     <main className="ask-meetro-workspace" aria-labelledby="ask-meetro-title">
       <header className="ask-meetro-header"><div><span className="ask-meetro-mark" aria-hidden="true">M</span><h1 id="ask-meetro-title">Ask Meetro</h1></div><button type="button" onClick={onClose} disabled={busy} aria-label="Close Ask Meetro">×</button></header>
-      {subject ? <div className="ask-meetro-context"><MeetroIcon name="workCenter" size={18} decorative /><span>Working with: {subject}</span><small>Exact record context · changes require review</small></div> : null}
+      {subject ? <div className="ask-meetro-context"><MeetroIcon name="workCenter" size={18} decorative /><span>Working with: {subject}</span><small>{isEmergencyAdvisory ? "Emergency guidance · no record changes" : "Exact record context · changes require review"}</small></div> : null}
       <div className="ask-meetro-conversation" role="region" aria-label="Ask Meetro conversation">
-        {!messages.length ? <section className="ask-meetro-welcome"><span className="ask-meetro-welcome-mark" aria-hidden="true">M</span><h2>Your assistant for real work.</h2><p>Tell me what you need. I'll help you take action, find information, and keep your work organized.</p><div className="ask-meetro-capabilities"><span>Understand</span><span>Take Action</span><span>Keep It Organized</span></div><div className="ask-meetro-suggestions">{suggestions[role === "business" ? "business" : "personal"].map(([title, prompt]) => <button key={title} type="button" onClick={() => { setInput(prompt); composerRef.current?.focus(); }}><strong>{title}</strong><span>{prompt}</span><MeetroIcon name="openExternal" size={20} decorative /></button>)}</div></section> : <div role="log" aria-live="polite">{messages.map((message, index) => <article key={index} className={`ask-meetro-message is-${message.role}`}><strong>{message.role === "user" ? "You" : "Meetro"}</strong><p>{message.text}</p></article>)}</div>}
+        {!messages.length ? <section className="ask-meetro-welcome"><span className="ask-meetro-welcome-mark" aria-hidden="true">M</span><h2>Your assistant for real work.</h2><p>Tell me what you need. I'll help you take action, find information, and keep your work organized.</p><div className="ask-meetro-capabilities"><span>Understand</span><span>Take Action</span><span>Keep It Organized</span></div><div className="ask-meetro-suggestions">{activeSuggestions.map(([title, prompt]) => <button key={title} type="button" onClick={() => { setInput(prompt); composerRef.current?.focus(); }}><strong>{title}</strong><span>{prompt}</span><MeetroIcon name="openExternal" size={20} decorative /></button>)}</div></section> : <div role="log" aria-live="polite">{messages.map((message, index) => <article key={index} className={`ask-meetro-message is-${message.role}`}><strong>{message.role === "user" ? "You" : "Meetro"}</strong><p>{message.text}</p></article>)}</div>}
         {inlineWorkspace?.type === "BUSINESS_DOCUMENT" && ["QUOTE", "INVOICE"].includes(inlineWorkspace.documentType) ? (
           <UnifiedBusinessDocumentWorkspace
             hostMode="ask"
