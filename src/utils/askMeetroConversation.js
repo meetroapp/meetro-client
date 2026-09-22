@@ -133,6 +133,17 @@ export function validateAskMeetroResolution(value) {
 }
 
 export function buildAskMeetroConversationContext(context = {}, continuation = null) {
+  if (context?.page === "emergencyRequest") {
+    if (continuation !== null && continuation !== undefined) {
+      throw Object.assign(
+        new Error("Emergency guidance does not support record selection. Start a new advisory question."),
+        { code: "ASK_CONVERSATION_CONTINUATION_INVALID" }
+      );
+    }
+
+    return {};
+  }
+
   const exact = askConversationRecord(context);
   const retrieval = { version: 1 };
 

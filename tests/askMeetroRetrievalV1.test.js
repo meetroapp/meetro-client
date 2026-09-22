@@ -62,6 +62,79 @@ test("Retrieval V1 context-free request contains only retrieval opt-in", () => {
   });
 });
 
+test("Emergency advisory context opts out of Retrieval V1 and all record identity", () => {
+  assert.deepEqual(
+    buildAskMeetroConversationContext({ page: "emergencyRequest" }),
+    {}
+  );
+  assert.deepEqual(
+    buildAskMeetroConversationContext({
+      page: "emergencyRequest",
+      requestId: "41",
+      jobId: JOB_ID,
+      conversationId: "340",
+      draftId: SECOND_JOB_ID,
+      invoiceId: SECOND_JOB_ID,
+      relationshipId: SECOND_JOB_ID,
+    }),
+    {}
+  );
+});
+
+test("Emergency advisory context rejects record-selection continuation", () => {
+  assert.throws(
+    () =>
+      buildAskMeetroConversationContext(
+        { page: "emergencyRequest", requestId: "41" },
+        { reference: OPERATION_ID, index: 0 }
+      ),
+    (error) => error?.code === "ASK_CONVERSATION_CONTINUATION_INVALID"
+  );
+});
+
+test("Emergency advisory transport posts empty context and accepts text-only conversation", async () => {
+  let requestBody;
+  const answer = await requestAskConversation({
+    instruction: "What details should I include?",
+    context: {
+      page: "emergencyRequest",
+      requestId: "41",
+      jobId: JOB_ID,
+    },
+    messages: [{ role: "user", text: "A pipe is leaking." }],
+    returnResolution: true,
+    authFetchImpl: async (_path, options) => {
+      requestBody = JSON.parse(options.body);
+      return {
+        response: { ok: true },
+        data: {
+          success: true,
+          code: "INTELLIGENCE_OPERATION_COMPLETED",
+          operation: "companion.converse",
+          result: {
+            schemaVersion: 1,
+            text: "Include where the leak is and what you can safely observe.",
+            authorityClassification: "CONVERSATIONAL_NON_CANONICAL",
+            directMutationAllowed: false,
+          },
+        },
+      };
+    },
+  });
+
+  assert.deepEqual(requestBody.context, {});
+  assert.equal(Object.hasOwn(requestBody.context, "retrieval"), false);
+  assert.equal(Object.hasOwn(requestBody.context, "record"), false);
+  assert.equal(requestBody.input.message, "What details should I include?");
+  assert.deepEqual(requestBody.input.history, [
+    { role: "user", text: "A pipe is leaking." },
+  ]);
+  assert.deepEqual(answer, {
+    text: "Include where the leak is and what you can safely observe.",
+    resolution: null,
+  });
+});
+
 test("Retrieval V1 exact record coexists with retrieval opt-in", () => {
   assert.deepEqual(
     buildAskMeetroConversationContext({

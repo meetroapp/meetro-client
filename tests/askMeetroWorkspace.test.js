@@ -221,9 +221,7 @@ test("Emergency Ask uses personal advisory context and bounded help suggestions"
 
   const askCall = w.calls.find((call) => call.path === "/api/companion/ask");
   assert.ok(askCall);
-  assert.deepEqual(JSON.parse(askCall.body).context, {
-    retrieval: { version: 1 },
-  });
+  assert.deepEqual(JSON.parse(askCall.body).context, {});
   assert.equal(document.querySelector(".ask-meetro-actions"), null);
   assert.deepEqual(w.routes, []);
 });

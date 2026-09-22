@@ -141,10 +141,10 @@ test("provider prose containing an action is inert display text", async () => {
   const answer = await resolveAskMeetroRequest("Explain the next step", { requestConversation: async () => text });
   assert.equal(answer.text, text); assert.deepEqual(answer.actions, []); assert.equal(answer.route, undefined);
 });
-test("audience validation remains fail-closed for Emergency advisory context", async () => {
+test("audience validation remains fail-closed for genuine retrieval context", async () => {
   await assert.rejects(
     resolveAskMeetroRequest("What details should I include?", {
-      context: { page: "emergencyRequest", label: "Emergency Help" },
+      context: { page: "home" },
       role: "personal",
       requestConversation: async () => ({
         text: "Professional-only response",
