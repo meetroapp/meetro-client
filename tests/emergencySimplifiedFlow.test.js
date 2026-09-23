@@ -128,7 +128,7 @@ test("Ask Meetro renders controlled homeowner copy instead of raw provider summa
 
   assert.match(
     requestSource,
-    /This sounds like a \$\{serviceLabel\} emergency\./
+    /This sounds like a match for \$\{serviceLabel\}\./
   );
 
   assert.doesNotMatch(

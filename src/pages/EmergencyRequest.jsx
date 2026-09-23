@@ -105,7 +105,7 @@ function buildAskMeetroDisplayMessage({
     if (serviceLabel) {
       return language === "es"
         ? `Esto parece una emergencia que necesita ${serviceLabel}.`
-        : `This sounds like a ${serviceLabel} emergency.`;
+        : `This sounds like a match for ${serviceLabel}.`;
     }
 
     return language === "es"
