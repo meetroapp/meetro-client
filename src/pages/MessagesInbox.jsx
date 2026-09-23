@@ -3058,6 +3058,41 @@ function MessagesInbox({ setPage, currentPage }) {
     ).length;
   }
 
+  function getMessageSectionUnreadCount(section) {
+    if (!["conversations", "hiring", "emergency"].includes(section)) {
+      return 0;
+    }
+
+    return liveIdentityQuotes
+      .filter((quote) => conversationMatchesMessageSection(quote, section))
+      .reduce((total, conversation) => {
+        const conversationId = Number(
+          conversation.conversationId || conversation.id
+        );
+        const jobId = String(
+          conversation.relationship?.jobId ||
+            conversation.jobId ||
+            conversation.job_id ||
+            ""
+        ).trim().toLowerCase();
+
+        const customerAttention = getConversationCustomerAttention(
+          communicationAttention,
+          conversationId
+        );
+
+        const teamAttention =
+          communicationAttention.byJob.find(
+            (scope) => scope.jobId === jobId
+          )?.teamUnread || 0;
+
+        const authoritativeUnread = customerAttention + teamAttention;
+        const unread = authoritativeUnread || (conversation.unread ? 1 : 0);
+
+        return total + unread;
+      }, 0);
+  }
+
   function relationshipHasActiveConversation(relationship = {}) {
     return getRelationshipConversations(relationship).length > 0;
   }
@@ -5563,7 +5598,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
             <div style={communicationSectionTabs} aria-label={t("messagesContextsAria", language)}>
               {COMMUNICATION_SECTION_OPTIONS.map(([key, label]) => {
-              const count = getMessageSectionCount(key);
+              const unreadCount = getMessageSectionUnreadCount(key);
 
               return (
                 <button
@@ -5576,7 +5611,17 @@ function MessagesInbox({ setPage, currentPage }) {
                   onClick={() => setMessageSection(key)}
                 >
                   <span style={messageSectionTabLabel}>{t(label, language)}</span>
-                  {count > 0 && <strong style={messageSectionTabCount}>{count}</strong>}
+                  {unreadCount > 0 && (
+                    <strong
+                      style={{
+                        ...messageSectionTabCount,
+                        ...messageSectionAttentionCount,
+                      }}
+                      aria-label={`${unreadCount} unread`}
+                    >
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </strong>
+                  )}
                 </button>
               );
               })}
@@ -7410,6 +7455,17 @@ const messageSectionTabCount = {
   padding: "0 5px",
   fontSize: "9px",
   lineHeight: 1,
+};
+
+const messageSectionAttentionCount = {
+  minWidth: "20px",
+  height: "20px",
+  padding: "0 6px",
+  background: "#dc2626",
+  color: "#ffffff",
+  fontSize: "10px",
+  fontWeight: "950",
+  boxShadow: "0 0 0 2px rgba(220,38,38,0.12)",
 };
 
 const messageSectionContext = {
