@@ -3303,11 +3303,6 @@ const askConsentActions = {
   marginTop: "16px",
 };
 
-const askConsentPrimaryButton = {
-  ...primaryButton,
-  marginTop: 0,
-};
-
 const askConsentSecondaryButton = {
   ...secondaryEntryButton,
   width: "100%",
@@ -3537,6 +3532,11 @@ const primaryButton = {
   fontSize: "16px",
   fontWeight: "900",
   cursor: "pointer",
+};
+
+const askConsentPrimaryButton = {
+  ...primaryButton,
+  marginTop: 0,
 };
 
 const secondaryButton = {
