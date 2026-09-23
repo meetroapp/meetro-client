@@ -10,3 +10,53 @@
 .emergency-work-center button.emergency-work-center__primary { background:#116dd6; border-color:#116dd6; color:white; font-weight:600; }
 .emergency-work-center__actions { display:flex; flex-wrap:wrap; gap:8px; }
 @media(max-width:600px) { .emergency-work-center section { padding:14px; } .emergency-work-center button { max-width:100%; } }
+
+/* Emergency Evaluation contextual field help */
+.emergency-evaluation__field-heading {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.emergency-evaluation__info {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #526173;
+  font: inherit;
+  cursor: pointer;
+}
+
+.emergency-evaluation__info:hover,
+.emergency-evaluation__info:focus-visible {
+  background: #eef5f1;
+  color: #145c3b;
+}
+
+.emergency-evaluation__info:focus-visible {
+  outline: 2px solid #1769e0;
+  outline-offset: 2px;
+}
+
+.emergency-evaluation__helper {
+  display: grid;
+  gap: 3px;
+  margin: 4px 0 8px;
+  padding: 10px 12px;
+  border: 1px solid #d7e3dc;
+  border-radius: 10px;
+  background: #f7faf8;
+  color: #34443b;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.emergency-evaluation__helper-example {
+  color: #65736b;
+}

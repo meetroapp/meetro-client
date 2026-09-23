@@ -19,6 +19,7 @@ function EmergencyEvaluation({record,liveJob,setPage,onRefresh}) {
   const [state,setState]=useState({loading:true,evaluation:null,error:''});
   const [form,setForm]=useState({serviceType:record.serviceSpecialty||'',context:'emergency_request',notes:'',findings:''});
   const [pending,setPending]=useState(false);
+  const [evaluationHelp,setEvaluationHelp]=useState('');
   useEffect(()=>{
     let active=true;
     loadCanonicalEvaluationForRecord({record,setPage}).then(evaluation=>{
@@ -40,8 +41,64 @@ function EmergencyEvaluation({record,liveJob,setPage,onRefresh}) {
   }
   return <section aria-label="Emergency Evaluation"><h3>Evaluation</h3>
     {state.loading&&<p role="status">Loading Evaluation…</p>}{state.error&&<p role="alert">{state.error}</p>}
-    <label>Observations<textarea value={form.notes} disabled={!editable||pending} onChange={e=>setForm({...form,notes:e.target.value})}/></label>
-    <label>Findings<textarea value={form.findings} disabled={!editable||pending} onChange={e=>setForm({...form,findings:e.target.value,findingRecords:[]})}/></label>
+    <label>
+      <span className="emergency-evaluation__field-heading">
+        <span>Observations</span>
+        <button
+          type="button"
+          className="emergency-evaluation__info"
+          aria-label="About Observations"
+          aria-expanded={evaluationHelp==='observations'}
+          aria-controls="emergency-evaluation-observations-help"
+          onClick={()=>setEvaluationHelp(current=>current==='observations'?'':'observations')}
+        >
+          <span aria-hidden="true">ⓘ</span>
+        </button>
+      </span>
+      {evaluationHelp==='observations'&&(
+        <span
+          id="emergency-evaluation-observations-help"
+          className="emergency-evaluation__helper"
+          role="note"
+        >
+          <strong>Observations</strong>
+          <span>What did you see, test, measure, or confirm during the evaluation?</span>
+          <span className="emergency-evaluation__helper-example">
+            Example: Cold-water shut-off valve under the sink is actively leaking.
+          </span>
+        </span>
+      )}
+      <textarea value={form.notes} disabled={!editable||pending} onChange={e=>setForm({...form,notes:e.target.value})}/>
+    </label>
+    <label>
+      <span className="emergency-evaluation__field-heading">
+        <span>Findings</span>
+        <button
+          type="button"
+          className="emergency-evaluation__info"
+          aria-label="About Findings"
+          aria-expanded={evaluationHelp==='findings'}
+          aria-controls="emergency-evaluation-findings-help"
+          onClick={()=>setEvaluationHelp(current=>current==='findings'?'':'findings')}
+        >
+          <span aria-hidden="true">ⓘ</span>
+        </button>
+      </span>
+      {evaluationHelp==='findings'&&(
+        <span
+          id="emergency-evaluation-findings-help"
+          className="emergency-evaluation__helper"
+          role="note"
+        >
+          <strong>Findings</strong>
+          <span>What did you determine from what you observed?</span>
+          <span className="emergency-evaluation__helper-example">
+            Example: The shut-off valve has failed and requires replacement.
+          </span>
+        </span>
+      )}
+      <textarea value={form.findings} disabled={!editable||pending} onChange={e=>setForm({...form,findings:e.target.value,findingRecords:[]})}/>
+    </label>
     {editable&&<div className="emergency-work-center__actions"><button disabled={pending} onClick={()=>save(false)}>Save Evaluation</button><button disabled={pending} onClick={()=>save(true)}>Complete Evaluation</button></div>}
     {state.evaluation?.evaluation.status==='completed'&&<p>Evaluation Complete</p>}
   </section>;
