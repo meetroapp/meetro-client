@@ -4,7 +4,7 @@ import BottomNav from "../components/BottomNav";
 import GuidedWorkspaceCard from "../components/GuidedWorkspaceCard";
 import ServiceSelectorSheet from "../components/ServiceSelectorSheet";
 import { authFetch } from "../utils/authFetch";
-import { getLanguage, t } from "../utils/language";
+import { t } from "../utils/language";
 import {
   clearAssistantRequestDraft,
   clearAssistantRequestDraftHandoff,
@@ -155,6 +155,57 @@ function buildSuggestedRequestTitle(value = "", fallback = "") {
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
+function createHomeownerDraftFingerprint(draft = {}) {
+  return JSON.stringify({
+    job: {
+      title: draft.job?.title || "",
+      description: draft.job?.description || "",
+    },
+    service: {
+      category: draft.service?.category || "",
+      customCategory: draft.service?.customCategory || "",
+      requestCategory: draft.service?.requestCategory || "",
+      domain: draft.service?.domain || "",
+      specialty: draft.service?.specialty || "",
+      selectedServiceOptionId:
+        draft.service?.selectedServiceOptionId || "",
+      displayLabel: draft.service?.displayLabel || "",
+    },
+    location: {
+      intakeMode: draft.location?.intakeMode || "",
+      serviceAddress:
+        draft.location?.serviceAddress || "",
+      city: draft.location?.city || "",
+      region: draft.location?.region || "",
+      postalCode: draft.location?.postalCode || "",
+      countryCode: draft.location?.countryCode || "",
+      unitNumber: draft.location?.unitNumber || "",
+      accessNotes: draft.location?.accessNotes || "",
+      affectedArea: draft.location?.affectedArea || "",
+    },
+    timing: {
+      urgency: draft.timing?.urgency || "",
+      desiredTiming: draft.timing?.desiredTiming || "",
+      availability: draft.timing?.availability || "",
+    },
+    details: {
+      measurements: draft.details?.measurements || "",
+      expectations: draft.details?.expectations || "",
+      additionalNotes:
+        draft.details?.additionalNotes || "",
+    },
+    photos: Array.isArray(draft.media?.photos)
+      ? draft.media.photos.map((photo, index) => ({
+          id:
+            photo.localPhotoId ||
+            photo.previewUrl ||
+            String(index),
+          order: photo.order ?? index,
+        }))
+      : [],
+  });
+}
+
 function getRequestHelpCopy(language) {
   const copy = {
     es: {
@@ -174,6 +225,8 @@ function getRequestHelpCopy(language) {
       matchRequired: "Elige un servicio compatible de la lista.",
       offline: "No tienes conexión. Vuelve a intentarlo cuando estés en línea.",
       failed: "La solicitud no fue creada. Revisa los detalles e inténtalo de nuevo.",
+      manualSyncAcknowledgement:
+        "Tengo los detalles más recientes de tu solicitud y los usaré de ahora en adelante.",
     },
     fr: {
       back: "Retour à l’accueil",
@@ -192,6 +245,8 @@ function getRequestHelpCopy(language) {
       matchRequired: "Choisissez un service pris en charge dans la liste.",
       offline: "Vous êtes hors ligne. Réessayez une fois connecté.",
       failed: "La demande n’a pas été créée. Vérifiez les détails et réessayez.",
+      manualSyncAcknowledgement:
+        "J’ai les détails les plus récents de votre demande et je les utiliserai désormais.",
     },
     pt: {
       back: "Voltar ao início",
@@ -210,6 +265,8 @@ function getRequestHelpCopy(language) {
       matchRequired: "Escolha um serviço compatível na lista.",
       offline: "Você está offline. Tente novamente quando estiver conectado.",
       failed: "A solicitação não foi criada. Revise os detalhes e tente novamente.",
+      manualSyncAcknowledgement:
+        "Tenho os detalhes mais recentes da sua solicitação e vou usá-los daqui para frente.",
     },
   };
 
@@ -230,6 +287,8 @@ function getRequestHelpCopy(language) {
     matchRequired: "Choose a supported service from the list.",
     offline: "You are offline. Try again when you are connected.",
     failed: "The request was not created. Review the details and try again.",
+    manualSyncAcknowledgement:
+      "I have your latest request details and will use them going forward.",
   };
 }
 
@@ -404,6 +463,7 @@ function Upload({ setPage }) {
   const descriptionEdited = draft.fieldMeta?.job?.description?.confirmed === true;
   const conversationLogRef = useRef(null);
   const manualDetailsRef = useRef(null);
+  const homeownerEditBaselineRef = useRef("");
   const [creationMessages, setCreationMessages] = useState(() =>
     createInitialCreationAssistanceMessages(language)
   );
@@ -418,6 +478,10 @@ function Upload({ setPage }) {
   const [requestMode, setRequestMode] = useState("conversation");
   const [activeGuidedCard, setActiveGuidedCard] = useState("work");
   const [photoFirstPromptShown, setPhotoFirstPromptShown] = useState(false);
+  const [
+    photoAttachmentNotice,
+    setPhotoAttachmentNotice,
+  ] = useState("");
 
   useEffect(() => {
     selectedRequestPhotosRef.current = selectedRequestPhotos;
@@ -662,6 +726,7 @@ function Upload({ setPage }) {
       ...current,
       media: { ...current.media, photos: [] },
     }));
+    setPhotoAttachmentNotice("");
   }
 
   function getSubmissionIntentKey() {
@@ -692,7 +757,10 @@ function Upload({ setPage }) {
   function removeSelectedRequestPhoto(indexToRemove) {
     const removed = selectedRequestPhotos[indexToRemove];
     removed?.revoke?.();
-    setDraft((current) => removeDraftPhoto(current, indexToRemove));
+    setDraft((current) =>
+      removeDraftPhoto(current, indexToRemove)
+    );
+    setPhotoAttachmentNotice("");
   }
 
   function moveSelectedRequestPhoto(index, direction) {
@@ -754,6 +822,24 @@ function Upload({ setPage }) {
         }))
       )
     );
+
+    const photoAcknowledgement = t(
+      "jobRequestConversationPhotosIncluded",
+      language
+    );
+
+    setPhotoAttachmentNotice(
+      photoAcknowledgement
+    );
+
+    appendCreationMessages(
+      createCreationAssistanceMessage({
+        role: "assistant",
+        kind: "photo_ack",
+        text: photoAcknowledgement,
+      })
+    );
+
     if (
       !photoFirstPromptShown &&
       !hasMeaningfulCreationText(draft.job?.description) &&
@@ -785,6 +871,11 @@ function Upload({ setPage }) {
   }
 
   function focusManualDetails(target = "description") {
+    if (requestMode !== "manual") {
+      homeownerEditBaselineRef.current =
+        createHomeownerDraftFingerprint(draft);
+    }
+
     setRequestMode("manual");
     const targetCard =
       target === "location" || target === "access"
@@ -863,9 +954,75 @@ function Upload({ setPage }) {
   }
 
   function handleBackToConversation() {
+    const currentFingerprint =
+      createHomeownerDraftFingerprint(draft);
+
+    const homeownerEditsChanged =
+      Boolean(homeownerEditBaselineRef.current) &&
+      homeownerEditBaselineRef.current !==
+        currentFingerprint;
+
+    if (homeownerEditsChanged) {
+      setPendingInterpretation(null);
+      setEditingInterpretation(false);
+      setInterpretationFailure(null);
+      setPendingInterpretText("");
+
+      const currentArea = [
+        draft.location?.city,
+        draft.location?.region,
+        draft.location?.postalCode,
+      ]
+        .filter(Boolean)
+        .join(", ");
+
+      const currentPhotoCount =
+        selectedRequestPhotos.length > 0
+          ? t(
+              "jobRequestPhotoCount",
+              language
+            ).replace(
+              "{count}",
+              String(selectedRequestPhotos.length)
+            )
+          : "";
+
+      const currentSummary = [
+        draft.job?.title,
+        draft.service?.displayLabel ||
+          draft.service?.specialty,
+        currentArea,
+        currentPhotoCount,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      const acknowledgement =
+        getRequestHelpCopy(
+          language
+        ).manualSyncAcknowledgement;
+
+      appendCreationMessages(
+        createCreationAssistanceMessage({
+          role: "assistant",
+          kind: "manual_draft_sync",
+          text: currentSummary
+            ? `${acknowledgement}\n${currentSummary}`
+            : acknowledgement,
+        })
+      );
+    }
+
+    homeownerEditBaselineRef.current =
+      currentFingerprint;
+
     setRequestMode("conversation");
+
     window.setTimeout(() => {
-      conversationLogRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+      conversationLogRef.current?.scrollIntoView({
+        block: "start",
+        behavior: "smooth",
+      });
     }, 0);
   }
 
@@ -876,6 +1033,12 @@ function Upload({ setPage }) {
 
   function handleReviewRequest(event) {
     event?.preventDefault();
+
+    if (requestMode !== "manual") {
+      homeownerEditBaselineRef.current =
+        createHomeownerDraftFingerprint(draft);
+    }
+
     setRequestMode("manual");
     setActiveGuidedCard(firstIncompleteRequiredCard);
     window.setTimeout(() => {
@@ -1367,9 +1530,13 @@ function Upload({ setPage }) {
       label: t("jobRequestDraftReviewPhotos", language),
       values: projectPhotos.length
         ? [
-            language === "es"
-              ? `${projectPhotos.length} ${projectPhotos.length === 1 ? "foto" : "fotos"}`
-              : `${projectPhotos.length} ${projectPhotos.length === 1 ? "photo" : "photos"}`,
+            t(
+              "jobRequestPhotoCount",
+              language
+            ).replace(
+              "{count}",
+              String(projectPhotos.length)
+            ),
           ]
         : [],
     },
@@ -2519,8 +2686,29 @@ function Upload({ setPage }) {
                   style={{ display: "none" }}
                 />
 
-                {uploading && <p role="status" aria-live="polite" style={uploadingText}>{t("uploadingImage")}</p>}
-                {photoError && <p role="alert" style={uploadingText}>{photoError}</p>}
+                {uploading && (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    style={uploadingText}
+                  >
+                    {t("uploadingImage")}
+                  </p>
+                )}
+                {photoAttachmentNotice && (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    style={uploadingText}
+                  >
+                    {photoAttachmentNotice}
+                  </p>
+                )}
+                {photoError && (
+                  <p role="alert" style={uploadingText}>
+                    {photoError}
+                  </p>
+                )}
               </div>
 
               {projectPhotos.length > 0 && (

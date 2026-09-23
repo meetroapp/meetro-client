@@ -31,7 +31,10 @@ import {
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { saveSelectedActiveProject } from "../utils/workCenter";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
-import { getEmergencyRequests } from "../utils/emergencyApi";
+import {
+  cancelEmergencyRequest,
+  getEmergencyRequests,
+} from "../utils/emergencyApi";
 import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoordinator";
 import { buildEmergencyRequestRoute } from "../utils/emergencyRoutes";
 import { buildCanonicalConversationRoute } from "../utils/canonicalConversationMessaging";
@@ -595,11 +598,34 @@ function HomeownerWorkflowHub({
   );
 }
 
+const WORK_CENTER_CANCELLABLE_EMERGENCY_STATUSES = new Set([
+  "draft",
+  "ready_for_distribution",
+  "active",
+  "selection_pending",
+]);
+
+function canCancelEmergencyRequestFromWorkCenter(
+  emergencyRequest
+) {
+  const normalizedStatus = String(
+    emergencyRequest?.status || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  return WORK_CENTER_CANCELLABLE_EMERGENCY_STATUSES.has(
+    normalizedStatus
+  );
+}
+
 function EmergencyRequestCard({
   emergencyRequest,
   language,
   onOpen,
   onOpenConversation,
+  onCancel,
+  cancelPending = false,
 }) {
   const responsePresentation =
     getEmergencyResponsePresentation({
@@ -649,6 +675,11 @@ function EmergencyRequestCard({
     )
       ? CONVERSATION_ACTION_STAGE.HISTORY
       : CONVERSATION_ACTION_STAGE.ACTIVE;
+  const canCancelFromWorkCenter =
+    canCancelEmergencyRequestFromWorkCenter(
+      emergencyRequest
+    );
+
   return (
     <article
       className="meetro-visual-surface"
@@ -721,6 +752,26 @@ function EmergencyRequestCard({
             : "View Emergency Request"}
         </button>
 
+        {canCancelFromWorkCenter && (
+          <button
+            type="button"
+            style={emergencyRequestSecondaryAction}
+            onClick={onCancel}
+            disabled={cancelPending}
+            aria-busy={cancelPending ? "true" : undefined}
+          >
+            {cancelPending
+              ? t(
+                  "myRequestsEmergencyCancelling",
+                  language
+                )
+              : t(
+                  "myRequestsEmergencyCancel",
+                  language
+                )}
+          </button>
+        )}
+
         {canOpenConversation && (
           <button
             type="button"
@@ -770,6 +821,14 @@ function MyRequests({ setPage, view = "list" }) {
   ] = useState(REQUEST_COLLECTION_STATUS.LOADING);
   const [emergencyReloadKey, setEmergencyReloadKey] =
     useState(0);
+  const [
+    emergencyCancelRequestId,
+    setEmergencyCancelRequestId,
+  ] = useState(null);
+  const [
+    emergencyCancelError,
+    setEmergencyCancelError,
+  ] = useState("");
   const [
     canonicalAlertCountSnapshot,
     setCanonicalAlertCountSnapshot,
@@ -975,6 +1034,76 @@ function MyRequests({ setPage, view = "list" }) {
       refreshCoordinator.stop();
     };
   }, [emergencyReloadKey, setPage]);
+
+  async function handleWorkCenterEmergencyCancel(
+    emergencyRequest
+  ) {
+    const requestId =
+      emergencyRequest?.emergencyRequestId;
+
+    if (
+      !requestId ||
+      emergencyCancelRequestId !== null ||
+      !canCancelEmergencyRequestFromWorkCenter(
+        emergencyRequest
+      )
+    ) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      t(
+        "myRequestsEmergencyCancelConfirm",
+        language
+      )
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setEmergencyCancelError("");
+    setEmergencyCancelRequestId(requestId);
+
+    try {
+      const result = await cancelEmergencyRequest(
+        requestId,
+        { setPage }
+      );
+      const returnedStatus = String(
+        result?.emergencyRequest?.status || ""
+      )
+        .trim()
+        .toLowerCase();
+
+      if (
+        !result?.ok ||
+        !result?.emergencyRequest ||
+        returnedStatus !== "cancelled"
+      ) {
+        setEmergencyCancelError(
+          t(
+            "myRequestsEmergencyCancelFailed",
+            language
+          )
+        );
+        return;
+      }
+
+      setEmergencyReloadKey(
+        (value) => value + 1
+      );
+    } catch {
+      setEmergencyCancelError(
+        t(
+          "myRequestsEmergencyCancelFailed",
+          language
+        )
+      );
+    } finally {
+      setEmergencyCancelRequestId(null);
+    }
+  }
 
   void recoveryTick;
 
@@ -1512,11 +1641,53 @@ function MyRequests({ setPage, view = "list" }) {
                       )
                     )
                   }
+                  onCancel={() => {
+                    void handleWorkCenterEmergencyCancel(
+                      emergencyRequest
+                    );
+                  }}
+                  cancelPending={
+                    String(
+                      emergencyCancelRequestId || ""
+                    ) ===
+                    String(
+                      emergencyRequest.emergencyRequestId ||
+                        ""
+                    )
+                  }
                 />
               ))}
             </div>
           </section>
         )}
+
+      {!isDetailView &&
+        emergencyCancelError && (
+          <div
+            className="meetro-visual-surface"
+            style={emptyCard}
+            role="alert"
+          >
+            <strong>{emergencyCancelError}</strong>
+          </div>
+        )}
+
+      {!isDetailView && (
+        <section
+          style={emergencyRequestSection}
+          aria-labelledby="service-requests-heading"
+        >
+          <h2
+            id="service-requests-heading"
+            style={emergencyRequestSectionTitle}
+          >
+            {t(
+              "myRequestsServiceRequestsHeading",
+              language
+            )}
+          </h2>
+        </section>
+      )}
 
       {requestMutationStatus === "pending" && (
         <div className="meetro-visual-surface" style={emptyCard} role="status">
@@ -1582,7 +1753,6 @@ function MyRequests({ setPage, view = "list" }) {
         </div>
       ) : !isDetailView && sortedRequests.length === 0 ? (
         <div className="meetro-visual-empty-state" style={emptyCard}>
-          <div style={emptyIcon}>REQ</div>
 
           <h2>{t("myRequestsEmptyTitle", language)}</h2>
 

@@ -1187,7 +1187,10 @@ function EmergencyRequest({ setPage }) {
   const askGeneralArea = buildEmergencyGeneralArea(
     askIntake.location
   );
-  const askLocationReady = Boolean(askGeneralArea);
+  const askLocationReady = Boolean(
+    clean(askIntake.location?.city) ||
+      clean(askIntake.location?.postalCode)
+  );
   const askIntakeReady = Boolean(
     askDescribeReady && askLocationReady
   );
@@ -1440,8 +1443,10 @@ function EmergencyRequest({ setPage }) {
         setAskStage("consent");
       } else if (
         interpretationStage === "location" &&
-        buildEmergencyGeneralArea(nextIntake.location) &&
-        nextClarifications.length === 0
+        (
+          clean(nextIntake.location?.city) ||
+          clean(nextIntake.location?.postalCode)
+        )
       ) {
         nextClarifications = [];
         setAskStage("review");

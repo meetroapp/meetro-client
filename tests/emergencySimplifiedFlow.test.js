@@ -90,6 +90,44 @@ test("Ask Meetro intake preserves the explicit consent boundary before location"
   assert.match(requestSource, /askStage === "review" && askIntakeReady/);
 });
 
+test("Ask Meetro location accepts city or ZIP independently and Review owns confirmation", () => {
+  const submitBlock = requestSource.slice(
+    requestSource.indexOf("async function submitAskMeetroIntake"),
+    requestSource.indexOf("function acceptAskMeetroFindHelp")
+  );
+
+  const locationBranchStart = submitBlock.indexOf(
+    'interpretationStage === "location"'
+  );
+  assert.notEqual(locationBranchStart, -1);
+
+  const locationBranchEnd = submitBlock.indexOf(
+    'setAskStage("review")',
+    locationBranchStart
+  );
+  assert.notEqual(locationBranchEnd, -1);
+
+  const locationBranch = submitBlock.slice(
+    locationBranchStart,
+    locationBranchEnd + 'setAskStage("review")'.length
+  );
+
+  assert.match(
+    locationBranch,
+    /clean\(nextIntake\.location\?\.city\)[\s\S]*clean\(nextIntake\.location\?\.postalCode\)/
+  );
+
+  assert.doesNotMatch(
+    locationBranch,
+    /nextClarifications\.length === 0/
+  );
+
+  assert.match(
+    requestSource,
+    /const askLocationReady = Boolean\([\s\S]*askIntake\.location\?\.city[\s\S]*askIntake\.location\?\.postalCode/
+  );
+});
+
 test("Ask Meetro review creates one canonical draft and then enters the certified Safety Check", () => {
   const handler = requestSource.slice(
     requestSource.indexOf("async function confirmAskMeetroIntake"),

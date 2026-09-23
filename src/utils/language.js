@@ -4268,9 +4268,17 @@ const highTrafficParityLabels = {
     myRequestsPerspectiveTitle: "How we move forward together",
     myRequestsPerspectiveText:
       "See the current status, the next step, and where the conversation continues for every project.",
-    myRequestsEmptyTitle: "No requests yet",
-    myRequestsEmptyText: "Request help to start receiving professional responses.",
-    myRequestsRequestHelp: "Request Help",
+    myRequestsEmptyTitle: "No active service requests",
+    myRequestsEmptyText:
+      "Need help with a home project or repair? Start a service request and Meetro will help organize the details and connect you with professionals.",
+    myRequestsRequestHelp: "Start Service Request",
+    myRequestsServiceRequestsHeading: "Service Requests",
+    myRequestsEmergencyCancel: "Cancel Emergency Request",
+    myRequestsEmergencyCancelConfirm:
+      "Cancel this Emergency request? Cancellation is permanent.",
+    myRequestsEmergencyCancelling: "Cancelling…",
+    myRequestsEmergencyCancelFailed:
+      "The Emergency request could not be cancelled. Try again.",
     myRequestsSelected: "Selected",
     myRequestsServiceRequest: "Service Request",
     myRequestsService: "Service",
@@ -4694,9 +4702,17 @@ const highTrafficParityLabels = {
     myRequestsPerspectiveTitle: "Cómo avanzamos juntos",
     myRequestsPerspectiveText:
       "Ve el estado actual, el siguiente paso y dónde continúa la conversación de cada proyecto.",
-    myRequestsEmptyTitle: "No hay solicitudes todavía",
-    myRequestsEmptyText: "Solicita ayuda para comenzar a recibir respuestas profesionales.",
-    myRequestsRequestHelp: "Solicitar Ayuda",
+    myRequestsEmptyTitle: "No hay solicitudes de servicio activas",
+    myRequestsEmptyText:
+      "¿Necesitas ayuda con un proyecto o una reparación en casa? Inicia una solicitud de servicio y Meetro te ayudará a organizar los detalles y conectarte con profesionales.",
+    myRequestsRequestHelp: "Iniciar Solicitud de Servicio",
+    myRequestsServiceRequestsHeading: "Solicitudes de Servicio",
+    myRequestsEmergencyCancel: "Cancelar Solicitud de Emergencia",
+    myRequestsEmergencyCancelConfirm:
+      "¿Cancelar esta solicitud de Emergencia? La cancelación es permanente.",
+    myRequestsEmergencyCancelling: "Cancelando…",
+    myRequestsEmergencyCancelFailed:
+      "No se pudo cancelar la solicitud de Emergencia. Inténtalo nuevamente.",
     myRequestsSelected: "Seleccionado",
     myRequestsServiceRequest: "Solicitud de servicio",
     myRequestsService: "Servicio",
@@ -5122,9 +5138,17 @@ const highTrafficParityLabels = {
     myRequestsPerspectiveTitle: "Comment avançons-nous ensemble",
     myRequestsPerspectiveText:
       "Voyez le statut actuel, la prochaine étape et où la conversation continue pour chaque projet.",
-    myRequestsEmptyTitle: "Aucune demande pour le moment",
-    myRequestsEmptyText: "Demandez de l'aide pour commencer à recevoir des réponses de professionnels.",
-    myRequestsRequestHelp: "Demander de l'aide",
+    myRequestsEmptyTitle: "Aucune demande de service active",
+    myRequestsEmptyText:
+      "Besoin d’aide pour un projet ou une réparation à domicile ? Lancez une demande de service et Meetro vous aidera à organiser les détails et à vous mettre en relation avec des professionnels.",
+    myRequestsRequestHelp: "Démarrer une demande de service",
+    myRequestsServiceRequestsHeading: "Demandes de service",
+    myRequestsEmergencyCancel: "Annuler la demande d’urgence",
+    myRequestsEmergencyCancelConfirm:
+      "Annuler cette demande d’urgence ? L’annulation est définitive.",
+    myRequestsEmergencyCancelling: "Annulation…",
+    myRequestsEmergencyCancelFailed:
+      "La demande d’urgence n’a pas pu être annulée. Réessayez.",
     myRequestsSelected: "Sélectionné",
     myRequestsServiceRequest: "Demande de service",
     myRequestsService: "Service",
@@ -5574,9 +5598,17 @@ const highTrafficParityLabels = {
     myRequestsPerspectiveTitle: "Como avançamos juntos",
     myRequestsPerspectiveText:
       "Veja o status atual, a próxima etapa e onde a conversa continua para cada projeto.",
-    myRequestsEmptyTitle: "Ainda não há solicitações",
-    myRequestsEmptyText: "Solicite ajuda para começar a receber respostas de profissionais.",
-    myRequestsRequestHelp: "Solicitar ajuda",
+    myRequestsEmptyTitle: "Nenhuma solicitação de serviço ativa",
+    myRequestsEmptyText:
+      "Precisa de ajuda com um projeto ou reparo em casa? Inicie uma solicitação de serviço e o Meetro ajudará a organizar os detalhes e conectar você a profissionais.",
+    myRequestsRequestHelp: "Iniciar Solicitação de Serviço",
+    myRequestsServiceRequestsHeading: "Solicitações de Serviço",
+    myRequestsEmergencyCancel: "Cancelar Solicitação de Emergência",
+    myRequestsEmergencyCancelConfirm:
+      "Cancelar esta solicitação de Emergência? O cancelamento é permanente.",
+    myRequestsEmergencyCancelling: "Cancelando…",
+    myRequestsEmergencyCancelFailed:
+      "Não foi possível cancelar a solicitação de Emergência. Tente novamente.",
     myRequestsSelected: "Selecionado",
     myRequestsServiceRequest: "Solicitação de serviço",
     myRequestsService: "Serviço",
