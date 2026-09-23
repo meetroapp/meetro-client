@@ -72,28 +72,28 @@ function EmergencyEvaluation({record,liveJob,setPage,onRefresh}) {
     </label>
     <label>
       <span className="emergency-evaluation__field-heading">
-        <span>Findings</span>
+        <span>Recommendation</span>
         <button
           type="button"
           className="emergency-evaluation__info"
-          aria-label="About Findings"
-          aria-expanded={evaluationHelp==='findings'}
-          aria-controls="emergency-evaluation-findings-help"
-          onClick={()=>setEvaluationHelp(current=>current==='findings'?'':'findings')}
+          aria-label="About Recommendation"
+          aria-expanded={evaluationHelp==='recommendation'}
+          aria-controls="emergency-evaluation-recommendation-help"
+          onClick={()=>setEvaluationHelp(current=>current==='recommendation'?'':'recommendation')}
         >
           <span aria-hidden="true">ⓘ</span>
         </button>
       </span>
-      {evaluationHelp==='findings'&&(
+      {evaluationHelp==='recommendation'&&(
         <span
-          id="emergency-evaluation-findings-help"
+          id="emergency-evaluation-recommendation-help"
           className="emergency-evaluation__helper"
           role="note"
         >
-          <strong>Findings</strong>
-          <span>What did you determine from what you observed?</span>
+          <strong>Recommendation</strong>
+          <span>What do you recommend doing to control or resolve the emergency?</span>
           <span className="emergency-evaluation__helper-example">
-            Example: The shut-off valve has failed and requires replacement.
+            Example: Replace the failed shut-off valve and test the connection for leaks.
           </span>
         </span>
       )}

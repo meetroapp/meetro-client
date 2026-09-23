@@ -7,9 +7,9 @@ const source = readFileSync(
   "utf8"
 );
 
-test("Emergency Evaluation exposes contextual help for Observations and Findings", () => {
+test("Emergency Evaluation exposes contextual help for Observations and Recommendation", () => {
   assert.match(source, /aria-label="About Observations"/);
-  assert.match(source, /aria-label="About Findings"/);
+  assert.match(source, /aria-label="About Recommendation"/);
 
   assert.match(
     source,
@@ -18,7 +18,7 @@ test("Emergency Evaluation exposes contextual help for Observations and Findings
 
   assert.match(
     source,
-    /aria-controls="emergency-evaluation-findings-help"/
+    /aria-controls="emergency-evaluation-recommendation-help"/
   );
 
   assert.match(
@@ -28,7 +28,7 @@ test("Emergency Evaluation exposes contextual help for Observations and Findings
 
   assert.match(
     source,
-    /What did you determine from what you observed\?/
+    /What do you recommend doing to control or resolve the emergency\?/
   );
 });
 
@@ -46,9 +46,9 @@ test("Emergency Evaluation help is user-controlled and mutually scoped", () => {
 
   assert.match(
     source,
-    /setEvaluationHelp\(current=>current==='findings'\?'':'findings'\)/
+    /setEvaluationHelp\(current=>current==='recommendation'\?'':'recommendation'\)/
   );
 
   assert.match(source, /evaluationHelp==='observations'/);
-  assert.match(source, /evaluationHelp==='findings'/);
+  assert.match(source, /evaluationHelp==='recommendation'/);
 });

@@ -294,7 +294,8 @@ test("existing presentation fields map into bounded canonical content without br
     }],
   });
   assert.equal(content.observations, "Observed active supply leak.");
-  assert.equal(content.findings.length, 1);
+  assert.equal(content.findings.length, 0);
+  assert.equal(content.diagnosisSummary, "Failed connection.");
   assert.equal(content.measurements.length, 1);
   assert.deepEqual(content.supportingMediaReferences, []);
   assert.equal(Object.hasOwn(content, "price"), false);

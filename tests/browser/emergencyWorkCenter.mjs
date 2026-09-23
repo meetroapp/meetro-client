@@ -68,7 +68,7 @@ try{
   const primary=page.locator('.emergency-work-center__primary');
   await primary.filter({hasText:fixtures.stages.assigned.liveJob.nextAction.label}).waitFor();await primary.click();
   await primary.filter({hasText:fixtures.stages.onTheWay.liveJob.nextAction.label}).waitFor();await primary.click();
-  await page.getByLabel('Observations',{exact:true}).fill('Observed leak at supply seal.');await page.getByLabel('Findings',{exact:true}).fill('Supply seal needs replacement.');
+  await page.getByLabel('Observations',{exact:true}).fill('Observed leak at supply seal.');await page.getByLabel('Recommendation',{exact:true}).fill('Supply seal needs replacement.');
   await page.getByRole('button',{name:'Complete Evaluation',exact:true}).click();
   await page.getByLabel('Payment terms',{exact:true}).fill('50% deposit');await page.getByRole('region',{name:'Emergency Quote',exact:true}).getByRole('button',{name:'Create Quote',exact:true}).click();
   await page.getByLabel('Scope of work',{exact:true}).fill('Replace supply seal');await page.getByLabel('Price (USD)',{exact:true}).fill('100');await page.getByRole('button',{name:'Add scope item',exact:true}).click();

@@ -314,7 +314,9 @@ export function buildCanonicalEvaluationContent(form = {}) {
     }))
     .filter((finding) => finding.summary);
   const findingNotes = String(form.findings || "").trim();
-  if (findings.length === 0 && findingNotes) {
+  const isEmergencyEvaluation =
+    String(form.context || "").trim() === "emergency_request";
+  if (!isEmergencyEvaluation && findings.length === 0 && findingNotes) {
     findings.push({
       summary: findingNotes.slice(0, 1000),
       severity: "informational",
