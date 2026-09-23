@@ -2194,6 +2194,110 @@ useEffect(() => {
     ? activeCustomerName
     : activeBusinessName;
 
+  const emergencyFirstContactCopy = (() => {
+    const participantName =
+      String(activeHeaderName || "").trim();
+
+    const translations = {
+      en: currentViewerRole === "business"
+        ? {
+            eyebrow: "Emergency connection ready",
+            fallback: "the homeowner",
+            title: "You’re connected with {name}",
+            body:
+              "Use this conversation to coordinate the Emergency service.",
+            stepLabel: "Start here",
+            step:
+              "Introduce yourself and confirm the next step. Share an ETA only when you actually know it.",
+          }
+        : {
+            eyebrow: "Emergency connection ready",
+            fallback: "your professional",
+            title: "You’re connected with {name}",
+            body:
+              "Use this conversation to coordinate your Emergency service.",
+            stepLabel: "Start here",
+            step:
+              "Send a quick message with anything the professional should know, such as access instructions or a change in the situation.",
+          },
+      es: currentViewerRole === "business"
+        ? {
+            eyebrow: "Conexión de Emergencia lista",
+            fallback: "el propietario",
+            title: "Estás conectado con {name}",
+            body:
+              "Usa esta conversación para coordinar el servicio de Emergencia.",
+            stepLabel: "Comienza aquí",
+            step:
+              "Preséntate y confirma el siguiente paso. Comparte una hora estimada de llegada solo cuando realmente la conozcas.",
+          }
+        : {
+            eyebrow: "Conexión de Emergencia lista",
+            fallback: "tu profesional",
+            title: "Estás conectado con {name}",
+            body:
+              "Usa esta conversación para coordinar tu servicio de Emergencia.",
+            stepLabel: "Comienza aquí",
+            step:
+              "Envía un mensaje breve con cualquier dato que el profesional deba saber, como instrucciones de acceso o un cambio en la situación.",
+          },
+      fr: currentViewerRole === "business"
+        ? {
+            eyebrow: "Connexion d’urgence prête",
+            fallback: "le propriétaire",
+            title: "Vous êtes connecté avec {name}",
+            body:
+              "Utilisez cette conversation pour coordonner le service d’urgence.",
+            stepLabel: "Commencez ici",
+            step:
+              "Présentez-vous et confirmez la prochaine étape. Ne partagez une heure d’arrivée estimée que lorsque vous la connaissez réellement.",
+          }
+        : {
+            eyebrow: "Connexion d’urgence prête",
+            fallback: "votre professionnel",
+            title: "Vous êtes connecté avec {name}",
+            body:
+              "Utilisez cette conversation pour coordonner votre service d’urgence.",
+            stepLabel: "Commencez ici",
+            step:
+              "Envoyez un court message avec toute information utile, comme les instructions d’accès ou un changement de situation.",
+          },
+      "pt-BR": currentViewerRole === "business"
+        ? {
+            eyebrow: "Conexão de Emergência pronta",
+            fallback: "o proprietário",
+            title: "Você está conectado com {name}",
+            body:
+              "Use esta conversa para coordenar o atendimento de Emergência.",
+            stepLabel: "Comece aqui",
+            step:
+              "Apresente-se e confirme o próximo passo. Informe uma previsão de chegada somente quando realmente souber.",
+          }
+        : {
+            eyebrow: "Conexão de Emergência pronta",
+            fallback: "seu profissional",
+            title: "Você está conectado com {name}",
+            body:
+              "Use esta conversa para coordenar seu atendimento de Emergência.",
+            stepLabel: "Comece aqui",
+            step:
+              "Envie uma mensagem rápida com qualquer informação que o profissional deva saber, como instruções de acesso ou uma mudança na situação.",
+          },
+    };
+
+    const copy =
+      translations[language] ||
+      translations.en;
+
+    return {
+      ...copy,
+      title: copy.title.replace(
+        "{name}",
+        participantName || copy.fallback
+      ),
+    };
+  })();
+
   const activeHeaderProject =
     isCanonicalThread && canonicalConversationDetail?.relationship?.title
       ? canonicalConversationDetail.relationship.title
@@ -6982,9 +7086,47 @@ const handleImageUpload = (event) => {
             {threadMessages.length === 0 &&
             !hasThreadSearch &&
             (!isCanonicalThread || canonicalMessagesPhase === "ready") ? (
-              <div style={{ ...timelineTopEmpty, textAlign: "center" }}>
-                {t("conversationNoMessages", language)}
-              </div>
+              isCanonicalEmergencyThread ? (
+                <section
+                  style={emergencyFirstContactCard}
+                  aria-label={emergencyFirstContactCopy.eyebrow}
+                  data-emergency-first-contact="canonical"
+                >
+                  <p style={emergencyFirstContactEyebrow}>
+                    {emergencyFirstContactCopy.eyebrow}
+                  </p>
+
+                  <h2 style={emergencyFirstContactTitle}>
+                    {emergencyFirstContactCopy.title}
+                  </h2>
+
+                  <p style={emergencyFirstContactBody}>
+                    {emergencyFirstContactCopy.body}
+                  </p>
+
+                  <div style={emergencyFirstContactStep}>
+                    <span
+                      style={emergencyFirstContactStepBadge}
+                      aria-hidden="true"
+                    >
+                      1
+                    </span>
+
+                    <div style={emergencyFirstContactStepText}>
+                      <strong>
+                        {emergencyFirstContactCopy.stepLabel}
+                      </strong>
+                      <span>
+                        {emergencyFirstContactCopy.step}
+                      </span>
+                    </div>
+                  </div>
+                </section>
+              ) : (
+                <div style={{ ...timelineTopEmpty, textAlign: "center" }}>
+                  {t("conversationNoMessages", language)}
+                </div>
+              )
             ) : null}
 
           {conversationTimelineItems.map((msg) => {
@@ -10228,6 +10370,77 @@ const dateLine = {
   width: "60px",
   height: "1px",
   background: "#e5e7eb",
+};
+
+const emergencyFirstContactCard = {
+  width: "min(92%, 560px)",
+  margin: "6px auto 18px",
+  padding: "20px",
+  boxSizing: "border-box",
+  border:
+    "1px solid rgba(31, 77, 52, 0.16)",
+  borderRadius: "20px",
+  background:
+    "linear-gradient(180deg, #f4fbf6 0%, #ffffff 100%)",
+  boxShadow:
+    "0 12px 30px rgba(31, 77, 52, 0.08)",
+};
+
+const emergencyFirstContactEyebrow = {
+  margin: "0 0 6px",
+  color:
+    "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "11px",
+  fontWeight: "900",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const emergencyFirstContactTitle = {
+  margin: "0 0 8px",
+  color: "#17231c",
+  fontSize: "20px",
+  lineHeight: 1.25,
+};
+
+const emergencyFirstContactBody = {
+  margin: 0,
+  color: "#55635b",
+  fontSize: "14px",
+  lineHeight: 1.55,
+};
+
+const emergencyFirstContactStep = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "12px",
+  marginTop: "16px",
+  padding: "14px",
+  borderRadius: "16px",
+  background: "#eef8f1",
+};
+
+const emergencyFirstContactStepBadge = {
+  width: "28px",
+  height: "28px",
+  flex: "0 0 28px",
+  display: "grid",
+  placeItems: "center",
+  borderRadius: "999px",
+  background:
+    "var(--meetro-color-forest, #1f4d34)",
+  color: "#ffffff",
+  fontSize: "13px",
+  fontWeight: "900",
+};
+
+const emergencyFirstContactStepText = {
+  display: "grid",
+  gap: "3px",
+  minWidth: 0,
+  color: "#314039",
+  fontSize: "13px",
+  lineHeight: 1.45,
 };
 
 const timelineTopEmpty = {

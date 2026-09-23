@@ -2134,15 +2134,6 @@ function EmergencyRequest({ setPage }) {
     setSelectedAvailableProfessional(null);
 
     await refreshCanonicalRequestAfterMutation();
-
-    setPage(
-      buildCanonicalConversationRoute(
-        result.conversation.id,
-        buildEmergencyRequestRoute(
-          canonicalRequestId
-        )
-      )
-    );
   }
 
   function requestProfessionalSelection(response) {
@@ -2181,7 +2172,10 @@ function EmergencyRequest({ setPage }) {
     setPage(
       buildCanonicalConversationRoute(
         canonicalConversationId,
-        buildEmergencyRequestRoute(canonicalRequestId)
+        buildEmergencyRequestRoute(canonicalRequestId),
+        {
+          shell: "communicationCenter",
+        }
       )
     );
   }
@@ -2269,12 +2263,6 @@ function EmergencyRequest({ setPage }) {
     setCanonicalConversationId(result.conversation.id);
     setSelectedResponse(null);
     await refreshCanonicalRequestAfterMutation();
-    setPage(
-      buildCanonicalConversationRoute(
-        result.conversation.id,
-        buildEmergencyRequestRoute(canonicalRequestId)
-      )
-    );
   }
 
   return (
