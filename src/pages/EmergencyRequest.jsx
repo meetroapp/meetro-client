@@ -302,6 +302,7 @@ function readCurrentEmergencyRoute() {
 
 function EmergencyRequest({ setPage }) {
   const safetyReviewHeadingRef = useRef(null);
+  const selectionDialogRef = useRef(null);
   const emergencyRefreshCoordinatorRef = useRef(null);
   const [routeSessionController] = useState(() =>
     createEmergencyRouteSessionController(
@@ -787,6 +788,27 @@ function EmergencyRequest({ setPage }) {
 
     return () => window.cancelAnimationFrame(frame);
   }, [canonicalRequestId, phase]);
+
+  useEffect(() => {
+    if (
+      !selectedResponse &&
+      !selectedAvailableProfessional
+    ) {
+      return undefined;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      selectionDialogRef.current?.focus({
+        preventScroll: true,
+      });
+    });
+
+    return () =>
+      window.cancelAnimationFrame(frame);
+  }, [
+    selectedAvailableProfessional,
+    selectedResponse,
+  ]);
 
   useEffect(() => {
     const controller = routeSessionController;
@@ -2881,121 +2903,153 @@ function EmergencyRequest({ setPage }) {
           )}
 
         {selectedResponse && (
-          <section
-            style={selectionConfirmationCard}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="emergency-selection-title"
-          >
-            <h2
-              id="emergency-selection-title"
-              style={sectionTitle}
+          <div style={selectionDialogBackdrop}>
+            <section
+              ref={selectionDialogRef}
+              tabIndex={-1}
+              style={selectionConfirmationCard}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="emergency-selection-title"
             >
-              {t("emergencySelectConfirmTitle", language)}
-            </h2>
+              <h2
+                id="emergency-selection-title"
+                style={sectionTitle}
+              >
+                {t(
+                  "emergencySelectConfirmTitle",
+                  language
+                )}
+              </h2>
 
-            <p style={completeBody}>
-              {t("emergencySelectConfirmBody", language, {
-                business:
-                  selectedResponse.professional.businessName ||
-                  t("messagesOwnerProfessional", language),
-              })}
-            </p>
+              <p style={completeBody}>
+                {t(
+                  "emergencySelectConfirmBody",
+                  language,
+                  {
+                    business:
+                      selectedResponse.professional
+                        .businessName ||
+                      t(
+                        "messagesOwnerProfessional",
+                        language
+                      ),
+                  }
+                )}
+              </p>
 
-            {selectionError && (
-              <div style={errorNotice} role="alert">
-                {selectionError}
-              </div>
-            )}
+              {selectionError && (
+                <div
+                  style={errorNotice}
+                  role="alert"
+                >
+                  {selectionError}
+                </div>
+              )}
 
-            <button
-              type="button"
-              style={{
-                ...primaryButton,
-                ...(selectionPending ? disabledButton : {}),
-              }}
-              onClick={confirmProfessionalSelection}
-              disabled={selectionPending}
-            >
-              {selectionPending
-                ? copy.submitting
-                : t("emergencySelectConfirm", language)}
-            </button>
+              <button
+                type="button"
+                style={{
+                  ...primaryButton,
+                  ...(selectionPending
+                    ? disabledButton
+                    : {}),
+                }}
+                onClick={
+                  confirmProfessionalSelection
+                }
+                disabled={selectionPending}
+              >
+                {selectionPending
+                  ? copy.submitting
+                  : t(
+                      "emergencySelectConfirm",
+                      language
+                    )}
+              </button>
 
-            <button
-              type="button"
-              style={secondaryButton}
-              onClick={keepWaitingForProfessional}
-              disabled={selectionPending}
-            >
-              {t("emergencyKeepWaiting", language)}
-            </button>
-          </section>
+              <button
+                type="button"
+                style={secondaryButton}
+                onClick={keepWaitingForProfessional}
+                disabled={selectionPending}
+              >
+                {t(
+                  "emergencyKeepWaiting",
+                  language
+                )}
+              </button>
+            </section>
+          </div>
         )}
 
         {selectedAvailableProfessional && (
-          <section
-            style={selectionConfirmationCard}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="emergency-available-selection-title"
-          >
-            <h2
-              id="emergency-available-selection-title"
-              style={sectionTitle}
+          <div style={selectionDialogBackdrop}>
+            <section
+              ref={selectionDialogRef}
+              tabIndex={-1}
+              style={selectionConfirmationCard}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="emergency-available-selection-title"
             >
-              {language === "es"
-                ? "¿Elegir este profesional?"
-                : "Choose this professional?"}
-            </h2>
-
-            <p style={completeBody}>
-              {language === "es"
-                ? `${selectedAvailableProfessional.businessName} está Disponible Ahora y habilitó la selección directa de Emergencia. Meetro te conectará si todavía está disponible. Esto no significa que el profesional ya esté en camino.`
-                : `${selectedAvailableProfessional.businessName} is Available Now and has enabled direct Emergency selection. Meetro will connect you if the selection is still available. This does not mean the professional is already on the way.`}
-            </p>
-
-            {selectionError && (
-              <div
-                style={errorNotice}
-                role="alert"
+              <h2
+                id="emergency-available-selection-title"
+                style={sectionTitle}
               >
-                {selectionError}
-              </div>
-            )}
+                {language === "es"
+                  ? "¿Elegir este profesional?"
+                  : "Choose this professional?"}
+              </h2>
 
-            <button
-              type="button"
-              style={{
-                ...primaryButton,
-                ...(selectionPending
-                  ? disabledButton
-                  : {}),
-              }}
-              onClick={
-                confirmAvailableProfessionalSelection
-              }
-              disabled={selectionPending}
-            >
-              {selectionPending
-                ? copy.submitting
-                : language === "es"
-                  ? "Elegir Profesional"
-                  : "Choose Professional"}
-            </button>
+              <p style={completeBody}>
+                {language === "es"
+                  ? `${selectedAvailableProfessional.businessName} está Disponible Ahora y habilitó la selección directa de Emergencia. Meetro te conectará si todavía está disponible. Esto no significa que el profesional ya esté en camino.`
+                  : `${selectedAvailableProfessional.businessName} is Available Now and has enabled direct Emergency selection. Meetro will connect you if the selection is still available. This does not mean the professional is already on the way.`}
+              </p>
 
-            <button
-              type="button"
-              style={secondaryButton}
-              onClick={keepWaitingForProfessional}
-              disabled={selectionPending}
-            >
-              {t(
-                "emergencyKeepWaiting",
-                language
+              {selectionError && (
+                <div
+                  style={errorNotice}
+                  role="alert"
+                >
+                  {selectionError}
+                </div>
               )}
-            </button>
-          </section>
+
+              <button
+                type="button"
+                style={{
+                  ...primaryButton,
+                  ...(selectionPending
+                    ? disabledButton
+                    : {}),
+                }}
+                onClick={
+                  confirmAvailableProfessionalSelection
+                }
+                disabled={selectionPending}
+              >
+                {selectionPending
+                  ? copy.submitting
+                  : language === "es"
+                    ? "Elegir Profesional"
+                    : "Choose Professional"}
+              </button>
+
+              <button
+                type="button"
+                style={secondaryButton}
+                onClick={keepWaitingForProfessional}
+                disabled={selectionPending}
+              >
+                {t(
+                  "emergencyKeepWaiting",
+                  language
+                )}
+              </button>
+            </section>
+          </div>
         )}
 
         {cancelConfirmationOpen && (
@@ -3571,11 +3625,34 @@ const confirmationCard = {
   background: "#fffafa",
 };
 
+const selectionDialogBackdrop = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 1200,
+  display: "grid",
+  placeItems: "center",
+  paddingTop:
+    "max(16px, env(safe-area-inset-top))",
+  paddingRight: "16px",
+  paddingBottom:
+    "max(16px, env(safe-area-inset-bottom))",
+  paddingLeft: "16px",
+  background: "rgba(15, 23, 42, 0.48)",
+  overflowY: "auto",
+  overscrollBehavior: "contain",
+};
+
 const selectionConfirmationCard = {
   ...completeCard,
-  marginTop: "16px",
+  width: "min(100%, 520px)",
+  maxHeight: "calc(100dvh - 32px)",
+  overflowY: "auto",
+  boxSizing: "border-box",
   border: "2px solid #bfdbfe",
   background: "#f8fbff",
+  boxShadow:
+    "0 24px 70px rgba(15, 23, 42, 0.28)",
+  outline: "none",
 };
 
 const completeBody = {
