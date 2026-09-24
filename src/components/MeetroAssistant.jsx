@@ -2473,7 +2473,7 @@ function getAssistantFirstName() {
   return String(storedName || "").trim().split(/\s+/)[0] || "";
 }
 
-function MeetroAssistant({ currentPage = "", setPage, onOpenWorkspace }) {
+function MeetroAssistant({ currentPage = "", setPage, onOpenWorkspace, showLauncher = true }) {
   const appLayoutMetrics = useAppLayoutMetrics();
   const [open, setOpen] = useState(false);
   const [wakeOpen, setWakeOpen] = useState(false);
@@ -3885,7 +3885,7 @@ function MeetroAssistant({ currentPage = "", setPage, onOpenWorkspace }) {
 
   return (
     <>
-      {!externalKeyboardOpen && (
+      {showLauncher && !externalKeyboardOpen && (
       <button
         className="meetro-assistant-launcher"
         data-position-mode={compactWorkCenterSafeDock ? "docked" : "draggable"}
@@ -3913,7 +3913,7 @@ function MeetroAssistant({ currentPage = "", setPage, onOpenWorkspace }) {
       </button>
       )}
 
-      {wakeOpen && !open && !externalKeyboardOpen && (
+      {showLauncher && wakeOpen && !open && !externalKeyboardOpen && (
         <section
           style={getAssistantWakeBubbleStyle({
             launcherPosition,

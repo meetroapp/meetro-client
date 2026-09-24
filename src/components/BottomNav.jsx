@@ -271,6 +271,12 @@ function BottomNav({ setPage, currentPage = "" }) {
     };
   }, [keyboardOpen]);
 
+  const askMeetroNavItem = {
+    action: "askMeetro",
+    label: "Ask Meetro",
+    sub: "Assistant",
+  };
+
   const personalMobileNavItems = [
     {
       page: "home",
@@ -286,6 +292,7 @@ function BottomNav({ setPage, currentPage = "" }) {
       label: t("navigationWorkCenter", language),
       sub: t("navigationCurrentWork", language),
     },
+    askMeetroNavItem,
     {
       page: "messagesInbox",
       aliases: [
@@ -299,13 +306,6 @@ function BottomNav({ setPage, currentPage = "" }) {
       icon: "messages",
       label: t("navigationChat", language),
       sub: t("navigationCommunication", language),
-    },
-    {
-      page: "meetroMoments",
-      aliases: ["meetroMoments"],
-      icon: "history",
-      label: t("navigationMoments", language),
-      sub: t("navigationHistory", language),
     },
     {
       page: "profile",
@@ -336,8 +336,8 @@ function BottomNav({ setPage, currentPage = "" }) {
       icon: "workCenter",
       label: t("navigationWorkCenter", language),
       sub: t("navigationOperations", language),
-      center: true,
     },
+    askMeetroNavItem,
     {
       page: "messagesInbox",
       aliases: [
@@ -351,13 +351,6 @@ function BottomNav({ setPage, currentPage = "" }) {
       icon: "messages",
       label: t("navigationChat", language),
       sub: t("navigationCommunication", language),
-    },
-    {
-      page: "meetroMoments",
-      aliases: ["meetroMoments"],
-      icon: "history",
-      label: t("navigationMoments", language),
-      sub: t("navigationHistory", language),
     },
     {
       page: "profile",
@@ -383,6 +376,7 @@ function BottomNav({ setPage, currentPage = "" }) {
       label: t("navigationWorkCenter", language),
       sub: t("navigationCurrentWork", language),
     },
+    askMeetroNavItem,
     {
       page: "messagesInbox",
       aliases: [
@@ -447,8 +441,8 @@ function BottomNav({ setPage, currentPage = "" }) {
       icon: "workCenter",
       label: t("navigationWorkCenter", language),
       sub: t("operations"),
-      center: true,
     },
+    askMeetroNavItem,
     {
       page: "messagesInbox",
       aliases: [
@@ -618,10 +612,11 @@ function BottomNav({ setPage, currentPage = "" }) {
     window.matchMedia?.("(orientation: landscape) and (max-height: 500px)")?.matches;
 
   const isNavItemActive = (item) =>
-    item.page === primaryNavigationOwner ||
-    item.page === normalizedPage ||
-    item.aliases?.includes(normalizedPage) ||
-    (item.page === "businessLeads" && normalizedPage === "businessLeads");
+    !item.action &&
+    (item.page === primaryNavigationOwner ||
+      item.page === normalizedPage ||
+      item.aliases?.includes(normalizedPage) ||
+      (item.page === "businessLeads" && normalizedPage === "businessLeads"));
 
   const getItemUnreadCount = (item) =>
     item.shortcut === "businessLeads"
@@ -668,6 +663,11 @@ function BottomNav({ setPage, currentPage = "" }) {
   };
 
   const handleNavPress = (item, variant = "bottom", event) => {
+    if (item.action === "askMeetro") {
+      window.dispatchEvent(new Event("meetro:assistant:open"));
+      return;
+    }
+
     if (item.page === "home") {
       window.dispatchEvent(new Event("meetroHomeResetToLanding"));
     }
@@ -742,18 +742,18 @@ function BottomNav({ setPage, currentPage = "" }) {
       (variant === "sidebar" && item.page === "profile" && profileContextCardOpen);
     const unread = getItemUnreadCount(item);
     const badgeText = getItemBadgeText(item, unread);
-    const isCenterAction = activeMode === "business" && item.center;
+    const isCenterAction = item.action === "askMeetro";
 
     if (variant === "sidebar") {
       return (
         <button
-          key={item.page}
+          key={item.action || item.page}
           type="button"
           className={`desktop-sidebar-item${active ? " active" : ""}`}
           aria-current={active ? "page" : undefined}
           aria-haspopup={item.page === "profile" ? "dialog" : undefined}
           aria-expanded={item.page === "profile" ? profileContextCardOpen : undefined}
-          aria-label={getItemAccessibleLabel(item)}
+          aria-label={isCenterAction ? "Ask Meetro" : getItemAccessibleLabel(item)}
           title={`${item.label} — ${item.sub}`}
           onClick={(event) => handleNavPress(item, "sidebar", event)}
           style={{
@@ -770,12 +770,16 @@ function BottomNav({ setPage, currentPage = "" }) {
             }}
             aria-hidden="true"
           >
-            <MeetroIcon
-              name={item.icon}
-              size={22}
-              decorative
-              style={active ? activeIconText : iconText}
-            />
+            {isCenterAction ? (
+              <span style={sidebarAskMark}>M</span>
+            ) : (
+              <MeetroIcon
+                name={item.icon}
+                size={22}
+                decorative
+                style={active ? activeIconText : iconText}
+              />
+            )}
             {unread > 0 && <span style={sidebarBadge}>{badgeText}</span>}
           </span>
 
@@ -793,11 +797,11 @@ function BottomNav({ setPage, currentPage = "" }) {
 
     return (
       <button
-        key={item.page}
+        key={item.action || item.page}
         type="button"
-        className={`bottom-nav-item${active ? " active" : ""}`}
+        className={`bottom-nav-item${active ? " active" : ""}${isCenterAction ? " bottom-nav-item--ask" : ""}`}
         aria-current={active ? "page" : undefined}
-        aria-label={getItemAccessibleLabel(item)}
+        aria-label={isCenterAction ? "Ask Meetro" : getItemAccessibleLabel(item)}
         onPointerDown={(event) => {
           navTouchStartRef.current = {
             x: event.clientX || 0,
@@ -825,6 +829,7 @@ function BottomNav({ setPage, currentPage = "" }) {
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
+          if (event.detail === 0) handleNavPress(item);
         }}
         style={{
           ...navButton,
@@ -845,16 +850,19 @@ function BottomNav({ setPage, currentPage = "" }) {
             ...(active && !isCenterAction ? activeIconWrap : {}),
             ...(active && isCenterAction ? centerIconWrapActive : {}),
             ...(isCenterAction && unread > 0 ? centerIconWrapAlert : {}),
-            ...(isCenterAction && isLandscapeCompact ? centerIconWrapLandscape : {}),
-            position: "relative",
+            position: isCenterAction ? "absolute" : "relative",
           }}
         >
-          <MeetroIcon
-            name={item.icon}
-            size={isCenterAction ? 28 : 24}
-            decorative
-            style={active ? activeIconText : iconText}
-          />
+          {isCenterAction ? (
+            <span style={centerAskMark} aria-hidden="true">M</span>
+          ) : (
+            <MeetroIcon
+              name={item.icon}
+              size={24}
+              decorative
+              style={active ? activeIconText : iconText}
+            />
+          )}
 
           {unread > 0 && <div style={badge}>{badgeText}</div>}
         </div>
@@ -959,6 +967,23 @@ function BottomNav({ setPage, currentPage = "" }) {
             aria-label={t("navigationPrimaryMobile", language)}
           >
             <div className="bottom-nav" style={isLandscapeCompact ? navWrapperLandscape : navWrapper}>
+              <div className="bottom-nav-surface" aria-hidden="true">
+                <span />
+                <svg width="104" height="100%" className="bottom-nav-cradle">
+                  <rect x="0" y="51" width="104" height="100%" fill="#fff" />
+                  <path
+                    d="M0 .5 C8 .5 16 4 16 15 C16 34.88 32.12 51 52 51 C71.88 51 88 34.88 88 15 C88 4 96 .5 104 .5 V52 H0 Z"
+                    fill="#fff"
+                  />
+                  <path
+                    d="M0 .5 C8 .5 16 4 16 15 C16 34.88 32.12 51 52 51 C71.88 51 88 34.88 88 15 C88 4 96 .5 104 .5"
+                    fill="none"
+                    stroke="#E5E7EB"
+                    strokeWidth="1"
+                  />
+                </svg>
+                <span />
+              </div>
               <div className="bottom-nav-container" style={isLandscapeCompact ? navContainerLandscape : navContainer}>
                 {mobileNavItems.map((item) => renderNavItem(item, "bottom"))}
               </div>
@@ -1029,6 +1054,47 @@ function DesktopProfileCard({ currentPage, onClose, position, setPage }) {
 }
 
 const adaptiveNavigationStyles = `
+  #root .bottom-nav-dock,
+  #root .bottom-nav-dock .bottom-nav,
+  #root .bottom-nav-dock .bottom-nav-container {
+    overflow: visible !important;
+  }
+
+  #root .bottom-nav-dock .bottom-nav {
+    padding: 0 4px env(safe-area-inset-bottom, 0px) !important;
+  }
+
+  .bottom-nav-surface {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 104px minmax(0, 1fr);
+    pointer-events: none;
+  }
+
+  .bottom-nav-surface > span {
+    background: #fff;
+    border-top: 1px solid #E5E7EB;
+  }
+
+  .bottom-nav-cradle { display: block; }
+
+  #root .bottom-nav-item--ask .bottom-nav-icon {
+    width: 58px !important;
+    height: 58px !important;
+    border-radius: 50% !important;
+    box-shadow: 0 0 10px 2px rgba(16, 185, 129, 0.22), 0 0 18px rgba(8, 120, 72, 0.12) !important;
+    flex-shrink: 0;
+  }
+
+  #root .bottom-nav-item--ask .bottom-nav-label {
+    position: absolute;
+    top: 55px;
+    color: #087848;
+  }
+
+  #root .bottom-nav-item--ask .bottom-nav-subtitle { display: none; }
+
   .desktop-sidebar {
     display: none;
   }
@@ -1436,7 +1502,10 @@ const profileCardLoading = {
   fontWeight: "850",
 };
 
-const centerNavButton = {};
+const centerNavButton = {
+  overflow: "visible",
+  border: "none",
+};
 
 const centerNavButtonActive = {
   background: "var(--meetro-surface-sage)",
@@ -1449,22 +1518,37 @@ const centerNavButtonAlert = {
 };
 
 const centerIconWrap = {
-  width: "30px",
-  height: "30px",
-  borderRadius: "10px",
-  fontSize: "18px",
-  background: "transparent",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  border: "none",
-  boxShadow: "none",
+  width: "58px",
+  height: "58px",
+  boxSizing: "border-box",
+  top: "-14px",
+  left: "50%",
+  borderRadius: "50%",
+  background: "linear-gradient(145deg, #10B981, #087848)",
+  color: "#fff",
+  border: "2px solid #fff",
+  transform: "translateX(-50%)",
 };
 
-const centerIconWrapLandscape = {
-  width: "24px",
-  height: "24px",
-  borderRadius: "10px",
-  fontSize: "14px",
-  boxShadow: "none",
+const centerAskMark = {
+  color: "#fff",
+  fontSize: "30px",
+  fontWeight: 900,
+  lineHeight: 1,
+  fontFamily: "Poppins, system-ui, sans-serif",
+};
+
+const sidebarAskMark = {
+  width: "30px",
+  height: "30px",
+  display: "grid",
+  placeItems: "center",
+  borderRadius: "50%",
+  background: "#087848",
+  color: "#fff",
+  fontSize: "17px",
+  fontWeight: 900,
+  lineHeight: 1,
 };
 
 const centerIconWrapActive = {
@@ -1490,12 +1574,13 @@ const navDock = {
   maxWidth: "100%",
   minWidth: 0,
   boxSizing: "border-box",
-  overflowX: "hidden",
+  overflow: "visible",
   zIndex: 9999,
   pointerEvents: "none",
 };
 
 const navWrapper = {
+  position: "relative",
   pointerEvents: "auto",
   width: "100%",
   maxWidth: "100%",
@@ -1505,10 +1590,11 @@ const navWrapper = {
   justifyContent: "space-around",
   padding: "5px 4px calc(5px + env(safe-area-inset-bottom))",
   boxSizing: "border-box",
-  background: "rgba(255,255,255,0.98)",
-  backdropFilter: "blur(16px)",
+  background: "transparent",
+  backdropFilter: "none",
+  border: "none",
   borderRadius: 0,
-  boxShadow: "0 -1px 8px rgba(15,23,42,0.10)",
+  boxShadow: "none",
 };
 
 const navWrapperLandscape = {
@@ -1518,6 +1604,7 @@ const navWrapperLandscape = {
 };
 
 const navContainer = {
+  height: "74px",
   touchAction: "manipulation",
   WebkitTransform: "translateZ(0)",
   transform: "translateZ(0)",

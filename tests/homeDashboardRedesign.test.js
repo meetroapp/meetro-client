@@ -5,6 +5,7 @@ import { JSDOM } from "jsdom";
 import React, { act } from "react";
 import { createServer } from "vite";
 import { getProfessionalHomeGreeting } from "../src/utils/professionalHomeGreeting.js";
+import { getMeetroMomentHashRoute } from "../src/utils/meetroMomentRoutes.js";
 
 let dom, vite, createRoot;
 const globals = new Map();
@@ -40,9 +41,10 @@ test.after(async () => {
   for (const [key, descriptor] of globals) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; }
   delete globalThis.IS_REACT_ACT_ENVIRONMENT; delete globalThis.__dashboardHttp;
 });
-async function mount(t, page) {
+async function mount(t, page, setup = () => {}) {
   localStorage.clear(); localStorage.setItem("language", "en"); localStorage.setItem("activeAccountMode", page === "BusinessDashboard" ? "business" : "personal");
   if (page === "BusinessDashboard") localStorage.setItem("userName", "William Molina");
+  setup();
   const routes = [], calls = [];
   globalThis.__dashboardHttp = async (path, options = {}) => {
     calls.push({ path, method: options.method || "GET" });
@@ -63,8 +65,22 @@ test("Professional lead priority, useful zero schedule and exact approved shortc
   assert.match(text, /Interior Painting/); assert.match(text, /Cape Coral, FL/);
   assert.match(text, /Today's Schedule0/); assert.match(text, /2 visits need scheduling/);
   const expectedGreeting = getProfessionalHomeGreeting({ name: "William Molina" });
-  assert.match(document.querySelector(".business-dashboard-header-section").textContent, new RegExp(`Meetro.*Real work\\. Real opportunity\\..*${expectedGreeting}.*Review opportunities.*Keep your business moving forward\\..*Ask Meetro.*Continue Work`, "s"));
-  assert.equal(document.querySelectorAll(".business-dashboard-hero-actions button").length, 2);
+  assert.match(document.querySelector(".business-dashboard-header-section").textContent, new RegExp(`Meetro.*Real work\\. Real opportunity\\..*${expectedGreeting}.*Review opportunities.*Keep your business moving forward\\..*Continue Work`, "s"));
+  assert.equal(document.querySelectorAll(".business-dashboard-hero-actions button").length, 1);
+  assert.equal(document.querySelectorAll(".business-dashboard-hero-ask, .business-dashboard .home-dashboard-ask-button").length, 0);
+  const professionalNav = [...document.querySelectorAll(".bottom-nav-dock .bottom-nav-item")];
+  assert.deepEqual(professionalNav.map((item) => item.querySelector(".bottom-nav-label").textContent), ["Home", "Work Center", "Ask Meetro", "Chat", "Profile"]);
+  assert.equal(professionalNav[2].getAttribute("aria-label"), "Ask Meetro");
+  assert.equal(professionalNav[2].getAttribute("aria-current"), null);
+  let professionalAskOpens = 0;
+  const onProfessionalAsk = () => { professionalAskOpens += 1; };
+  window.addEventListener("meetro:assistant:open", onProfessionalAsk);
+  const professionalRouteCount = w.routes.length;
+  await act(async () => professionalNav[2].click());
+  await act(async () => document.querySelector('.desktop-sidebar-item[aria-label="Ask Meetro"]').click());
+  window.removeEventListener("meetro:assistant:open", onProfessionalAsk);
+  assert.equal(professionalAskOpens, 2);
+  assert.equal(w.routes.length, professionalRouteCount);
   assert.ok(document.querySelector(".home-dashboard-leads-icon"));
   assert.equal(document.querySelector(".home-dashboard-leads-new-badge").textContent, "1 NEW");
   assert.match(document.querySelector(".home-dashboard-leads-count").textContent, /1 new lead/);
@@ -81,10 +97,6 @@ test("Professional lead priority, useful zero schedule and exact approved shortc
   await act(async () => revenue.click());
   assert.equal(w.routes.at(-1), "contractorDashboard");
   assert.equal(localStorage.getItem("meetroWorkCenterTab"), "revenue");
-  let askOpened = false;
-  window.addEventListener("meetro:assistant:open", () => { askOpened = true; }, { once: true });
-  await act(async () => document.querySelector(".business-dashboard-hero-ask").click());
-  assert.equal(askOpened, true);
   await act(async () => document.querySelector(".business-dashboard-hero-continue").click());
   assert.equal(w.routes.at(-1), "contractorDashboard");
   assert.equal(localStorage.getItem("meetroWorkCenterTab"), "schedule");
@@ -111,6 +123,19 @@ test("Professional Home greeting follows the local device daypart boundaries", (
 });
 test("Homeowner projects, functional Active/History controls and service entries remain role specific", async (t) => {
   const w = await mount(t, "Home");
+  const homeownerNav = [...document.querySelectorAll(".bottom-nav-dock .bottom-nav-item")];
+  assert.deepEqual(homeownerNav.map((item) => item.querySelector(".bottom-nav-label").textContent), ["Home", "Work Center", "Ask Meetro", "Chat", "Profile"]);
+  assert.equal(homeownerNav[2].getAttribute("aria-label"), "Ask Meetro");
+  assert.equal(homeownerNav[2].getAttribute("aria-current"), null);
+  let homeownerAskOpens = 0;
+  const onHomeownerAsk = () => { homeownerAskOpens += 1; };
+  window.addEventListener("meetro:assistant:open", onHomeownerAsk);
+  const homeownerRouteCount = w.routes.length;
+  await act(async () => homeownerNav[2].click());
+  await act(async () => document.querySelector('.desktop-sidebar-item[aria-label="Ask Meetro"]').click());
+  window.removeEventListener("meetro:assistant:open", onHomeownerAsk);
+  assert.equal(homeownerAskOpens, 2);
+  assert.equal(w.routes.length, homeownerRouteCount);
   assert.match(w.text(), /My Projects/); assert.match(w.text(), /Your home, our community/);
   assert.doesNotMatch(w.text(), /New Leads|Pending Quotes|Hiring|Quote Builder/);
   const tabs = [...document.querySelectorAll(".home-my-projects-tabs button")];
@@ -120,15 +145,44 @@ test("Homeowner projects, functional Active/History controls and service entries
   assert.equal(tabs[0].getAttribute("aria-pressed"), "false");
   assert.match(
     document.querySelector(".home-help-action-grid").textContent,
-    /Request Service.*Emergency.*Ask Meetro/i
+    /Request Service.*Emergency/i
   );
+  assert.equal(document.querySelectorAll(".home-help-action-grid button").length, 2);
+  assert.doesNotMatch(document.querySelector(".home-help-action-grid").textContent, /Ask Meetro/i);
   assert.match(
     document.querySelector(".home-my-professionals-entry").textContent,
     /My Professionals/i
   );
   assert.equal(document.querySelector(".home-dashboard-welcome h1").textContent, "Good morning!");
-  assert.ok(document.querySelector(".home-top-bar .home-dashboard-ask-button"));
+  assert.equal(document.querySelectorAll(".home-top-bar .home-dashboard-ask-button").length, 0);
   assert.ok(document.querySelector(".home-top-bar .home-dashboard-notification"));
+  assert.ok(document.querySelector(".home-dashboard-moments"));
+  await act(async () => document.querySelector(".home-moments-view-all").click());
+  assert.equal(w.routes.at(-1), "meetroMoments");
+});
+
+test("Home shows at most three viewer-visible Moments and opens an existing detail route", async (t) => {
+  const w = await mount(t, "Home", () => {
+    localStorage.setItem("userId", "homeowner-1");
+    localStorage.setItem("meetroTimelineMoments", JSON.stringify([
+      ...Array.from({ length: 4 }, (_, index) => ({
+        id: `moment-${index + 1}`,
+        projectTitle: `Completed project ${index + 1}`,
+        customerId: "homeowner-1",
+        verified: true,
+        origin: "closed_job",
+        status: "published",
+        closureDate: `2026-09-${String(index + 1).padStart(2, "0")}`,
+      })),
+      { id: "other-account", projectTitle: "Private other account", customerId: "someone-else", verified: true, origin: "closed_job", status: "published" },
+    ]));
+  });
+  const cards = [...document.querySelectorAll(".home-moment-preview")];
+  assert.equal(cards.length, 3);
+  assert.doesNotMatch(document.querySelector(".home-dashboard-moments").textContent, /Private other account/);
+  await act(async () => cards[0].click());
+  assert.equal(w.routes.at(-1), getMeetroMomentHashRoute("moment-4"));
+  assert.equal(localStorage.getItem("selectedMeetroMomentId"), "moment-4");
 });
 test("dashboard layout protects narrow phones and scales metrics/tools without changing nav destinations", () => {
   const css = readFileSync("src/styles/homeDashboard.css", "utf8");
@@ -145,7 +199,7 @@ test("dashboard layout protects narrow phones and scales metrics/tools without c
   );
   assert.doesNotMatch(mobileGreetingRule, /overflow|clip|translate|margin-left|left:/);
   assert.match(css, /business-dashboard-header-section \{[\s\S]*safe-area-inset-top/);
-  assert.match(css, /home-help-action-grid \{ grid-template-columns: repeat\(3, minmax\(0, 1fr\)\) !important/);
+  assert.match(css, /home-help-action-grid \{ grid-template-columns: repeat\(2, minmax\(0, 1fr\)\) !important/);
   assert.match(css, /\.business-dashboard, \.homeowner-home-dashboard\) ~ \.meetro-assistant-launcher/);
   assert.match(css, /min-width: 768px/); assert.match(css, /min-width: 1200px/);
   assert.match(css, /repeat\(3, minmax\(0, 1fr\)\)/); assert.match(css, /repeat\(4, minmax\(0, 1fr\)\)/);

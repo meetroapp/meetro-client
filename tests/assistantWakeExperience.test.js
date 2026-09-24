@@ -30,6 +30,7 @@ const assistantSource = readFileSync(
   "utf8"
 );
 const appSource = readFileSync(new URL("../src/App.jsx", import.meta.url), "utf8");
+const bottomNavSource = readFileSync(new URL("../src/components/BottomNav.jsx", import.meta.url), "utf8");
 const homeSource = readFileSync(new URL("../src/pages/Home.jsx", import.meta.url), "utf8");
 const profileSource = readFileSync(new URL("../src/pages/Profile.jsx", import.meta.url), "utf8");
 
@@ -202,7 +203,8 @@ test("Ask Meetro launchers open the in-context overlay without route navigation"
   assert.match(assistantSource, /window\.addEventListener\("meetro:assistant:open", handleAssistantOpen\)/);
   assert.match(assistantSource, /openAssistantFromLauncher\(\{ initialQuestion \}\)/);
   assert.match(assistantSource, /setWakeOpen\(true\);/);
-  assert.match(homeSource, /window\.dispatchEvent\(new Event\("meetro:assistant:open"\)\)/);
+  assert.match(bottomNavSource, /window\.dispatchEvent\(new Event\("meetro:assistant:open"\)\)/);
+  assert.doesNotMatch(homeSource, /window\.dispatchEvent\(new Event\("meetro:assistant:open"\)\)/);
   assert.match(profileSource, /window\.dispatchEvent\(new Event\("meetro:assistant:open"\)\)/);
   assert.doesNotMatch(homeSource, /setPage\("assistant"\)/);
   assert.doesNotMatch(profileSource, /setPage\("assistant"\)/);

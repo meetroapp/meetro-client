@@ -64,6 +64,8 @@ import {
   getProfessionalWorkMetrics,
 } from "../utils/dashboardMetrics";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import { getTimelineMomentsForViewer, readTimelineMoments } from "../utils/meetroTimeline";
+import { getMeetroMomentHashRoute } from "../utils/meetroMomentRoutes";
 import {
   buildSpotlightProfessionalProfile,
   getEligibleSpotlightBusinesses,
@@ -401,6 +403,29 @@ function Home({ setPage }) {
   const isBusinessMode = activeMode === "business" && hasBusinessAccess;
 
   const legacyWorkflowStorageEnabled = canReadLegacyWorkflowStorage();
+  const momentUser = readHomeJson("user", {});
+  const momentBusinessId =
+    localStorage.getItem("activeBusinessId") ||
+    localStorage.getItem("businessId") ||
+    localStorage.getItem("contractorProfileId") ||
+    "";
+  const momentViewer = {
+    activeMode: "personal",
+    accountType: localStorage.getItem("accountType") || "",
+    businessId: momentBusinessId,
+    businessName,
+    hasBusinessProfile: Boolean(businessName || momentBusinessId),
+    employee: localStorage.getItem("accountType") === "employee",
+    relationshipId:
+      localStorage.getItem("activeRelationshipId") ||
+      localStorage.getItem("homeownerRelationshipId") ||
+      localStorage.getItem("activeConversationId") ||
+      "",
+    userId: momentUser.id || momentUser.userId || momentUser.user_id || localStorage.getItem("userId") || "",
+  };
+  const homeMoments = legacyWorkflowStorageEnabled
+    ? getTimelineMomentsForViewer(readTimelineMoments(localStorage), momentViewer).slice(0, 3)
+    : [];
   const allHomeownerRequests = (
     legacyWorkflowStorageEnabled
       ? getStoredHomeownerRequests()
@@ -1304,6 +1329,41 @@ function Home({ setPage }) {
         )}
       </section>
 
+      <section className="home-dashboard-moments" style={homeMomentsSection}>
+        <div className="home-moments-heading">
+          <div>
+            <p style={sectionEyebrow}>{t("momentsVerifiedHistory", language)}</p>
+            <h2 style={sectionTitle}>{t("navigationMoments", language)}</h2>
+            <p style={sectionGuideText}>{t("momentsPreservationStatementText", language)}</p>
+          </div>
+          <button type="button" className="home-moments-view-all" onClick={() => setPage("meetroMoments")}>{t("viewAll", language)} →</button>
+        </div>
+        {homeMoments.length > 0 ? (
+          <div className="home-moments-preview-grid">
+            {homeMoments.map((moment) => (
+              <button
+                key={moment.id}
+                type="button"
+                className="home-moment-preview"
+                onClick={() => {
+                  localStorage.setItem("selectedMeetroMomentId", String(moment.id));
+                  setPage(getMeetroMomentHashRoute(moment.id));
+                }}
+              >
+                <span className="home-moment-preview-icon"><MeetroIcon name="verified" size={22} decorative /></span>
+                <span className="home-moment-preview-copy">
+                  <strong>{moment.projectTitle || t("momentsCompletedProject", language)}</strong>
+                  <small>{[moment.businessName, moment.projectCategory].filter(Boolean).join(" · ") || t("momentsVerifiedLabel", language)}</small>
+                </span>
+                <span aria-hidden="true">→</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="home-moments-empty">{t("momentsEmptyTitle", language)}</p>
+        )}
+      </section>
+
       <section
         className="home-my-professionals-entry"
         style={communityEntrySection}
@@ -1384,17 +1444,6 @@ function Home({ setPage }) {
             </strong>
           </button>
 
-          <button
-            type="button"
-            className="home-help-action-card"
-            style={helpActionCard}
-            onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}
-          >
-            <span className="home-help-action-icon" style={helpActionIcon}>
-              <MeetroIcon name="aiHelp" size={24} decorative />
-            </span>
-            <strong>{t("assistantCompanionAskMeetro", language)}</strong>
-          </button>
         </div>
       </section>
 
@@ -1462,10 +1511,6 @@ function TopBar({ setPage, unreadCount = 0 }) {
         <button className="home-dashboard-notification" type="button" aria-label="Open communications" onClick={() => setPage("messagesInbox")}>
           <MeetroIcon name="notifications" size={20} decorative />
           {unreadCount > 0 ? <span className="home-dashboard-notification-count">{unreadCount}</span> : null}
-        </button>
-        <button className="home-dashboard-ask-button" type="button" onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}>
-          <MeetroIcon name="aiHelp" size={18} decorative />
-          <span>Ask Meetro</span>
         </button>
       </div>
     </div>
@@ -2986,7 +3031,7 @@ const helpSectionHeader = {
 
 const helpActionGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
   gap: "14px",
 };
 
@@ -3090,6 +3135,11 @@ const spotlightDebugLine = {
 };
 
 const communityEntrySection = {
+  marginBottom: "22px",
+};
+
+const homeMomentsSection = {
+  ...homeWorkflowSection,
   marginBottom: "22px",
 };
 

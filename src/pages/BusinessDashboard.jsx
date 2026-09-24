@@ -990,10 +990,6 @@ function BusinessDashboard({ setPage }) {
                 <MeetroIcon name="notifications" size={20} decorative />
                 {unreadMessages > 0 ? <span className="home-dashboard-notification-count">{unreadMessages}</span> : null}
               </button>
-              <button className="home-dashboard-ask-button" type="button" onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}>
-                <MeetroIcon name="aiHelp" size={18} decorative />
-                <span>Ask Meetro</span>
-              </button>
               <button className="home-dashboard-profile-button" onClick={openBusinessProfile} style={profileMini}>
                 {profile?.image_url ? <img src={profile.image_url} alt={businessName} style={miniAvatar} /> : <span style={profileInitial}>{String(businessName || "B").charAt(0).toUpperCase()}</span>}
               </button>
@@ -1155,14 +1151,6 @@ function BusinessDashboard({ setPage }) {
             </div>
 
             <div className="business-dashboard-hero-actions">
-              <button
-                className="business-dashboard-hero-ask"
-                type="button"
-                onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}
-              >
-                <MeetroIcon name="aiHelp" size={18} decorative />
-                <span>Ask Meetro</span>
-              </button>
               <button
                 className="business-dashboard-hero-continue"
                 type="button"

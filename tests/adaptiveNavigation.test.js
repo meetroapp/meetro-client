@@ -10,6 +10,10 @@ const appSource = readFileSync(
   new URL("../src/App.jsx", import.meta.url),
   "utf8"
 );
+const askHostSource = readFileSync(
+  new URL("../src/components/AskMeetroHost.jsx", import.meta.url),
+  "utf8"
+);
 const profileSource = readFileSync(
   new URL("../src/pages/Profile.jsx", import.meta.url),
   "utf8"
@@ -136,7 +140,7 @@ test("Community Discover is a shared destination and not an implicit role switch
   assert.doesNotMatch(personalModeBlock, /"discover"/);
 });
 
-test("mobile bottom navigation uses five permanent platform destinations without standalone Alerts", () => {
+test("mobile bottom navigation uses the same five ordered actions for both roles", () => {
   const personalMobileBlock = bottomNavSource.slice(
     bottomNavSource.indexOf("const personalMobileNavItems = ["),
     bottomNavSource.indexOf("const businessMobileNavItems = [")
@@ -146,46 +150,17 @@ test("mobile bottom navigation uses five permanent platform destinations without
     bottomNavSource.indexOf("const personalDesktopNavItems = [")
   );
 
-  for (const page of [
-    "home",
-    "myRequests",
-    "messagesInbox",
-    "meetroMoments",
-    "profile",
-  ]) {
-    assert.match(personalMobileBlock, new RegExp(`page: "${page}"`));
-  }
-
-  for (const label of [
-    'label: t\\("navigationHome", language\\)',
-    'label: t\\("navigationWorkCenter", language\\)',
-    'label: t\\("navigationChat", language\\)',
-    'label: t\\("navigationMoments", language\\)',
-    'label: t\\("navigationProfile", language\\)',
-  ]) {
-    assert.match(personalMobileBlock, new RegExp(label));
-  }
-
-  for (const page of [
-    "businessDashboard",
-    "contractorDashboard",
-    "messagesInbox",
-    "meetroMoments",
-    "profile",
-  ]) {
-    assert.match(businessMobileBlock, new RegExp(`page: "${page}"`));
-  }
-
-  assert.equal(
-    (personalMobileBlock.match(/page: "/g) || []).length,
-    5
+  assert.deepEqual(
+    [...personalMobileBlock.matchAll(/(?:page: "([^"]+)"|askMeetroNavItem,)/g)].map((match) => match[1] || "askMeetro"),
+    ["home", "myRequests", "askMeetro", "messagesInbox", "profile"]
   );
-  assert.equal(
-    (businessMobileBlock.match(/page: "/g) || []).length,
-    5
+  assert.deepEqual(
+    [...businessMobileBlock.matchAll(/(?:page: "([^"]+)"|askMeetroNavItem,)/g)].map((match) => match[1] || "askMeetro"),
+    ["businessDashboard", "contractorDashboard", "askMeetro", "messagesInbox", "profile"]
   );
 
   for (const block of [personalMobileBlock, businessMobileBlock]) {
+    assert.doesNotMatch(block, /page: "meetroMoments"/);
     assert.doesNotMatch(block, /page: "notifications"/);
     assert.doesNotMatch(block, /navigationAlerts/);
   }
@@ -226,6 +201,31 @@ test("desktop sidebar and mobile dock share active state and navigation handlers
   assert.match(bottomNavSource, /aria-current=\{active \? "page" : undefined\}/);
   assert.match(bottomNavSource, /renderNavItem\(item, "sidebar"\)/);
   assert.match(bottomNavSource, /renderNavItem\(item, "bottom"\)/);
+});
+
+test("Ask Meetro is an action in both global shells and does not navigate", () => {
+  const actionBlock = bottomNavSource.slice(
+    bottomNavSource.indexOf('const askMeetroNavItem = {'),
+    bottomNavSource.indexOf('const personalMobileNavItems = [')
+  );
+  const pressBlock = bottomNavSource.slice(
+    bottomNavSource.indexOf('const handleNavPress = ('),
+    bottomNavSource.indexOf('const renderNavItem = (')
+  );
+  assert.match(actionBlock, /action: "askMeetro"/);
+  assert.doesNotMatch(actionBlock, /page:/);
+  assert.match(pressBlock, /if \(item\.action === "askMeetro"\) \{\s*window\.dispatchEvent\(new Event\("meetro:assistant:open"\)\);\s*return;/);
+  assert.match(bottomNavSource, /aria-label=\{isCenterAction \? "Ask Meetro"/);
+  assert.match(bottomNavSource, /const isCenterAction = item\.action === "askMeetro"/);
+  assert.match(bottomNavSource, /if \(event\.detail === 0\) handleNavPress\(item\)/);
+  assert.match(bottomNavSource, /const centerIconWrap = \{[\s\S]*?width: "58px"[\s\S]*?top: "-14px"/);
+  const desktopBlocks = bottomNavSource.slice(
+    bottomNavSource.indexOf('const personalDesktopNavItems = ['),
+    bottomNavSource.indexOf('const businessDesktopShortcutItems = [')
+  );
+  assert.equal((desktopBlocks.match(/askMeetroNavItem,/g) || []).length, 2);
+  assert.match(askHostSource, /backgroundRef\.current\?\.querySelector\("\.bottom-nav-dock, \.desktop-sidebar"\)/);
+  assert.match(askHostSource, /showLauncher=\{showLauncher\}/);
 });
 
 test("desktop Property and Relationships actions report their own active page state", () => {

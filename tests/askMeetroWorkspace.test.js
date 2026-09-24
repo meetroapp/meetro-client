@@ -41,7 +41,7 @@ test.after(async () => {
   delete globalThis.IS_REACT_ACT_ENVIRONMENT; delete globalThis.__dashboardHttp;
 });
 const JOB = "7e742dc1-e2a2-49c6-a493-11e351c80d54", EVIDENCE = "7a02ee20-7f32-48eb-96dc-a3217bc5dcda";
-async function mount(t, { host = false, context = { page: "workCenter", jobId: JOB }, completionApi, resolveActions, requestConversation, currentPage = "workCenter", role = "business", activeAccountMode = "business", route = `#workCenter?jobId=${JOB}&stage=work` } = {}) {
+async function mount(t, { host = false, hostChildren, context = { page: "workCenter", jobId: JOB }, completionApi, resolveActions, requestConversation, currentPage = "workCenter", role = "business", activeAccountMode = "business", route = `#workCenter?jobId=${JOB}&stage=work` } = {}) {
   localStorage.clear(); localStorage.setItem("activeAccountMode", activeAccountMode); localStorage.setItem("language", "en");
   window.history.replaceState({}, "", route);
   const calls = [], routes = [];
@@ -90,7 +90,7 @@ async function mount(t, { host = false, context = { page: "workCenter", jobId: J
   const root = createRoot(document.getElementById("root"));
   t.after(async () => { await act(async () => root.unmount()); });
   const props = { currentPage, role, context, ...(resolveActions ? { resolveActions } : {}), ...(requestConversation ? { requestConversation } : {}), ...(completionApi ? { completionApi } : {}), setPage: (nextRoute) => routes.push(nextRoute), onClose() {} };
-  await act(async () => { root.render(React.createElement(Component, props, host ? React.createElement("input", { "aria-label": "Existing unsaved Quote", defaultValue: "Unsaved scope" }) : null)); await pause(); });
+  await act(async () => { root.render(React.createElement(Component, props, host ? hostChildren || React.createElement("input", { "aria-label": "Existing unsaved Quote", defaultValue: "Unsaved scope" }) : null)); await pause(); });
   async function click(label) {
     const button = [...document.querySelectorAll("button")].find((item) => item.textContent.trim() === label || item.getAttribute("aria-label") === label);
     assert.ok(button, label); assert.equal(button.disabled, false);
@@ -164,6 +164,32 @@ test("persistent launcher opens a dedicated workspace and closes without unmount
   assert.equal(w.routes.length, 0);
   await act(async () => { window.dispatchEvent(new CustomEvent("meetro:assistant:open", { detail: { initialQuestion: "Help with this job" } })); await pause(); });
   assert.equal(document.querySelector(".ask-meetro-composer textarea").value, "Help with this job");
+});
+test("global navigation owns Ask while the current work page and draft remain mounted", async (t) => {
+  const route = `#workCenter?jobId=${JOB}&stage=work`;
+  const w = await mount(t, {
+    host: true,
+    route,
+    hostChildren: React.createElement(React.Fragment, null,
+      React.createElement("nav", { className: "desktop-sidebar" },
+        React.createElement("button", {
+          type: "button",
+          "aria-label": "Ask Meetro",
+          onClick: () => window.dispatchEvent(new Event("meetro:assistant:open")),
+        }, "Ask Meetro")),
+      React.createElement("input", { "aria-label": "Existing unsaved Quote", defaultValue: "Unsaved scope" })
+    ),
+  });
+  const original = document.querySelector('[aria-label="Existing unsaved Quote"]');
+  assert.equal(document.querySelector(".meetro-assistant-launcher"), null);
+  await act(async () => { document.querySelector('.desktop-sidebar [aria-label="Ask Meetro"]').click(); await pause(); });
+  assert.ok(document.querySelector(".ask-meetro-workspace"));
+  assert.equal(window.location.hash, route);
+  assert.equal(w.routes.length, 0);
+  assert.equal(document.querySelector('[aria-label="Existing unsaved Quote"]'), original);
+  await w.click("Close Ask Meetro");
+  assert.equal(original.value, "Unsaved scope");
+  assert.equal(document.querySelector(".meetro-assistant-launcher"), null);
 });
 
 test("Emergency Ask uses personal advisory context and bounded help suggestions", async (t) => {

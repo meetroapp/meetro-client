@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import MeetroAssistant from "./MeetroAssistant";
 import AskMeetroWorkspace from "./AskMeetroWorkspace";
 import { captureAskMeetroContext } from "../utils/askMeetro.js";
@@ -7,6 +7,8 @@ import { getAccountModeForPage, subscribeAuthenticatedIdentity } from "../utils/
 export default function AskMeetroHost({ children, currentPage, setPage, enabled = true }) {
   const [entry, setEntry] = useState(null);
   const [session, setSession] = useState(null);
+  const [showLauncher, setShowLauncher] = useState(false);
+  const backgroundRef = useRef(null);
   const opener = useRef(null);
   const role = getAccountModeForPage(currentPage, localStorage.getItem("activeAccountMode") || "personal");
   const open = useCallback((detail = {}) => {
@@ -30,11 +32,31 @@ export default function AskMeetroHost({ children, currentPage, setPage, enabled 
     window.addEventListener("hashchange", closeOnRoute);
     return () => { unsubscribe(); window.removeEventListener("accountModeChanged", reset); window.removeEventListener("meetroAuthExpired", reset); window.removeEventListener("hashchange", closeOnRoute); };
   }, []);
+  useLayoutEffect(() => {
+    const hasGlobalNavigation = () => Boolean(
+      backgroundRef.current?.querySelector(".bottom-nav-dock, .desktop-sidebar")
+    );
+    const navigationPresent = hasGlobalNavigation();
+    setShowLauncher(!navigationPresent);
+    if (navigationPresent) {
+      return undefined;
+    }
+
+    if (typeof window.MutationObserver !== "function") return undefined;
+    const observer = new window.MutationObserver(() => {
+      if (hasGlobalNavigation()) {
+        setShowLauncher(false);
+        observer.disconnect();
+      }
+    });
+    observer.observe(document.body, { childList: true, subtree: true });
+    return () => observer.disconnect();
+  }, [currentPage]);
   return <>
     {/* Keep the original workspace mounted so opening Ask cannot discard a local draft. */}
-    <div hidden={Boolean(entry)} style={{ display: entry ? "none" : "contents" }}>
+    <div ref={backgroundRef} hidden={Boolean(entry)} style={{ display: entry ? "none" : "contents" }}>
       {children}
-      {enabled ? <MeetroAssistant currentPage={currentPage} setPage={setPage} onOpenWorkspace={open} /> : null}
+      {enabled ? <MeetroAssistant currentPage={currentPage} setPage={setPage} onOpenWorkspace={open} showLauncher={showLauncher} /> : null}
     </div>
     {entry ? <AskMeetroWorkspace context={entry.context} initialQuestion={entry.initialQuestion} role={role} currentPage={currentPage} onClose={close} setPage={navigate} session={session} onSessionChange={setSession} /> : null}
   </>;
