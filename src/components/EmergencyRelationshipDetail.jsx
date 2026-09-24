@@ -303,6 +303,11 @@ function EmergencyRelationshipDetail({
     },
   };
   const copy = text[language] || text.en;
+  const relationshipHeading = String(
+    detail.description ||
+      detail.title ||
+      "Emergency"
+  ).trim();
   const professional = detail.selectedProfessional;
   const identityName = professional
     ? professional.displayName
@@ -344,12 +349,14 @@ function EmergencyRelationshipDetail({
 
   return (
     <section
+      className="emergency-find-help-relationship"
       style={relationshipShell}
       aria-label={copy.eyebrow}
       data-emergency-relationship-detail="canonical"
     >
       <button
         type="button"
+        className="emergency-find-help-back"
         style={backButton}
         onClick={onBack}
       >
@@ -357,9 +364,14 @@ function EmergencyRelationshipDetail({
         <span>{copy.back}</span>
       </button>
 
-      <header style={relationshipHeader}>
+      <header
+        className="emergency-find-help-relationship-card"
+        style={relationshipHeader}
+      >
         <p style={eyebrow}>{copy.eyebrow}</p>
-        <h1 style={relationshipTitle}>{detail.title}</h1>
+        <h1 style={relationshipTitle}>
+          {relationshipHeading}
+        </h1>
         <p style={serviceLabel}>
           {detail.serviceSpecialtyLabel}
           {detail.serviceDomainLabel
@@ -371,7 +383,8 @@ function EmergencyRelationshipDetail({
         </strong>
       </header>
 
-      <RelationshipIdentityPage
+      <div className="emergency-find-help-identity">
+        <RelationshipIdentityPage
         identity={{
           displayName: identityName,
           typeLabel: professional
@@ -622,7 +635,8 @@ function EmergencyRelationshipDetail({
               )}
           </div>
         }
-      />
+        />
+      </div>
     </section>
   );
 }
@@ -819,7 +833,7 @@ const eyebrow = {
 const relationshipTitle = {
   margin: 0,
   color: "#111827",
-  fontSize: "clamp(28px, 8vw, 40px)",
+  fontSize: "clamp(24px, 6vw, 34px)",
   lineHeight: 1.08,
   fontWeight: "950",
   overflowWrap: "anywhere",

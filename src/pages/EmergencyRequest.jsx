@@ -302,6 +302,8 @@ function readCurrentEmergencyRoute() {
 
 function EmergencyRequest({ setPage }) {
   const safetyReviewHeadingRef = useRef(null);
+  const findHelpSectionRef = useRef(null);
+  const findHelpScrollKeyRef = useRef("");
   const selectionDialogRef = useRef(null);
   const emergencyRefreshCoordinatorRef = useRef(null);
   const [routeSessionController] = useState(() =>
@@ -765,6 +767,38 @@ function EmergencyRequest({ setPage }) {
   ].includes(canonicalRequestStatus);
   const shouldLoadAvailableNow =
     canonicalRequestStatus === "ready_for_distribution";
+
+  useEffect(() => {
+    if (!canonicalRequestId || !shouldLoadAvailableNow) {
+      findHelpScrollKeyRef.current = "";
+      return undefined;
+    }
+
+    const scrollKey =
+      `${canonicalRequestId}:ready_for_distribution`;
+
+    if (findHelpScrollKeyRef.current === scrollKey) {
+      return undefined;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const section = findHelpSectionRef.current;
+      if (!section) return;
+
+      findHelpScrollKeyRef.current = scrollKey;
+
+      section.scrollIntoView({
+        behavior: window.matchMedia?.(
+          "(prefers-reduced-motion: reduce)"
+        ).matches
+          ? "auto"
+          : "smooth",
+        block: "start",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [canonicalRequestId, shouldLoadAvailableNow]);
 
   useEffect(() => {
     if (phase !== "safety" || !canonicalRequestId) {
@@ -2268,6 +2302,11 @@ function EmergencyRequest({ setPage }) {
   return (
     <div className="app-page meetro-form-page" style={page}>
       <main
+        className={
+          canonicalRequest && !showDraftWorkflow
+            ? "emergency-find-help-main"
+            : undefined
+        }
         style={card}
         aria-labelledby={
           !canonicalRequest || showDraftWorkflow
@@ -2804,8 +2843,17 @@ function EmergencyRequest({ setPage }) {
           canonicalRequest &&
           !showDraftWorkflow && (
             emergencyRelationshipDetail ? (
-              <>
-                <EmergencyAvailableNow
+              <div className="emergency-find-help-layout">
+                <div
+                  ref={
+                    canonicalStatus ===
+                    "ready_for_distribution"
+                      ? findHelpSectionRef
+                      : null
+                  }
+                  style={findHelpAnchor}
+                >
+                  <EmergencyAvailableNow
                   visible={
                     canonicalStatus ===
                     "ready_for_distribution"
@@ -2830,7 +2878,8 @@ function EmergencyRequest({ setPage }) {
                   onKeepWaiting={() =>
                     setPage(detailReturnPage)
                   }
-                />
+                  />
+                </div>
 
                 <EmergencyRelationshipDetail
                 detail={emergencyRelationshipDetail}
@@ -2860,7 +2909,7 @@ function EmergencyRequest({ setPage }) {
                     : null
                 }
               />
-              </>
+              </div>
             ) : (
               <section style={formCard} role="alert">
                 <p style={recoveryMessage}>
@@ -3167,6 +3216,13 @@ const card = {
   paddingTop: "24px",
   paddingBottom: "90px",
   boxSizing: "border-box",
+};
+
+const findHelpAnchor = {
+  width: "100%",
+  minWidth: 0,
+  scrollMarginTop:
+    "calc(env(safe-area-inset-top, 0px) + 16px)",
 };
 
 const backMini = {

@@ -17,6 +17,14 @@ const emergencyRequestSource = source(
   "../src/pages/EmergencyRequest.jsx"
 );
 
+const emergencyRelationshipSource = source(
+  "../src/components/EmergencyRelationshipDetail.jsx"
+);
+
+const globalStylesSource = source(
+  "../src/index.css"
+);
+
 const contractorDetailsSource = source(
   "../src/pages/ContractorDetails.jsx"
 );
@@ -209,6 +217,93 @@ test(
     assert.doesNotMatch(
       dashboardSource,
       /EmergencyBusinessSettings/
+    );
+  }
+);
+
+
+test(
+  "Find Help positions Available Now at the viewport once per ready-for-distribution entry",
+  () => {
+    assert.match(
+      emergencyRequestSource,
+      /findHelpSectionRef/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /findHelpScrollKeyRef/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /canonicalRequestId[\s\S]*shouldLoadAvailableNow[\s\S]*findHelpSectionRef\.current[\s\S]*scrollIntoView/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /ready_for_distribution/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /scrollMarginTop/
+    );
+  }
+);
+
+
+test(
+  "Emergency Find Help preserves phone flow and expands into the governed iPad landscape and desktop layout",
+  () => {
+    assert.match(
+      emergencyRequestSource,
+      /emergency-find-help-main/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /emergency-find-help-layout/
+    );
+
+    assert.match(
+      emergencyRelationshipSource,
+      /emergency-find-help-relationship/
+    );
+
+    assert.match(
+      emergencyRelationshipSource,
+      /emergency-find-help-relationship-card/
+    );
+
+    assert.match(
+      emergencyRelationshipSource,
+      /emergency-find-help-identity/
+    );
+
+    assert.match(
+      globalStylesSource,
+      /data-app-layout="tablet"\]\[data-app-orientation="landscape"/
+    );
+
+    assert.match(
+      globalStylesSource,
+      /data-app-layout="desktop"/
+    );
+
+    assert.match(
+      globalStylesSource,
+      /grid-template-columns:[\s\S]*1\.08fr[\s\S]*0\.92fr/
+    );
+
+    assert.match(
+      globalStylesSource,
+      /max-width:\s*1180px\s*!important/
+    );
+
+    assert.match(
+      globalStylesSource,
+      /\.emergency-find-help-main[\s\S]*max-width:\s*760px\s*!important/
     );
   }
 );

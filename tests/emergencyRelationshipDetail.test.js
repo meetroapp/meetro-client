@@ -763,3 +763,29 @@ test("existing Work Center actions and canonical card routing remain in place", 
     /cancellationAvailable[\s\S]*onCancelRequest[\s\S]*copy\.cancelRequest/
   );
 });
+
+
+test(
+  "Emergency Relationship headline prefers the customer request description and stays compact",
+  () => {
+    assert.match(
+      componentSource,
+      /detail\.description[\s\S]*detail\.title[\s\S]*"Emergency"/
+    );
+
+    assert.match(
+      componentSource,
+      /\{relationshipHeading\}/
+    );
+
+    assert.match(
+      componentSource,
+      /fontSize:\s*"clamp\(24px,\s*6vw,\s*34px\)"/
+    );
+
+    assert.doesNotMatch(
+      componentSource,
+      /<h1[^>]*>\{detail\.title\}<\/h1>/
+    );
+  }
+);

@@ -2869,6 +2869,138 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   min-width: 0;
 }
 
+
+/* ==========================================================
+   Emergency Find Help responsive presentation
+   ========================================================== */
+
+.emergency-find-help-main {
+  width: 100% !important;
+  max-width: 760px !important;
+  min-width: 0;
+  margin-left: auto !important;
+  margin-right: auto !important;
+}
+
+.emergency-find-help-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+  width: 100%;
+  min-width: 0;
+}
+
+.emergency-find-help-layout > * {
+  min-width: 0;
+}
+
+.emergency-find-help-relationship {
+  width: 100% !important;
+  max-width: 760px !important;
+}
+
+.emergency-find-help-identity {
+  min-width: 0;
+}
+
+/*
+ * iPad landscape and desktop share the wider two-column
+ * Find Help composition. iPad portrait remains a spacious
+ * single-column layout.
+ */
+@media (min-width: 900px) {
+  #root[data-app-layout="desktop"]
+    .emergency-find-help-main,
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .emergency-find-help-main {
+    max-width: 1180px !important;
+  }
+
+  #root[data-app-layout="desktop"]
+    .emergency-find-help-layout,
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .emergency-find-help-layout {
+    grid-template-columns:
+      minmax(0, 1.08fr)
+      minmax(360px, 0.92fr);
+    column-gap: 20px;
+    align-items: start;
+  }
+
+  /*
+   * Available Now stays in the left column.
+   */
+  #root[data-app-layout="desktop"]
+    .emergency-find-help-layout
+    > div:first-child,
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .emergency-find-help-layout
+    > div:first-child {
+    grid-column: 1;
+    grid-row: 1;
+  }
+
+  /*
+   * The relationship component spans the two-column width,
+   * then places its relationship card on the left and the
+   * canonical identity/status body on the right.
+   */
+  #root[data-app-layout="desktop"]
+    .emergency-find-help-relationship,
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .emergency-find-help-relationship {
+    grid-column: 1 / -1;
+    grid-row: 2;
+    display: grid;
+    grid-template-columns:
+      minmax(0, 1.08fr)
+      minmax(360px, 0.92fr);
+    grid-template-areas:
+      "back identity"
+      "relationship identity";
+    column-gap: 20px;
+    align-items: start;
+    max-width: 1180px !important;
+    overflow: visible !important;
+  }
+
+  #root[data-app-layout="desktop"]
+    .emergency-find-help-back,
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .emergency-find-help-back {
+    grid-area: back;
+    justify-self: center;
+  }
+
+  #root[data-app-layout="desktop"]
+    .emergency-find-help-relationship-card,
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .emergency-find-help-relationship-card {
+    grid-area: relationship;
+    margin-bottom: 0 !important;
+  }
+
+  #root[data-app-layout="desktop"]
+    .emergency-find-help-identity,
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .emergency-find-help-identity {
+    grid-area: identity;
+    min-width: 0;
+    margin-top: calc(-1 * var(--meetro-layout-grid-gap-compact, 14px));
+  }
+
+  #root[data-app-layout="desktop"]
+    .emergency-find-help-identity
+    > section,
+  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+    .emergency-find-help-identity
+    > section {
+    width: 100% !important;
+    max-width: none !important;
+  }
+}
+
+
 .meetro-selected-card {
   border: 2px solid var(--meetro-color-forest) !important;
   background:
