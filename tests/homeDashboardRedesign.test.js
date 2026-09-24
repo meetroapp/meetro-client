@@ -41,14 +41,14 @@ test.after(async () => {
   for (const [key, descriptor] of globals) { if (descriptor) Object.defineProperty(globalThis, key, descriptor); else delete globalThis[key]; }
   delete globalThis.IS_REACT_ACT_ENVIRONMENT; delete globalThis.__dashboardHttp;
 });
-async function mount(t, page, setup = () => {}) {
+async function mount(t, page, setup = () => {}, profileOverride = {}) {
   localStorage.clear(); localStorage.setItem("language", "en"); localStorage.setItem("activeAccountMode", page === "BusinessDashboard" ? "business" : "personal");
   if (page === "BusinessDashboard") localStorage.setItem("userName", "William Molina");
   setup();
   const routes = [], calls = [];
   globalThis.__dashboardHttp = async (path, options = {}) => {
     calls.push({ path, method: options.method || "GET" });
-    if (path === "/my-contractor-profile") return { response: { ok: true }, data: { profile: { id: 7, business_name: "Test business", category: "painting" } } };
+    if (path === "/my-contractor-profile") return { response: { ok: true }, data: { profile: { id: 7, business_name: "Test business", category: "painting", ...profileOverride } } };
     return { response: { ok: false, status: 503 }, data: { success: false } };
   };
   const { default: Page } = await vite.ssrLoadModule(`/src/pages/${page}.jsx`);
@@ -104,6 +104,30 @@ test("Professional lead priority, useful zero schedule and exact approved shortc
   assert.ok(w.calls.every((call) => call.method === "GET"));
 });
 
+test("Professional header business initial opens Business Profile while account navigation remains", async (t) => {
+  const w = await mount(t, "BusinessDashboard", () => localStorage.setItem("businessName", "Stale mirror"), { business_name: "Bgone Construction Cleanup", image_url: "" });
+  const actions = document.querySelector(".business-dashboard .home-dashboard-topbar-actions");
+  assert.deepEqual([...actions.querySelectorAll("button")].map((button) => button.className), ["home-dashboard-notification", "home-dashboard-profile-button"]);
+  const shortcut = actions.querySelector(".home-dashboard-profile-button");
+  assert.equal(shortcut.getAttribute("aria-label"), "Open business profile: Bgone Construction Cleanup");
+  assert.equal(shortcut.querySelector("span")?.textContent, "B");
+  assert.equal(Boolean(shortcut.querySelector("img")), false);
+  assert.ok([...document.querySelectorAll(".bottom-nav-dock .bottom-nav-label")].some((label) => label.textContent === "Profile"));
+  await act(async () => shortcut.click());
+  assert.equal(w.routes.at(-1), "contractorProfile");
+  assert.equal(localStorage.getItem("contractorProfileReturnPage"), "businessDashboard");
+});
+
+test("Professional header uses the canonical business image with one spoken button label", async (t) => {
+  const imageUrl = "https://example.invalid/business-logo.png";
+  await mount(t, "BusinessDashboard", () => localStorage.setItem("userName", "William Account"), { business_name: "Acme Plumbing", image_url: imageUrl });
+  const shortcut = document.querySelector(".business-dashboard .home-dashboard-profile-button");
+  assert.equal(shortcut.getAttribute("aria-label"), "Open business profile: Acme Plumbing");
+  assert.equal(shortcut.querySelector("img")?.getAttribute("src"), imageUrl);
+  assert.equal(shortcut.querySelector("img")?.getAttribute("alt"), "");
+  assert.equal(Boolean(shortcut.querySelector("span")), false);
+});
+
 test("Professional Home greeting follows the local device daypart boundaries", () => {
   for (const [hour, expected] of [
     [8, "Good morning, Willy"],
@@ -123,6 +147,7 @@ test("Professional Home greeting follows the local device daypart boundaries", (
 });
 test("Homeowner projects, functional Active/History controls and service entries remain role specific", async (t) => {
   const w = await mount(t, "Home");
+  assert.equal(Boolean(document.querySelector(".homeowner-home-dashboard .home-dashboard-profile-button")), false);
   const homeownerNav = [...document.querySelectorAll(".bottom-nav-dock .bottom-nav-item")];
   assert.deepEqual(homeownerNav.map((item) => item.querySelector(".bottom-nav-label").textContent), ["Home", "Work Center", "Ask Meetro", "Chat", "Profile"]);
   assert.equal(homeownerNav[2].getAttribute("aria-label"), "Ask Meetro");

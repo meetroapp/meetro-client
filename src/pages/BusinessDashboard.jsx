@@ -659,6 +659,7 @@ function BusinessDashboard({ setPage }) {
   const dashboardText = {
     en: {
       dashboard: "Business Dashboard",
+      openBusinessProfile: "Open business profile",
       subtitle: "Keep your business moving forward.",
       online: "Online",
       offline: "Offline",
@@ -716,6 +717,7 @@ function BusinessDashboard({ setPage }) {
     },
     es: {
       dashboard: "Panel de Negocio",
+      openBusinessProfile: "Abrir perfil del negocio",
       subtitle: "Atiende primero lo más importante.",
       online: "En línea",
       offline: "Desconectado",
@@ -773,6 +775,7 @@ function BusinessDashboard({ setPage }) {
     },
     fr: {
       dashboard: "Tableau de bord",
+      openBusinessProfile: "Ouvrir le profil professionnel",
       subtitle: "Traitez d’abord ce qui compte.",
       online: "En ligne",
       offline: "Hors ligne",
@@ -830,6 +833,7 @@ function BusinessDashboard({ setPage }) {
     },
     "pt-BR": {
       dashboard: "Painel do negócio",
+      openBusinessProfile: "Abrir perfil da empresa",
       subtitle: "Cuide primeiro do que importa.",
       online: "Online",
       offline: "Offline",
@@ -1049,8 +1053,8 @@ function BusinessDashboard({ setPage }) {
                 <MeetroIcon name="notifications" size={20} decorative />
                 {unreadMessages > 0 ? <span className="home-dashboard-notification-count">{unreadMessages}</span> : null}
               </button>
-              <button className="home-dashboard-profile-button" onClick={openBusinessProfile} style={profileMini}>
-                {profile?.image_url ? <img src={profile.image_url} alt={businessName} style={miniAvatar} /> : <span style={profileInitial}>{String(businessName || "B").charAt(0).toUpperCase()}</span>}
+              <button className="home-dashboard-profile-button" type="button" aria-label={`${text.openBusinessProfile}: ${businessName}`} onClick={openBusinessProfile} style={profileMini}>
+                {profile?.image_url ? <img src={profile.image_url} alt="" style={miniAvatar} /> : <span style={profileInitial} aria-hidden="true">{String(businessName || "B").charAt(0).toUpperCase()}</span>}
               </button>
             </div>
           </div>
