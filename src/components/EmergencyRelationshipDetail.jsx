@@ -221,6 +221,7 @@ function EmergencyRelationshipDetail({
   detail,
   language = "en",
   responsesPhase = "idle",
+  responsesPresentation = "inline",
   selectionPending = false,
   cancellationAvailable = false,
   mutationPending = false,
@@ -345,8 +346,11 @@ function EmergencyRelationshipDetail({
     },
   ].filter((item) => String(item.value || "").trim());
   const showResponses =
-    responsesPhase !== "idle" ||
-    detail.responseCards.length > 0;
+    responsesPresentation === "inline" &&
+    (
+      responsesPhase !== "idle" ||
+      detail.responseCards.length > 0
+    );
 
   return (
     <section

@@ -36,7 +36,6 @@ function EmergencyAvailableNow({
   language = "en",
   onViewProfile,
   onChooseProfessional,
-  onKeepWaiting,
 }) {
   if (!visible) return null;
 
@@ -60,10 +59,6 @@ function EmergencyAvailableNow({
           viewProfile: "Ver perfil",
           choose: "Elegir Profesional",
           choosing: "Conectando…",
-          responsesTitle: "Respuestas de Profesionales",
-          responsesBody:
-            "Los profesionales que respondan directamente a tu solicitud aparecerán por separado abajo.",
-          keepWaiting: "Seguir Esperando",
         }
       : {
           eyebrow: "Find Emergency Help",
@@ -83,10 +78,6 @@ function EmergencyAvailableNow({
           viewProfile: "View Profile",
           choose: "Choose Professional",
           choosing: "Connecting…",
-          responsesTitle: "Professional Responses",
-          responsesBody:
-            "Professionals who respond directly to your request appear separately below.",
-          keepWaiting: "Keep Waiting",
         };
 
   const cards = Array.isArray(professionals)
@@ -259,38 +250,13 @@ function EmergencyAvailableNow({
         </div>
       )}
 
-      <div style={responsesSummary}>
-        <div style={responsesNote}>
-          <span style={responsesIconTile} aria-hidden="true">
-            <MeetroIcon
-              name="customerRelationships"
-              size={18}
-              decorative
-            />
-          </span>
-
-          <div style={responsesText}>
-            <strong>{copy.responsesTitle}</strong>
-            <p style={responsesTextParagraph}>{copy.responsesBody}</p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          style={waitButton}
-          disabled={selectionPending}
-          onClick={() => onKeepWaiting?.()}
-        >
-          {copy.keepWaiting}
-        </button>
-      </div>
     </section>
   );
 }
 
 const shell = {
   marginBottom: "12px",
-  padding: "14px",
+  padding: "12px",
   border: "1px solid var(--meetro-color-line, #E5E7EB)",
   borderRadius: "18px",
   background: "var(--meetro-surface-paper, #FFFFFF)",
@@ -314,8 +280,8 @@ const headerCopy = {
 };
 
 const availableIconTile = {
-  width: "40px",
-  height: "40px",
+  width: "36px",
+  height: "36px",
   borderRadius: "14px",
   display: "grid",
   placeItems: "center",
@@ -341,7 +307,7 @@ const title = {
   margin: 0,
   color:
     "var(--meetro-color-ink, #111827)",
-  fontSize: "24px",
+  fontSize: "21px",
   lineHeight: 1.15,
   fontWeight: "900",
 };
@@ -410,7 +376,7 @@ const cardStack = {
 };
 
 const professionalCard = {
-  padding: "12px",
+  padding: "10px",
   border:
     "1px solid var(--meetro-color-line, #E5E7EB)",
   borderRadius: "14px",
@@ -439,17 +405,17 @@ const identityText = {
 };
 
 const avatarImage = {
-  width: "44px",
-  height: "44px",
-  borderRadius: "14px",
+  width: "40px",
+  height: "40px",
+  borderRadius: "13px",
   objectFit: "cover",
   flex: "0 0 auto",
 };
 
 const avatarFallback = {
-  width: "44px",
-  height: "44px",
-  borderRadius: "14px",
+  width: "40px",
+  height: "40px",
+  borderRadius: "13px",
   display: "grid",
   placeItems: "center",
   flex: "0 0 auto",
@@ -557,72 +523,6 @@ const chooseButton = {
 const disabledButton = {
   opacity: 0.6,
   cursor: "default",
-};
-
-const responsesSummary = {
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  flexWrap: "wrap",
-  gap: "8px",
-  marginTop: "10px",
-  paddingTop: "10px",
-  borderTop:
-    "1px solid var(--meetro-color-line, #E5E7EB)",
-};
-
-const responsesNote = {
-  display: "flex",
-  alignItems: "center",
-  gap: "8px",
-  minWidth: 0,
-  flex: "1 1 200px",
-  color:
-    "var(--meetro-color-ink, #111827)",
-};
-
-const responsesIconTile = {
-  width: "36px",
-  height: "36px",
-  borderRadius: "12px",
-  display: "grid",
-  placeItems: "center",
-  flex: "0 0 auto",
-  background: "rgba(139, 92, 246, 0.10)",
-  color:
-    "var(--meetro-color-purple, #8B5CF6)",
-};
-
-const responsesText = {
-  display: "grid",
-  gap: "2px",
-  minWidth: 0,
-  fontSize: "13px",
-};
-
-const responsesTextParagraph = {
-  margin: 0,
-  color:
-    "var(--meetro-color-muted, #6B7280)",
-  fontSize: "12px",
-  lineHeight: 1.3,
-};
-
-const waitButton = {
-  minWidth: "118px",
-  minHeight: "44px",
-  marginLeft: "auto",
-  padding: "9px 12px",
-  border:
-    "1px solid var(--meetro-color-line, #E5E7EB)",
-  borderRadius: "12px",
-  background:
-    "var(--meetro-surface-paper, #FFFFFF)",
-  color:
-    "var(--meetro-color-ink, #111827)",
-  fontSize: "13px",
-  fontWeight: "800",
-  cursor: "pointer",
 };
 
 export default EmergencyAvailableNow;

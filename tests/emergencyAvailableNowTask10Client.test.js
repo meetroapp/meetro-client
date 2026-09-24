@@ -13,6 +13,10 @@ const availableNowSource = source(
   "../src/components/EmergencyAvailableNow.jsx"
 );
 
+const professionalResponsesSource = source(
+  "../src/components/EmergencyProfessionalResponses.jsx"
+);
+
 const emergencyRequestSource = source(
   "../src/pages/EmergencyRequest.jsx"
 );
@@ -380,6 +384,11 @@ test(
     );
 
     assert.match(
+      professionalResponsesSource,
+      /name="customerRelationships"/
+    );
+
+    assert.doesNotMatch(
       availableNowSource,
       /name="customerRelationships"/
     );
@@ -400,7 +409,7 @@ test(
     );
 
     assert.match(
-      availableNowSource,
+      professionalResponsesSource,
       /var\(--meetro-color-purple, #8B5CF6\)/
     );
 

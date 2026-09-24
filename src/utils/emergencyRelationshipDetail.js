@@ -91,6 +91,8 @@ function normalizeResponseCard(response, emergencyRequestId) {
       cleanText(professional.businessLogoUrl) ||
       cleanText(professional.profileImageUrl) ||
       "",
+    respondedAt:
+      normalizeTimestamp(response.respondedAt),
     conversationAvailable:
       response.status === "active" &&
       response.conversationAvailable === true,

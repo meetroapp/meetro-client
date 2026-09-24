@@ -5,6 +5,7 @@ import MeetroIcon from "../components/MeetroIcon";
 import ContextualAskMeetro from "../components/ContextualAskMeetro";
 import EmergencyRelationshipDetail from "../components/EmergencyRelationshipDetail";
 import EmergencyAvailableNow from "../components/EmergencyAvailableNow";
+import EmergencyProfessionalResponses from "../components/EmergencyProfessionalResponses";
 import {
   cancelEmergencyRequest,
   createEmergencyDraft,
@@ -2852,40 +2853,64 @@ function EmergencyRequest({ setPage }) {
           !showDraftWorkflow && (
             emergencyRelationshipDetail ? (
               <div className="emergency-find-help-layout">
-                <div
-                  ref={
-                    canonicalStatus ===
-                    "ready_for_distribution"
-                      ? findHelpSectionRef
-                      : null
-                  }
-                  style={findHelpAnchor}
-                >
-                  <EmergencyAvailableNow
-                  visible={
-                    canonicalStatus ===
-                    "ready_for_distribution"
-                  }
-                  phase={availableNowPhase}
-                  professionals={
-                    availableProfessionals
-                  }
-                  selectionPending={
-                    selectionPending
-                  }
-                  errorMessage={
-                    availableNowError
-                  }
-                  language={language}
-                  onViewProfile={
-                    openAvailableProfessionalProfile
-                  }
-                  onChooseProfessional={
-                    requestAvailableProfessionalSelectionById
-                  }
-                  onKeepWaiting={() =>
-                    setPage(detailReturnPage)
-                  }
+                <div className="emergency-find-help-left-column">
+                  <div
+                    ref={
+                      canonicalStatus ===
+                      "ready_for_distribution"
+                        ? findHelpSectionRef
+                        : null
+                    }
+                    style={findHelpAnchor}
+                  >
+                    <EmergencyAvailableNow
+                    visible={
+                      canonicalStatus ===
+                      "ready_for_distribution"
+                    }
+                    phase={availableNowPhase}
+                    professionals={
+                      availableProfessionals
+                    }
+                    selectionPending={
+                      selectionPending
+                    }
+                    errorMessage={
+                      availableNowError
+                    }
+                    language={language}
+                    onViewProfile={
+                      openAvailableProfessionalProfile
+                    }
+                    onChooseProfessional={
+                      requestAvailableProfessionalSelectionById
+                    }
+                    />
+                  </div>
+
+                  <EmergencyProfessionalResponses
+                    phase={
+                      shouldLoadResponses
+                        ? responsesPhase
+                        : "idle"
+                    }
+                    responses={
+                      emergencyRelationshipDetail.responseCards
+                    }
+                    selectionPending={
+                      selectionPending
+                    }
+                    language={language}
+                    onSelectResponse={
+                      requestProfessionalSelectionById
+                    }
+                    onKeepWaiting={
+                      canonicalStatus ===
+                      "ready_for_distribution"
+                        ? () =>
+                            setPage(detailReturnPage)
+                        : undefined
+                    }
                   />
                 </div>
 
@@ -2897,6 +2922,7 @@ function EmergencyRequest({ setPage }) {
                     ? responsesPhase
                     : "idle"
                 }
+                responsesPresentation="external"
                 selectionPending={selectionPending}
                 cancellationAvailable={cancellationAvailable}
                 mutationPending={pending}

@@ -2913,6 +2913,25 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   max-width: 100%;
 }
 
+.emergency-find-help-left-column {
+  display: grid;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  align-content: start;
+}
+
+.emergency-professional-responses-pane {
+  min-height: 190px;
+}
+
+.emergency-professional-responses-list {
+  max-height: 300px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
 .emergency-find-help-relationship {
   width: 100% !important;
   max-width: none !important;
@@ -2971,10 +2990,19 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
   }
 
   #root:not([data-app-layout="mobile"])
-    .emergency-find-help-layout
-    > div:first-child {
+    .emergency-find-help-left-column {
     flex: 1 1 0;
     min-width: 0;
+  }
+
+  #root:not([data-app-layout="mobile"])
+    .emergency-professional-responses-pane {
+    min-height: 320px;
+  }
+
+  #root:not([data-app-layout="mobile"])
+    .emergency-professional-responses-list {
+    max-height: 390px;
   }
 
   #root:not([data-app-layout="mobile"])
@@ -2993,9 +3021,18 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
  */
 @container emergency-find-help (min-width: 900px) {
   #root[data-app-layout="desktop"]
-    .emergency-find-help-layout
-    > div:first-child {
+    .emergency-find-help-left-column {
     flex: 1.25 1 0;
+  }
+
+  #root[data-app-layout="desktop"]
+    .emergency-professional-responses-pane {
+    min-height: 360px;
+  }
+
+  #root[data-app-layout="desktop"]
+    .emergency-professional-responses-list {
+    max-height: 430px;
   }
 
   #root[data-app-layout="desktop"]
