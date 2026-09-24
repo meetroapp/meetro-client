@@ -1,6 +1,6 @@
 import "../styles/homeDashboard.css";
 import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import MeetroIcon from "../components/MeetroIcon";
@@ -64,6 +64,41 @@ const profileLoadText = {
   },
 };
 
+const availabilityText = {
+  en: {
+    title: "Availability", available: "Available Now", dispatch: "Dispatch Ready",
+    availableHelp: "Show your business as available for matching Emergency requests.",
+    dispatchHelp: "Allow direct Emergency selection when Available Now is on.",
+    dependency: "Turn on Available Now to appear for direct Emergency selection.",
+    on: "ON", off: "OFF", saving: "Saving…",
+    error: "Availability could not be saved. Try again.",
+  },
+  es: {
+    title: "Disponibilidad", available: "Disponible Ahora", dispatch: "Selección Directa",
+    availableHelp: "Muestra tu negocio como disponible para solicitudes de Emergencia compatibles.",
+    dispatchHelp: "Permite la selección directa de Emergencia cuando Disponible Ahora está activado.",
+    dependency: "Activa Disponible Ahora para aparecer en la selección directa de Emergencia.",
+    on: "ACTIVO", off: "INACTIVO", saving: "Guardando…",
+    error: "No se pudo guardar la disponibilidad. Intenta de nuevo.",
+  },
+  fr: {
+    title: "Disponibilité", available: "Disponible Maintenant", dispatch: "Sélection Directe",
+    availableHelp: "Affichez votre entreprise comme disponible pour les demandes d’urgence correspondantes.",
+    dispatchHelp: "Autorisez la sélection directe d’urgence lorsque Disponible Maintenant est activé.",
+    dependency: "Activez Disponible Maintenant pour apparaître dans la sélection directe d’urgence.",
+    on: "ACTIF", off: "INACTIF", saving: "Enregistrement…",
+    error: "La disponibilité n’a pas pu être enregistrée. Réessayez.",
+  },
+  "pt-BR": {
+    title: "Disponibilidade", available: "Disponível Agora", dispatch: "Seleção Direta",
+    availableHelp: "Mostre sua empresa como disponível para solicitações de Emergência compatíveis.",
+    dispatchHelp: "Permita a seleção direta de Emergência quando Disponível Agora estiver ativado.",
+    dependency: "Ative Disponível Agora para aparecer na seleção direta de Emergência.",
+    on: "ATIVO", off: "INATIVO", saving: "Salvando…",
+    error: "Não foi possível salvar a disponibilidade. Tente novamente.",
+  },
+};
+
 function BusinessDashboard({ setPage }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -75,6 +110,10 @@ function BusinessDashboard({ setPage }) {
 
   const [availableNow, setAvailableNow] = useState(false);
   const [dispatchReady, setDispatchReady] = useState(false);
+  const availabilityUpdateRef = useRef(false);
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState(false);
+  const availabilityCopy = availabilityText[language] || availabilityText.en;
   const [leadStatus, setLeadStatus] = useState(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
   const [authoritativeLeads, setAuthoritativeLeads] = useState([]);
   const [canonicalSchedule, setCanonicalSchedule] = useState(null);
@@ -284,79 +323,99 @@ function BusinessDashboard({ setPage }) {
     }
   }
 
+  async function withAvailabilityUpdate(update) {
+    if (!profile?.id || availabilityUpdateRef.current) return;
+    // Both PUTs carry the full profile; serialize them to preserve the other setting.
+    availabilityUpdateRef.current = true;
+    setAvailabilitySaving(true);
+    setAvailabilityError(false);
+    try {
+      await update();
+    } catch {
+      setAvailabilityError(true);
+    } finally {
+      availabilityUpdateRef.current = false;
+      setAvailabilitySaving(false);
+    }
+  }
+
   async function updateBusinessAvailability(nextValue) {
-    if (!profile?.id) return;
-    const result = await authFetch(
-      `/contractor-profiles/${profile.id}`,
-      {
-        method: "PUT",
-        body: JSON.stringify(
-          buildBusinessProfilePayloadFromCanonical(profile, {
-            available_now: nextValue,
-          })
-        ),
-      },
-      setPage
-    );
-    const confirmedProfile = getConfirmedBusinessProfile(result);
-    if (!confirmedProfile) return;
-    setProfile(confirmedProfile);
-    setAvailableNow(confirmedProfile.available_now === true);
-    setBusinessAvailability(confirmedProfile.available_now === true);
+    return withAvailabilityUpdate(async () => {
+      const result = await authFetch(
+        `/contractor-profiles/${profile.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify(
+            buildBusinessProfilePayloadFromCanonical(profile, {
+              available_now: nextValue,
+            })
+          ),
+        },
+        setPage
+      );
+      const confirmedProfile = getConfirmedBusinessProfile(result);
+      if (!confirmedProfile) throw new Error("Business Profile update not confirmed");
+      setProfile(confirmedProfile);
+      setAvailableNow(confirmedProfile.available_now === true);
+      setDispatchReady(confirmedProfile.dispatch_ready === true);
+      setBusinessAvailability(confirmedProfile.available_now === true);
+      localStorage.setItem("meetroDispatchReady", String(confirmedProfile.dispatch_ready === true));
+    });
   }
 
   async function updateDispatchReady(
     nextValue
   ) {
-    if (!profile?.id) return;
+    return withAvailabilityUpdate(async () => {
 
-    const result = await authFetch(
-      `/contractor-profiles/${profile.id}`,
-      {
-        method: "PUT",
-        body: JSON.stringify(
-          buildBusinessProfilePayloadFromCanonical(
-            profile,
-            {
-              dispatch_ready: nextValue,
-            }
-          )
-        ),
-      },
-      setPage
-    );
-
-    const confirmedProfile =
-      getConfirmedBusinessProfile(
-        result
+      const result = await authFetch(
+        `/contractor-profiles/${profile.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify(
+            buildBusinessProfilePayloadFromCanonical(
+              profile,
+              {
+                dispatch_ready: nextValue,
+              }
+            )
+          ),
+        },
+        setPage
       );
 
-    if (!confirmedProfile) return;
+      const confirmedProfile =
+        getConfirmedBusinessProfile(
+          result
+        );
 
-    setProfile(confirmedProfile);
+      if (!confirmedProfile) throw new Error("Business Profile update not confirmed");
 
-    setAvailableNow(
-      confirmedProfile.available_now ===
-        true
-    );
+      setProfile(confirmedProfile);
 
-    setDispatchReady(
-      confirmedProfile.dispatch_ready ===
-        true
-    );
+      setAvailableNow(
+        confirmedProfile.available_now ===
+          true
+      );
 
-    setBusinessAvailability(
-      confirmedProfile.available_now ===
-        true
-    );
-
-    localStorage.setItem(
-      "meetroDispatchReady",
-      String(
+      setDispatchReady(
         confirmedProfile.dispatch_ready ===
           true
-      )
-    );
+      );
+
+      setBusinessAvailability(
+        confirmedProfile.available_now ===
+          true
+      );
+
+      localStorage.setItem(
+        "meetroDispatchReady",
+        String(
+          confirmedProfile.dispatch_ready ===
+            true
+        )
+      );
+    });
   }
 
   function formatCategory(value) {
@@ -1163,6 +1222,39 @@ function BusinessDashboard({ setPage }) {
 
 
           </section>
+        </section>
+
+        <section className="business-dashboard-availability" aria-labelledby="dashboard-availability-title">
+          <h2 id="dashboard-availability-title">{availabilityCopy.title}</h2>
+          <div className="business-dashboard-availability-grid" aria-busy={availabilitySaving}>
+            {[
+              { key: "available", value: availableNow, update: updateBusinessAvailability },
+              { key: "dispatch", value: dispatchReady, update: updateDispatchReady },
+            ].map(({ key, value, update }) => (
+              <div className="business-dashboard-availability-row" key={key}>
+                <div>
+                  <strong id={`dashboard-${key}-label`}>{availabilityCopy[key]}</strong>
+                  <p id={`dashboard-${key}-help`}>{availabilityCopy[`${key}Help`]}</p>
+                </div>
+                <button
+                  type="button"
+                  className="business-dashboard-availability-switch"
+                  role="switch"
+                  aria-checked={value}
+                  aria-labelledby={`dashboard-${key}-label`}
+                  aria-describedby={`dashboard-${key}-help`}
+                  disabled={availabilitySaving}
+                  onClick={() => update(!value)}
+                >
+                  <span className="business-dashboard-availability-thumb" aria-hidden="true" />
+                  <span>{value ? availabilityCopy.on : availabilityCopy.off}</span>
+                </button>
+              </div>
+            ))}
+          </div>
+          {!availableNow && dispatchReady && <p className="business-dashboard-availability-note">{availabilityCopy.dependency}</p>}
+          {availabilitySaving && <p className="business-dashboard-availability-note" role="status">{availabilityCopy.saving}</p>}
+          {availabilityError && <p className="business-dashboard-availability-error" role="alert">{availabilityCopy.error}</p>}
         </section>
 
             <section className="business-dashboard-leads-card" style={leadsCard}>
