@@ -150,7 +150,32 @@ test(
 
     assert.match(
       emergencyStyles,
+      /align-items:\s*stretch/
+    );
+
+    assert.doesNotMatch(
+      emergencyStyles,
+      /align-items:\s*flex-start/
+    );
+
+    assert.match(
+      emergencyStyles,
+      /grid-template-rows:\s*auto\s+minmax\(320px,\s*1fr\)/
+    );
+
+    assert.match(
+      emergencyStyles,
+      /grid-template-rows:\s*auto\s+minmax\(0,\s*1fr\)\s+auto/
+    );
+
+    assert.match(
+      emergencyStyles,
       /@container emergency-find-help \(min-width:\s*900px\)/
+    );
+
+    assert.match(
+      emergencyStyles,
+      /grid-template-rows:\s*auto\s+minmax\(360px,\s*1fr\)/
     );
 
     assert.doesNotMatch(
