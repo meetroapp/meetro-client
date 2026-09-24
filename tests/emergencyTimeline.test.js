@@ -385,7 +385,7 @@ test("Work Center timeline layout remains width-bounded on mobile", () => {
   );
   assert.match(
     componentSource,
-    /gridTemplateColumns:[\s\S]*repeat\(auto-fit, minmax\(min\(100%, 112px\), 1fr\)\)/
+    /const timelineGrid = \{[\s\S]*repeat\(auto-fit, minmax\(min\(100%, 112px\), 1fr\)\)/
   );
   assert.match(
     componentSource,
@@ -426,3 +426,71 @@ test("canonical conversation timeline remains untouched when requestedAt is unav
     /canonicalEmergencyWorkflow\?\.status/
   );
 });
+
+
+test(
+  "Emergency timeline uses compact Meetro lifecycle semantics without destructive red current-state styling",
+  () => {
+    assert.match(
+      componentSource,
+      /presentation = "default"/
+    );
+
+    assert.match(
+      componentSource,
+      /presentation === "findHelp"/
+    );
+
+    assert.match(
+      componentSource,
+      /className=\{[\s\S]*compactFindHelp[\s\S]*"emergency-timeline-grid"[\s\S]*undefined/
+    );
+
+    assert.match(
+      componentSource,
+      /const compactTimelineGrid = \{[\s\S]*repeat\(4, minmax\(0, 1fr\)\)/
+    );
+
+    assert.match(
+      componentSource,
+      /const compactTimelineStage = \{[\s\S]*minHeight: "44px"/
+    );
+
+    assert.match(
+      componentSource,
+      /const compactCurrentStage = \{[\s\S]*var\(--meetro-color-forest, #0B5D3B\)[\s\S]*var\(--meetro-color-sage, #E8F5EE\)/
+    );
+
+    const compactCurrentStart =
+      componentSource.indexOf(
+        "const compactCurrentStage = {"
+      );
+
+    const compactCurrentEnd =
+      componentSource.indexOf(
+        "const compactFutureStage = {",
+        compactCurrentStart
+      );
+
+    assert.ok(
+      compactCurrentStart >= 0,
+      "compact current-stage style must exist"
+    );
+
+    assert.ok(
+      compactCurrentEnd > compactCurrentStart,
+      "compact current-stage style must be bounded"
+    );
+
+    const compactCurrentStyle =
+      componentSource.slice(
+        compactCurrentStart,
+        compactCurrentEnd
+      );
+
+    assert.doesNotMatch(
+      compactCurrentStyle,
+      /#(?:991b1b|dc2626|fee2e2)/
+    );
+  }
+);

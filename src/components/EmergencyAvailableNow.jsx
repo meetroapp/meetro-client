@@ -1,3 +1,5 @@
+import MeetroIcon from "./MeetroIcon";
+
 function clean(value) {
   return String(value ?? "").trim();
 }
@@ -98,14 +100,24 @@ function EmergencyAvailableNow({
       data-emergency-available-now="canonical"
     >
       <header style={header}>
-        <p style={eyebrow}>{copy.eyebrow}</p>
-        <h2
-          id="emergency-available-now-title"
-          style={title}
-        >
-          {copy.title}
-        </h2>
-        <p style={intro}>{copy.intro}</p>
+        <span style={availableIconTile} aria-hidden="true">
+          <MeetroIcon
+            name="availableNow"
+            size={20}
+            decorative
+          />
+        </span>
+
+        <div style={headerCopy}>
+          <p style={eyebrow}>{copy.eyebrow}</p>
+          <h2
+            id="emergency-available-now-title"
+            style={title}
+          >
+            {copy.title}
+          </h2>
+          <p style={intro}>{copy.intro}</p>
+        </div>
       </header>
 
       {(phase === "idle" ||
@@ -195,242 +207,349 @@ function EmergencyAvailableNow({
 
                 {serviceArea && (
                   <div style={serviceAreaRow}>
-                    <span>{copy.area}</span>
+                    <span style={serviceAreaLabel}>
+                      <MeetroIcon
+                        name="location"
+                        size={16}
+                        decorative
+                      />
+                      <span>{copy.area}</span>
+                    </span>
                     <strong>{serviceArea}</strong>
                   </div>
                 )}
 
-                <button
-                  type="button"
-                  style={profileButton}
-                  disabled={selectionPending}
-                  onClick={() =>
-                    onViewProfile?.(
-                      professional.contractorProfileId
-                    )
-                  }
-                >
-                  {copy.viewProfile}
-                </button>
+                <div style={actionRow}>
+                  <button
+                    type="button"
+                    style={profileButton}
+                    disabled={selectionPending}
+                    onClick={() =>
+                      onViewProfile?.(
+                        professional.contractorProfileId
+                      )
+                    }
+                  >
+                    {copy.viewProfile}
+                  </button>
 
-                <button
-                  type="button"
-                  style={{
-                    ...chooseButton,
-                    ...(selectionPending
-                      ? disabledButton
-                      : {}),
-                  }}
-                  disabled={selectionPending}
-                  onClick={() =>
-                    onChooseProfessional?.(
-                      professional.contractorProfileId
-                    )
-                  }
-                >
-                  {selectionPending
-                    ? copy.choosing
-                    : copy.choose}
-                </button>
+                  <button
+                    type="button"
+                    style={{
+                      ...chooseButton,
+                      ...(selectionPending
+                        ? disabledButton
+                        : {}),
+                    }}
+                    disabled={selectionPending}
+                    onClick={() =>
+                      onChooseProfessional?.(
+                        professional.contractorProfileId
+                      )
+                    }
+                  >
+                    {selectionPending
+                      ? copy.choosing
+                      : copy.choose}
+                  </button>
+                </div>
               </article>
             );
           })}
         </div>
       )}
 
-      <div style={responsesNote}>
-        <strong>{copy.responsesTitle}</strong>
-        <p>{copy.responsesBody}</p>
-      </div>
+      <div style={responsesSummary}>
+        <div style={responsesNote}>
+          <span style={responsesIconTile} aria-hidden="true">
+            <MeetroIcon
+              name="customerRelationships"
+              size={18}
+              decorative
+            />
+          </span>
 
-      <button
-        type="button"
-        style={waitButton}
-        disabled={selectionPending}
-        onClick={() => onKeepWaiting?.()}
-      >
-        {copy.keepWaiting}
-      </button>
+          <div style={responsesText}>
+            <strong>{copy.responsesTitle}</strong>
+            <p style={responsesTextParagraph}>{copy.responsesBody}</p>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          style={waitButton}
+          disabled={selectionPending}
+          onClick={() => onKeepWaiting?.()}
+        >
+          {copy.keepWaiting}
+        </button>
+      </div>
     </section>
   );
 }
 
 const shell = {
-  marginBottom: "22px",
-  padding: "22px",
-  border: "1px solid #d8e8dc",
-  borderRadius: "24px",
-  background:
-    "linear-gradient(180deg, #f6fbf7 0%, #ffffff 100%)",
-  boxShadow: "0 12px 34px rgba(31,77,52,0.08)",
+  marginBottom: "12px",
+  padding: "14px",
+  border: "1px solid var(--meetro-color-line, #E5E7EB)",
+  borderRadius: "18px",
+  background: "var(--meetro-surface-paper, #FFFFFF)",
+  boxShadow:
+    "0 8px 24px rgba(17, 24, 39, 0.05)",
 };
 
 const header = {
-  marginBottom: "18px",
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "10px",
+  minWidth: 0,
+  marginBottom: "12px",
+};
+
+const headerCopy = {
+  display: "grid",
+  gap: "3px",
+  minWidth: 0,
+  flex: 1,
+};
+
+const availableIconTile = {
+  width: "40px",
+  height: "40px",
+  borderRadius: "14px",
+  display: "grid",
+  placeItems: "center",
+  flex: "0 0 auto",
+  background:
+    "var(--meetro-color-sage, #E8F5EE)",
+  color:
+    "var(--meetro-color-forest, #0B5D3B)",
 };
 
 const eyebrow = {
-  margin: "0 0 5px",
-  color: "#1f6b42",
-  fontSize: "12px",
+  margin: 0,
+  color:
+    "var(--meetro-color-forest, #0B5D3B)",
+  fontSize: "11px",
+  lineHeight: 1.2,
   fontWeight: "900",
-  letterSpacing: "0.08em",
+  letterSpacing: "0.06em",
   textTransform: "uppercase",
 };
 
 const title = {
-  margin: "0 0 8px",
-  color: "#17231c",
+  margin: 0,
+  color:
+    "var(--meetro-color-ink, #111827)",
   fontSize: "24px",
   lineHeight: 1.15,
+  fontWeight: "900",
 };
 
 const intro = {
   margin: 0,
-  color: "#55635b",
-  lineHeight: 1.55,
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  fontSize: "13px",
+  lineHeight: 1.4,
 };
 
 const notice = {
   margin: 0,
-  padding: "14px",
-  borderRadius: "16px",
-  background: "#f5f7f5",
-  color: "#55635b",
+  padding: "12px",
+  borderRadius: "14px",
+  background:
+    "var(--meetro-surface-warm, #F7F6F2)",
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  fontSize: "13px",
+  lineHeight: 1.4,
 };
 
 const errorNotice = {
   display: "grid",
-  gap: "6px",
-  padding: "14px",
-  borderRadius: "16px",
-  background: "#fff7ed",
-  color: "#9a3412",
+  gap: "4px",
+  padding: "12px",
+  borderRadius: "14px",
+  background: "rgba(245, 158, 11, 0.10)",
+  color:
+    "var(--meetro-color-warning, #F59E0B)",
+  fontSize: "13px",
 };
 
 const errorDetail = {
-  fontSize: "13px",
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  fontSize: "12px",
   fontWeight: "600",
 };
 
 const emptyCard = {
-  padding: "16px",
-  borderRadius: "18px",
-  background: "#f8faf9",
-  color: "#314039",
+  padding: "12px",
+  border:
+    "1px solid var(--meetro-color-line, #E5E7EB)",
+  borderRadius: "14px",
+  background:
+    "var(--meetro-surface-warm, #F7F6F2)",
+  color:
+    "var(--meetro-color-ink, #111827)",
+  fontSize: "13px",
 };
 
 const emptyText = {
-  margin: "6px 0 0",
-  color: "#657269",
-  lineHeight: 1.45,
+  margin: "4px 0 0",
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  fontSize: "12px",
+  lineHeight: 1.35,
 };
 
 const cardStack = {
   display: "grid",
-  gap: "14px",
+  gap: "10px",
 };
 
 const professionalCard = {
-  padding: "16px",
-  border: "1px solid #dfe9e1",
-  borderRadius: "20px",
-  background: "#ffffff",
+  padding: "12px",
+  border:
+    "1px solid var(--meetro-color-line, #E5E7EB)",
+  borderRadius: "14px",
+  background:
+    "var(--meetro-surface-paper, #FFFFFF)",
 };
 
 const cardHeader = {
   display: "flex",
   alignItems: "flex-start",
   justifyContent: "space-between",
-  gap: "12px",
+  gap: "10px",
 };
 
 const identity = {
   display: "flex",
   alignItems: "center",
-  gap: "12px",
+  gap: "10px",
   minWidth: 0,
 };
 
 const identityText = {
   display: "grid",
-  gap: "3px",
+  gap: "2px",
   minWidth: 0,
 };
 
 const avatarImage = {
-  width: "48px",
-  height: "48px",
-  borderRadius: "16px",
+  width: "44px",
+  height: "44px",
+  borderRadius: "14px",
   objectFit: "cover",
   flex: "0 0 auto",
 };
 
 const avatarFallback = {
-  width: "48px",
-  height: "48px",
-  borderRadius: "16px",
+  width: "44px",
+  height: "44px",
+  borderRadius: "14px",
   display: "grid",
   placeItems: "center",
   flex: "0 0 auto",
-  background: "#e8f3eb",
-  color: "#1f6b42",
+  background:
+    "var(--meetro-color-sage, #E8F5EE)",
+  color:
+    "var(--meetro-color-forest, #0B5D3B)",
+  fontSize: "13px",
   fontWeight: "900",
 };
 
 const businessNameStyle = {
   overflowWrap: "anywhere",
-  color: "#17231c",
+  color:
+    "var(--meetro-color-ink, #111827)",
   fontSize: "16px",
+  lineHeight: 1.25,
 };
 
 const category = {
-  color: "#657269",
-  fontSize: "13px",
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  fontSize: "12px",
+  lineHeight: 1.3,
 };
 
 const availableBadge = {
   flex: "0 0 auto",
-  padding: "7px 10px",
+  padding: "5px 8px",
   borderRadius: "999px",
-  background: "#dcfce7",
-  color: "#166534",
+  background:
+    "var(--meetro-color-sage, #E8F5EE)",
+  color:
+    "var(--meetro-color-forest, #0B5D3B)",
   fontSize: "10px",
+  lineHeight: 1.15,
   fontWeight: "900",
-  letterSpacing: "0.04em",
+  letterSpacing: "0.035em",
 };
 
 const serviceAreaRow = {
   display: "flex",
+  alignItems: "center",
   justifyContent: "space-between",
-  gap: "14px",
-  marginTop: "14px",
-  paddingTop: "13px",
-  borderTop: "1px solid #edf1ee",
-  color: "#657269",
-  fontSize: "13px",
+  gap: "10px",
+  minHeight: "36px",
+  marginTop: "10px",
+  paddingTop: "9px",
+  borderTop:
+    "1px solid var(--meetro-color-line, #E5E7EB)",
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  fontSize: "12px",
+};
+
+const serviceAreaLabel = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  minWidth: 0,
+  color:
+    "var(--meetro-color-forest, #0B5D3B)",
+};
+
+const actionRow = {
+  display: "grid",
+  gridTemplateColumns:
+    "minmax(0, .9fr) minmax(0, 1.1fr)",
+  gap: "8px",
+  marginTop: "10px",
 };
 
 const profileButton = {
   width: "100%",
-  marginTop: "14px",
-  padding: "12px 16px",
-  border: "1px solid #cfd9d2",
-  borderRadius: "14px",
-  background: "#ffffff",
-  color: "#314039",
-  fontWeight: "850",
+  minHeight: "44px",
+  margin: 0,
+  padding: "9px 10px",
+  border:
+    "1px solid var(--meetro-color-line, #E5E7EB)",
+  borderRadius: "12px",
+  background:
+    "var(--meetro-surface-paper, #FFFFFF)",
+  color:
+    "var(--meetro-color-ink, #111827)",
+  fontSize: "13px",
+  fontWeight: "800",
   cursor: "pointer",
 };
 
 const chooseButton = {
   width: "100%",
-  marginTop: "10px",
-  padding: "13px 16px",
+  minHeight: "44px",
+  margin: 0,
+  padding: "9px 10px",
   border: 0,
-  borderRadius: "14px",
-  background: "#1f6b42",
-  color: "#ffffff",
+  borderRadius: "12px",
+  background:
+    "var(--meetro-color-forest, #0B5D3B)",
+  color: "#FFFFFF",
+  fontSize: "13px",
   fontWeight: "900",
   cursor: "pointer",
 };
@@ -440,21 +559,68 @@ const disabledButton = {
   cursor: "default",
 };
 
+const responsesSummary = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  flexWrap: "wrap",
+  gap: "8px",
+  marginTop: "10px",
+  paddingTop: "10px",
+  borderTop:
+    "1px solid var(--meetro-color-line, #E5E7EB)",
+};
+
 const responsesNote = {
-  marginTop: "18px",
-  paddingTop: "16px",
-  borderTop: "1px solid #dfe9e1",
-  color: "#4f5d55",
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  minWidth: 0,
+  flex: "1 1 200px",
+  color:
+    "var(--meetro-color-ink, #111827)",
+};
+
+const responsesIconTile = {
+  width: "36px",
+  height: "36px",
+  borderRadius: "12px",
+  display: "grid",
+  placeItems: "center",
+  flex: "0 0 auto",
+  background: "rgba(139, 92, 246, 0.10)",
+  color:
+    "var(--meetro-color-purple, #8B5CF6)",
+};
+
+const responsesText = {
+  display: "grid",
+  gap: "2px",
+  minWidth: 0,
+  fontSize: "13px",
+};
+
+const responsesTextParagraph = {
+  margin: 0,
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  fontSize: "12px",
+  lineHeight: 1.3,
 };
 
 const waitButton = {
-  width: "100%",
-  marginTop: "12px",
-  padding: "12px 16px",
-  border: "1px solid #cfd9d2",
-  borderRadius: "14px",
-  background: "#ffffff",
-  color: "#314039",
+  minWidth: "118px",
+  minHeight: "44px",
+  marginLeft: "auto",
+  padding: "9px 12px",
+  border:
+    "1px solid var(--meetro-color-line, #E5E7EB)",
+  borderRadius: "12px",
+  background:
+    "var(--meetro-surface-paper, #FFFFFF)",
+  color:
+    "var(--meetro-color-ink, #111827)",
+  fontSize: "13px",
   fontWeight: "800",
   cursor: "pointer",
 };

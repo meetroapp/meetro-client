@@ -1,6 +1,7 @@
 import { buildProfessionalWorkCenterRoute } from "../utils/professionalWorkCenterRoute";
 import { t } from "../utils/language";
 import EmergencyTimeline from "./EmergencyTimeline";
+import MeetroIcon from "./MeetroIcon";
 import RelationshipIdentityPage from "./RelationshipIdentityPage";
 import {
   getEmergencyRelationshipNextStep,
@@ -368,17 +369,36 @@ function EmergencyRelationshipDetail({
         className="emergency-find-help-relationship-card"
         style={relationshipHeader}
       >
-        <p style={eyebrow}>{copy.eyebrow}</p>
-        <h1 style={relationshipTitle}>
-          {relationshipHeading}
-        </h1>
-        <p style={serviceLabel}>
-          {detail.serviceSpecialtyLabel}
-          {detail.serviceDomainLabel
-            ? " · " + detail.serviceDomainLabel
-            : ""}
-        </p>
-        <strong style={statusPill}>
+        <div style={relationshipHeaderTop}>
+          <span style={emergencyIconTile} aria-hidden="true">
+            <MeetroIcon
+              name="emergency"
+              size={20}
+              decorative
+            />
+          </span>
+
+          <div style={relationshipHeaderCopy}>
+            <p style={eyebrow}>{copy.eyebrow}</p>
+            <h1 style={relationshipTitle}>
+              {relationshipHeading}
+            </h1>
+            <p style={serviceLabel}>
+              {detail.serviceSpecialtyLabel}
+              {detail.serviceDomainLabel
+                ? " · " + detail.serviceDomainLabel
+                : ""}
+            </p>
+          </div>
+        </div>
+
+        <strong
+          style={
+            professional
+              ? selectedStatusPill
+              : statusPill
+          }
+        >
           {detail.statusLabel}
         </strong>
       </header>
@@ -417,7 +437,20 @@ function EmergencyRelationshipDetail({
                   id="emergency-relationship-request-details"
                   style={sectionTitle}
                 >
-                  {copy.requestDetails}
+                  <span
+                    style={{
+                      ...sectionIconTile,
+                      ...sectionIconBlue,
+                    }}
+                    aria-hidden="true"
+                  >
+                    <MeetroIcon
+                      name="requestDetails"
+                      size={17}
+                      decorative
+                    />
+                  </span>
+                  <span>{copy.requestDetails}</span>
                 </h2>
                 {detail.description && (
                   <p style={requestDescription}>
@@ -441,10 +474,24 @@ function EmergencyRelationshipDetail({
                 id="emergency-relationship-progress"
                 style={sectionTitle}
               >
-                {copy.lifecycle}
+                <span
+                  style={{
+                    ...sectionIconTile,
+                    ...sectionIconBlue,
+                  }}
+                  aria-hidden="true"
+                >
+                  <MeetroIcon
+                    name="workCenter"
+                    size={17}
+                    decorative
+                  />
+                </span>
+                <span>{copy.lifecycle}</span>
               </h2>
               <EmergencyTimeline
                 emergencyRequest={detail.timelineRequest}
+                presentation="findHelp"
                 language={language}
               />
             </section>
@@ -457,7 +504,20 @@ function EmergencyRelationshipDetail({
                 id="emergency-relationship-next-step"
                 style={sectionTitle}
               >
-                {copy.nextStep}
+                <span
+                  style={{
+                    ...sectionIconTile,
+                    ...sectionIconBlue,
+                  }}
+                  aria-hidden="true"
+                >
+                  <MeetroIcon
+                    name="help"
+                    size={17}
+                    decorative
+                  />
+                </span>
+                <span>{copy.nextStep}</span>
               </h2>
               <p style={sectionText}>{detail.nextStep}</p>
               {String(workflowAction?.label || "").trim() &&
@@ -478,117 +538,172 @@ function EmergencyRelationshipDetail({
                 )}
             </section>
 
-            {detail.location && (
-              <section
-                style={detailSection}
-                aria-labelledby="emergency-relationship-location"
-              >
-                <h2
-                  id="emergency-relationship-location"
-                  style={sectionTitle}
-                >
-                  {copy.location}
-                </h2>
-                {detail.location.locationText && (
-                  <address style={locationValue}>
-                    {detail.location.locationText}
-                  </address>
-                )}
-                {detail.location.unitNumber && (
-                  <p style={locationRow}>
-                    <span>{copy.unit}</span>
-                    <strong>{detail.location.unitNumber}</strong>
-                  </p>
-                )}
-                {detail.location.accessNotes && (
-                  <p style={locationRow}>
-                    <span>{copy.access}</span>
-                    <strong>{detail.location.accessNotes}</strong>
-                  </p>
-                )}
-              </section>
-            )}
-
-            {showResponses && (
-              <section
-                style={detailSection}
-                aria-labelledby="emergency-relationship-responses"
-              >
-                <h2
-                  id="emergency-relationship-responses"
-                  style={sectionTitle}
-                >
-                  {copy.responses}
-                </h2>
-
-                {responsesPhase === "loading" && (
-                  <p style={sectionText}>
-                    {copy.responsesLoading}
-                  </p>
-                )}
-
-                {responsesPhase === "error" && (
-                  <p style={responseError} role="alert">
-                    {copy.responsesError}
-                  </p>
-                )}
-
-                {responsesPhase === "ready" &&
-                  detail.responseCards.length === 0 && (
-                    <p style={sectionText}>
-                      {copy.responsesEmpty}
-                    </p>
-                  )}
-
-                {detail.responseCards.map((response) => (
-                  <article
-                    key={response.id}
-                    style={responseCard}
+            {(detail.location || showResponses) && (
+              <div style={locationResponsesGrid}>
+                {detail.location && (
+                  <section
+                    style={{
+                      ...detailSection,
+                      ...pairedDetailSection,
+                    }}
+                    aria-labelledby="emergency-relationship-location"
                   >
-                    <div style={responseIdentity}>
-                      <div style={responseAvatar} aria-hidden="true">
-                        {response.logoUrl ? (
-                          <img
-                            src={response.logoUrl}
-                            alt=""
-                            style={responseAvatarImage}
-                          />
-                        ) : (
-                          initialsFor(response.businessName) ||
-                          "M"
-                        )}
-                      </div>
-                      <div style={responseText}>
-                        <strong style={responseName}>
-                          {response.businessName}
-                        </strong>
-                        {response.category && (
-                          <span style={responseCategory}>
-                            {response.category}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-
-                    {response.status === "pending" ? (
-                      <button
-                        type="button"
-                        style={responseAction}
-                        disabled={selectionPending}
-                        onClick={() =>
-                          onSelectResponse?.(response.id)
-                        }
+                    <h2
+                      id="emergency-relationship-location"
+                      style={sectionTitle}
+                    >
+                      <span
+                        style={{
+                          ...sectionIconTile,
+                          ...sectionIconGreen,
+                        }}
+                        aria-hidden="true"
                       >
-                        {copy.selectProfessional}
-                      </button>
-                    ) : (
-                      <strong style={selectedPill}>
-                        {copy.selected}
-                      </strong>
+                        <MeetroIcon
+                          name="location"
+                          size={17}
+                          decorative
+                        />
+                      </span>
+                      <span>{copy.location}</span>
+                    </h2>
+
+                    {detail.location.locationText && (
+                      <address style={locationValue}>
+                        {detail.location.locationText}
+                      </address>
                     )}
-                  </article>
-                ))}
-              </section>
+
+                    {detail.location.unitNumber && (
+                      <p style={locationRow}>
+                        <span>{copy.unit}</span>
+                        <strong>
+                          {detail.location.unitNumber}
+                        </strong>
+                      </p>
+                    )}
+
+                    {detail.location.accessNotes && (
+                      <p style={locationRow}>
+                        <span>{copy.access}</span>
+                        <strong>
+                          {detail.location.accessNotes}
+                        </strong>
+                      </p>
+                    )}
+                  </section>
+                )}
+
+                {showResponses && (
+                  <section
+                    style={{
+                      ...detailSection,
+                      ...pairedDetailSection,
+                    }}
+                    aria-labelledby="emergency-relationship-responses"
+                  >
+                    <h2
+                      id="emergency-relationship-responses"
+                      style={sectionTitle}
+                    >
+                      <span
+                        style={{
+                          ...sectionIconTile,
+                          ...sectionIconPurple,
+                        }}
+                        aria-hidden="true"
+                      >
+                        <MeetroIcon
+                          name="customerRelationships"
+                          size={17}
+                          decorative
+                        />
+                      </span>
+                      <span>{copy.responses}</span>
+                    </h2>
+
+                    {responsesPhase === "loading" && (
+                      <p style={sectionText}>
+                        {copy.responsesLoading}
+                      </p>
+                    )}
+
+                    {responsesPhase === "error" && (
+                      <p
+                        style={responseError}
+                        role="alert"
+                      >
+                        {copy.responsesError}
+                      </p>
+                    )}
+
+                    {responsesPhase === "ready" &&
+                      detail.responseCards.length === 0 && (
+                        <p style={sectionText}>
+                          {copy.responsesEmpty}
+                        </p>
+                      )}
+
+                    {detail.responseCards.map((response) => (
+                      <article
+                        key={response.id}
+                        style={responseCard}
+                      >
+                        <div style={responseIdentity}>
+                          <div
+                            style={responseAvatar}
+                            aria-hidden="true"
+                          >
+                            {response.logoUrl ? (
+                              <img
+                                src={response.logoUrl}
+                                alt=""
+                                style={responseAvatarImage}
+                              />
+                            ) : (
+                              initialsFor(
+                                response.businessName
+                              ) || "M"
+                            )}
+                          </div>
+
+                          <div style={responseText}>
+                            <strong style={responseName}>
+                              {response.businessName}
+                            </strong>
+                            {response.category && (
+                              <span
+                                style={responseCategory}
+                              >
+                                {response.category}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {response.status === "pending" ? (
+                          <button
+                            type="button"
+                            style={responseAction}
+                            disabled={selectionPending}
+                            onClick={() =>
+                              onSelectResponse?.(
+                                response.id
+                              )
+                            }
+                          >
+                            {copy.selectProfessional}
+                          </button>
+                        ) : (
+                          <strong style={selectedPill}>
+                            {copy.selected}
+                          </strong>
+                        )}
+                      </article>
+                    ))}
+                  </section>
+                )}
+              </div>
             )}
 
             {detail.completed && (
@@ -630,7 +745,12 @@ function EmergencyRelationshipDetail({
                   disabled={mutationPending}
                   onClick={onCancelRequest}
                 >
-                  {copy.cancelRequest}
+                  <MeetroIcon
+                    name="close"
+                    size={16}
+                    decorative
+                  />
+                  <span>{copy.cancelRequest}</span>
                 </button>
               )}
           </div>
@@ -776,30 +896,35 @@ const conversationContextAddress = {
 const backButton = {
   display: "inline-flex",
   alignItems: "center",
-  gap: "7px",
-  minHeight: "48px",
-  marginBottom: "14px",
-  padding: "10px 14px",
-  border: "1px solid #cbd5e1",
-  borderRadius: "16px",
-  background: "#ffffff",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  fontSize: "14px",
-  fontWeight: "900",
+  gap: "6px",
+  minHeight: "44px",
+  marginBottom: "8px",
+  padding: "8px 11px",
+  border:
+    "1px solid var(--meetro-color-line, #E5E7EB)",
+  borderRadius: "12px",
+  background:
+    "var(--meetro-surface-paper, #FFFFFF)",
+  color:
+    "var(--meetro-color-forest, #0B5D3B)",
+  fontSize: "13px",
+  fontWeight: "850",
   cursor: "pointer",
 };
 
 const workflowActionButton = {
   width: "100%",
   minWidth: 0,
-  minHeight: "48px",
-  marginTop: "12px",
-  padding: "12px 16px",
-  border: "1px solid var(--meetro-color-forest, #1f4d34)",
-  borderRadius: "16px",
-  background: "var(--meetro-color-forest, #1f4d34)",
-  color: "#ffffff",
-  fontSize: "14px",
+  minHeight: "44px",
+  marginTop: "8px",
+  padding: "9px 12px",
+  border:
+    "1px solid var(--meetro-color-forest, #0B5D3B)",
+  borderRadius: "12px",
+  background:
+    "var(--meetro-color-forest, #0B5D3B)",
+  color: "#FFFFFF",
+  fontSize: "13px",
   fontWeight: "900",
   cursor: "pointer",
   boxSizing: "border-box",
@@ -810,60 +935,104 @@ const relationshipHeader = {
   display: "grid",
   gap: "8px",
   minWidth: 0,
-  marginBottom: "16px",
-  padding: "22px",
-  border: "1px solid #fecaca",
-  borderRadius: "24px",
+  marginBottom: "10px",
+  padding: "14px",
+  border:
+    "1px solid rgba(239, 68, 68, 0.25)",
+  borderRadius: "18px",
   background:
-    "linear-gradient(145deg, #fff7f7, #ffffff)",
-  boxShadow: "0 12px 30px rgba(127, 29, 29, 0.08)",
+    "linear-gradient(0deg, rgba(239, 68, 68, 0.03), rgba(239, 68, 68, 0.03)), var(--meetro-surface-paper, #FFFFFF)",
+  boxShadow:
+    "0 8px 24px rgba(17, 24, 39, 0.05)",
   boxSizing: "border-box",
   overflowWrap: "anywhere",
 };
 
+const relationshipHeaderTop = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "10px",
+  minWidth: 0,
+};
+
+const relationshipHeaderCopy = {
+  display: "grid",
+  gap: "3px",
+  minWidth: 0,
+  flex: 1,
+};
+
+const emergencyIconTile = {
+  width: "40px",
+  height: "40px",
+  borderRadius: "14px",
+  display: "grid",
+  placeItems: "center",
+  flex: "0 0 auto",
+  background: "rgba(239, 68, 68, 0.10)",
+  color:
+    "var(--meetro-color-danger, #EF4444)",
+};
+
 const eyebrow = {
   margin: 0,
-  color: "#991b1b",
-  fontSize: "12px",
-  fontWeight: "950",
+  color:
+    "var(--meetro-color-danger, #EF4444)",
+  fontSize: "11px",
+  fontWeight: "900",
   letterSpacing: "0.06em",
   textTransform: "uppercase",
 };
 
 const relationshipTitle = {
   margin: 0,
-  color: "#111827",
-  fontSize: "clamp(24px, 6vw, 34px)",
-  lineHeight: 1.08,
-  fontWeight: "950",
+  color:
+    "var(--meetro-color-ink, #111827)",
+  fontSize: "22px",
+  lineHeight: 1.12,
+  fontWeight: "900",
   overflowWrap: "anywhere",
 };
 
 const serviceLabel = {
   margin: 0,
-  color: "#475569",
-  fontSize: "15px",
-  fontWeight: "800",
-  lineHeight: 1.45,
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  fontSize: "12px",
+  fontWeight: "750",
+  lineHeight: 1.35,
   overflowWrap: "anywhere",
 };
 
 const statusPill = {
   justifySelf: "start",
   maxWidth: "100%",
-  padding: "8px 11px",
-  border: "1px solid #fca5a5",
+  padding: "6px 9px",
+  border:
+    "1px solid rgba(245, 158, 11, 0.24)",
   borderRadius: "999px",
-  background: "#fee2e2",
-  color: "#991b1b",
-  fontSize: "13px",
-  lineHeight: 1.3,
+  background: "rgba(245, 158, 11, 0.10)",
+  color:
+    "var(--meetro-color-warning, #F59E0B)",
+  fontSize: "12px",
+  fontWeight: "850",
+  lineHeight: 1.25,
   overflowWrap: "anywhere",
+};
+
+const selectedStatusPill = {
+  ...statusPill,
+  border:
+    "1px solid rgba(11, 93, 59, 0.24)",
+  background:
+    "var(--meetro-color-sage, #E8F5EE)",
+  color:
+    "var(--meetro-color-forest, #0B5D3B)",
 };
 
 const detailBody = {
   display: "grid",
-  gap: "12px",
+  gap: "8px",
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
@@ -873,39 +1042,91 @@ const detailSection = {
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
-  padding: "16px",
-  border: "1px solid #e2e8f0",
-  borderRadius: "20px",
-  background: "#ffffff",
+  padding: "12px",
+  border:
+    "1px solid var(--meetro-color-line, #E5E7EB)",
+  borderRadius: "14px",
+  background:
+    "var(--meetro-surface-paper, #FFFFFF)",
   boxSizing: "border-box",
   overflowWrap: "anywhere",
 };
 
+const pairedDetailSection = {
+  flex: "1 1 0",
+  width: "auto",
+};
+
+const locationResponsesGrid = {
+  display: "flex",
+  alignItems: "stretch",
+  gap: "8px",
+  width: "100%",
+  minWidth: 0,
+};
+
 const nextStepCard = {
   ...detailSection,
-  borderColor: "#bfdbfe",
-  background: "#eff6ff",
+  border:
+    "1px solid rgba(59, 130, 246, 0.22)",
+  background: "rgba(59, 130, 246, 0.06)",
 };
 
 const completionCard = {
   ...detailSection,
-  borderColor: "#86efac",
-  background: "#f0fdf4",
+  border:
+    "1px solid rgba(16, 185, 129, 0.28)",
+  background:
+    "var(--meetro-color-sage, #E8F5EE)",
 };
 
 const sectionTitle = {
-  margin: "0 0 10px",
-  color: "#0f172a",
-  fontSize: "18px",
+  display: "flex",
+  alignItems: "center",
+  gap: "8px",
+  minWidth: 0,
+  margin: "0 0 6px",
+  color:
+    "var(--meetro-color-ink, #111827)",
+  fontSize: "14px",
   lineHeight: 1.25,
-  fontWeight: "950",
+  fontWeight: "900",
+};
+
+const sectionIconTile = {
+  width: "34px",
+  height: "34px",
+  borderRadius: "11px",
+  display: "grid",
+  placeItems: "center",
+  flex: "0 0 auto",
+};
+
+const sectionIconBlue = {
+  background: "rgba(59, 130, 246, 0.10)",
+  color:
+    "var(--meetro-color-info, #3B82F6)",
+};
+
+const sectionIconGreen = {
+  background:
+    "var(--meetro-color-sage, #E8F5EE)",
+  color:
+    "var(--meetro-color-forest, #0B5D3B)",
+};
+
+const sectionIconPurple = {
+  background: "rgba(139, 92, 246, 0.10)",
+  color:
+    "var(--meetro-color-purple, #8B5CF6)",
 };
 
 const sectionText = {
   margin: 0,
-  color: "#475569",
-  fontSize: "14px",
-  lineHeight: 1.55,
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  fontSize: "13px",
+  lineHeight: 1.4,
   overflowWrap: "anywhere",
 };
 
@@ -916,12 +1137,13 @@ const requestDescription = {
 };
 
 const locationValue = {
-  margin: "0 0 10px",
-  color: "#0f172a",
-  fontSize: "15px",
+  margin: "0 0 6px",
+  color:
+    "var(--meetro-color-ink, #111827)",
+  fontSize: "13px",
   fontStyle: "normal",
-  fontWeight: "900",
-  lineHeight: 1.5,
+  fontWeight: "850",
+  lineHeight: 1.35,
   whiteSpace: "pre-wrap",
   overflowWrap: "anywhere",
   wordBreak: "break-word",
@@ -929,19 +1151,21 @@ const locationValue = {
 
 const locationRow = {
   display: "grid",
-  gap: "3px",
+  gap: "2px",
   minWidth: 0,
-  margin: "10px 0 0",
-  color: "#64748b",
-  fontSize: "13px",
-  lineHeight: 1.45,
+  margin: "6px 0 0",
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  fontSize: "12px",
+  lineHeight: 1.35,
   overflowWrap: "anywhere",
   wordBreak: "break-word",
 };
 
 const responseError = {
   ...sectionText,
-  color: "#991b1b",
+  color:
+    "var(--meetro-color-danger, #EF4444)",
 };
 
 const responseCard = {
@@ -949,13 +1173,15 @@ const responseCard = {
   alignItems: "center",
   justifyContent: "space-between",
   flexWrap: "wrap",
-  gap: "12px",
+  gap: "8px",
   minWidth: 0,
-  marginTop: "10px",
-  padding: "12px",
-  border: "1px solid #e2e8f0",
-  borderRadius: "16px",
-  background: "#f8fafc",
+  marginTop: "8px",
+  padding: "10px",
+  border:
+    "1px solid var(--meetro-color-line, #E5E7EB)",
+  borderRadius: "12px",
+  background:
+    "var(--meetro-surface-muted, #F3F4F6)",
   boxSizing: "border-box",
 };
 
@@ -1010,25 +1236,29 @@ const responseCategory = {
 };
 
 const responseAction = {
-  flex: "1 1 150px",
-  minHeight: "48px",
-  padding: "11px 14px",
+  flex: "1 1 130px",
+  minHeight: "44px",
+  padding: "9px 11px",
   border: 0,
-  borderRadius: "14px",
-  background: "var(--meetro-color-forest, #1f4d34)",
-  color: "#ffffff",
-  fontSize: "13px",
+  borderRadius: "12px",
+  background:
+    "var(--meetro-color-forest, #0B5D3B)",
+  color: "#FFFFFF",
+  fontSize: "12px",
   fontWeight: "900",
   cursor: "pointer",
 };
 
 const selectedPill = {
-  padding: "8px 10px",
-  border: "1px solid #86efac",
+  padding: "6px 9px",
+  border:
+    "1px solid rgba(16, 185, 129, 0.28)",
   borderRadius: "999px",
-  background: "#dcfce7",
-  color: "#166534",
-  fontSize: "12px",
+  background:
+    "var(--meetro-color-sage, #E8F5EE)",
+  color:
+    "var(--meetro-color-accent, #10B981)",
+  fontSize: "11px",
 };
 
 const completionTimestamp = {
@@ -1040,14 +1270,21 @@ const completionTimestamp = {
 };
 
 const cancelAction = {
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "7px",
   minHeight: "48px",
   width: "100%",
-  padding: "12px 16px",
-  border: "1px solid #fecaca",
-  borderRadius: "16px",
-  background: "#fff7f7",
-  color: "#991b1b",
-  fontSize: "14px",
+  padding: "10px 14px",
+  border:
+    "1px solid rgba(239, 68, 68, 0.35)",
+  borderRadius: "12px",
+  background:
+    "var(--meetro-surface-paper, #FFFFFF)",
+  color:
+    "var(--meetro-color-danger, #EF4444)",
+  fontSize: "13px",
   fontWeight: "900",
   cursor: "pointer",
   boxSizing: "border-box",

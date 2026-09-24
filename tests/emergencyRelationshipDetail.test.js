@@ -436,7 +436,7 @@ test("relationship-detail presentation never combines a waiting label with pendi
 test("response-aware relationship hydration remains screen-reader readable without a live announcement", () => {
   assert.match(
     componentSource,
-    /<strong style=\{statusPill\}>[\s\S]*\{detail\.statusLabel\}/
+    /<strong[\s\S]*style=\{[\s\S]*professional[\s\S]*selectedStatusPill[\s\S]*statusPill[\s\S]*\}[\s\S]*\{detail\.statusLabel\}[\s\S]*<\/strong>/
   );
   assert.match(
     componentSource,
@@ -780,7 +780,7 @@ test(
 
     assert.match(
       componentSource,
-      /fontSize:\s*"clamp\(24px,\s*6vw,\s*34px\)"/
+      /fontSize:\s*"22px"/
     );
 
     assert.doesNotMatch(
@@ -789,3 +789,82 @@ test(
     );
   }
 );
+
+
+test(
+  "Emergency lower-half presentation uses semantic Meetro icons, compact cards, and non-destructive waiting state",
+  () => {
+    assert.match(
+      componentSource,
+      /import MeetroIcon from "\.\/MeetroIcon"/
+    );
+
+    assert.match(
+      componentSource,
+      /name="emergency"/
+    );
+
+    assert.match(
+      componentSource,
+      /name="requestDetails"/
+    );
+
+    assert.match(
+      componentSource,
+      /name="workCenter"/
+    );
+
+    assert.match(
+      componentSource,
+      /name="location"/
+    );
+
+    assert.match(
+      componentSource,
+      /name="customerRelationships"/
+    );
+
+    assert.match(
+      componentSource,
+      /var\(--meetro-color-warning, #F59E0B\)/
+    );
+
+    assert.match(
+      componentSource,
+      /const locationResponsesGrid = \{[\s\S]*display: "flex"[\s\S]*gap: "8px"/
+    );
+
+    assert.match(
+      componentSource,
+      /const pairedDetailSection = \{[\s\S]*flex: "1 1 0"/
+    );
+
+    assert.match(
+      componentSource,
+      /const detailSection = \{[\s\S]*padding: "12px"[\s\S]*borderRadius: "14px"/
+    );
+
+    assert.match(
+      componentSource,
+      /const cancelAction = \{[\s\S]*background:[\s\S]*var\(--meetro-surface-paper, #FFFFFF\)[\s\S]*var\(--meetro-color-danger, #EF4444\)/
+    );
+  }
+);
+
+
+test("Find Help opts into compact Emergency timeline without changing shared conversation timeline presentation", () => {
+  assert.match(
+    componentSource,
+    /<EmergencyTimeline\s+emergencyRequest=\{detail\.timelineRequest\}\s+presentation="findHelp"\s+language=\{language\}\s*\/>/
+  );
+
+  assert.match(
+    componentSource,
+    /<EmergencyTimeline\s+emergencyRequest=\{timelineRequest\}\s+language=\{language\}\s*\/>/
+  );
+
+  assert.doesNotMatch(
+    componentSource,
+    /emergencyRequest=\{timelineRequest\}[\s\S]{0,120}presentation="findHelp"/
+  );
+});

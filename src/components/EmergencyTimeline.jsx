@@ -17,7 +17,19 @@ function formatTimestamp(value, language) {
   ).format(new Date(value));
 }
 
-function getStageStyle(state) {
+function getStageStyle(state, compactFindHelp = false) {
+  if (compactFindHelp) {
+    if (state === "current") {
+      return compactCurrentStage;
+    }
+
+    if (state === "reached") {
+      return compactReachedStage;
+    }
+
+    return compactFutureStage;
+  }
+
   if (state === "current") {
     return currentStage;
   }
@@ -29,7 +41,19 @@ function getStageStyle(state) {
   return futureStage;
 }
 
-function getDotStyle(state) {
+function getDotStyle(state, compactFindHelp = false) {
+  if (compactFindHelp) {
+    if (state === "current") {
+      return compactCurrentDot;
+    }
+
+    if (state === "reached") {
+      return compactReachedDot;
+    }
+
+    return compactFutureDot;
+  }
+
   if (state === "current") {
     return currentDot;
   }
@@ -44,7 +68,11 @@ function getDotStyle(state) {
 function EmergencyTimeline({
   emergencyRequest = {},
   language = "en",
+  presentation = "default",
 }) {
+  const compactFindHelp =
+    presentation === "findHelp";
+
   const stages = getEmergencyTimeline(
     emergencyRequest,
     language
@@ -61,7 +89,16 @@ function EmergencyTimeline({
       data-emergency-timeline="canonical"
     >
       <ol
-        style={timelineGrid}
+        className={
+          compactFindHelp
+            ? "emergency-timeline-grid"
+            : undefined
+        }
+        style={
+          compactFindHelp
+            ? compactTimelineGrid
+            : timelineGrid
+        }
         aria-label={
           language === "es"
             ? "Progreso de la solicitud de Emergencia"
@@ -72,8 +109,13 @@ function EmergencyTimeline({
           <li
             key={stage.key}
             style={{
-              ...timelineStage,
-              ...getStageStyle(stage.state),
+              ...(compactFindHelp
+                ? compactTimelineStage
+                : timelineStage),
+              ...getStageStyle(
+                stage.state,
+                compactFindHelp
+              ),
             }}
             data-stage-key={stage.key}
             data-stage-state={stage.state}
@@ -86,7 +128,10 @@ function EmergencyTimeline({
             <span
               style={{
                 ...timelineDot,
-                ...getDotStyle(stage.state),
+                ...getDotStyle(
+                  stage.state,
+                  compactFindHelp
+                ),
               }}
               aria-hidden="true"
             />
@@ -160,6 +205,13 @@ const timelineGrid = {
   listStyle: "none",
 };
 
+const compactTimelineGrid = {
+  ...timelineGrid,
+  gridTemplateColumns:
+    "repeat(4, minmax(0, 1fr))",
+  gap: "6px",
+};
+
 const timelineStage = {
   display: "flex",
   alignItems: "flex-start",
@@ -167,6 +219,15 @@ const timelineStage = {
   minWidth: 0,
   padding: "9px",
   borderRadius: "12px",
+};
+
+const compactTimelineStage = {
+  ...timelineStage,
+  gap: "5px",
+  minHeight: "44px",
+  padding: "6px",
+  borderRadius: "10px",
+  boxSizing: "border-box",
 };
 
 const reachedStage = {
@@ -179,13 +240,42 @@ const currentStage = {
   color: "#991b1b",
   background: "#fee2e2",
   border: "2px solid #dc2626",
-  boxShadow: "0 0 0 3px rgba(220, 38, 38, 0.12)",
+  boxShadow:
+    "0 0 0 3px rgba(220, 38, 38, 0.12)",
 };
 
 const futureStage = {
   color: "#64748b",
   background: "#ffffff",
   border: "1px solid #cbd5e1",
+};
+
+const compactReachedStage = {
+  color:
+    "var(--meetro-color-accent, #10B981)",
+  background:
+    "var(--meetro-color-sage, #E8F5EE)",
+  border:
+    "1px solid rgba(16, 185, 129, 0.28)",
+};
+
+const compactCurrentStage = {
+  color:
+    "var(--meetro-color-forest, #0B5D3B)",
+  background:
+    "var(--meetro-color-sage, #E8F5EE)",
+  border:
+    "1px solid var(--meetro-color-forest, #0B5D3B)",
+  boxShadow: "none",
+};
+
+const compactFutureStage = {
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  background:
+    "var(--meetro-surface-paper, #FFFFFF)",
+  border:
+    "1px solid var(--meetro-color-line, #E5E7EB)",
 };
 
 const timelineDot = {
@@ -210,6 +300,27 @@ const currentDot = {
 const futureDot = {
   background: "transparent",
   border: "1px solid #94a3b8",
+};
+
+const compactReachedDot = {
+  background:
+    "var(--meetro-color-accent, #10B981)",
+  border:
+    "1px solid var(--meetro-color-accent, #10B981)",
+};
+
+const compactCurrentDot = {
+  background:
+    "var(--meetro-color-forest, #0B5D3B)",
+  border: "2px solid #FFFFFF",
+  boxShadow:
+    "0 0 0 2px var(--meetro-color-forest, #0B5D3B)",
+};
+
+const compactFutureDot = {
+  background: "transparent",
+  border:
+    "1px solid var(--meetro-color-muted, #6B7280)",
 };
 
 const stageContent = {

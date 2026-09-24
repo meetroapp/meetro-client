@@ -254,8 +254,45 @@ test(
 
 
 test(
-  "Emergency Find Help preserves phone flow and expands into the governed iPad landscape and desktop layout",
+  "Emergency Find Help uses the real post-sidebar Meetro workspace and preserves native phone classification",
   () => {
+    const emergencyCssStart =
+      globalStylesSource.indexOf(
+        "Emergency Find Help responsive presentation"
+      );
+
+    const emergencyCssEnd =
+      globalStylesSource.indexOf(
+        ".meetro-selected-card {",
+        emergencyCssStart
+      );
+
+    assert.ok(
+      emergencyCssStart >= 0,
+      "Emergency responsive CSS marker must exist"
+    );
+
+    assert.ok(
+      emergencyCssEnd > emergencyCssStart,
+      "Emergency responsive CSS block must have a bounded end"
+    );
+
+    const emergencyResponsiveStyles =
+      globalStylesSource.slice(
+        emergencyCssStart,
+        emergencyCssEnd
+      );
+
+    assert.match(
+      emergencyRequestSource,
+      /meetro-wide-page emergency-page emergency-find-help-page/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /app-page meetro-form-page/
+    );
+
     assert.match(
       emergencyRequestSource,
       /emergency-find-help-main/
@@ -272,38 +309,175 @@ test(
     );
 
     assert.match(
-      emergencyRelationshipSource,
-      /emergency-find-help-relationship-card/
+      emergencyResponsiveStyles,
+      /container-type:\s*inline-size/
     );
 
     assert.match(
-      emergencyRelationshipSource,
-      /emergency-find-help-identity/
+      emergencyResponsiveStyles,
+      /container-name:\s*emergency-find-help/
     );
 
     assert.match(
-      globalStylesSource,
+      emergencyResponsiveStyles,
+      /@container emergency-find-help \(min-width:\s*700px\)/
+    );
+
+    assert.match(
+      emergencyResponsiveStyles,
+      /#root:not\(\[data-app-layout="mobile"\]\)[\s\S]*\.emergency-find-help-layout/
+    );
+
+    assert.match(
+      emergencyResponsiveStyles,
+      /@container emergency-find-help \(min-width:\s*900px\)/
+    );
+
+    assert.match(
+      emergencyResponsiveStyles,
+      /#root\[data-app-layout="desktop"\]/
+    );
+
+    assert.match(
+      emergencyResponsiveStyles,
+      /flex:\s*1\.25 1 0/
+    );
+
+    assert.doesNotMatch(
+      emergencyResponsiveStyles,
+      /max-width:\s*1180px/
+    );
+
+    assert.doesNotMatch(
+      emergencyResponsiveStyles,
+      /@media\s*\(min-width:\s*900px\)/
+    );
+
+    assert.doesNotMatch(
+      emergencyResponsiveStyles,
       /data-app-layout="tablet"\]\[data-app-orientation="landscape"/
     );
+  }
+);
 
+
+test(
+  "Emergency Find Help top half uses current Meetro icons, semantic tokens, and compact 44px actions",
+  () => {
     assert.match(
-      globalStylesSource,
-      /data-app-layout="desktop"/
+      availableNowSource,
+      /import MeetroIcon from "\.\/MeetroIcon"/
     );
 
     assert.match(
-      globalStylesSource,
-      /grid-template-columns:[\s\S]*1\.08fr[\s\S]*0\.92fr/
+      availableNowSource,
+      /name="availableNow"/
     );
 
     assert.match(
-      globalStylesSource,
-      /max-width:\s*1180px\s*!important/
+      availableNowSource,
+      /name="location"/
     );
 
     assert.match(
-      globalStylesSource,
-      /\.emergency-find-help-main[\s\S]*max-width:\s*760px\s*!important/
+      availableNowSource,
+      /name="customerRelationships"/
+    );
+
+    assert.match(
+      availableNowSource,
+      /gridTemplateColumns:\s*"minmax\(0, \.9fr\) minmax\(0, 1\.1fr\)"/
+    );
+
+    assert.match(
+      availableNowSource,
+      /minHeight:\s*"44px"/
+    );
+
+    assert.match(
+      availableNowSource,
+      /var\(--meetro-color-forest, #0B5D3B\)/
+    );
+
+    assert.match(
+      availableNowSource,
+      /var\(--meetro-color-purple, #8B5CF6\)/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /import MeetroIcon from "\.\.\/components\/MeetroIcon"/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /details:\s*"messages"/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /safety:\s*"trust"/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /find:\s*"availableNow"/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /connected:\s*"fastResponse"/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /gridTemplateColumns:\s*"repeat\(4, minmax\(0, 1fr\)\)"/
+    );
+
+    assert.match(
+      emergencyRequestSource,
+      /calc\(96px \+ env\(safe-area-inset-bottom/
+    );
+  }
+);
+
+
+test(
+  "compact Emergency timeline CSS remains scoped to Find Help",
+  () => {
+    const emergencyCssStart =
+      globalStylesSource.indexOf(
+        "Emergency Find Help responsive presentation"
+      );
+
+    const emergencyCssEnd =
+      globalStylesSource.indexOf(
+        ".meetro-selected-card {",
+        emergencyCssStart
+      );
+
+    assert.ok(emergencyCssStart >= 0);
+    assert.ok(emergencyCssEnd > emergencyCssStart);
+
+    const emergencyResponsiveStyles =
+      globalStylesSource.slice(
+        emergencyCssStart,
+        emergencyCssEnd
+      );
+
+    assert.match(
+      emergencyResponsiveStyles,
+      /\.emergency-find-help-page[\s\S]*\.emergency-timeline-grid/
+    );
+
+    assert.doesNotMatch(
+      emergencyResponsiveStyles,
+      /(?:^|\n)\.emergency-timeline-grid\s*\{/
+    );
+
+    assert.match(
+      emergencyResponsiveStyles,
+      /#root\[data-app-layout="mobile"\][\s\S]*\.emergency-find-help-page[\s\S]*\.emergency-timeline-grid/
     );
   }
 );

@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import BottomNav from "../components/BottomNav";
+import MeetroIcon from "../components/MeetroIcon";
 import ContextualAskMeetro from "../components/ContextualAskMeetro";
 import EmergencyRelationshipDetail from "../components/EmergencyRelationshipDetail";
 import EmergencyAvailableNow from "../components/EmergencyAvailableNow";
@@ -2300,7 +2301,14 @@ function EmergencyRequest({ setPage }) {
   }
 
   return (
-    <div className="app-page meetro-form-page" style={page}>
+    <div
+      className={
+        canonicalRequest && !showDraftWorkflow
+          ? "app-page meetro-wide-page emergency-page emergency-find-help-page"
+          : "app-page meetro-form-page"
+      }
+      style={page}
+    >
       <main
         className={
           canonicalRequest && !showDraftWorkflow
@@ -3153,6 +3161,12 @@ function EmergencyRequest({ setPage }) {
 
 function EmergencyProgress({ copy, currentStage }) {
   const stages = ["details", "safety", "find", "connected"];
+  const stageIcons = {
+    details: "messages",
+    safety: "trust",
+    find: "availableNow",
+    connected: "fastResponse",
+  };
 
   return (
     <ol style={progressList} aria-label={copy.progress}>
@@ -3161,11 +3175,22 @@ function EmergencyProgress({ copy, currentStage }) {
           key={stage}
           style={{
             ...progressItem,
-            ...(stage === currentStage ? progressItemCurrent : {}),
+            ...(stage === currentStage
+              ? progressItemCurrent
+              : {}),
           }}
-          aria-current={stage === currentStage ? "step" : undefined}
+          aria-current={
+            stage === currentStage ? "step" : undefined
+          }
         >
-          {copy.stages[stage]}
+          <span style={progressIcon} aria-hidden="true">
+            <MeetroIcon
+              name={stageIcons[stage]}
+              size={16}
+              decorative
+            />
+          </span>
+          <span>{copy.stages[stage]}</span>
         </li>
       ))}
     </ol>
@@ -3202,9 +3227,10 @@ function SafetyCheck({
 
 const page = {
   minHeight: "100dvh",
-  background: "#f5f7fb",
+  background:
+    "var(--meetro-color-background, #FAFAFC)",
   padding:
-    "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
+    "calc(env(safe-area-inset-top, 0px) + 16px) max(16px, env(safe-area-inset-right, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
 };
 
@@ -3420,27 +3446,47 @@ const progressList = {
   display: "grid",
   gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
   gap: "6px",
-  margin: "18px 0",
+  margin: "8px 0 12px",
   padding: 0,
   listStyle: "none",
 };
 
 const progressItem = {
+  display: "grid",
+  placeItems: "center",
+  alignContent: "center",
+  gap: "3px",
   minWidth: 0,
-  padding: "8px 6px",
-  borderRadius: "10px",
-  background: "#f1f5f9",
-  color: "#64748b",
-  fontSize: "11px",
+  minHeight: "44px",
+  padding: "5px 4px",
+  border:
+    "1px solid var(--meetro-color-line, #E5E7EB)",
+  borderRadius: "12px",
+  background:
+    "var(--meetro-surface-muted, #F3F4F6)",
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  fontSize: "10.5px",
   fontWeight: "800",
-  lineHeight: 1.25,
+  lineHeight: 1.15,
   textAlign: "center",
 };
 
+const progressIcon = {
+  width: "16px",
+  height: "16px",
+  display: "grid",
+  placeItems: "center",
+};
+
 const progressItemCurrent = {
-  background: "#dcfce7",
-  color: "#166534",
-  boxShadow: "inset 0 0 0 1px #86efac",
+  border:
+    "1px solid rgba(11, 93, 59, 0.35)",
+  background:
+    "var(--meetro-color-sage, #E8F5EE)",
+  color:
+    "var(--meetro-color-forest, #0B5D3B)",
+  boxShadow: "none",
 };
 
 const serviceChoices = {

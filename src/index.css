@@ -2872,31 +2872,52 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
 
 /* ==========================================================
    Emergency Find Help responsive presentation
+
+   The Meetro shell owns:
+   - sidebar width
+   - role-aware navigation
+   - post-sidebar page positioning
+   - mobile/tablet/desktop classification
+
+   This page owns only its INTERNAL composition.
    ========================================================== */
+
+.emergency-find-help-page {
+  background: var(--meetro-color-background, #FAFAFC);
+}
 
 .emergency-find-help-main {
   width: 100% !important;
-  max-width: 760px !important;
+  max-width: none !important;
   min-width: 0;
   margin-left: auto !important;
   margin-right: auto !important;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+
+  container-type: inline-size;
+  container-name: emergency-find-help;
 }
 
 .emergency-find-help-layout {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr);
-  gap: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
   width: 100%;
   min-width: 0;
+  align-items: stretch;
 }
 
 .emergency-find-help-layout > * {
   min-width: 0;
+  max-width: 100%;
 }
 
 .emergency-find-help-relationship {
   width: 100% !important;
-  max-width: 760px !important;
+  max-width: none !important;
+  min-width: 0;
+  margin: 0 !important;
 }
 
 .emergency-find-help-identity {
@@ -2904,99 +2925,82 @@ body:has(.contextual-ask-meetro) .meetro-assistant-launcher {
 }
 
 /*
- * iPad landscape and desktop share the wider two-column
- * Find Help composition. iPad portrait remains a spacious
- * single-column layout.
+ * RelationshipIdentityPage historically reserves a full-screen
+ * minimum height and large phone-navigation bottom padding.
+ *
+ * Inside the Emergency dashboard those constraints are owned by
+ * the page shell instead, so remove only those PRESENTATION
+ * reservations here.
  */
-@media (min-width: 900px) {
-  #root[data-app-layout="desktop"]
-    .emergency-find-help-main,
-  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
-    .emergency-find-help-main {
-    max-width: 1180px !important;
-  }
+.emergency-find-help-identity > section {
+  width: 100% !important;
+  max-width: none !important;
+  min-height: 0 !important;
+  padding-bottom: 0 !important;
+}
 
-  #root[data-app-layout="desktop"]
-    .emergency-find-help-layout,
-  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
-    .emergency-find-help-layout {
+.emergency-find-help-page
+  .emergency-timeline-grid {
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr)) !important;
+}
+
+@media (max-width: 389px) {
+  #root[data-app-layout="mobile"]
+    .emergency-find-help-page
+    .emergency-timeline-grid {
     grid-template-columns:
-      minmax(0, 1.08fr)
-      minmax(360px, 0.92fr);
-    column-gap: 20px;
-    align-items: start;
+      repeat(3, minmax(0, 1fr)) !important;
+  }
+}
+
+/*
+ * The first wide composition point is based on the REAL
+ * post-sidebar Emergency workspace.
+ *
+ * The root mobile guard is intentional:
+ * a native iPhone in landscape remains mobile even when its
+ * physical width is > 700px.
+ */
+@container emergency-find-help (min-width: 700px) {
+  #root:not([data-app-layout="mobile"])
+    .emergency-find-help-layout {
+    flex-direction: row;
+    gap: 16px;
+    align-items: flex-start;
   }
 
-  /*
-   * Available Now stays in the left column.
-   */
-  #root[data-app-layout="desktop"]
-    .emergency-find-help-layout
-    > div:first-child,
-  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
+  #root:not([data-app-layout="mobile"])
     .emergency-find-help-layout
     > div:first-child {
-    grid-column: 1;
-    grid-row: 1;
-  }
-
-  /*
-   * The relationship component spans the two-column width,
-   * then places its relationship card on the left and the
-   * canonical identity/status body on the right.
-   */
-  #root[data-app-layout="desktop"]
-    .emergency-find-help-relationship,
-  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
-    .emergency-find-help-relationship {
-    grid-column: 1 / -1;
-    grid-row: 2;
-    display: grid;
-    grid-template-columns:
-      minmax(0, 1.08fr)
-      minmax(360px, 0.92fr);
-    grid-template-areas:
-      "back identity"
-      "relationship identity";
-    column-gap: 20px;
-    align-items: start;
-    max-width: 1180px !important;
-    overflow: visible !important;
-  }
-
-  #root[data-app-layout="desktop"]
-    .emergency-find-help-back,
-  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
-    .emergency-find-help-back {
-    grid-area: back;
-    justify-self: center;
-  }
-
-  #root[data-app-layout="desktop"]
-    .emergency-find-help-relationship-card,
-  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
-    .emergency-find-help-relationship-card {
-    grid-area: relationship;
-    margin-bottom: 0 !important;
-  }
-
-  #root[data-app-layout="desktop"]
-    .emergency-find-help-identity,
-  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
-    .emergency-find-help-identity {
-    grid-area: identity;
+    flex: 1 1 0;
     min-width: 0;
-    margin-top: calc(-1 * var(--meetro-layout-grid-gap-compact, 14px));
+  }
+
+  #root:not([data-app-layout="mobile"])
+    .emergency-find-help-relationship {
+    flex: 1 1 0;
+    min-width: 0;
+  }
+}
+
+/*
+ * Full desktop composition uses the same real workspace but
+ * gives Find Help slightly more room.
+ *
+ * 1.25 / 1 produces ~56 / 44, matching the approved desktop
+ * composition without assuming the page owns the full viewport.
+ */
+@container emergency-find-help (min-width: 900px) {
+  #root[data-app-layout="desktop"]
+    .emergency-find-help-layout
+    > div:first-child {
+    flex: 1.25 1 0;
   }
 
   #root[data-app-layout="desktop"]
-    .emergency-find-help-identity
-    > section,
-  #root[data-app-layout="tablet"][data-app-orientation="landscape"]
-    .emergency-find-help-identity
-    > section {
-    width: 100% !important;
-    max-width: none !important;
+    .emergency-find-help-relationship {
+    flex: 1 1 0;
   }
 }
 
