@@ -2081,10 +2081,8 @@ function QuoteInvoiceBusinessDocumentWorkspace({
   const [newContentAvailable, setNewContentAvailable] = useState(false);
   const [customerParties, setCustomerParties] = useState({ quote: null, invoice: sourceQuoteDocument?.customerParty || null });
   const [linkedCustomerContacts, setLinkedCustomerContacts] = useState({ quote: null, invoice: null });
-  const [newQuoteSetup, setNewQuoteSetup] = useState(() => emptyNewQuoteSetup({
-    open: genericNewQuoteIntent && initialDocument === "quote",
-    target: genericNewQuoteIntent && initialDocument === "quote" ? "INITIAL" : "",
-  }));
+  // Generic entry stays fresh through newQuoteSetupAuthorityRef without opening setup.
+  const [newQuoteSetup, setNewQuoteSetup] = useState(() => emptyNewQuoteSetup());
   const invoicePreparationHydratedRef = useRef("");
   const savedJobCustomerLookupRef = useRef(null);
   const workspaceSetPageRef = useRef(setPage);

@@ -154,12 +154,19 @@ async function mount(t, { route = "quoteBuilder?new=1", stored = {}, initialDocu
     }
     assert.doesNotMatch(text(), /Loading saved documents…/, "Saved Files finished loading");
   }
-  async function selectCustomer() {
-    await click("External Customer");
-    await click("Choose Existing Customer");
+  async function selectCustomer({ startNew = false } = {}) {
+    if (startNew) {
+      await click("External Customer");
+      await click("Choose Existing Customer");
+    } else {
+      assert.equal(Boolean(document.querySelector(".new-quote-customer-setup")), false);
+      await click("Document and workspace actions");
+      await click("Choose saved customer");
+    }
     const option = [...document.querySelectorAll("button")].find((button) => button.textContent.includes(contact.displayName));
     assert.ok(option, text());
     await act(async () => { option.click(); await pause(); });
+    if (!startNew) await click("Use this customer");
   }
   async function edit(fields) {
     await click("Fill the form manually");
@@ -201,15 +208,25 @@ test("real generic QuoteBuilder ignores stale request/revision/active Job state 
     meetroRevisedQuoteContext: { source: "workflow_change_request", projectTitle: "Stale revision" },
     activeJobService: "Scheduled Estimate Visit", activeJobCustomer: "Wrong customer",
   } });
+  assert.equal(document.querySelector(".business-document-header h1")?.textContent, "Quote & Invoice");
+  assert.equal(document.querySelector('.business-document-tabs [aria-current="page"]')?.textContent.trim(), "Quote");
+  assert.match(document.querySelector(".business-document-header").textContent, /Working draft/);
+  assert.match(document.querySelector(".business-document-header p").textContent, /Customer not selected/);
+  assert.equal(Boolean(document.querySelector('[role="dialog"]')), false, "generic entry opens no modal");
+  assert.equal(Boolean(document.querySelector(".new-quote-customer-setup")), false);
+  assert.equal(Boolean(document.querySelector(".business-document-customer-panel")), false);
+  assert.doesNotMatch(w.text(), /External Customer|Choose Existing Customer|Add New Customer/);
   assert.equal(w.snapshot().quote.quoteNumber, "");
   assert.equal(w.snapshot().canonicalJobId, "");
   assert.equal(w.snapshot().quote.projectTitle, "");
   assert.deepEqual(w.snapshot().request, {});
-  assert.doesNotMatch(w.text(), /Scheduled Estimate Visit|Wrong customer|Q-OLD/);
+  assert.doesNotMatch(w.text(), /Scheduled Estimate Visit|Wrong customer|Q-OLD|Stale Quote|Stale work|Stale homeowner|Stale revision/);
   assert.equal(localStorage.getItem("selectedQuoteRequest"), null);
   assert.equal(localStorage.getItem("meetroRevisedQuoteContext"), null);
   assert.equal(w.documents.length, 0);
   assert.equal(w.allocations(), 0);
+  assert.ok(w.calls.every((call) => call.method === "GET"), "entry never creates documents, customers, roles, or relationships");
+  assert.equal(w.calls.filter((call) => /numbering/.test(call.path)).length, 0);
 });
 
 function assertBobQuotePresentation(w) {
@@ -236,6 +253,9 @@ function assertCustomerSnapshot(w, expected) {
 
 test("R4-E new external Customer initializes the actual Quote preview without saving a document", async (t) => {
   const w = await mount(t, { newExternalCustomer: true });
+  assert.equal(Boolean(document.querySelector(".new-quote-customer-setup")), false);
+  await w.click("+ Start New Quote");
+  await w.click("Discard Changes");
   await w.click("External Customer");
   await w.click("Add New Customer");
   for (const [label, value] of Object.entries({ Name: contact.displayName, Email: contact.email, Phone: contact.phone, Address: contact.address })) {
@@ -433,7 +453,7 @@ test("R3 Start New Quote detaches prior saved Invoice authority before its first
   await w.click("Quote");
   await w.click("+ Start New Quote");
   await w.click("Discard Changes");
-  await w.selectCustomer();
+  await w.selectCustomer({ startNew: true });
   const before = w.calls.length;
   await w.click("Invoice");
   assert.equal(w.workspace().savedDocuments.invoice, null);
