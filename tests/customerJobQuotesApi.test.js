@@ -163,3 +163,46 @@ test("invalid input, transport failures, and malformed deployed truth never fall
     (error) => error.code === "INVALID_CUSTOMER_JOB_QUOTES_RESPONSE"
   );
 });
+
+
+test("tagged ordinary and existing customer Jobs preserve positive Request identity", () => {
+  for (const sourceType of ["ordinary_request_selection", "existing_customer_request"]) {
+    const result = normalizeCustomerJobQuotes(payload({
+      job: { ...payload().job, sourceType },
+    }), { jobId: IDS.job });
+    assert.equal(result.job.sourceType, sourceType);
+    assert.equal(result.job.requestId, 16);
+  }
+  const legacy = normalizeCustomerJobQuotes(payload(), { jobId: IDS.job });
+  assert.equal(legacy.job.sourceType, "legacy_ordinary");
+  assert.equal(legacy.job.requestId, 16);
+});
+
+test("tagged Emergency Job preserves null Request identity and exact Quote", () => {
+  const result = normalizeCustomerJobQuotes(payload({
+    job: { ...payload().job, sourceType: "emergency_request", requestId: null },
+  }), { jobId: IDS.job });
+  assert.equal(result.job.sourceType, "emergency_request");
+  assert.equal(result.job.requestId, null);
+  assert.equal(result.quotes[0].quoteId, IDS.quote);
+  assert.equal("emergencyRequestId" in result.job, false);
+});
+
+test("source identity combinations and forged Job fields fail closed", () => {
+  const base = payload().job;
+  const invalid = [
+    { ...base, sourceType: "emergency_request" },
+    { ...base, sourceType: "ordinary_request_selection", requestId: null },
+    { ...base, sourceType: "existing_customer_request", requestId: null },
+    { ...base, requestId: null },
+    { ...base, requestId: 0 },
+    { ...base, sourceType: "emergency_request", requestId: 0 },
+    { ...base, sourceType: "unknown_source" },
+    { ...base, sourceType: "emergency_request", requestId: null, emergencyRequestId: 51 },
+    { ...base, sourceType: "ordinary_request_selection", relationshipId: 21 },
+    { id: IDS.job, title: base.title, service: base.service, issuerName: base.issuerName },
+  ];
+  for (const job of invalid) {
+    assert.equal(normalizeCustomerJobQuotes(payload({ job }), { jobId: IDS.job }), null);
+  }
+});

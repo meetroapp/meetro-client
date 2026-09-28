@@ -68,20 +68,26 @@ function timestamp(value, { nullable = false } = {}) {
 }
 
 function normalizeJob(value, expectedJobId) {
-  if (!exactKeys(value, ["id", "requestId", "title", "service", "issuerName"])) return null;
+  const legacy = exactKeys(value, ["id", "requestId", "title", "service", "issuerName"]);
+  const tagged = exactKeys(value, ["id", "sourceType", "requestId", "title", "service", "issuerName"]);
+  if (!legacy && !tagged) return null;
+  const sourceType = legacy ? "legacy_ordinary" : value.sourceType;
+  if (!legacy && !["ordinary_request_selection", "existing_customer_request", "emergency_request"].includes(sourceType)) return null;
   const id = uuid(value.id);
-  const requestId = positiveInteger(value.requestId);
+  const requestId = sourceType === "emergency_request" && value.requestId === null
+    ? null : (Number.isSafeInteger(value.requestId) && value.requestId > 0
+      ? value.requestId : null);
+  if (sourceType === "emergency_request" ? value.requestId !== null : !requestId) return null;
   const title = text(value.title, 500);
   const service = text(value.service, 200, { nullable: true });
   const issuerName = text(value.issuerName, 200);
   if (
     id !== expectedJobId ||
-    !requestId ||
     !title ||
     (value.service != null && !service) ||
     !issuerName
   ) return null;
-  return Object.freeze({ id, requestId, title, service, issuerName });
+  return Object.freeze({ id, sourceType, requestId, title, service, issuerName });
 }
 
 function normalizeActions(value, businessStatus) {
