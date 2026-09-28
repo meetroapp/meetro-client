@@ -91,11 +91,12 @@ function resolveCurrentStageIndex(liveJob) {
 export function resolveWorkCenterLifecyclePresentation({ liveJob, invoice, sourceType } = {}) {
   if (sourceType === 'emergency_request' && !liveJob) return {sourceType,authoritySource:'UNAVAILABLE',currentStageKey:'',completedCount:0,canonicalJobCompleted:false,invoiceUnlocked:false,statusLabel:'Current status unavailable',nextActionLabel:'Open the Job to refresh its next step',responsibilityLabel:'Unavailable',stages:[]};
   if (liveJob?.sourceType === 'emergency_request') {
+    const depositNotRequired = liveJob.deposit?.state === 'NOT_REQUIRED';
     const groups = [
       ['dispatch','Dispatch',['ASSIGNED','ON_THE_WAY','EMERGENCY_REVIEW_REQUIRED']],
       ['evaluation','Evaluation',['EVALUATION_NEEDED','EVALUATION_IN_PROGRESS']],
       ['quote','Quote',['QUOTE_NEEDED','QUOTE_DRAFT','WAITING_FOR_CUSTOMER_DECISION','QUOTE_DECLINED']],
-      ['deposit','Deposit',['QUOTE_APPROVED_DEPOSIT_DUE']],
+      ...(!depositNotRequired ? [['deposit','Deposit',['QUOTE_APPROVED_DEPOSIT_DUE']]] : []),
       ['work','Work',['WORK_READY','WORK_IN_PROGRESS']],
       ['invoice','Invoice',['JOB_COMPLETED','FINAL_INVOICE','PARTIALLY_PAID']],
       ['paid','Paid',['PAID']],

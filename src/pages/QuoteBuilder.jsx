@@ -76,6 +76,7 @@ import { resolveCompletedJobInvoiceHandoff } from "../utils/completedJobInvoiceH
 import {
   fetchEffectiveApprovedInvoiceQuote,
 } from "../utils/invoiceReviewDraft.js";
+import { fetchCanonicalLiveJobProjection } from "../utils/canonicalLiveJobProjection.js";
 import {
   bootstrapExactSavedQuote,
   parseSavedQuoteRoute,
@@ -1157,9 +1158,23 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
             const handoff = resolveCompletedJobInvoiceHandoff(workspace, routeCanonicalJobId);
             if (handoff.status !== "ready") return { handoff };
             const prepared = handoff.job;
+            let sourceContext = null;
+            if (prepared.sourceType === "emergency_request") {
+              const live = await fetchCanonicalLiveJobProjection({
+                jobId: routeCanonicalJobId,
+                setPage: setPageRef.current,
+              });
+              if (live.status !== "ready" || live.projection?.sourceType !== "emergency_request") {
+                const error = new Error("The Emergency Job identity is unavailable for Invoice Quote review.");
+                error.code = "INVOICE_QUOTE_REFERENCE_READ_GAP";
+                throw error;
+              }
+              sourceContext = live.projection;
+            }
             const quoteReference = await fetchEffectiveApprovedInvoiceQuote({
               jobId: routeCanonicalJobId,
               approvedTotalMinor: prepared.approvedAmount?.totalMinor,
+              sourceContext,
               setPage: setPageRef.current,
             });
             return { handoff, documents, prepared, quoteReference };

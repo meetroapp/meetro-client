@@ -39,6 +39,8 @@ import {
 } from "../utils/homeownerLifecycle";
 import { getHomeownerProjectJourney } from "../utils/homeownerProjectJourney";
 import { getHomeownerServiceHistory } from "../utils/homeownerServiceHistory";
+import CustomerCompletionHistory from "../components/CustomerCompletionHistory.jsx";
+import { fetchCustomerJobHistoryList } from "../utils/jobCompletionApi.js";
 import {
   getStoredProfessionalMatchProfile,
   canProfessionalReceiveRequest,
@@ -363,6 +365,8 @@ function Home({ setPage }) {
   const [myProjectsTab, setMyProjectsTab] = useState("active");
   const [detailsRequest, setDetailsRequest] = useState(null);
   const [historyDetailsRequest, setHistoryDetailsRequest] = useState(null);
+  const [canonicalHistoryJobId, setCanonicalHistoryJobId] = useState("");
+  const [canonicalCustomerHistory, setCanonicalCustomerHistory] = useState(null);
   const [canonicalSpotlightBusinesses, setCanonicalSpotlightBusinesses] =
     useState(null);
   const [backendHomeownerRequests, setBackendHomeownerRequests] = useState([]);
@@ -436,7 +440,25 @@ function Home({ setPage }) {
     (request) => request.status === "completed"
   );
 
-  const historyRequests = getHomeownerServiceHistory();
+  const canonicalHistoryRequests = (canonicalCustomerHistory?.jobs || []).map((job) => ({
+    id: job.jobId,
+    jobId: job.jobId,
+    requestId: job.requestId,
+    relationshipId: job.relationshipId,
+    conversationId: job.conversationId,
+    sourceType: job.sourceType,
+    sourceLabel: job.sourceLabel,
+    status: "closed",
+    title: job.serviceTitle,
+    professionalName: job.professionalName,
+    completedAt: job.completedAt,
+    finalAmount: job.approvedQuote ? job.approvedQuote.totalMinor / 100 : 0,
+    paymentStatus: "completed",
+    canonicalHistory: true,
+  }));
+  const historyRequests = legacyWorkflowStorageEnabled
+    ? getHomeownerServiceHistory()
+    : canonicalHistoryRequests;
   const homeownerMetrics = getHomeownerRequestMetrics({
     requests: allHomeownerRequests,
     history: historyRequests,
@@ -485,6 +507,26 @@ function Home({ setPage }) {
     }
 
     loadAuthenticatedHomeownerRequests();
+    return () => {
+      active = false;
+    };
+  }, [legacyWorkflowStorageEnabled, requestReloadKey, setPage]);
+
+  useEffect(() => {
+    if (legacyWorkflowStorageEnabled) {
+      setCanonicalCustomerHistory(null);
+      return undefined;
+    }
+
+    let active = true;
+    void fetchCustomerJobHistoryList({ limit: 50, setPage })
+      .then((history) => {
+        if (active) setCanonicalCustomerHistory(history);
+      })
+      .catch(() => {
+        if (active) setCanonicalCustomerHistory(null);
+      });
+
     return () => {
       active = false;
     };
@@ -827,6 +869,12 @@ function Home({ setPage }) {
   }
 
   function openHistoryDetails(request) {
+    if (request?.canonicalHistory && request.jobId) {
+      setHistoryDetailsRequest(null);
+      setCanonicalHistoryJobId(request.jobId);
+      return;
+    }
+    setCanonicalHistoryJobId("");
     setHistoryDetailsRequest(request);
   }
 
@@ -1107,12 +1155,24 @@ function Home({ setPage }) {
             conversationEntry={getConversationEntryForRequest(
               historyDetailsRequest
             )}
+
             onOpenRecord={() => openCompletedRecord(historyDetailsRequest, setPage)}
             onMessageProfessional={() =>
               openHomeownerProject(historyDetailsRequest)
             }
             onClose={() => setHistoryDetailsRequest(null)}
           />
+        )}
+
+        {canonicalHistoryJobId && (
+          <div role="dialog" aria-modal="true" aria-label="Completed Job History">
+            <button type="button" onClick={() => setCanonicalHistoryJobId("")}>Close</button>
+            <CustomerCompletionHistory
+              jobId={canonicalHistoryJobId}
+              language={language}
+              setPage={setPage}
+            />
+          </div>
         )}
 
         <BottomNav setPage={setPage} currentPage="home" />
@@ -1486,11 +1546,23 @@ function Home({ setPage }) {
           conversationEntry={getConversationEntryForRequest(
             historyDetailsRequest
           )}
+
           onOpenRecord={() => openCompletedRecord(historyDetailsRequest, setPage)}
           onMessageProfessional={() => openHomeownerProject(historyDetailsRequest)}
           onClose={() => setHistoryDetailsRequest(null)}
         />
       )}
+
+        {canonicalHistoryJobId && (
+          <div role="dialog" aria-modal="true" aria-label="Completed Job History">
+            <button type="button" onClick={() => setCanonicalHistoryJobId("")}>Close</button>
+            <CustomerCompletionHistory
+              jobId={canonicalHistoryJobId}
+              language={language}
+              setPage={setPage}
+            />
+          </div>
+        )}
 
       <BottomNav setPage={setPage} currentPage="home" />
     </div>
@@ -2666,7 +2738,8 @@ function HistoryRequestCard({ request, language, setPage, onDetails }) {
           style={historyButton}
           onClick={(e) => {
             e.stopPropagation();
-            openCompletedRecord(request, setPage);
+            if (request.canonicalHistory) onDetails?.(request);
+            else openCompletedRecord(request, setPage);
           }}
         >
           {t("viewDetails", language)}
@@ -2686,16 +2759,18 @@ function HistoryRequestCard({ request, language, setPage, onDetails }) {
             </button>
           )}
 
-          <button
-            type="button"
-            style={historySecondaryButton}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDetails?.(request);
-            }}
-          >
-            {reviewLabel}
-          </button>
+          {!request.canonicalHistory && (
+            <button
+              type="button"
+              style={historySecondaryButton}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDetails?.(request);
+              }}
+            >
+              {reviewLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>

@@ -295,6 +295,14 @@ export function fetchProfessionalJobHistory({ limit = 20, cursor = "", setPage, 
   return read(`/professional/jobs/history?${query}`, "jobHistory", validateProfessionalJobHistory, setPage, authFetchImpl);
 }
 
+export function fetchCustomerJobHistoryList({ limit = 20, cursor = "", setPage, authFetchImpl = authFetch } = {}) {
+  const boundedLimit = integer(limit);
+  if (!boundedLimit || boundedLimit > 50) return Promise.reject(new JobCompletionApiError({ status: 400, code: "INVALID_JOB_HISTORY_PAGE" }));
+  const query = new URLSearchParams({ limit: String(boundedLimit) });
+  if (cursor) query.set("cursor", cursor);
+  return read(`/customer/jobs/history?${query}`, "jobHistory", validateProfessionalJobHistory, setPage, authFetchImpl);
+}
+
 export function fetchProfessionalJobHistoryDetail({ jobId, setPage, authFetchImpl = authFetch } = {}) {
   const canonicalJobId = uuid(jobId);
   if (!canonicalJobId) return Promise.reject(new JobCompletionApiError({ status: 400, code: "INVALID_JOB_ID" }));

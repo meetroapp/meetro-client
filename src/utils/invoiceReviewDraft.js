@@ -174,6 +174,7 @@ export function selectEffectiveApprovedInvoiceQuote(quotes, { approvedTotalMinor
 export async function fetchEffectiveApprovedInvoiceQuote({
   jobId,
   approvedTotalMinor,
+  sourceContext,
   setPage,
   authFetchImpl = authFetch,
 } = {}) {
@@ -183,7 +184,7 @@ export async function fetchEffectiveApprovedInvoiceQuote({
     setPage
   );
   const quotes = response?.ok && data?.success === true
-    ? validateCanonicalQuotes(data.quotes, { jobId })
+    ? validateCanonicalQuotes(data.quotes, { jobId, sourceContext })
     : null;
   const quote = selectEffectiveApprovedInvoiceQuote(quotes, { approvedTotalMinor });
   if (!quote) {

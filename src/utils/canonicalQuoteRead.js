@@ -897,10 +897,10 @@ function quoteLineageIsAcyclic(quotes) {
   return true;
 }
 
-export function validateCanonicalQuotes(value, { jobId } = {}) {
+export function validateCanonicalQuotes(value, { jobId, sourceContext } = {}) {
   const expectedJobId = canonicalUuid(jobId);
   if (!expectedJobId || !Array.isArray(value) || value.length > 100) return null;
-  const quotes = value.map(validateCanonicalQuoteProjection);
+  const quotes = value.map((quote) => validateCanonicalQuoteProjection(quote, { sourceContext }));
   if (
     quotes.some((quote) => !quote) ||
     quotes.some((quote) => quote.jobId !== expectedJobId) ||
