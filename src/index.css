@@ -2128,6 +2128,11 @@ h6 {
   --meetro-sidebar-width: clamp(220px, 27vw, var(--meetro-layout-sidebar-width));
 }
 
+/* Keep Request Help’s fixed tablet sidebar anchored to the viewport. */
+#root[data-app-layout="tablet"] .app-page.request-help-page {
+  contain: none !important;
+}
+
 @media (min-width: 1180px) {
   #root[data-app-layout="desktop"] {
     --meetro-sidebar-width: var(--meetro-layout-sidebar-width);

@@ -1,3 +1,4 @@
+import EmergencyFollowUpAction from "../components/EmergencyFollowUpAction.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import BottomNav from "../components/BottomNav";
@@ -2961,6 +2962,10 @@ function EmergencyRequest({ setPage }) {
               </section>
             )
           )}
+
+        {recoveryState !== "loading" && recoveryState !== "failed" && canonicalRequest && (
+          <EmergencyFollowUpAction key={canonicalRequest.id} emergencyRequest={canonicalRequest} language={language} setPage={setPage} />
+        )}
 
         {showDraftWorkflow && cancellationAvailable && (
             <button

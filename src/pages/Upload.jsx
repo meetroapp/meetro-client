@@ -1,9 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { readRequestHelpContext, canResumeRequestHelpDraft, requestHelpContextRoute, requestHelpSessionKey, subscribeRequestHelpSession } from "../utils/requestHelpContext.js";
+import { createEmergencyFollowUpJobRequest } from "../utils/emergencyApi.js";
+import { readEmergencyFollowUpRequestRoute, getEmergencyFollowUpRequestCopy } from "../utils/emergencyFollowUpRequestRoute.js";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
 import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import GuidedWorkspaceCard from "../components/GuidedWorkspaceCard";
 import ServiceSelectorSheet from "../components/ServiceSelectorSheet";
-import { authFetch } from "../utils/authFetch";
+import { authFetch, handleAuthExpired } from "../utils/authFetch";
 import { t } from "../utils/language";
 import {
   clearAssistantRequestDraft,
@@ -371,6 +374,52 @@ function getExistingCustomerRequestCopy(language) {
 }
 
 function Upload({ setPage }) {
+  const sessionKey = useSyncExternalStore(subscribeRequestHelpSession, requestHelpSessionKey, requestHelpSessionKey);
+  return <RequestHelpEntry key={sessionKey} sessionKey={sessionKey} setPage={setPage} />;
+}
+
+function RequestHelpEntry({ sessionKey, setPage }) {
+  const language = useLanguage();
+  const [context] = useState(() => readRequestHelpContext());
+  const [savedDraft] = useState(() => readJobRequestDraft(sessionStorage, { initialLocation: "" }));
+  const [resume, setResume] = useState(() => canResumeRequestHelpDraft(savedDraft, context) &&
+    !(context?.mode === "emergency_follow_up" && !savedDraft.requestContext &&
+      (readAssistantRequestDraft(sessionStorage) || readAssistantRequestDraft(localStorage))));
+  if (resume) return <RequestHelpComposer sessionKey={sessionKey} requestContext={context} setPage={setPage} />;
+  const spanish = language === "es";
+  const pending = Boolean(savedDraft.submission?.intentKey || savedDraft.submission?.snapshot);
+  return (
+    <div className="app-page request-help-page upload-page" style={pageWrapper}>
+      <section style={successPanel} role="alert">
+        <h1>{spanish ? "Revisa el contexto de la solicitud" : "Check the request context"}</h1>
+        <p>{!context ? getEmergencyFollowUpRequestCopy(language).invalid :
+          spanish ? "Tu borrador anterior se conserva. Vuelve a esa solicitud antes de continuar, o descártalo explícitamente para comenzar otra." :
+            "Your earlier draft is preserved. Return to that request, or explicitly discard the draft to start another."}</p>
+        {context && savedDraft.requestContext?.actorId === context.actorId && (
+          <button type="button" style={primaryButton} onClick={() => setPage(requestHelpContextRoute(savedDraft.requestContext))}>
+            {spanish ? "Volver a la solicitud guardada" : "Return to saved request"}
+          </button>
+        )}
+        {context && !pending && (!savedDraft.requestContext || savedDraft.requestContext.actorId === context.actorId) && (
+          <button type="button" style={cancelRequestButton} onClick={() => {
+            if (!window.confirm(t("cancelRequestWarning", language))) return;
+            clearJobRequestDraft(sessionStorage);
+            clearAssistantRequestDraft(sessionStorage);
+            clearAssistantRequestDraft(localStorage);
+            setResume(true);
+          }}>{spanish ? "Descartar borrador y comenzar otra solicitud" : "Discard draft and start another request"}</button>
+        )}
+        {pending && <p>{spanish ? "El envío anterior aún no está resuelto. Conservamos su contenido y sus fotos para reintentarlo en el contexto original." : "The earlier submission is unresolved. Its content and photos are preserved for retry in the original context."}</p>}
+        <button type="button" style={cancelRequestButton} onClick={() => setPage("myRequests")}>
+          {spanish ? "Mis solicitudes" : "My Requests"}
+        </button>
+      </section>
+      <BottomNav setPage={setPage} currentPage="upload" />
+    </div>
+  );
+}
+
+function RequestHelpComposer({ setPage, sessionKey, requestContext }) {
   const language = useLanguage();
   const photoInputRef = useRef(null);
   const serviceSearchInputRef = useRef(null);
@@ -378,6 +427,9 @@ function Upload({ setPage }) {
   const descriptionInputRef = useRef(null);
   const locationInputRef = useRef(null);
   const submissionAttemptRef = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const ownsSubmission = () => mounted.current && requestHelpSessionKey() === sessionKey;
   const requestPhotoUploadEnabled = isRequestPhotoUploadEnabled();
   const mediaUploadDeferred =
     isFriendsAndFamilyMediaDeferred() && !requestPhotoUploadEnabled;
@@ -388,10 +440,18 @@ function Upload({ setPage }) {
         ? window.location.hash
         : ""
     );
+  const emergencyFollowUpRoute = readEmergencyFollowUpRequestRoute(
+    typeof window !== "undefined" ? window.location.hash : ""
+  );
+  const emergencyFollowUpCopy = getEmergencyFollowUpRequestCopy(language);
+  const invalidFollowUpContext = emergencyFollowUpRoute.active &&
+    (!emergencyFollowUpRoute.valid || existingCustomerRequestRoute.active);
   const existingCustomerRequestCopy =
     getExistingCustomerRequestCopy(language);
 
   const [initialAssistantDraft] = useState(() => {
+    const saved = readJobRequestDraft(sessionStorage, { initialLocation: "" });
+    if (saved.submission.intentKey || saved.submission.snapshot) return null;
     const transientDraft = readAssistantRequestDraft(sessionStorage);
     const persistentDraft = transientDraft
       ? null
@@ -412,6 +472,7 @@ function Upload({ setPage }) {
       });
       return {
         ...normalizedDraft,
+        requestContext,
         service: {
           ...normalizedDraft.service,
           category: validCategory
@@ -423,7 +484,7 @@ function Upload({ setPage }) {
         },
       };
     }
-    return readJobRequestDraft(sessionStorage, { initialLocation: "" });
+    return { ...readJobRequestDraft(sessionStorage, { initialLocation: "" }), requestContext };
   });
   const [serviceSearch, setServiceSearch] = useState(
     initialAssistantDraft?.suggestedServiceLabel ||
@@ -488,8 +549,8 @@ function Upload({ setPage }) {
   }, [selectedRequestPhotos]);
 
   useEffect(() => {
-    saveJobRequestDraft(sessionStorage, draft);
-  }, [draft]);
+    if (mounted.current && requestHelpSessionKey() === sessionKey) saveJobRequestDraft(sessionStorage, draft);
+  }, [draft, requestContext, sessionKey]);
 
   useEffect(() => {
     conversationLogRef.current?.scrollTo({
@@ -742,12 +803,12 @@ function Upload({ setPage }) {
     setDraft((current) => clearDraftSubmission(current));
   }
 
-  async function cleanupUploadedRequestPhotos(mediaItems = []) {
+  async function cleanupUploadedRequestPhotos(mediaItems = [], transport = authFetch) {
     await Promise.all(
       mediaItems.map((media) =>
         cleanupRequestPhoto({
           media,
-          authFetchImpl: authFetch,
+          authFetchImpl: transport,
           setPage,
         })
       )
@@ -1194,6 +1255,11 @@ function Upload({ setPage }) {
 
     if (submissionAttemptRef.current) return;
 
+    if (invalidFollowUpContext || !ownsSubmission() || !readRequestHelpContext()) {
+      setSubmissionError(emergencyFollowUpCopy.invalid);
+      return;
+    }
+
     if (
       existingCustomerRequestRoute.active &&
       !existingCustomerRequestRoute.valid
@@ -1207,6 +1273,13 @@ function Upload({ setPage }) {
     submissionAttemptRef.current = true;
     setCreating(true);
 
+    const submissionFetch = async (endpoint, options = {}) => {
+      if (!ownsSubmission()) throw new Error("Request context changed.");
+      const result = await authFetch(endpoint, { ...options, skipAuthExpirationHandling: true }, setPage);
+      if (!ownsSubmission()) throw new Error("Request context changed.");
+      if (result?.response?.status === 401) handleAuthExpired(setPage);
+      return result;
+    };
     let uploadedMediaForCleanup = [];
     let shouldCleanupUploadedMedia = false;
     try {
@@ -1265,11 +1338,13 @@ function Upload({ setPage }) {
         const uploadedRequestPhotos = selectedRequestPhotos.length > 0
           ? await uploadRequestPhotos({
               files: selectedRequestPhotos.map((photo) => photo.file),
-              authFetchImpl: authFetch,
+              authFetchImpl: submissionFetch,
               setPage,
             })
           : { ok: true, photos: [] };
 
+        // A route/account switch cannot advance this command or delete its media.
+        if (!ownsSubmission()) return;
         setUploading(false);
 
         if (!uploadedRequestPhotos.ok) {
@@ -1305,7 +1380,11 @@ function Upload({ setPage }) {
           existingCustomerRequestRoute
         );
 
-      const result = await authFetch(
+      const result = emergencyFollowUpRoute.active
+        ? await createEmergencyFollowUpJobRequest(emergencyFollowUpRoute.emergencyRequestId, requestBody, {
+            idempotencyKey: submissionIntentKey, authFetchImpl: submissionFetch, setPage,
+          })
+        : await authFetch(
         "/posts",
         {
           method: "POST",
@@ -1313,12 +1392,18 @@ function Upload({ setPage }) {
             "Idempotency-Key": submissionIntentKey,
           },
           body: JSON.stringify(requestBody),
+          skipAuthExpirationHandling: true,
         },
         setPage
       );
 
-      const data = result.data || {};
-      const canonicalPost = getCanonicalJobRequestPost(result);
+      if (!ownsSubmission()) return;
+      if (!emergencyFollowUpRoute.active && result?.response?.status === 401) handleAuthExpired(setPage);
+      if (!ownsSubmission()) return;
+      const data = emergencyFollowUpRoute.active ? result : result.data || {};
+      const canonicalPost = emergencyFollowUpRoute.active
+        ? (result.ok ? result.post : null)
+        : getCanonicalJobRequestPost(result);
 
       if (canonicalPost) {
         uploadedMediaForCleanup = [];
@@ -1335,9 +1420,7 @@ function Upload({ setPage }) {
         localStorage.removeItem("requestProfessionalContext");
 
         clearSelectedRequestPhotos();
-        setDraft(resetJobRequestDraft({
-          initialLocation: "",
-        }));
+        setDraft({ ...resetJobRequestDraft({ initialLocation: "", }), requestContext });
         clearJobRequestDraft(sessionStorage);
         setCreationMessages(createInitialCreationAssistanceMessages(language));
         setConversationText("");
@@ -1349,8 +1432,14 @@ function Upload({ setPage }) {
         setFieldErrors({});
         setSubmissionError("");
         setSubmittedRequest(canonicalPost);
+        if (emergencyFollowUpRoute.active) {
+          clearAssistantRequestDraft(sessionStorage);
+          setPage("homeownerRequestDetails");
+        }
       } else {
-        const failureType = classifyJobRequestCreateFailure(result);
+        const failureType = emergencyFollowUpRoute.active
+          ? result.failureType || "definitive"
+          : classifyJobRequestCreateFailure(result);
         if (failureType === "ambiguous" || failureType === "conflict") {
           shouldCleanupUploadedMedia = false;
         }
@@ -1366,19 +1455,22 @@ function Upload({ setPage }) {
           );
         }
         if (shouldCleanupUploadedMedia) {
-          await cleanupUploadedRequestPhotos(uploadedMediaForCleanup);
-          clearSubmissionIntent();
+          await cleanupUploadedRequestPhotos(uploadedMediaForCleanup, submissionFetch);
+          if (ownsSubmission()) clearSubmissionIntent();
         }
       }
     } catch (error) {
+      if (!ownsSubmission()) return;
       if (classifyJobRequestCreateFailure(error) !== "ambiguous" && shouldCleanupUploadedMedia) {
-        await cleanupUploadedRequestPhotos(uploadedMediaForCleanup);
+        await cleanupUploadedRequestPhotos(uploadedMediaForCleanup, submissionFetch);
         clearSubmissionIntent();
       }
       setSubmissionError(getRequestHelpCopy(language).failed);
     } finally {
-      setUploading(false);
-      setCreating(false);
+      if (ownsSubmission()) {
+        setUploading(false);
+        setCreating(false);
+      }
       submissionAttemptRef.current = false;
     }
   }
@@ -1406,9 +1498,7 @@ function Upload({ setPage }) {
     }
 
     clearSelectedRequestPhotos();
-    setDraft(resetJobRequestDraft({
-      initialLocation: "",
-    }));
+    setDraft({ ...resetJobRequestDraft({ initialLocation: "", }), requestContext });
     clearJobRequestDraft(sessionStorage);
     setFieldErrors({});
     setSubmissionError("");
@@ -1700,7 +1790,15 @@ function Upload({ setPage }) {
           <p style={requestPageSubtitle}>{t("newProjectSubtitle")}</p>
         </header>
 
-        {existingCustomerRequestRoute.active && (
+        {emergencyFollowUpRoute.active && (
+          <div style={{ ...existingCustomerRequestBanner, ...(invalidFollowUpContext ? existingCustomerRequestBannerInvalid : {}) }}
+            role={invalidFollowUpContext ? "alert" : "status"} data-emergency-follow-up-context>
+            <strong>{emergencyFollowUpCopy.title}</strong>
+            <p>{invalidFollowUpContext ? emergencyFollowUpCopy.invalid : emergencyFollowUpCopy.text}</p>
+          </div>
+        )}
+
+        {existingCustomerRequestRoute.active && !emergencyFollowUpRoute.active && (
           <div
             style={{
               ...existingCustomerRequestBanner,
