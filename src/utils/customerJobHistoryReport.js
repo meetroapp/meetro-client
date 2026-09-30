@@ -3,7 +3,6 @@ import { jsPDF } from "jspdf";
 
 import {
   downloadBusinessDocumentPdfArtifact,
-  openBusinessDocumentEmailDraft,
   previewBusinessDocumentPdfArtifact,
   shareBusinessDocumentPdfArtifact,
 } from "./businessDocumentDeviceShare.js";
@@ -26,6 +25,35 @@ const COLORS = Object.freeze({
 
 const COPY = Object.freeze({
   en: Object.freeze({
+    print: "Print",
+    share: "Share",
+    email: "Email",
+    preparing: "Preparing…",
+    reportActions: "Job History report actions",
+    evaluationVisit: "Evaluation visit",
+    workVisit: "Work visit",
+    noWorkDetails: "No additional recorded work-detail entries are available for this Job.",
+    noFinalizedInvoice: "No finalized invoice is available for this Job yet.",
+    noPhotos: "No customer-visible request photos are available for this Job.",
+    recordsUnavailable: "These records could not be loaded. Reopen Job History to try again.",
+    approvedWork: "Approved work",
+    extraWork: "Extra work",
+    quantity: "Qty",
+    pdfUnavailable: "Job History PDF is unavailable on this device.",
+    printShareNotice: "Job History PDF is ready. Choose Print from the share sheet.",
+    printNotice: "Print-ready Job History PDF opened.",
+    emailManualNotice: "Email draft opened. Browsers cannot attach the PDF automatically. Use Share to save the Job History PDF, then attach it before sending.",
+    emailNativeNotice: "Job History PDF is ready. Choose Mail or your email app from the share sheet.",
+    downloadNotice: "System sharing is unavailable, so the Job History PDF was downloaded instead.",
+    shareNotice: "Job History PDF is ready to share.",
+    readyNotice: "Job History PDF is ready.",
+    failedNotice: "Job History PDF could not be prepared. Nothing was changed or sent.",
+    cancelledNotice: "Sharing was cancelled.",
+    emailSubject: "Meetro Job History",
+    emailIntro: "Meetro Job History Report for the completed project:",
+    manualAttachment: "Browsers cannot attach the PDF automatically. Use Share in Job History to save the PDF, then attach it manually before sending.",
+    nativePrint: "Choose Print or Save to Files for this Job History Report.",
+    photoUnavailable: "Photo could not be embedded. Open the original photo:",
     report: "JOB HISTORY REPORT",
     customer: "Customer",
     professional: "Professional",
@@ -59,6 +87,35 @@ const COPY = Object.freeze({
     preparedWith: "Prepared with Meetro",
   }),
   es: Object.freeze({
+    print: "Imprimir",
+    share: "Compartir",
+    email: "Correo",
+    preparing: "Preparando…",
+    reportActions: "Acciones del informe del historial",
+    evaluationVisit: "Visita de evaluación",
+    workVisit: "Visita de trabajo",
+    noWorkDetails: "No hay más detalles de trabajo registrados para este trabajo.",
+    noFinalizedInvoice: "Aún no hay una factura finalizada disponible para este trabajo.",
+    noPhotos: "No hay fotos de la solicitud visibles para el cliente para este trabajo.",
+    recordsUnavailable: "No se pudieron cargar estos registros. Vuelve a abrir el historial para intentar de nuevo.",
+    approvedWork: "Trabajo aprobado",
+    extraWork: "Trabajo adicional",
+    quantity: "Cant.",
+    pdfUnavailable: "El PDF del historial no está disponible en este dispositivo.",
+    printShareNotice: "El PDF está listo. Elige Imprimir en la hoja para compartir.",
+    printNotice: "Se abrió el PDF del historial listo para imprimir.",
+    emailManualNotice: "Se abrió el borrador de correo. El navegador no puede adjuntar el PDF automáticamente. Usa Compartir para guardarlo y adjúntalo antes de enviar.",
+    emailNativeNotice: "El PDF está listo. Elige Mail o tu aplicación de correo en la hoja para compartir.",
+    downloadNotice: "No se puede compartir con el sistema. Se descargó el PDF del historial.",
+    shareNotice: "El PDF del historial está listo para compartir.",
+    readyNotice: "El PDF del historial está listo.",
+    failedNotice: "No se pudo preparar el PDF. No se modificó ni envió nada.",
+    cancelledNotice: "Se canceló compartir.",
+    emailSubject: "Historial del trabajo de Meetro",
+    emailIntro: "Informe del historial de Meetro para el proyecto completado:",
+    manualAttachment: "El navegador no puede adjuntar el PDF automáticamente. Usa Compartir en el historial para guardar el PDF y adjúntalo manualmente antes de enviar.",
+    nativePrint: "Elige Imprimir o Guardar en Archivos para este informe.",
+    photoUnavailable: "No se pudo incluir la foto. Abre la foto original:",
     report: "INFORME DEL HISTORIAL DEL TRABAJO",
     customer: "Cliente",
     professional: "Profesional",
@@ -92,6 +149,35 @@ const COPY = Object.freeze({
     preparedWith: "Preparado con Meetro",
   }),
   fr: Object.freeze({
+    print: "Imprimer",
+    share: "Partager",
+    email: "E-mail",
+    preparing: "Préparation…",
+    reportActions: "Actions du rapport d’historique",
+    evaluationVisit: "Visite d’évaluation",
+    workVisit: "Visite de travail",
+    noWorkDetails: "Aucun détail supplémentaire du travail n’est enregistré pour ce travail.",
+    noFinalizedInvoice: "Aucune facture finalisée n’est encore disponible pour ce travail.",
+    noPhotos: "Aucune photo de la demande visible par le client n’est disponible pour ce travail.",
+    recordsUnavailable: "Ces dossiers n’ont pas pu être chargés. Rouvrez l’historique pour réessayer.",
+    approvedWork: "Travail approuvé",
+    extraWork: "Travail supplémentaire",
+    quantity: "Qté",
+    pdfUnavailable: "Le PDF de l’historique n’est pas disponible sur cet appareil.",
+    printShareNotice: "Le PDF est prêt. Choisissez Imprimer dans la feuille de partage.",
+    printNotice: "Le PDF de l’historique prêt à imprimer a été ouvert.",
+    emailManualNotice: "Le brouillon d’e-mail a été ouvert. Le navigateur ne peut pas joindre le PDF automatiquement. Utilisez Partager pour l’enregistrer, puis joignez-le avant l’envoi.",
+    emailNativeNotice: "Le PDF est prêt. Choisissez Mail ou votre application de messagerie dans la feuille de partage.",
+    downloadNotice: "Le partage système est indisponible. Le PDF de l’historique a été téléchargé.",
+    shareNotice: "Le PDF de l’historique est prêt à être partagé.",
+    readyNotice: "Le PDF de l’historique est prêt.",
+    failedNotice: "Le PDF n’a pas pu être préparé. Rien n’a été modifié ni envoyé.",
+    cancelledNotice: "Le partage a été annulé.",
+    emailSubject: "Historique du travail Meetro",
+    emailIntro: "Rapport d’historique Meetro pour le projet terminé :",
+    manualAttachment: "Le navigateur ne peut pas joindre le PDF automatiquement. Utilisez Partager dans l’historique pour enregistrer le PDF, puis joignez-le manuellement avant l’envoi.",
+    nativePrint: "Choisissez Imprimer ou Enregistrer dans Fichiers pour ce rapport.",
+    photoUnavailable: "La photo n’a pas pu être intégrée. Ouvrez la photo originale :",
     report: "RAPPORT D’HISTORIQUE DU TRAVAIL",
     customer: "Client",
     professional: "Professionnel",
@@ -125,6 +211,35 @@ const COPY = Object.freeze({
     preparedWith: "Préparé avec Meetro",
   }),
   "pt-BR": Object.freeze({
+    print: "Imprimir",
+    share: "Compartilhar",
+    email: "E-mail",
+    preparing: "Preparando…",
+    reportActions: "Ações do relatório do histórico",
+    evaluationVisit: "Visita de avaliação",
+    workVisit: "Visita de trabalho",
+    noWorkDetails: "Não há outros detalhes de trabalho registrados para este trabalho.",
+    noFinalizedInvoice: "Ainda não há uma fatura finalizada disponível para este trabalho.",
+    noPhotos: "Não há fotos da solicitação visíveis ao cliente para este trabalho.",
+    recordsUnavailable: "Não foi possível carregar estes registros. Abra o histórico novamente para tentar outra vez.",
+    approvedWork: "Trabalho aprovado",
+    extraWork: "Trabalho adicional",
+    quantity: "Qtd.",
+    pdfUnavailable: "O PDF do histórico não está disponível neste dispositivo.",
+    printShareNotice: "O PDF está pronto. Escolha Imprimir na folha de compartilhamento.",
+    printNotice: "O PDF do histórico pronto para impressão foi aberto.",
+    emailManualNotice: "O rascunho de e-mail foi aberto. O navegador não pode anexar o PDF automaticamente. Use Compartilhar para salvá-lo e anexe-o antes de enviar.",
+    emailNativeNotice: "O PDF está pronto. Escolha Mail ou seu aplicativo de e-mail na folha de compartilhamento.",
+    downloadNotice: "O compartilhamento do sistema não está disponível. O PDF do histórico foi baixado.",
+    shareNotice: "O PDF do histórico está pronto para compartilhar.",
+    readyNotice: "O PDF do histórico está pronto.",
+    failedNotice: "Não foi possível preparar o PDF. Nada foi alterado ou enviado.",
+    cancelledNotice: "O compartilhamento foi cancelado.",
+    emailSubject: "Histórico do trabalho Meetro",
+    emailIntro: "Relatório do histórico Meetro para o projeto concluído:",
+    manualAttachment: "O navegador não pode anexar o PDF automaticamente. Use Compartilhar no histórico para salvar o PDF e anexe-o manualmente antes de enviar.",
+    nativePrint: "Escolha Imprimir ou Salvar em Arquivos para este relatório.",
+    photoUnavailable: "Não foi possível incluir a foto. Abra a foto original:",
     report: "RELATÓRIO DO HISTÓRICO DO TRABALHO",
     customer: "Cliente",
     professional: "Profissional",
@@ -159,7 +274,7 @@ const COPY = Object.freeze({
   }),
 });
 
-function copyFor(language) {
+export function getCustomerJobHistoryReportCopy(language) {
   return COPY[language] || COPY.en;
 }
 
@@ -311,6 +426,7 @@ export function buildCustomerJobHistoryReportModel({
 } = {}) {
   if (
     !history ||
+    history.status !== "COMPLETED" ||
     !text(history.jobId, 100) ||
     !text(history.serviceTitle, 500) ||
     !timestamp(history.completedAt)
@@ -319,6 +435,18 @@ export function buildCustomerJobHistoryReportModel({
       "Verified customer Job History is required."
     );
   }
+
+  for (const record of [...quotes, invoice, workPlan,
+    assessment === history.historyRecords?.emergencyAssessment ? null : assessment].filter(Boolean)) {
+    if (record.jobId !== history.jobId) {
+      throw new TypeError("History records must belong to the exact Job.");
+    }
+  }
+  quotes = quotes.filter((quote, index, records) =>
+    records.findIndex((candidate) => candidate.quoteId === quote.quoteId) === index
+  );
+  invoice = invoice && ["SENT", "PARTIALLY_PAID", "PAID"].includes(invoice.status)
+    ? invoice : null;
 
   const historyRecords =
     history.historyRecords || {
@@ -742,6 +870,7 @@ export function buildCustomerJobHistoryReportModel({
 
     media: Object.freeze(
       (historyRecords.media || [])
+        .filter((photo) => photo.category === "REQUEST_PHOTO")
         .map((photo) =>
           Object.freeze({
             secureUrl:
@@ -763,13 +892,18 @@ export function buildCustomerJobHistoryReportModel({
           })
         )
         .filter(
-          (photo) =>
-            photo.secureUrl.startsWith(
-              "https://res.cloudinary.com/"
-            )
+          (photo) => isCustomerHistoryPhotoUrl(photo.secureUrl)
         )
     ),
   });
+}
+
+function isCustomerHistoryPhotoUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && url.hostname === "res.cloudinary.com" &&
+      !url.username && !url.password && url.pathname.startsWith("/") && url.pathname.length > 1;
+  } catch { return false; }
 }
 
 async function imageDataUrl(
@@ -777,9 +911,7 @@ async function imageDataUrl(
   fetchImpl
 ) {
   if (
-    !imageUrl?.startsWith(
-      "https://res.cloudinary.com/"
-    ) ||
+    !isCustomerHistoryPhotoUrl(imageUrl) ||
     typeof fetchImpl !== "function"
   ) {
     return null;
@@ -880,7 +1012,7 @@ export async function createCustomerJobHistoryPdfArtifact(
   }
 
   const copy =
-    copyFor(model.language);
+    getCustomerJobHistoryReportCopy(model.language);
 
   const media =
     await prepareMedia(
@@ -915,34 +1047,18 @@ export async function createCustomerJobHistoryPdfArtifact(
       align = "left",
     } = options;
 
-    doc.setFont(
-      "helvetica",
-      style
-    );
-
+    doc.setFont("helvetica", style);
     doc.setFontSize(size);
-    doc.setTextColor(...color);
-
-    const lines =
-      doc.splitTextToSize(
-        String(value || ""),
-        maxWidth
-      );
-
-    doc.text(
-      lines,
-      x,
-      y,
-      { align }
-    );
-
-    y +=
-      Math.max(
-        lines.length,
-        1
-      ) *
-      size *
-      1.3;
+    const lines = doc.splitTextToSize(String(value || ""), maxWidth);
+    for (const line of lines) {
+      ensureSpace(size * 1.3);
+      // A new page header may change the font; restore the content styling.
+      doc.setFont("helvetica", style);
+      doc.setFontSize(size);
+      doc.setTextColor(...color);
+      doc.text(line, x, y, { align });
+      y += size * 1.3;
+    }
 
     return lines.length;
   }
@@ -1046,6 +1162,7 @@ export async function createCustomerJobHistoryPdfArtifact(
     );
 
     const rowY = y;
+    const rowPage = doc.getNumberOfPages();
 
     addText(
       label,
@@ -1070,10 +1187,7 @@ export async function createCustomerJobHistoryPdfArtifact(
       }
     );
 
-    y = Math.max(
-      y,
-      rowY + 18
-    );
+    if (doc.getNumberOfPages() === rowPage) y = Math.max(y, rowY + 18);
   }
 
   function bullet(
@@ -1371,8 +1485,7 @@ export async function createCustomerJobHistoryPdfArtifact(
     ) {
       bullet(
         [
-          visit.purpose
-            .replaceAll("_", " "),
+          visit.purpose === "EVALUATION" ? copy.evaluationVisit : copy.workVisit,
           visit.state,
         ]
           .filter(Boolean)
@@ -1430,6 +1543,7 @@ export async function createCustomerJobHistoryPdfArtifact(
       }
     }
   } else {
+    addText(copy.noWorkDetails);
     row(
       copy.work,
       String(
@@ -1556,7 +1670,7 @@ export async function createCustomerJobHistoryPdfArtifact(
       ) {
         bullet(
           line.description,
-          `${line.quantity} × ${money(
+          `${copy.quantity} ${line.quantity} · ${copy.total}: ${money(
             line.lineTotalMinor,
             model.invoice.currency,
             model.language
@@ -1602,6 +1716,11 @@ export async function createCustomerJobHistoryPdfArtifact(
         );
       }
     }
+  }
+
+  if (!model.invoice) {
+    section(copy.invoices);
+    addText(copy.noFinalizedInvoice);
   }
 
   section(copy.documents);
@@ -1652,6 +1771,11 @@ export async function createCustomerJobHistoryPdfArtifact(
           index + 2
         );
 
+      if (!pair.some((photo) => photo.dataUrl)) {
+        for (const photo of pair) bullet(copy.photoUnavailable, photo.secureUrl);
+        continue;
+      }
+
       ensureSpace(
         photoHeight + 38
       );
@@ -1691,28 +1815,12 @@ export async function createCustomerJobHistoryPdfArtifact(
                 "FAST"
               );
             } catch {
-              doc.setDrawColor(
-                ...COLORS.line
-              );
-
-              doc.rect(
-                x,
-                startY,
-                photoWidth,
-                photoHeight
-              );
+              y = startY;
+              addText(`${copy.photoUnavailable} ${photo.secureUrl}`, x, { size: 9, maxWidth: photoWidth });
             }
           } else {
-            doc.setDrawColor(
-              ...COLORS.line
-            );
-
-            doc.rect(
-              x,
-              startY,
-              photoWidth,
-              photoHeight
-            );
+            y = startY;
+            addText(`${copy.photoUnavailable} ${photo.secureUrl}`, x, { size: 9, maxWidth: photoWidth });
           }
         }
       );
@@ -1724,6 +1832,7 @@ export async function createCustomerJobHistoryPdfArtifact(
     }
   }
 
+  ensureSpace(doc.splitTextToSize(copy.readOnly, contentWidth).length * 9 * 1.3 + 8);
   addText(
     copy.readOnly,
     PAGE.margin,
@@ -1858,8 +1967,10 @@ export async function shareCustomerJobHistoryReport(
     await shareArtifact({
       artifact,
       message:
-        `Meetro Job History Report: ${model.job.serviceTitle}`,
+        `${getCustomerJobHistoryReportCopy(model.language).report}: ${model.job.serviceTitle}`,
     });
+
+  if (shared?.method === "cancelled") return shared;
 
   if (shared?.ok) {
     return Object.freeze({
@@ -1897,16 +2008,10 @@ function openCustomerJobHistoryEmailDraft({
     return false;
   }
 
-  const body = [
-    message,
-    "",
-    "Please attach the Meetro Job History PDF before sending.",
-  ].join("\n");
-
   locationObject.href =
     `mailto:${encodeURIComponent(recipient)}` +
     `?subject=${encodeURIComponent(subject)}` +
-    `&body=${encodeURIComponent(body)}`;
+    `&body=${encodeURIComponent(message)}`;
 
   return true;
 }
@@ -1930,18 +2035,15 @@ export async function emailCustomerJobHistoryReport(
       Capacitor.getPlatform(),
   } = {}
 ) {
-  const artifact =
-    await createArtifact(model);
-
-  const subject =
-    `Meetro Job History — ${model.job.serviceTitle}`;
+  const copy = getCustomerJobHistoryReportCopy(model.language);
+  const subject = `${copy.emailSubject} — ${model.job.serviceTitle}`;
 
   const message =
     [
-      "Attached is the Meetro Job History Report.",
+      copy.emailIntro,
       "",
       model.job.serviceTitle,
-      `${copyFor(model.language).completed}: ${date(
+      `${getCustomerJobHistoryReportCopy(model.language).completed}: ${date(
         model.job.completedAt,
         model.language
       )}`,
@@ -1953,6 +2055,7 @@ export async function emailCustomerJobHistoryReport(
       platform
     )
   ) {
+    const artifact = await createArtifact(model);
     const shared =
       await shareArtifact({
         artifact,
@@ -1979,7 +2082,7 @@ export async function emailCustomerJobHistoryReport(
     openEmailDraft({
       recipient: "",
       subject,
-      message,
+      message: `${message}\n\n${copy.manualAttachment}`,
     });
 
   return Object.freeze({
@@ -1991,8 +2094,7 @@ export async function emailCustomerJobHistoryReport(
         ? "email-draft"
         : "unavailable",
 
-    fileName:
-      artifact.fileName,
+    fileName: `Meetro-Job-History-${safeFileSegment(model.job.serviceTitle)}-${String(model.job.completedAt).slice(0, 10)}.pdf`,
 
     manualAttachment:
       draftOpened === true,
@@ -2034,7 +2136,7 @@ export async function printCustomerJobHistoryReport(
       await shareArtifact({
         artifact,
         message:
-          "Choose Print or Save to Files for this Job History Report.",
+          getCustomerJobHistoryReportCopy(model.language).nativePrint,
       });
 
     return Object.freeze({
@@ -2107,7 +2209,7 @@ export async function printCustomerJobHistoryReport(
 
 export const customerJobHistoryReportInternals =
   Object.freeze({
-    copyFor,
+    copyFor: getCustomerJobHistoryReportCopy,
     date,
     money,
     safeFileSegment,

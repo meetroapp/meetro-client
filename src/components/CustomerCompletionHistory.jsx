@@ -8,6 +8,7 @@ import { getJobCompletionCopy } from "../utils/jobCompletionLanguage.js";
 import { getCustomerRelationshipsCopy } from "../utils/customerRelationshipsLanguage.js";
 import {
   buildCustomerJobHistoryReportModel,
+  getCustomerJobHistoryReportCopy,
   emailCustomerJobHistoryReport,
   printCustomerJobHistoryReport,
   shareCustomerJobHistoryReport,
@@ -64,6 +65,33 @@ function displayMoneyMinor(minor, currency, language) {
     style: "currency",
     currency,
   }).format(amount / 100);
+}
+
+// Read every page through the existing exact-Job customer projection.
+export async function fetchAllCustomerHistoryQuotes({
+  jobId, setPage, isActive = () => true, fetchQuotes = fetchCustomerJobQuotes,
+}) {
+  const quotes = [];
+  const cursors = new Set();
+  const identities = new Set();
+  let cursor = null;
+  do {
+    const page = await fetchQuotes({ jobId, limit: 50, cursor, setPage });
+    if (!isActive()) return null;
+    for (const quote of page.quotes) {
+      if (quote.jobId !== jobId || identities.has(quote.quoteId)) {
+        throw new Error("History Quote identity could not be verified.");
+      }
+      identities.add(quote.quoteId);
+      quotes.push(quote);
+    }
+    cursor = page.pagination.hasMore ? page.pagination.nextCursor : null;
+    if (page.pagination.hasMore && (!cursor || cursors.has(cursor))) {
+      throw new Error("History Quote pagination could not be verified.");
+    }
+    if (cursor) cursors.add(cursor);
+  } while (cursor);
+  return { quotes };
 }
 
 function settledValue(result) {
@@ -139,6 +167,7 @@ export default function CustomerCompletionHistory({
 }) {
   const copy = getJobCompletionCopy(language);
   const historyCopy = getCustomerRelationshipsCopy(language);
+  const reportCopy = getCustomerJobHistoryReportCopy(language);
 
   const [activeTab, setActiveTab] = useState("overview");
 
@@ -162,6 +191,7 @@ export default function CustomerCompletionHistory({
     let active = true;
 
     setActiveTab("overview");
+    setReportState({ busy: "", notice: "" });
 
     if (!jobId) {
       queueMicrotask(() => {
@@ -201,10 +231,10 @@ export default function CustomerCompletionHistory({
     })
       .then(async (history) => {
         const results = await Promise.allSettled([
-          fetchCustomerJobQuotes({
+          fetchAllCustomerHistoryQuotes({
             jobId,
-            limit: 50,
             setPage,
+            isActive: () => active,
           }),
 
           fetchCustomerJobInvoice({
@@ -294,7 +324,7 @@ export default function CustomerCompletionHistory({
     return null;
   }
 
-  if (state.status === "loading") {
+  if (state.status === "loading" || (state.history && state.history.jobId !== jobId)) {
     return (
       <p role="status">
         {copy.loading}
@@ -402,49 +432,14 @@ export default function CustomerCompletionHistory({
       }
 
       const notice = (() => {
-        if (!result?.ok) {
-          return "Job History PDF is unavailable on this device.";
-        }
-
-        if (
-          action === "print" &&
-          result.printFromShareSheet
-        ) {
-          return "Job History PDF is ready. Choose Print from the share sheet.";
-        }
-
-        if (
-          action === "print"
-        ) {
-          return "Print-ready Job History PDF opened.";
-        }
-
-        if (
-          action === "email" &&
-          result.manualAttachment
-        ) {
-          return "Email draft opened. Browsers cannot attach the PDF automatically. Use Share to save the Job History PDF, then attach it before sending.";
-        }
-
-        if (
-          action === "email" &&
-          result.chooseEmailApp
-        ) {
-          return "Job History PDF is ready. Choose Mail or your email app from the share sheet.";
-        }
-
-        if (
-          action === "share" &&
-          result.method === "download"
-        ) {
-          return "System sharing is unavailable, so the Job History PDF was downloaded instead.";
-        }
-
-        if (action === "share") {
-          return "Job History PDF is ready to share.";
-        }
-
-        return "Job History PDF is ready.";
+        if (result?.method === "cancelled") return reportCopy.cancelledNotice;
+        if (!result?.ok) return reportCopy.pdfUnavailable;
+        if (action === "print") return result.printFromShareSheet
+          ? reportCopy.printShareNotice : reportCopy.printNotice;
+        if (action === "email") return result.manualAttachment
+          ? reportCopy.emailManualNotice : reportCopy.emailNativeNotice;
+        if (result.method === "download") return reportCopy.downloadNotice;
+        return reportCopy.shareNotice;
       })();
 
       setReportState({
@@ -455,7 +450,7 @@ export default function CustomerCompletionHistory({
       setReportState({
         busy: "",
         notice:
-          "Job History PDF could not be prepared. Nothing was changed or sent.",
+          reportCopy.failedNotice,
       });
     }
   }
@@ -499,7 +494,7 @@ export default function CustomerCompletionHistory({
 
         <div
           style={styles.historyReportActions}
-          aria-label="Job History report actions"
+          aria-label={reportCopy.reportActions}
         >
           <button
             type="button"
@@ -510,8 +505,8 @@ export default function CustomerCompletionHistory({
             }
           >
             {reportState.busy === "print"
-              ? "Preparing…"
-              : "Print"}
+              ? reportCopy.preparing
+              : reportCopy.print}
           </button>
 
           <button
@@ -523,8 +518,8 @@ export default function CustomerCompletionHistory({
             }
           >
             {reportState.busy === "share"
-              ? "Preparing…"
-              : "Share"}
+              ? reportCopy.preparing
+              : reportCopy.share}
           </button>
 
           <button
@@ -536,8 +531,8 @@ export default function CustomerCompletionHistory({
             }
           >
             {reportState.busy === "email"
-              ? "Preparing…"
-              : "Email"}
+              ? reportCopy.preparing
+              : reportCopy.email}
           </button>
         </div>
 
@@ -595,6 +590,10 @@ export default function CustomerCompletionHistory({
             title={historyCopy.historySummary}
           >
             <div style={styles.historySummaryGrid}>
+              <span style={styles.historySummaryItem}>
+                <small>{reportCopy.customer}</small>
+                <strong>{history.customerName}</strong>
+              </span>
               <span style={styles.historySummaryItem}>
                 <small>
                   {historyCopy.status}
@@ -675,10 +674,10 @@ export default function CustomerCompletionHistory({
           )}
 
           {assessment && (
-            <HistorySection title="Project assessment">
+            <HistorySection title={reportCopy.assessment}>
               {assessment.evaluation && (
                 <HistoryRecord
-                  title="Evaluation"
+                  title={reportCopy.evaluation}
                   status={
                     assessment
                       .evaluation
@@ -702,7 +701,7 @@ export default function CustomerCompletionHistory({
               {assessment.findings.length > 0 && (
                 <div style={styles.historyStack}>
                   <strong>
-                    Findings
+                    {reportCopy.findings}
                   </strong>
 
                   {assessment.findings.map(
@@ -726,7 +725,7 @@ export default function CustomerCompletionHistory({
                 .length > 0 && (
                 <div style={styles.historyStack}>
                   <strong>
-                    Recommendations
+                    {reportCopy.recommendations}
                   </strong>
 
                   {assessment
@@ -881,8 +880,8 @@ export default function CustomerCompletionHistory({
                     key={visit.visitId}
                     title={
                       visit.purpose === "EVALUATION"
-                        ? "Evaluation visit"
-                        : "Work visit"
+                        ? reportCopy.evaluationVisit
+                        : reportCopy.workVisit
                     }
                     status={visit.state}
                     meta={
@@ -1030,43 +1029,47 @@ export default function CustomerCompletionHistory({
                 )}
               </div>
             ) : (
-              <div style={styles.historySummaryGrid}>
-                <span style={styles.historySummaryItem}>
-                  <small>{copy.work}</small>
-                  <strong>
-                    {
-                      history
-                        .completionSummary
-                        .workstreamCount
-                    }
-                  </strong>
-                </span>
+              <div style={styles.historyStack}>
+                <HistoryEmpty>{state.optionalReads.workPlan === "rejected" && hasCounts
+                  ? reportCopy.recordsUnavailable : reportCopy.noWorkDetails}</HistoryEmpty>
+                <div style={styles.historySummaryGrid}>
+                  <span style={styles.historySummaryItem}>
+                    <small>{copy.work}</small>
+                    <strong>
+                      {
+                        history
+                          .completionSummary
+                          .workstreamCount
+                      }
+                    </strong>
+                  </span>
 
-                <span style={styles.historySummaryItem}>
-                  <small>
-                    {copy.completed}
-                  </small>
-                  <strong>
-                    {
-                      history
-                        .completionSummary
-                        .workItemCount
-                    }
-                  </strong>
-                </span>
+                  <span style={styles.historySummaryItem}>
+                    <small>
+                      {copy.completed}
+                    </small>
+                    <strong>
+                      {
+                        history
+                          .completionSummary
+                          .workItemCount
+                      }
+                    </strong>
+                  </span>
 
-                <span style={styles.historySummaryItem}>
-                  <small>
-                    {copy.customerUpdates}
-                  </small>
-                  <strong>
-                    {
-                      history
-                        .completionSummary
-                        .customerUpdateCount
-                    }
-                  </strong>
-                </span>
+                  <span style={styles.historySummaryItem}>
+                    <small>
+                      {copy.customerUpdates}
+                    </small>
+                    <strong>
+                      {
+                        history
+                          .completionSummary
+                          .customerUpdateCount
+                      }
+                    </strong>
+                  </span>
+                </div>
               </div>
             )}
           </HistorySection>
@@ -1195,10 +1198,10 @@ export default function CustomerCompletionHistory({
                       status={
                         line.type ===
                         "approvedWork"
-                          ? "Approved work"
-                          : "Extra work"
+                          ? reportCopy.approvedWork
+                          : reportCopy.extraWork
                       }
-                      meta={`Qty ${line.quantity}`}
+                      meta={`${reportCopy.quantity} ${line.quantity}`}
                       amount={displayMoneyMinor(
                         line.lineTotalMinor,
                         invoice.currency,
@@ -1245,7 +1248,7 @@ export default function CustomerCompletionHistory({
               </div>
             ) : (
               <HistoryEmpty>
-                {historyCopy.noInvoices}
+                {reportCopy.noFinalizedInvoice}
               </HistoryEmpty>
             )}
           </HistorySection>
@@ -1372,7 +1375,7 @@ export default function CustomerCompletionHistory({
                       styles.historyRecordMeta
                     }
                   >
-                    {historyCopy.photosLabel}: —
+                    {reportCopy.noPhotos}
                   </p>
                 )}
               </div>

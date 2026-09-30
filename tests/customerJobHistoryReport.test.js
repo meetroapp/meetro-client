@@ -146,6 +146,7 @@ function fixture() {
     },
 
     quotes: [{
+      jobId: JOB_ID,
       quoteId:
         "22222222-2222-4222-8222-222222222222",
       quoteNumber:
@@ -167,6 +168,7 @@ function fixture() {
     }],
 
     invoice: {
+      jobId: JOB_ID,
       invoiceId:
         "55555555-5555-4555-8555-555555555555",
       invoiceNumber:
@@ -612,17 +614,17 @@ test(
 
     assert.match(
       source,
-      /"Print"/
+      /reportCopy\.print/
     );
 
     assert.match(
       source,
-      /"Share"/
+      /reportCopy\.share/
     );
 
     assert.match(
       source,
-      /"Email"/
+      /reportCopy\.email/
     );
 
     assert.doesNotMatch(
@@ -631,3 +633,158 @@ test(
     );
   }
 );
+
+test("unfinished Invoice is excluded and exact-Job optional projections cannot cross History identity", () => {
+  const input = fixture();
+  input.invoice.status = "DRAFT";
+  assert.equal(buildCustomerJobHistoryReportModel(input).invoice, null);
+  for (const key of ["quotes", "invoice", "workPlan", "assessment"]) {
+    const other = fixture();
+    if (key === "quotes") other.quotes[0].jobId = "other-job";
+    else other[key] = { jobId: "other-job" };
+    assert.throws(() => buildCustomerJobHistoryReportModel(other), /exact Job/);
+  }
+});
+
+test("export allowlist excludes authority, margins, processor references, recovery data and hidden media", () => {
+  const input = fixture();
+  const secrets = {
+    authorityGrants: "SECRET_AUTHORITY", participantAuthority: "SECRET_PARTICIPANT",
+    integrityHash: "SECRET_HASH", margin: "SECRET_MARGIN", internalCost: "SECRET_COST",
+    processorReference: "SECRET_PROCESSOR", privatePaymentReference: "SECRET_PAYMENT",
+    localRecoveryData: "SECRET_RECOVERY", privateProfessionalNotes: "SECRET_PRO_NOTES",
+    privateRecommendations: "SECRET_RECOMMENDATIONS", privateTeamMessages: "SECRET_TEAM",
+  };
+  Object.assign(input.history, secrets);
+  Object.assign(input.invoice, secrets);
+  Object.assign(input.quotes[0], secrets);
+  Object.assign(input.history.historyRecords.deposits[0].payments[0], secrets);
+  input.history.historyRecords.media.push({ category: "PRIVATE_PHOTO", secureUrl: "https://res.cloudinary.com/demo/image/upload/SECRET_HIDDEN.jpg" });
+  input.history.historyRecords.media.push({ category: "REQUEST_PHOTO", secureUrl: "https://other.test/SECRET_UNSAFE.jpg" });
+  const model = buildCustomerJobHistoryReportModel(input);
+  assert.equal(model.media.length, 1);
+  assert.doesNotMatch(JSON.stringify(model), /SECRET_|authorityGrants|participantAuthority|margin|processorReference|privatePaymentReference|localRecoveryData|privateProfessionalNotes/);
+  assert.equal(model.invoice.lineItems[0].description, "Emergency plumbing repair");
+  assert.equal(model.invoice.payments[0].amountMinor, 17500);
+});
+
+test("web Share downloads the same PDF when file sharing is unavailable and respects cancellation", async () => {
+  const model = buildCustomerJobHistoryReportModel(fixture());
+  const artifact = { blob: new Blob(["%PDF-fixture"], { type: "application/pdf" }), fileName: "history.pdf", contentType: "application/pdf" };
+  let downloaded = null;
+  const result = await shareCustomerJobHistoryReport(model, {
+    createArtifact: async () => artifact,
+    shareArtifact: async () => ({ ok: false, method: "fallback" }),
+    downloadArtifact: value => { downloaded = value; return true; },
+  });
+  assert.equal(result.method, "download"); assert.equal(downloaded, artifact);
+  downloaded = null;
+  const cancelled = await shareCustomerJobHistoryReport(model, {
+    createArtifact: async () => artifact,
+    shareArtifact: async () => ({ ok: false, method: "cancelled" }),
+    downloadArtifact: value => { downloaded = value; return true; },
+  });
+  assert.equal(cancelled.method, "cancelled"); assert.equal(downloaded, null);
+});
+
+test("web Email opens mailto synchronously without PDF preparation or Save As", async () => {
+  const model = buildCustomerJobHistoryReportModel(fixture());
+  let prepared = false, opened = false;
+  const promise = emailCustomerJobHistoryReport(model, {
+    isNative: false, platform: "web",
+    createArtifact: async () => { prepared = true; throw new Error("Web Email must not prepare a PDF first"); },
+    openEmailDraft: ({ message }) => { opened = true; assert.match(message, /attach.*manually/i); return true; },
+  });
+  assert.equal(opened, true); assert.equal(prepared, false);
+  assert.equal((await promise).manualAttachment, true);
+});
+
+test("native Android Email shares the actual PDF file without opening mailto", async () => {
+  const model = buildCustomerJobHistoryReportModel(fixture());
+  const artifact = { blob: new Blob(["%PDF-fixture"], { type: "application/pdf" }), fileName: "history.pdf", contentType: "application/pdf" };
+  let shared = null;
+  const result = await emailCustomerJobHistoryReport(model, {
+    isNative: true, platform: "android", createArtifact: async () => artifact,
+    shareArtifact: async ({ artifact: file }) => { shared = file; return { ok: true, method: "native-pdf" }; },
+    openEmailDraft: () => { throw new Error("Native Email must share its file"); },
+  });
+  assert.equal(result.chooseEmailApp, true); assert.equal(shared, artifact);
+});
+
+test("real web email draft includes the manual-attachment notice in every language", async () => {
+  const { getCustomerJobHistoryReportCopy } = await import("../src/utils/customerJobHistoryReport.js");
+  const prior = Object.getOwnPropertyDescriptor(globalThis, "location");
+  const location = { href: "" };
+  Object.defineProperty(globalThis, "location", { configurable: true, value: location });
+  try {
+    for (const language of ["en", "es", "fr", "pt-BR"]) {
+      const input = fixture(); input.language = language;
+      await emailCustomerJobHistoryReport(buildCustomerJobHistoryReportModel(input), { isNative: false, platform: "web" });
+      assert.match(location.href, /^mailto:/);
+      const decoded = decodeURIComponent(location.href);
+      const copy = getCustomerJobHistoryReportCopy(language);
+      assert.ok(decoded.includes(copy.manualAttachment));
+      assert.ok(decoded.includes(copy.emailSubject));
+    }
+  } finally {
+    if (prior) Object.defineProperty(globalThis, "location", prior); else delete globalThis.location;
+  }
+});
+
+test("generated PDF renders complete available sections and a single read-only statement", async () => {
+  const { createCustomerJobHistoryPdfArtifact, getCustomerJobHistoryReportCopy } = await import("../src/utils/customerJobHistoryReport.js");
+  const input = fixture();
+  input.history.originalRequest = { concern: "Real original request", reportedAt: "2026-09-28T12:00:00Z" };
+  input.history.historyRecords.visits = [{ purpose: "EVALUATION", state: "COMPLETED", scheduledStartAt: "2026-09-28T12:00:00Z" }];
+  input.workPlan = { jobId: JOB_ID, workstreams: [{ title: "Real workstream", status: "COMPLETED", activities: [{ statement: "Real recorded repair", status: "COMPLETED", performedAt: "2026-09-29T17:00:00Z" }], updates: [{ statement: "Real customer update" }] }] };
+  const printed = [];
+  class PdfSpy {
+    setFont() {} setFontSize() {} setTextColor() {} setDrawColor() {} line() {} rect() {}
+    addPage() {} setPage() {} setProperties() {} addImage() {} autoPrint() {}
+    splitTextToSize(value) { return [value]; }
+    text(value) { printed.push(...(Array.isArray(value) ? value : [value])); }
+    getNumberOfPages() { return 1; }
+    output() { return new Blob(["%PDF-fixture"], { type: "application/pdf" }); }
+  }
+  await createCustomerJobHistoryPdfArtifact(buildCustomerJobHistoryReportModel(input), { jsPDFImpl: PdfSpy, fetchImpl: async () => ({ ok: false }) });
+  const rendered = printed.join("\n");
+  for (const content of ["Emergency Plumbing", "Liam Molina", "Handyman LLC", "$350.00", "Real original request", "Main waterline leak", "Replace damaged section", "Real recorded repair", "Real customer update", "Q-0000025", "INV-0000025", "Payment history", "Evaluation visit"]) assert.ok(rendered.includes(content), content);
+  const readOnly = getCustomerJobHistoryReportCopy("en").readOnly;
+  assert.equal(printed.filter(line => line === readOnly).length, 1);
+  assert.match(rendered, /Photo could not be embedded/);
+});
+
+test("long customer-visible text paginates within the content boundary without losing its tail", async () => {
+  const { createCustomerJobHistoryPdfArtifact } = await import("../src/utils/customerJobHistoryReport.js");
+  const input = fixture();
+  input.history.historyRecords.media = [];
+  input.history.originalRequest = { concern: "Long request text. ".repeat(250) + "END_OF_REQUEST", reportedAt: "2026-09-28T12:00:00Z" };
+  const printed = [];
+  class PaginatedPdf {
+    page = 1;
+    setFont() {} setFontSize() {} setTextColor() {} setDrawColor() {} line() {} rect() {} setProperties() {}
+    addPage() { this.page += 1; } setPage(page) { this.page = page; }
+    splitTextToSize(value) { return String(value).match(/.{1,70}/g) || [""]; }
+    text(value, x, y) { printed.push({ value, x, y, page: this.page }); }
+    getNumberOfPages() { return this.page; }
+    output() { return new Blob(["%PDF-fixture"], { type: "application/pdf" }); }
+  }
+  const artifact = await createCustomerJobHistoryPdfArtifact(buildCustomerJobHistoryReportModel(input), { jsPDFImpl: PaginatedPdf });
+  assert.ok(artifact.doc.page > 1);
+  assert.ok(printed.map(item => item.value).join("").includes("END_OF_REQUEST"));
+  assert.ok(printed.filter(item => item.y !== 766).every(item => item.y <= 746), "Content stays above the footer");
+});
+
+test("web Print previews a print-ready PDF through the existing device adapter", async () => {
+  const model = buildCustomerJobHistoryReportModel(fixture());
+  let preview = null, autoPrint = false;
+  const artifact = { fileName: "history.pdf", contentType: "application/pdf", blob: new Blob(["%PDF-fixture"], { type: "application/pdf" }), doc: {
+    autoPrint: () => { autoPrint = true; }, output: () => new Blob(["%PDF-print"], { type: "application/pdf" }),
+  } };
+  const result = await printCustomerJobHistoryReport(model, {
+    isNative: false, platform: "web", createArtifact: async () => artifact,
+    previewArtifact: async value => { preview = value; return true; },
+  });
+  assert.equal(autoPrint, true); assert.equal(result.method, "print-ready-pdf");
+  assert.equal(preview.fileName, artifact.fileName); assert.equal(await preview.blob.text(), "%PDF-print");
+});
