@@ -40,6 +40,7 @@ import {
 import { getHomeownerProjectJourney } from "../utils/homeownerProjectJourney";
 import { getHomeownerServiceHistory } from "../utils/homeownerServiceHistory";
 import CustomerCompletionHistory from "../components/CustomerCompletionHistory.jsx";
+import { getJobCompletionCopy } from "../utils/jobCompletionLanguage.js";
 import { fetchCustomerJobHistoryList } from "../utils/jobCompletionApi.js";
 import {
   getStoredProfessionalMatchProfile,
@@ -366,6 +367,7 @@ function Home({ setPage }) {
   const [detailsRequest, setDetailsRequest] = useState(null);
   const [historyDetailsRequest, setHistoryDetailsRequest] = useState(null);
   const [canonicalHistoryJobId, setCanonicalHistoryJobId] = useState("");
+  const canonicalHistoryInvokerRef = useRef(null);
   const [canonicalCustomerHistory, setCanonicalCustomerHistory] = useState(null);
   const [canonicalSpotlightBusinesses, setCanonicalSpotlightBusinesses] =
     useState(null);
@@ -868,8 +870,9 @@ function Home({ setPage }) {
     setDetailsRequest(request);
   }
 
-  function openHistoryDetails(request) {
+  function openHistoryDetails(request, invoker = null) {
     if (request?.canonicalHistory && request.jobId) {
+      canonicalHistoryInvokerRef.current = invoker;
       setHistoryDetailsRequest(null);
       setCanonicalHistoryJobId(request.jobId);
       return;
@@ -1165,14 +1168,13 @@ function Home({ setPage }) {
         )}
 
         {canonicalHistoryJobId && (
-          <div role="dialog" aria-modal="true" aria-label="Completed Job History">
-            <button type="button" onClick={() => setCanonicalHistoryJobId("")}>Close</button>
-            <CustomerCompletionHistory
-              jobId={canonicalHistoryJobId}
-              language={language}
-              setPage={setPage}
-            />
-          </div>
+          <CanonicalHistoryDetailsSheet
+            jobId={canonicalHistoryJobId}
+            language={language}
+            setPage={setPage}
+            invoker={canonicalHistoryInvokerRef.current}
+            onClose={() => setCanonicalHistoryJobId("")}
+          />
         )}
 
         <BottomNav setPage={setPage} currentPage="home" />
@@ -1554,14 +1556,13 @@ function Home({ setPage }) {
       )}
 
         {canonicalHistoryJobId && (
-          <div role="dialog" aria-modal="true" aria-label="Completed Job History">
-            <button type="button" onClick={() => setCanonicalHistoryJobId("")}>Close</button>
-            <CustomerCompletionHistory
-              jobId={canonicalHistoryJobId}
-              language={language}
-              setPage={setPage}
-            />
-          </div>
+          <CanonicalHistoryDetailsSheet
+            jobId={canonicalHistoryJobId}
+            language={language}
+            setPage={setPage}
+            invoker={canonicalHistoryInvokerRef.current}
+            onClose={() => setCanonicalHistoryJobId("")}
+          />
         )}
 
       <BottomNav setPage={setPage} currentPage="home" />
@@ -2652,6 +2653,97 @@ function ServiceHistoryDetailsSheet({
   );
 }
 
+function CanonicalHistoryDetailsSheet({ jobId, language, setPage, invoker, onClose }) {
+  const copy = getJobCompletionCopy(language);
+  const overlayRef = useRef(null);
+  const dialogRef = useRef(null);
+  const closeRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    const dialog = dialogRef.current;
+    const siblings = overlay?.parentElement
+      ? [...overlay.parentElement.children].filter((element) => element !== overlay)
+      : [];
+    const previousInert = siblings.map((element) => [element, element.inert]);
+    siblings.forEach((element) => { element.inert = true; });
+    const previousBodyOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    closeRef.current?.focus();
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onCloseRef.current?.();
+        return;
+      }
+      if (event.key !== "Tab" || !dialog) return;
+      const focusable = [...dialog.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
+        .filter((element) => !element.hasAttribute("hidden") && element.getAttribute("aria-hidden") !== "true");
+      if (!focusable.length) {
+        event.preventDefault();
+        dialog.focus();
+        return;
+      }
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
+        event.preventDefault();
+        last.focus();
+      } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
+        event.preventDefault();
+        first.focus();
+      }
+    }
+
+    document.addEventListener("keydown", handleKeyDown);
+    return () => {
+      document.removeEventListener("keydown", handleKeyDown);
+      previousInert.forEach(([element, wasInert]) => { element.inert = wasInert; });
+      document.body.style.overflow = previousBodyOverflow;
+      if (invoker?.isConnected) invoker.focus();
+    };
+  }, [invoker]);
+
+  return (
+    <div ref={overlayRef} style={detailsSheetOverlay} onClick={onClose}>
+      <section
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-label={copy.historyDialogLabel}
+        tabIndex={-1}
+        style={detailsSheet}
+        onClick={(event) => event.stopPropagation()}
+      >
+        <div style={detailsSheetHandle}></div>
+        <div style={detailsSheetHeader}>
+          <div>
+            <p style={eyebrow}>{t("homeServiceDetails", language)}</p>
+            <h3 style={detailsSheetTitle}>{copy.history}</h3>
+          </div>
+          <button
+            ref={closeRef}
+            type="button"
+            style={detailsSheetClose}
+            aria-label={copy.historyDialogClose}
+            onClick={onClose}
+          >
+            ×
+          </button>
+        </div>
+        <CustomerCompletionHistory
+          jobId={jobId}
+          language={language}
+          setPage={setPage}
+        />
+      </section>
+    </div>
+  );
+}
+
 function HistoryRequestCard({ request, language, setPage, onDetails }) {
   const lifecycle = getHomeownerLifecycleStage(request, language);
   const isClosed = request.status === "closed" || lifecycle.key === "history";
@@ -2738,7 +2830,7 @@ function HistoryRequestCard({ request, language, setPage, onDetails }) {
           style={historyButton}
           onClick={(e) => {
             e.stopPropagation();
-            if (request.canonicalHistory) onDetails?.(request);
+            if (request.canonicalHistory) onDetails?.(request, e.currentTarget);
             else openCompletedRecord(request, setPage);
           }}
         >

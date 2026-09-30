@@ -84,6 +84,16 @@ function historyDetail(audience, overrides = {}) {
       visits: true,
       workPlan: true,
     },
+    ...(audience === "customer"
+      ? {
+          historyRecords: {
+            deposits: [],
+            media: [],
+            visits: [],
+            emergencyAssessment: null,
+          },
+        }
+      : {}),
     actions: audience === "customer" ? { canMessageProfessional: true } : { canViewJob: true },
     ...overrides,
   };

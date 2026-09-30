@@ -201,13 +201,628 @@ export function validateProfessionalJobHistory(value) {
   return normalized;
 }
 
+
+const CUSTOMER_HISTORY_DEPOSIT_STATES =
+  new Set([
+    "DUE",
+    "PARTIALLY_SATISFIED",
+    "SATISFIED",
+    "TERMS_UNVERIFIED",
+    "SUPERSEDED",
+    "VOIDED",
+  ]);
+
+function validateCustomerHistoryPayment(
+  value
+) {
+  if (
+    !exact(
+      value,
+      [
+        "grossAmountMinor",
+        "appliedMinor",
+        "currency",
+        "method",
+        "receivedAt",
+      ]
+    )
+  ) {
+    return null;
+  }
+
+  const grossAmountMinor =
+    integer(
+      value.grossAmountMinor,
+      { zero: true }
+    );
+
+  const appliedMinor =
+    integer(
+      value.appliedMinor,
+      { zero: true }
+    );
+
+  const currency =
+    text(value.currency, 3);
+
+  const method =
+    text(value.method, 120);
+
+  const receivedAt =
+    timestamp(value.receivedAt);
+
+  return (
+    grossAmountMinor != null &&
+    appliedMinor != null &&
+    /^[A-Z]{3}$/.test(currency) &&
+    method &&
+    receivedAt
+  )
+    ? {
+        grossAmountMinor,
+        appliedMinor,
+        currency,
+        method,
+        receivedAt,
+      }
+    : null;
+}
+
+function validateCustomerHistoryDeposit(
+  value
+) {
+  if (
+    !exact(
+      value,
+      [
+        "quoteId",
+        "state",
+        "currency",
+        "requiredMinor",
+        "appliedMinor",
+        "remainingMinor",
+        "payments",
+      ]
+    ) ||
+    !Array.isArray(value.payments) ||
+    value.payments.length > 200
+  ) {
+    return null;
+  }
+
+  const quoteId =
+    uuid(value.quoteId);
+
+  const currency =
+    text(value.currency, 3);
+
+  const requiredMinor =
+    integer(
+      value.requiredMinor,
+      { zero: true }
+    );
+
+  const appliedMinor =
+    integer(
+      value.appliedMinor,
+      { zero: true }
+    );
+
+  const remainingMinor =
+    integer(
+      value.remainingMinor,
+      { zero: true }
+    );
+
+  const payments =
+    value.payments.map(
+      validateCustomerHistoryPayment
+    );
+
+  if (
+    !quoteId ||
+    !CUSTOMER_HISTORY_DEPOSIT_STATES.has(
+      value.state
+    ) ||
+    !/^[A-Z]{3}$/.test(currency) ||
+    requiredMinor == null ||
+    appliedMinor == null ||
+    remainingMinor == null ||
+    requiredMinor !==
+      appliedMinor + remainingMinor ||
+    payments.some((item) => !item)
+  ) {
+    return null;
+  }
+
+  return {
+    quoteId,
+    state: value.state,
+    currency,
+    requiredMinor,
+    appliedMinor,
+    remainingMinor,
+    payments,
+  };
+}
+
+function validateCustomerHistoryMedia(
+  value
+) {
+  if (
+    !exact(
+      value,
+      [
+        "mediaId",
+        "secureUrl",
+        "format",
+        "uploadedAt",
+        "category",
+      ]
+    )
+  ) {
+    return null;
+  }
+
+  const mediaId =
+    text(value.mediaId, 600);
+
+  const secureUrl =
+    text(value.secureUrl, 2000);
+
+  const format =
+    value.format == null
+      ? null
+      : text(value.format, 40);
+
+  const uploadedAt =
+    timestamp(
+      value.uploadedAt,
+      { nullable: true }
+    );
+
+  if (
+    !mediaId ||
+    !secureUrl.startsWith(
+      "https://res.cloudinary.com/"
+    ) ||
+    (
+      value.format != null &&
+      !format
+    ) ||
+    (
+      value.uploadedAt != null &&
+      !uploadedAt
+    ) ||
+    value.category !==
+      "REQUEST_PHOTO"
+  ) {
+    return null;
+  }
+
+  return {
+    mediaId,
+    secureUrl,
+    format,
+    uploadedAt,
+    category: "REQUEST_PHOTO",
+  };
+}
+
+function validateCustomerHistoryVisit(
+  value
+) {
+  if (
+    !exact(
+      value,
+      [
+        "visitId",
+        "purpose",
+        "state",
+        "scheduledStartAt",
+        "scheduledEndAt",
+        "timeZone",
+        "locationMode",
+        "completedAt",
+        "createdAt",
+      ]
+    )
+  ) {
+    return null;
+  }
+
+  const normalized = {
+    visitId:
+      uuid(value.visitId),
+
+    purpose:
+      ["EVALUATION", "APPROVED_WORK"]
+        .includes(value.purpose)
+        ? value.purpose
+        : "",
+
+    state:
+      text(value.state, 100),
+
+    scheduledStartAt:
+      timestamp(
+        value.scheduledStartAt,
+        { nullable: true }
+      ),
+
+    scheduledEndAt:
+      timestamp(
+        value.scheduledEndAt,
+        { nullable: true }
+      ),
+
+    timeZone:
+      value.timeZone == null
+        ? null
+        : text(
+            value.timeZone,
+            120
+          ),
+
+    locationMode:
+      value.locationMode == null
+        ? null
+        : text(
+            value.locationMode,
+            120
+          ),
+
+    completedAt:
+      timestamp(
+        value.completedAt,
+        { nullable: true }
+      ),
+
+    createdAt:
+      timestamp(value.createdAt),
+  };
+
+  if (
+    !normalized.visitId ||
+    !normalized.purpose ||
+    !normalized.state ||
+    (
+      value.scheduledStartAt != null &&
+      !normalized.scheduledStartAt
+    ) ||
+    (
+      value.scheduledEndAt != null &&
+      !normalized.scheduledEndAt
+    ) ||
+    (
+      value.timeZone != null &&
+      !normalized.timeZone
+    ) ||
+    (
+      value.locationMode != null &&
+      !normalized.locationMode
+    ) ||
+    (
+      value.completedAt != null &&
+      !normalized.completedAt
+    ) ||
+    !normalized.createdAt
+  ) {
+    return null;
+  }
+
+  return normalized;
+}
+
+function validateCustomerHistoryAssessment(
+  value
+) {
+  if (value == null) return null;
+
+  if (
+    !exact(
+      value,
+      [
+        "evaluation",
+        "findings",
+        "recommendations",
+      ]
+    ) ||
+    !Array.isArray(value.findings) ||
+    !Array.isArray(
+      value.recommendations
+    ) ||
+    value.findings.length > 100 ||
+    value.recommendations.length > 100
+  ) {
+    return false;
+  }
+
+  if (
+    !exact(
+      value.evaluation,
+      [
+        "status",
+        "completedAt",
+        "startedAt",
+        "updatedAt",
+      ]
+    )
+  ) {
+    return false;
+  }
+
+  const evaluation = {
+    status:
+      ["COMPLETE", "IN_PROGRESS"]
+        .includes(
+          value.evaluation.status
+        )
+        ? value.evaluation.status
+        : "",
+
+    completedAt:
+      timestamp(
+        value.evaluation.completedAt,
+        { nullable: true }
+      ),
+
+    startedAt:
+      timestamp(
+        value.evaluation.startedAt
+      ),
+
+    updatedAt:
+      timestamp(
+        value.evaluation.updatedAt
+      ),
+  };
+
+  if (
+    !evaluation.status ||
+    (
+      value.evaluation.completedAt != null &&
+      !evaluation.completedAt
+    ) ||
+    !evaluation.startedAt ||
+    !evaluation.updatedAt
+  ) {
+    return false;
+  }
+
+  const findings =
+    value.findings.map((finding) => {
+      if (
+        !exact(
+          finding,
+          [
+            "id",
+            "statement",
+            "state",
+            "createdAt",
+            "updatedAt",
+          ]
+        )
+      ) {
+        return null;
+      }
+
+      const result = {
+        id: uuid(finding.id),
+
+        statement:
+          text(
+            finding.statement,
+            5000
+          ),
+
+        state:
+          [
+            "NEEDS_ATTENTION",
+            "RESOLVED",
+          ].includes(finding.state)
+            ? finding.state
+            : "",
+
+        createdAt:
+          timestamp(
+            finding.createdAt
+          ),
+
+        updatedAt:
+          timestamp(
+            finding.updatedAt
+          ),
+      };
+
+      return (
+        result.id &&
+        result.statement &&
+        result.state &&
+        result.createdAt &&
+        result.updatedAt
+      )
+        ? result
+        : null;
+    });
+
+  if (findings.some((item) => !item)) {
+    return false;
+  }
+
+  const findingIds =
+    new Set(
+      findings.map(
+        (finding) => finding.id
+      )
+    );
+
+  const recommendations =
+    value.recommendations.map(
+      (recommendation) => {
+        if (
+          !exact(
+            recommendation,
+            [
+              "id",
+              "findingId",
+              "statement",
+              "state",
+              "createdAt",
+              "updatedAt",
+            ]
+          )
+        ) {
+          return null;
+        }
+
+        const result = {
+          id:
+            uuid(
+              recommendation.id
+            ),
+
+          findingId:
+            uuid(
+              recommendation.findingId
+            ),
+
+          statement:
+            text(
+              recommendation.statement,
+              5000
+            ),
+
+          state:
+            [
+              "RECOMMENDED",
+              "DEFERRED",
+              "NOT_PROCEEDING",
+            ].includes(
+              recommendation.state
+            )
+              ? recommendation.state
+              : "",
+
+          createdAt:
+            timestamp(
+              recommendation.createdAt
+            ),
+
+          updatedAt:
+            timestamp(
+              recommendation.updatedAt
+            ),
+        };
+
+        return (
+          result.id &&
+          result.findingId &&
+          findingIds.has(
+            result.findingId
+          ) &&
+          result.statement &&
+          result.state &&
+          result.createdAt &&
+          result.updatedAt
+        )
+          ? result
+          : null;
+      }
+    );
+
+  if (
+    recommendations.some(
+      (item) => !item
+    )
+  ) {
+    return false;
+  }
+
+  return {
+    evaluation,
+    findings,
+    recommendations,
+  };
+}
+
+function validateCustomerHistoryRecords(
+  value
+) {
+  if (
+    !exact(
+      value,
+      [
+        "deposits",
+        "media",
+        "visits",
+        "emergencyAssessment",
+      ]
+    ) ||
+    !Array.isArray(value.deposits) ||
+    !Array.isArray(value.media) ||
+    !Array.isArray(value.visits) ||
+    value.deposits.length > 100 ||
+    value.media.length > 200 ||
+    value.visits.length > 200
+  ) {
+    return null;
+  }
+
+  const deposits =
+    value.deposits.map(
+      validateCustomerHistoryDeposit
+    );
+
+  const media =
+    value.media.map(
+      validateCustomerHistoryMedia
+    );
+
+  const visits =
+    value.visits.map(
+      validateCustomerHistoryVisit
+    );
+
+  const emergencyAssessment =
+    validateCustomerHistoryAssessment(
+      value.emergencyAssessment
+    );
+
+  if (
+    deposits.some((item) => !item) ||
+    media.some((item) => !item) ||
+    visits.some((item) => !item) ||
+    emergencyAssessment === false
+  ) {
+    return null;
+  }
+
+  return {
+    deposits,
+    media,
+    visits,
+    emergencyAssessment,
+  };
+}
+
 export function validateJobHistoryDetail(value, { jobId, audience } = {}) {
   const summaryKeys = [
     "contractVersion", "jobId", "requestId", "relationshipId", "conversationId",
     "customerName", "professionalName", "serviceTitle", "status", "completedAt",
     "approvedQuote", "completionSummary", "nextAction",
   ];
-  const keys = [...summaryKeys, "audience", "originalRequest", "preservedRecords", "actions"];
+  const keys = [
+    ...summaryKeys,
+    "audience",
+    "originalRequest",
+    "preservedRecords",
+    ...(audience === "customer"
+      ? ["historyRecords"]
+      : []),
+    "actions",
+  ];
+
   if (!exact(value, authorityKeys(value, keys))) return null;
   const summary = validateJobHistorySummary(Object.fromEntries(authorityKeys(value, summaryKeys).map((key) => [key, value[key]])));
   const originalRequest = value.originalRequest == null ? null : (() => {
@@ -216,13 +831,81 @@ export function validateJobHistoryDetail(value, { jobId, audience } = {}) {
     const reportedAt = timestamp(value.originalRequest.reportedAt);
     return concern && reportedAt ? { concern, reportedAt } : false;
   })();
-  const preservedKeys = ["evaluation", "findings", "recommendations", "approvedQuotes", "visits", "workPlan"];
-  const actionKeys = audience === "customer" ? ["canMessageProfessional"] : ["canViewJob"];
-  if (!summary || summary.jobId !== uuid(jobId) || value.audience !== audience ||
-      originalRequest === false || !exact(value.preservedRecords, preservedKeys) ||
-      Object.values(value.preservedRecords).some((item) => typeof item !== "boolean") ||
-      !exact(value.actions, actionKeys) || typeof value.actions[actionKeys[0]] !== "boolean") return null;
-  return { ...summary, audience, originalRequest, preservedRecords: value.preservedRecords, actions: value.actions };
+  const preservedKeys = [
+    "evaluation",
+    "findings",
+    "recommendations",
+    "approvedQuotes",
+    "visits",
+    "workPlan",
+  ];
+
+  const actionKeys =
+    audience === "customer"
+      ? ["canMessageProfessional"]
+      : ["canViewJob"];
+
+  const historyRecords =
+    audience === "customer"
+      ? validateCustomerHistoryRecords(
+          value.historyRecords
+        )
+      : null;
+
+  if (
+    !summary ||
+    summary.jobId !== uuid(jobId) ||
+    value.audience !== audience ||
+    originalRequest === false ||
+    !exact(
+      value.preservedRecords,
+      preservedKeys
+    ) ||
+    Object.values(
+      value.preservedRecords
+    ).some(
+      (item) =>
+        typeof item !== "boolean"
+    ) ||
+    (
+      audience === "customer" &&
+      !historyRecords
+    ) ||
+    (
+      audience === "customer" &&
+      summary.sourceType ===
+        "emergency_request" &&
+      historyRecords.visits.length !== 0
+    ) ||
+    (
+      audience === "customer" &&
+      summary.sourceType !==
+        "emergency_request" &&
+      historyRecords.emergencyAssessment !==
+        null
+    ) ||
+    !exact(
+      value.actions,
+      actionKeys
+    ) ||
+    typeof value.actions[
+      actionKeys[0]
+    ] !== "boolean"
+  ) {
+    return null;
+  }
+
+  return {
+    ...summary,
+    audience,
+    originalRequest,
+    preservedRecords:
+      value.preservedRecords,
+    ...(audience === "customer"
+      ? { historyRecords }
+      : {}),
+    actions: value.actions,
+  };
 }
 
 export class JobCompletionApiError extends Error {

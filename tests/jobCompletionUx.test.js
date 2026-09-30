@@ -52,7 +52,12 @@ test("customer Project Journey exposes only read-only canonical completion histo
   assert.match(customerHistory, /fetchCustomerJobHistory/);
   assert.match(customerHistory, /JOB_HISTORY_UNAVAILABLE/);
   assert.match(customerHistory, /history\.actions\.canMessageProfessional/);
-  assert.doesNotMatch(customerHistory, /completeCanonicalJob|Approve|Decline|invoice|payment|portfolio|localStorage|sessionStorage/);
+  assert.doesNotMatch(
+    customerHistory,
+    /completeCanonicalJob|recordCanonicalPayment|createCanonicalInvoice|confirmProfessionalPreWorkDepositReceived|localStorage|sessionStorage/
+  );
+  assert.match(customerHistory, /fetchCustomerJobInvoice/);
+  assert.match(customerHistory, /invoice\.payments/);
 });
 
 test("completion and history copy is complete for EN, ES, FR, and PT-BR", () => {
