@@ -31,17 +31,20 @@ export default function ProfessionalJobHistoryWorkspace({
   setPage,
   onRetry,
   onLoadMore,
+  requestedJobId = "",
+  onBack,
 }) {
   const copy = getJobCompletionCopy(language);
   const invoiceCopy = getInvoiceCopy(language);
   const workspaceCopy = getWorkCenterWorkspaceCopy(language);
   const [selectedJobId, setSelectedJobId] = useState("");
+  const historyJobId = requestedJobId || selectedJobId;
   const [sourceFilter, setSourceFilter] = useState("all");
   const [detailState, setDetailState] = useState({ status: "idle", detail: null, invoice: null, error: "" });
 
   useEffect(() => {
     let active = true;
-    if (!selectedJobId) {
+    if (!historyJobId) {
       queueMicrotask(() => {
         if (active) setDetailState({ status: "idle", detail: null, invoice: null, error: "" });
       });
@@ -51,8 +54,8 @@ export default function ProfessionalJobHistoryWorkspace({
       if (active) setDetailState({ status: "loading", detail: null, invoice: null, error: "" });
     });
     void Promise.all([
-      fetchProfessionalJobHistoryDetail({ jobId: selectedJobId, setPage }),
-      fetchProfessionalJobInvoice({ jobId: selectedJobId, setPage })
+      fetchProfessionalJobHistoryDetail({ jobId: historyJobId, setPage }),
+      fetchProfessionalJobInvoice({ jobId: historyJobId, setPage })
         .catch((error) => error?.code === "INVOICE_UNAVAILABLE" ? null : Promise.reject(error)),
     ])
       .then(([detail, invoice]) => {
@@ -62,13 +65,13 @@ export default function ProfessionalJobHistoryWorkspace({
         if (active) setDetailState({ status: "error", detail: null, invoice: null, error: String(error?.code || "JOB_HISTORY_FAILED") });
       });
     return () => { active = false; };
-  }, [selectedJobId, setPage]);
+  }, [historyJobId, setPage]);
 
-  if (selectedJobId) {
-    const detail = detailState.detail;
+  if (historyJobId) {
+    const detail = detailState.detail?.jobId === historyJobId ? detailState.detail : null;
     return (
-      <section style={styles.section} data-professional-job-history-detail={selectedJobId}>
-        <button type="button" style={styles.secondaryButton} onClick={() => setSelectedJobId("")}>
+      <section style={styles.section} data-professional-job-history-detail={historyJobId}>
+        <button type="button" style={styles.secondaryButton} onClick={() => onBack ? onBack() : setSelectedJobId("")}>
           {copy.backToHistory}
         </button>
         {detailState.status === "loading" && <p role="status">{copy.loading}</p>}

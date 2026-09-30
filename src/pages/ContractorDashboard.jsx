@@ -1,3 +1,4 @@
+import { resolveProfessionalWorkCenterRoute } from "../utils/professionalWorkCenterRouteResolution.js";
 import EmergencyWorkCenterDetail from '../components/EmergencyWorkCenterDetail.jsx';
 import { fetchProfessionalWorkCenterEntries } from '../utils/professionalWorkCenterDiscovery.js';
 import { WorkCenterSourceBadge, WorkCenterSourceFilter } from "../components/WorkCenterSource.jsx";
@@ -164,7 +165,6 @@ import {
 import { fetchProfessionalJobHistory } from "../utils/jobCompletionApi.js";
 import { getJobCompletionCopy } from "../utils/jobCompletionLanguage.js";
 import {
-  findCanonicalWorkCenterEntryByJobId,
   isCanonicalWorkCenterEntry,
   mergeCanonicalWorkCenterEntries,
 } from "../utils/workCenterCanonicalHydration";
@@ -468,6 +468,10 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
       typeof window === "undefined" ? "" : window.location.hash
     )
   );
+  const workCenterRouteLocationRef = useRef(
+    typeof window === "undefined" ? "" : window.location.hash
+  );
+  const [workCenterRouteLocation, setWorkCenterRouteLocation] = useState(workCenterRouteLocationRef.current);
   const [workCenterRouteRevision, setWorkCenterRouteRevision] = useState(0);
   const appliedWorkCenterRouteRef = useRef("");
   const [workCenterJobReturnSurface, setWorkCenterJobReturnSurface] = useState("jobs");
@@ -8702,9 +8706,11 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
 
   useEffect(() => {
     const syncWorkCenterRoute = () => {
-      const next = parseProfessionalWorkCenterRoute(window.location.hash);
+      const location = window.location.hash;
+      const next = parseProfessionalWorkCenterRoute(location);
       const current = workCenterRouteRecordRef.current;
       if (
+        workCenterRouteLocationRef.current === location &&
         current?.jobId === next?.jobId &&
         current?.quoteId === next?.quoteId &&
         current?.visitId === next?.visitId &&
@@ -8713,6 +8719,8 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
       ) {
         return;
       }
+      workCenterRouteLocationRef.current = location;
+      setWorkCenterRouteLocation(location);
       workCenterRouteRecordRef.current = next;
       setWorkCenterRouteRevision((revision) => revision + 1);
     };
@@ -8723,21 +8731,22 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
   }, []);
 
   useEffect(() => {
-    const target = workCenterRouteRecordRef.current;
-    if (!target) return;
-    if (canonicalWorkCenterHydration.status !== "ready") return;
-    const token = `${target.jobId}:${target.quoteId || ""}:${target.visitId || ""}:${target.stage || ""}:${target.returnPage || ""}`;
-    const exactJob = findCanonicalWorkCenterEntryByJobId(
-      canonicalWorkCenterHydration.entries,
-      target.jobId
-    );
-    if (!exactJob) {
+    const resolution = resolveProfessionalWorkCenterRoute({
+      route: workCenterRouteLocation,
+      sourceState: canonicalWorkCenterHydration,
+    });
+    if (resolution.kind === "list") return;
+    const target = resolution.target;
+    if (resolution.kind !== "active") {
+      appliedWorkCenterRouteRef.current = "";
       setSelectedWorkCenterJob(null);
       setSelectedWorkCenterQuoteId("");
       setSelectedWorkCenterVisitId("");
       setSelectedWorkCenterAlertStage("");
       return;
     }
+    const exactJob = resolution.entry;
+    const token = `${target.jobId}:${target.quoteId || ""}:${target.visitId || ""}:${target.stage || ""}:${target.returnPage || ""}`;
     if (appliedWorkCenterRouteRef.current === token) {
       setSelectedWorkCenterJob((current) =>
         String(current?.jobId || "").toLowerCase() === target.jobId &&
@@ -8766,6 +8775,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
   }, [
     canonicalWorkCenterHydration.entries,
     canonicalWorkCenterHydration.status,
+    workCenterRouteLocation,
     workCenterRouteRevision,
   ]);
 
@@ -10942,6 +10952,39 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
             </button>
           </div>
         </section>
+      </div>
+    );
+  }
+
+  const exactRouteResolution = resolveProfessionalWorkCenterRoute({
+    route: workCenterRouteLocation,
+    sourceState: canonicalWorkCenterHydration,
+  });
+  if (["history", "loading", "unavailable"].includes(exactRouteResolution.kind)) {
+    const historyCopy = getJobCompletionCopy(activeLanguage);
+    const returnPage = exactRouteResolution.target?.returnPage || "workCenter";
+    const backToHistory = () => setPage(returnPage);
+    return (
+      <div className="app-page contractor-dashboard meetro-wide-page meetro-visual-page" style={page}
+        data-professional-work-center-route-job-id={exactRouteResolution.target?.jobId || ""}
+        data-professional-work-center-route-status={exactRouteResolution.kind}>
+        {exactRouteResolution.kind === "history" ? (
+          <ProfessionalJobHistoryWorkspace
+            key={exactRouteResolution.target.jobId}
+            requestedJobId={exactRouteResolution.target.jobId}
+            language={activeLanguage}
+            setPage={setPage}
+            onBack={backToHistory}
+          />
+        ) : (
+          <section style={{ display: "grid", gap: 16, minWidth: 0 }}>
+            <WorkCenterBackButton onClick={backToHistory} label={historyCopy.backToHistory} />
+            <p role={exactRouteResolution.kind === "loading" ? "status" : "alert"}>
+              {exactRouteResolution.kind === "loading" ? historyCopy.loading : historyCopy.historyUnavailable}
+            </p>
+          </section>
+        )}
+        <BottomNav setPage={setPage} currentPage="contractorDashboard" />
       </div>
     );
   }
