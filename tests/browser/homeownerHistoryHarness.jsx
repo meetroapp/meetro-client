@@ -19,6 +19,6 @@ window.__homeownerHistoryPorts={
  fetchCustomerEfr:async({jobId})=>{window.__homeownerHistoryReads.push({kind:"assessment",jobId});throw Error("No assessment fixture");},
  buildCustomerJobHistoryReportModel,getCustomerJobHistoryReportCopy,
 };
-for(const[name,action]of [["printCustomerJobHistoryReport","print"],["shareCustomerJobHistoryReport","share"],["emailCustomerJobHistoryReport","email"]])window.__homeownerHistoryPorts[name]=async model=>{window.__homeownerHistoryExports.push({action,jobId:window.__homeownerHistoryReads.filter(row=>row.kind==="history").at(-1).jobId,amountMinor:model.job.approvedQuote?.totalMinor});return {ok:true,method:"fixture"};};
+for(const[name,action]of [["printCustomerJobHistoryReport","print"],["shareCustomerJobHistoryReport","share"]])window.__homeownerHistoryPorts[name]=async model=>{window.__homeownerHistoryExports.push({action,jobId:window.__homeownerHistoryReads.filter(row=>row.kind==="history").at(-1).jobId,amountMinor:model.job.approvedQuote?.totalMinor});return {ok:true,method:"fixture"};};
 function Harness(){const[,rerender]=React.useState(0);React.useEffect(()=>{const update=()=>rerender(n=>n+1);window.addEventListener("resize",update);return()=>window.removeEventListener("resize",update);},[]);return <Home setPage={route=>document.documentElement.dataset.route=route}/>;}
 const element=document.getElementById("root");applyAppLayoutDiagnostics(element,getDesktopContentMetrics());window.addEventListener("pagehide",startAppLayoutCoordinator({root:element}),{once:true});createRoot(element).render(<Harness/>);

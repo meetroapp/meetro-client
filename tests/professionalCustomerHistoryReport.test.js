@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { writeFileSync } from 'node:fs';
 import { buildProfessionalCustomerHistoryReportModel, loadProfessionalCustomerHistoryReport } from '../src/utils/professionalCustomerHistoryReport.js';
-import { createCustomerJobHistoryPdfArtifact, printCustomerJobHistoryReport, shareCustomerJobHistoryReport, emailCustomerJobHistoryReport } from '../src/utils/customerJobHistoryReport.js';
+import { createCustomerJobHistoryPdfArtifact, printCustomerJobHistoryReport, shareCustomerJobHistoryReport } from '../src/utils/customerJobHistoryReport.js';
 const A='33333333-3333-4333-8333-333333333333';const B='44444444-4444-4444-8444-444444444444';
 const Q='55555555-5555-4555-8555-555555555555';const I='66666666-6666-4666-8666-666666666666';
 const REL='77777777-7777-4777-8777-777777777777';const CONTACT='88888888-8888-4888-8888-888888888888';
@@ -48,12 +48,11 @@ test('export reads every native page regardless of the open tab, deduplicates an
  assert.equal(calls.length,2);assert.equal(calls[1].cursor,'page-two');assert.equal(report.jobReports.length,2);assert.equal(report.summary.invoices,1);
  await assert.rejects(loadProfessionalCustomerHistoryReport({authority,readNative:async()=>({...h,pagination:{limit:50,nextCursor:'loop'}})}),/repeated/);
 });
-test('customer Print, Share and Email reuse one PDF artifact path without business mutations',async()=>{
+test('customer Print and Share reuse one PDF artifact path without business mutations',async()=>{
  const model=buildProfessionalCustomerHistoryReportModel({authority,history:fixture()});
- const artifact={fileName:'customer.pdf',blob:new Blob(['pdf'])};const createArtifact=async received=>{assert.equal(received,model);return artifact;};
+ const artifact={fileName:'customer.pdf',blob:new Blob(['pdf'],{type:'application/pdf'}),contentType:'application/pdf'};const createArtifact=async received=>{assert.equal(received,model);return artifact;};
  const print=await printCustomerJobHistoryReport(model,{createArtifact,previewArtifact:async a=>a===artifact,isNative:false});assert.equal(print.ok,true);
  const share=await shareCustomerJobHistoryReport(model,{createArtifact,shareArtifact:async()=>({ok:true,method:'native-share'})});assert.equal(share.ok,true);
- const email=await emailCustomerJobHistoryReport(model,{isNative:false,openEmailDraft:()=>true,createArtifact:()=>{throw Error('Web Email must only open a draft');}});assert.equal(email.ok,true);
 });
 test('existing PDF renderer produces one customer report with summary and all Job sections',async()=>{
  const model=buildProfessionalCustomerHistoryReportModel({authority,history:fixture()});

@@ -17,6 +17,18 @@ try {
   assert.deepEqual(await workspace.locator('nav button').allTextContents(),['Overview','Jobs','Quotes','Invoices','Documents / Photos']);
   assert.equal(await workspace.getByRole('button',{name:'Start New Job',exact:true}).isDisabled(),true);
   assert.equal(await workspace.getByRole('button',{name:'Message Customer',exact:true}).isDisabled(),true);
+  const exports = workspace.locator('[aria-label="Professional Customer History Report"]');
+  assert.deepEqual(await exports.getByRole('button').allTextContents(), ['Print', 'Share']);
+  for (const action of ['Print','Share']) {
+    const button = exports.getByRole('button',{name:action,exact:true});
+    await button.scrollIntoViewIfNeeded();
+    assert.equal(await button.isVisible(),true);
+    const box=await button.boundingBox();assert.ok(box.height>=44);assert.ok(box.width<width*.7);
+  }
+  assert.equal(await workspace.getByRole('button',{name:'Email',exact:true}).count(),0);
+  const actionGap = await exports.locator('div').first().evaluate(node=>getComputedStyle(node).gap);
+  assert.equal(actionGap,'8px');
+  await page.screenshot({path:`${output}/controls-${width}.png`,fullPage:true});
   for(const tab of ['Overview','Jobs','Quotes','Invoices','Documents / Photos']) {
    await workspace.getByRole('button',{name:tab,exact:true}).click();
    const measured=await page.evaluate(()=>{

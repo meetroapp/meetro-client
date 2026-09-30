@@ -1,3 +1,5 @@
+import { historyReportNotice } from "../utils/historyPdfShare.js";
+import { downloadBusinessDocumentPdfArtifact } from "../utils/businessDocumentDeviceShare.js";
 import { useEffect, useState } from "react";
 import "./CustomerCompletionHistory.css";
 import { fetchCustomerJobHistory } from "../utils/jobCompletionApi.js";
@@ -10,7 +12,6 @@ import { getCustomerRelationshipsCopy } from "../utils/customerRelationshipsLang
 import {
   buildCustomerJobHistoryReportModel,
   getCustomerJobHistoryReportCopy,
-  emailCustomerJobHistoryReport,
   printCustomerJobHistoryReport,
   shareCustomerJobHistoryReport,
 } from "../utils/customerJobHistoryReport.js";
@@ -421,31 +422,22 @@ export default function CustomerCompletionHistory({
       } else if (action === "share") {
         result =
           await shareCustomerJobHistoryReport(
-            model
-          );
-      } else if (action === "email") {
-        result =
-          await emailCustomerJobHistoryReport(
-            model
+            model,
+            { preparedArtifact: reportState.jobId === history.jobId && reportState.language === language ? reportState.artifact : null }
           );
       } else {
         return;
       }
 
-      const notice = (() => {
-        if (result?.method === "cancelled") return reportCopy.cancelledNotice;
-        if (!result?.ok) return reportCopy.pdfUnavailable;
-        if (action === "print") return result.printFromShareSheet
-          ? reportCopy.printShareNotice : reportCopy.printNotice;
-        if (action === "email") return result.manualAttachment
-          ? reportCopy.emailManualNotice : reportCopy.emailNativeNotice;
-        if (result.method === "download") return reportCopy.downloadNotice;
-        return reportCopy.shareNotice;
-      })();
+      const notice = historyReportNotice(result, action, reportCopy);
 
       setReportState({
         busy: "",
         notice,
+        jobId: history.jobId,
+        language,
+        artifact: result.artifact || null,
+        saveAvailable: result.saveAvailable === true,
       });
     } catch {
       setReportState({
@@ -522,19 +514,15 @@ export default function CustomerCompletionHistory({
               : reportCopy.share}
           </button>
 
-          <button
-            type="button"
-            style={styles.historyReportButton}
-            disabled={Boolean(reportState.busy)}
-            onClick={() =>
-              void runHistoryReportAction("email")
-            }
-          >
-            {reportState.busy === "email"
-              ? reportCopy.preparing
-              : reportCopy.email}
-          </button>
         </div>
+
+        {reportState.saveAvailable && reportState.jobId === history.jobId && reportState.language === language && reportState.artifact && (
+          <button type="button" style={styles.historyReportButton} onClick={() => {
+            let saved = false;
+            try { saved = downloadBusinessDocumentPdfArtifact(reportState.artifact); } catch { /* Keep the prepared PDF. */ }
+            setReportState({ ...reportState, notice: saved ? reportCopy.downloadNotice : reportCopy.saveRequired });
+          }}>{reportCopy.savePdf}</button>
+        )}
 
         {reportState.notice ? (
           <p

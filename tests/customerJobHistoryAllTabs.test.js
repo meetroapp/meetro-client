@@ -59,8 +59,8 @@ async function withWorkspace(run) {
     fetchCustomerEfr: async ({ jobId }) => { calls.push(["assessment", jobId]); throw Object.assign(new Error("Emergency fallback"), { status: 404 }); },
     buildCustomerJobHistoryReportModel, getCustomerJobHistoryReportCopy,
   };
-  for (const [name, action] of [["printCustomerJobHistoryReport", "print"], ["shareCustomerJobHistoryReport", "share"], ["emailCustomerJobHistoryReport", "email"]]) {
-    api[name] = async model => { exports.push({ action, model }); return { ok: true, method: "fixture", manualAttachment: action === "email" }; };
+  for (const [name, action] of [["printCustomerJobHistoryReport", "print"], ["shareCustomerJobHistoryReport", "share"]]) {
+    api[name] = async model => { exports.push({ action, model }); return { ok: true, method: "fixture" }; };
   }
   const vite = await createServer({ root: process.cwd(), configFile: false, cacheDir: "/tmp/meetro-task63j4c1/vite-tests", optimizeDeps: { noDiscovery: true }, server: { middlewareMode: true, hmr: false, ws: false }, plugins: [react(), {
     name: "history-c1-projection-fixture", enforce: "pre",
@@ -112,10 +112,10 @@ test("all five tabs retain exact Emergency Job, expose common exports, and expor
         assert.match(workspace.textContent, /Q-0000025/); assert.match(workspace.textContent, /Canonical Quote/);
         assert.match(workspace.textContent, /No customer-visible request photos/); assert.equal(workspace.querySelectorAll("img").length, 0);
       }
-      for (const action of ["Print", "Share", "Email"]) await click(action);
+      for (const action of ["Print", "Share"]) await click(action);
       assert.deepEqual(calls, originalCalls, "Tab and export actions must not read or mutate another Job");
     }
-    assert.equal(exports.length, 18);
+    assert.equal(exports.length, 12);
     for (const exported of exports) {
       assert.deepEqual(exported.model, exports[0].model);
       assert.equal(exported.model.invoice, null);
@@ -144,8 +144,9 @@ test("History controls, visit labels, empty states, and export notices use all f
       await click(historyCopy.overview);
 
       assert.ok(document.body.textContent.includes(historyCopy.jobStatus));
-      for (const key of ["evaluationVisit", "workVisit", "preparing", "noFinalizedInvoice", "noPhotos", "emailManualNotice", "failedNotice"]) assert.ok(copy[key]);
-      await click(copy.email); assert.ok(document.body.textContent.includes(copy.emailManualNotice));
+      for (const key of ["evaluationVisit", "workVisit", "preparing", "noFinalizedInvoice", "noPhotos", "shareDismissed", "failedNotice"]) assert.ok(copy[key]);
+      assert.equal(copy.email, undefined);
+      await click(copy.share); assert.ok(document.body.textContent.includes(copy.shareNotice));
       await click(getJobCompletionCopy(language).homeownerJob); assert.ok(document.body.textContent.includes(copy.noWorkDetails));
       await click(getJobCompletionCopy(language).homeownerInvoice); assert.ok(document.body.textContent.includes(copy.noFinalizedInvoice));
       await click(historyCopy.documentsPhotos); assert.ok(document.body.textContent.includes(copy.noPhotos));

@@ -4,7 +4,6 @@ import test from "node:test";
 
 import {
   buildCustomerJobHistoryReportModel,
-  emailCustomerJobHistoryReport,
   shareCustomerJobHistoryReport,
   printCustomerJobHistoryReport,
 } from "../src/utils/customerJobHistoryReport.js";
@@ -319,183 +318,6 @@ test(
 );
 
 test(
-  "Web Email opens an email draft directly without invoking Share or Download",
-  async () => {
-    const model =
-      buildCustomerJobHistoryReportModel(
-        fixture()
-      );
-
-    let shared = false;
-    let downloaded = false;
-    let draft = null;
-
-    const result =
-      await emailCustomerJobHistoryReport(
-        model,
-        {
-          createArtifact:
-            async () => ({
-              blob:
-                new Blob(
-                  ["%PDF-test"],
-                  {
-                    type:
-                      "application/pdf",
-                  }
-                ),
-              fileName:
-                "history.pdf",
-              contentType:
-                "application/pdf",
-            }),
-
-          isNative: false,
-          platform: "web",
-
-          shareArtifact:
-            async () => {
-              shared = true;
-
-              return {
-                ok: true,
-                method:
-                  "web-pdf",
-              };
-            },
-
-          downloadArtifact:
-            () => {
-              downloaded = true;
-              return true;
-            },
-
-          openEmailDraft:
-            (input) => {
-              draft = input;
-              return true;
-            },
-        }
-      );
-
-    assert.equal(
-      result.ok,
-      true
-    );
-
-    assert.equal(
-      result.method,
-      "email-draft"
-    );
-
-    assert.equal(
-      result.manualAttachment,
-      true
-    );
-
-    assert.equal(
-      result.attachmentDownloaded,
-      false
-    );
-
-    assert.equal(
-      shared,
-      false
-    );
-
-    assert.equal(
-      downloaded,
-      false
-    );
-
-    assert.match(
-      draft.subject,
-      /Meetro Job History/
-    );
-  }
-);
-
-test(
-  "Native Email keeps the PDF share sheet so Mail can receive the file",
-  async () => {
-    const model =
-      buildCustomerJobHistoryReportModel(
-        fixture()
-      );
-
-    let shared = false;
-    let draftOpened = false;
-
-    const result =
-      await emailCustomerJobHistoryReport(
-        model,
-        {
-          createArtifact:
-            async () => ({
-              blob:
-                new Blob(
-                  ["%PDF-test"],
-                  {
-                    type:
-                      "application/pdf",
-                  }
-                ),
-              fileName:
-                "history.pdf",
-              contentType:
-                "application/pdf",
-            }),
-
-          isNative: true,
-          platform: "ios",
-
-          shareArtifact:
-            async () => {
-              shared = true;
-
-              return {
-                ok: true,
-                method:
-                  "native-pdf",
-              };
-            },
-
-          openEmailDraft:
-            () => {
-              draftOpened = true;
-              return true;
-            },
-        }
-      );
-
-    assert.equal(
-      result.ok,
-      true
-    );
-
-    assert.equal(
-      result.method,
-      "native-pdf"
-    );
-
-    assert.equal(
-      result.chooseEmailApp,
-      true
-    );
-
-    assert.equal(
-      shared,
-      true
-    );
-
-    assert.equal(
-      draftOpened,
-      false
-    );
-  }
-);
-
-test(
   "PDF renders the read-only statement once rather than as a duplicate heading",
   () => {
     const source =
@@ -586,7 +408,7 @@ test(
 );
 
 test(
-  "History UI exposes Print Share and Email only as read-only export actions",
+  "History UI exposes Print and Share only as read-only export actions",
   () => {
     const source =
       readFileSync(
@@ -607,10 +429,7 @@ test(
       /runHistoryReportAction\("share"\)/
     );
 
-    assert.match(
-      source,
-      /runHistoryReportAction\("email"\)/
-    );
+    assert.doesNotMatch(source, /runHistoryReportAction\("email"\)/);
 
     assert.match(
       source,
@@ -622,10 +441,7 @@ test(
       /reportCopy\.share/
     );
 
-    assert.match(
-      source,
-      /reportCopy\.email/
-    );
+    assert.doesNotMatch(source, /reportCopy\.email/);
 
     assert.doesNotMatch(
       source,
@@ -685,50 +501,6 @@ test("web Share downloads the same PDF when file sharing is unavailable and resp
     downloadArtifact: value => { downloaded = value; return true; },
   });
   assert.equal(cancelled.method, "cancelled"); assert.equal(downloaded, null);
-});
-
-test("web Email opens mailto synchronously without PDF preparation or Save As", async () => {
-  const model = buildCustomerJobHistoryReportModel(fixture());
-  let prepared = false, opened = false;
-  const promise = emailCustomerJobHistoryReport(model, {
-    isNative: false, platform: "web",
-    createArtifact: async () => { prepared = true; throw new Error("Web Email must not prepare a PDF first"); },
-    openEmailDraft: ({ message }) => { opened = true; assert.match(message, /attach.*manually/i); return true; },
-  });
-  assert.equal(opened, true); assert.equal(prepared, false);
-  assert.equal((await promise).manualAttachment, true);
-});
-
-test("native Android Email shares the actual PDF file without opening mailto", async () => {
-  const model = buildCustomerJobHistoryReportModel(fixture());
-  const artifact = { blob: new Blob(["%PDF-fixture"], { type: "application/pdf" }), fileName: "history.pdf", contentType: "application/pdf" };
-  let shared = null;
-  const result = await emailCustomerJobHistoryReport(model, {
-    isNative: true, platform: "android", createArtifact: async () => artifact,
-    shareArtifact: async ({ artifact: file }) => { shared = file; return { ok: true, method: "native-pdf" }; },
-    openEmailDraft: () => { throw new Error("Native Email must share its file"); },
-  });
-  assert.equal(result.chooseEmailApp, true); assert.equal(shared, artifact);
-});
-
-test("real web email draft includes the manual-attachment notice in every language", async () => {
-  const { getCustomerJobHistoryReportCopy } = await import("../src/utils/customerJobHistoryReport.js");
-  const prior = Object.getOwnPropertyDescriptor(globalThis, "location");
-  const location = { href: "" };
-  Object.defineProperty(globalThis, "location", { configurable: true, value: location });
-  try {
-    for (const language of ["en", "es", "fr", "pt-BR"]) {
-      const input = fixture(); input.language = language;
-      await emailCustomerJobHistoryReport(buildCustomerJobHistoryReportModel(input), { isNative: false, platform: "web" });
-      assert.match(location.href, /^mailto:/);
-      const decoded = decodeURIComponent(location.href);
-      const copy = getCustomerJobHistoryReportCopy(language);
-      assert.ok(decoded.includes(copy.manualAttachment));
-      assert.ok(decoded.includes(copy.emailSubject));
-    }
-  } finally {
-    if (prior) Object.defineProperty(globalThis, "location", prior); else delete globalThis.location;
-  }
 });
 
 test("generated PDF renders complete available sections and a single read-only statement", async () => {

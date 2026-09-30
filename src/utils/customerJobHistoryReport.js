@@ -1,3 +1,4 @@
+import { historyPdfProblem, shareHistoryPdfArtifact } from "./historyPdfShare.js";
 import { customerHistoryStatusLabel } from "./professionalCustomerHistory.js";
 import { getCustomerRelationshipsCopy } from "./customerRelationshipsLanguage.js";
 import { Capacitor } from "@capacitor/core";
@@ -29,8 +30,14 @@ const COPY = Object.freeze({
   en: Object.freeze({
     print: "Print",
     share: "Share",
-    email: "Email",
     preparing: "Preparing…",
+    generationFailed: "The History PDF could not be generated. Please try again.",
+    blobFailed: "The generated History PDF is empty or invalid. Please try again.",
+    fileFailed: "The PDF file could not be prepared for sharing. You can save the PDF instead.",
+    shareDismissed: "Sharing was dismissed or no destination is available. Your PDF is ready to save.",
+    sharePrepared: "Your PDF is ready. Select Share again to open the share sheet, or save the PDF.",
+    saveRequired: "Your PDF is ready. Select Save PDF to keep a local copy.",
+    savePdf: "Save PDF",
     reportActions: "Job History report actions",
     evaluationVisit: "Evaluation visit",
     workVisit: "Work visit",
@@ -44,16 +51,11 @@ const COPY = Object.freeze({
     pdfUnavailable: "Job History PDF is unavailable on this device.",
     printShareNotice: "Job History PDF is ready. Choose Print from the share sheet.",
     printNotice: "Print-ready Job History PDF opened.",
-    emailManualNotice: "Email draft opened. Browsers cannot attach the PDF automatically. Use Share to save the Job History PDF, then attach it before sending.",
-    emailNativeNotice: "Job History PDF is ready. Choose Mail or your email app from the share sheet.",
     downloadNotice: "System sharing is unavailable, so the Job History PDF was downloaded instead.",
     shareNotice: "Job History PDF is ready to share.",
     readyNotice: "Job History PDF is ready.",
     failedNotice: "Job History PDF could not be prepared. Nothing was changed or sent.",
     cancelledNotice: "Sharing was cancelled.",
-    emailSubject: "Meetro Job History",
-    emailIntro: "Meetro Job History Report for the completed project:",
-    manualAttachment: "Browsers cannot attach the PDF automatically. Use Share in Job History to save the PDF, then attach it manually before sending.",
     nativePrint: "Choose Print or Save to Files for this Job History Report.",
     photoUnavailable: "Photo could not be embedded. Open the original photo:",
     report: "JOB HISTORY REPORT",
@@ -91,8 +93,14 @@ const COPY = Object.freeze({
   es: Object.freeze({
     print: "Imprimir",
     share: "Compartir",
-    email: "Correo",
     preparing: "Preparando…",
+    generationFailed: "No se pudo generar el PDF del historial. Inténtalo de nuevo.",
+    blobFailed: "El PDF generado está vacío o no es válido. Inténtalo de nuevo.",
+    fileFailed: "No se pudo preparar el archivo para compartir. Puedes guardar el PDF.",
+    shareDismissed: "Se cerró Compartir o no hay un destino disponible. El PDF está listo para guardar.",
+    sharePrepared: "El PDF está listo. Pulsa Compartir otra vez o guarda el PDF.",
+    saveRequired: "El PDF está listo. Pulsa Guardar PDF para obtener una copia local.",
+    savePdf: "Guardar PDF",
     reportActions: "Acciones del informe del historial",
     evaluationVisit: "Visita de evaluación",
     workVisit: "Visita de trabajo",
@@ -106,16 +114,11 @@ const COPY = Object.freeze({
     pdfUnavailable: "El PDF del historial no está disponible en este dispositivo.",
     printShareNotice: "El PDF está listo. Elige Imprimir en la hoja para compartir.",
     printNotice: "Se abrió el PDF del historial listo para imprimir.",
-    emailManualNotice: "Se abrió el borrador de correo. El navegador no puede adjuntar el PDF automáticamente. Usa Compartir para guardarlo y adjúntalo antes de enviar.",
-    emailNativeNotice: "El PDF está listo. Elige Mail o tu aplicación de correo en la hoja para compartir.",
     downloadNotice: "No se puede compartir con el sistema. Se descargó el PDF del historial.",
     shareNotice: "El PDF del historial está listo para compartir.",
     readyNotice: "El PDF del historial está listo.",
     failedNotice: "No se pudo preparar el PDF. No se modificó ni envió nada.",
     cancelledNotice: "Se canceló compartir.",
-    emailSubject: "Historial del trabajo de Meetro",
-    emailIntro: "Informe del historial de Meetro para el proyecto completado:",
-    manualAttachment: "El navegador no puede adjuntar el PDF automáticamente. Usa Compartir en el historial para guardar el PDF y adjúntalo manualmente antes de enviar.",
     nativePrint: "Elige Imprimir o Guardar en Archivos para este informe.",
     photoUnavailable: "No se pudo incluir la foto. Abre la foto original:",
     report: "INFORME DEL HISTORIAL DEL TRABAJO",
@@ -153,8 +156,14 @@ const COPY = Object.freeze({
   fr: Object.freeze({
     print: "Imprimer",
     share: "Partager",
-    email: "E-mail",
     preparing: "Préparation…",
+    generationFailed: "Le PDF de l’historique n’a pas pu être généré. Réessayez.",
+    blobFailed: "Le PDF généré est vide ou invalide. Réessayez.",
+    fileFailed: "Le fichier n’a pas pu être préparé pour le partage. Vous pouvez enregistrer le PDF.",
+    shareDismissed: "Le partage a été fermé ou aucune destination n’est disponible. Le PDF peut être enregistré.",
+    sharePrepared: "Le PDF est prêt. Sélectionnez Partager à nouveau ou enregistrez le PDF.",
+    saveRequired: "Le PDF est prêt. Sélectionnez Enregistrer le PDF pour garder une copie locale.",
+    savePdf: "Enregistrer le PDF",
     reportActions: "Actions du rapport d’historique",
     evaluationVisit: "Visite d’évaluation",
     workVisit: "Visite de travail",
@@ -168,16 +177,11 @@ const COPY = Object.freeze({
     pdfUnavailable: "Le PDF de l’historique n’est pas disponible sur cet appareil.",
     printShareNotice: "Le PDF est prêt. Choisissez Imprimer dans la feuille de partage.",
     printNotice: "Le PDF de l’historique prêt à imprimer a été ouvert.",
-    emailManualNotice: "Le brouillon d’e-mail a été ouvert. Le navigateur ne peut pas joindre le PDF automatiquement. Utilisez Partager pour l’enregistrer, puis joignez-le avant l’envoi.",
-    emailNativeNotice: "Le PDF est prêt. Choisissez Mail ou votre application de messagerie dans la feuille de partage.",
     downloadNotice: "Le partage système est indisponible. Le PDF de l’historique a été téléchargé.",
     shareNotice: "Le PDF de l’historique est prêt à être partagé.",
     readyNotice: "Le PDF de l’historique est prêt.",
     failedNotice: "Le PDF n’a pas pu être préparé. Rien n’a été modifié ni envoyé.",
     cancelledNotice: "Le partage a été annulé.",
-    emailSubject: "Historique du travail Meetro",
-    emailIntro: "Rapport d’historique Meetro pour le projet terminé :",
-    manualAttachment: "Le navigateur ne peut pas joindre le PDF automatiquement. Utilisez Partager dans l’historique pour enregistrer le PDF, puis joignez-le manuellement avant l’envoi.",
     nativePrint: "Choisissez Imprimer ou Enregistrer dans Fichiers pour ce rapport.",
     photoUnavailable: "La photo n’a pas pu être intégrée. Ouvrez la photo originale :",
     report: "RAPPORT D’HISTORIQUE DU TRAVAIL",
@@ -215,8 +219,14 @@ const COPY = Object.freeze({
   "pt-BR": Object.freeze({
     print: "Imprimir",
     share: "Compartilhar",
-    email: "E-mail",
     preparing: "Preparando…",
+    generationFailed: "Não foi possível gerar o PDF do histórico. Tente novamente.",
+    blobFailed: "O PDF gerado está vazio ou é inválido. Tente novamente.",
+    fileFailed: "Não foi possível preparar o arquivo para compartilhar. Você pode salvar o PDF.",
+    shareDismissed: "O compartilhamento foi fechado ou não há destino disponível. O PDF está pronto para salvar.",
+    sharePrepared: "O PDF está pronto. Selecione Compartilhar novamente ou salve o PDF.",
+    saveRequired: "O PDF está pronto. Selecione Salvar PDF para manter uma cópia local.",
+    savePdf: "Salvar PDF",
     reportActions: "Ações do relatório do histórico",
     evaluationVisit: "Visita de avaliação",
     workVisit: "Visita de trabalho",
@@ -230,16 +240,11 @@ const COPY = Object.freeze({
     pdfUnavailable: "O PDF do histórico não está disponível neste dispositivo.",
     printShareNotice: "O PDF está pronto. Escolha Imprimir na folha de compartilhamento.",
     printNotice: "O PDF do histórico pronto para impressão foi aberto.",
-    emailManualNotice: "O rascunho de e-mail foi aberto. O navegador não pode anexar o PDF automaticamente. Use Compartilhar para salvá-lo e anexe-o antes de enviar.",
-    emailNativeNotice: "O PDF está pronto. Escolha Mail ou seu aplicativo de e-mail na folha de compartilhamento.",
     downloadNotice: "O compartilhamento do sistema não está disponível. O PDF do histórico foi baixado.",
     shareNotice: "O PDF do histórico está pronto para compartilhar.",
     readyNotice: "O PDF do histórico está pronto.",
     failedNotice: "Não foi possível preparar o PDF. Nada foi alterado ou enviado.",
     cancelledNotice: "O compartilhamento foi cancelado.",
-    emailSubject: "Histórico do trabalho Meetro",
-    emailIntro: "Relatório do histórico Meetro para o projeto concluído:",
-    manualAttachment: "O navegador não pode anexar o PDF automaticamente. Use Compartilhar no histórico para salvar o PDF e anexe-o manualmente antes de enviar.",
     nativePrint: "Escolha Imprimir ou Salvar em Arquivos para este relatório.",
     photoUnavailable: "Não foi possível incluir a foto. Abra a foto original:",
     report: "RELATÓRIO DO HISTÓRICO DO TRABALHO",
@@ -1240,10 +1245,18 @@ export async function createCustomerJobHistoryPdfArtifact(
     y += 3;
   }
 
-  if (customerReport) {
+  function reportHeading(contentTitle) {
     addText("MEETRO", PAGE.margin, { size: 12, style: "bold", color: COLORS.accent });
-    addText(copy.report, PAGE.margin, { size: 22, style: "bold" });
-    row(copy.customer, model.customer.displayName);
+    y += 8;
+    addText(copy.report, PAGE.margin, { size: 22, style: "bold", color: COLORS.ink });
+    // Trim the reserved leading; the sentence-case customer heading has descenders.
+    y -= customerReport ? 2 : 6;
+    addText(contentTitle, PAGE.margin, { size: 17, style: "bold", color: COLORS.text });
+    y += 4;
+  }
+
+  if (customerReport) {
+    reportHeading(model.customer.displayName);
     section(customerCopy.historySummary);
     for (const [key, label] of [["activeJobs",customerCopy.activeJobs],["completedJobs",customerCopy.completedJobs],
       ["quotes",customerCopy.quotes],["invoices",customerCopy.invoices],["documents",customerCopy.documentsLabel],["photos",customerCopy.photosLabel]]) {
@@ -1258,37 +1271,7 @@ export async function createCustomerJobHistoryPdfArtifact(
   for (const [jobIndex, model] of jobModels.entries()) {
     if (customerReport && (jobIndex > 0 || jobModels.length)) { doc.addPage("letter", "portrait"); y = PAGE.margin; }
     const media = await prepareMedia(model.media, fetchImpl);
-  addText(
-    "MEETRO",
-    PAGE.margin,
-    {
-      size: 12,
-      style: "bold",
-      color: COLORS.accent,
-    }
-  );
-
-  addText(
-    copy.report,
-    PAGE.margin,
-    {
-      size: 22,
-      style: "bold",
-      color: COLORS.ink,
-    }
-  );
-
-  addText(
-    model.job.serviceTitle,
-    PAGE.margin,
-    {
-      size: 17,
-      style: "bold",
-      color: COLORS.text,
-    }
-  );
-
-  y += 4;
+  reportHeading(model.job.serviceTitle);
 
   row(
     copy.customer,
@@ -1927,8 +1910,13 @@ export async function createCustomerJobHistoryPdfArtifact(
     creator: "Meetro",
   });
 
-  const blob =
-    doc.output("blob");
+  let blob;
+  try { blob = doc.output("blob"); }
+  catch (cause) {
+    const error = new Error("History PDF Blob creation failed.", { cause });
+    error.code = "HISTORY_PDF_BLOB_FAILED";
+    throw error;
+  }
 
   const dateSegment =
     String(
@@ -1975,161 +1963,36 @@ export async function downloadCustomerJobHistoryReport(
   });
 }
 
-export async function shareCustomerJobHistoryReport(
-  model,
-  {
-    createArtifact =
-      createCustomerJobHistoryPdfArtifact,
-
-    shareArtifact =
-      shareBusinessDocumentPdfArtifact,
-
-    downloadArtifact =
-      downloadBusinessDocumentPdfArtifact,
-  } = {}
-) {
-  const artifact =
-    await createArtifact(model);
-
-  const shared =
-    await shareArtifact({
-      artifact,
-      message:
-        model.reportType === "PROFESSIONAL_CUSTOMER_HISTORY" ? `${getCustomerRelationshipsCopy(model.language).professionalHistoryReport}: ${model.customer.displayName}` : `${getCustomerJobHistoryReportCopy(model.language).report}: ${model.job.serviceTitle}`,
-    });
-
-  if (shared?.method === "cancelled") return shared;
-
-  if (shared?.ok) {
-    return Object.freeze({
-      ...shared,
-      fileName:
-        artifact.fileName,
-    });
-  }
-
-  const downloaded =
-    downloadArtifact(
-      artifact
-    );
-
-  return Object.freeze({
-    ok:
-      downloaded === true,
-    method:
-      downloaded
-        ? "download"
-        : "unavailable",
-    fileName:
-      artifact.fileName,
-  });
-}
-
-
-function openCustomerJobHistoryEmailDraft({
-  recipient = "",
-  subject = "",
-  message = "",
-  locationObject = globalThis.location,
+export async function shareCustomerJobHistoryReport(model, {
+  createArtifact = createCustomerJobHistoryPdfArtifact,
+  shareArtifact = shareHistoryPdfArtifact,
+  downloadArtifact = downloadBusinessDocumentPdfArtifact,
+  preparedArtifact = null,
 } = {}) {
-  if (!locationObject) {
-    return false;
+  let artifact = preparedArtifact;
+  if (!artifact) {
+    try { artifact = await createArtifact(model); }
+    catch (error) {
+      return error?.code === "HISTORY_PDF_BLOB_FAILED"
+        ? { ok: false, method: "invalid-pdf", reason: "blob-invalid" }
+        : { ok: false, method: "generation-failed", reason: "pdf-generation-failed" };
+    }
   }
-
-  locationObject.href =
-    `mailto:${encodeURIComponent(recipient)}` +
-    `?subject=${encodeURIComponent(subject)}` +
-    `&body=${encodeURIComponent(message)}`;
-
-  return true;
-}
-
-export async function emailCustomerJobHistoryReport(
-  model,
-  {
-    createArtifact =
-      createCustomerJobHistoryPdfArtifact,
-
-    shareArtifact =
-      shareBusinessDocumentPdfArtifact,
-
-    openEmailDraft =
-      openCustomerJobHistoryEmailDraft,
-
-    isNative =
-      Capacitor.isNativePlatform(),
-
-    platform =
-      Capacitor.getPlatform(),
-  } = {}
-) {
-  const copy = getCustomerJobHistoryReportCopy(model.language);
-  const customerReport = model?.reportType === "PROFESSIONAL_CUSTOMER_HISTORY";
-  const reportName = customerReport ? model.customer.displayName : model.job.serviceTitle;
-  const subject = `${customerReport ? getCustomerRelationshipsCopy(model.language).professionalHistoryReport : copy.emailSubject} — ${reportName}`;
-
-  const message =
-    [
-      customerReport ? getCustomerRelationshipsCopy(model.language).professionalHistoryReport : copy.emailIntro,
-      "",
-      reportName,
-      ...(customerReport ? [] : [`${copy.completed}: ${date(model.job.completedAt, model.language)}`]),
-    ].join("\n");
-
-  if (
-    isNative &&
-    ["ios", "android"].includes(
-      platform
-    )
-  ) {
-    const artifact = await createArtifact(model);
-    const shared =
-      await shareArtifact({
-        artifact,
-        message,
-      });
-
-    return Object.freeze({
-      ok:
-        shared?.ok === true,
-
-      method:
-        shared?.method ||
-        "unavailable",
-
-      fileName:
-        artifact.fileName,
-
-      chooseEmailApp:
-        shared?.ok === true,
-    });
-  }
-
-  const draftOpened =
-    openEmailDraft({
-      recipient: "",
-      subject,
-      message: `${message}\n\n${copy.manualAttachment}`,
-    });
-
-  return Object.freeze({
-    ok:
-      draftOpened === true,
-
-    method:
-      draftOpened
-        ? "email-draft"
-        : "unavailable",
-
-    fileName: customerReport ? `Meetro-Customer-History-${safeFileSegment(reportName)}.pdf` :
-      `Meetro-Job-History-${safeFileSegment(reportName)}-${String(model.job.completedAt).slice(0, 10)}.pdf`,
-
-    manualAttachment:
-      draftOpened === true,
-
-    attachmentDownloaded:
-      false,
+  const problem = historyPdfProblem(artifact);
+  if (problem) return { ok: false, method: "invalid-pdf", reason: problem };
+  const shared = await shareArtifact({ artifact, message:
+    model.reportType === "PROFESSIONAL_CUSTOMER_HISTORY"
+      ? `${getCustomerRelationshipsCopy(model.language).professionalHistoryReport}: ${model.customer.displayName}`
+      : `${getCustomerJobHistoryReportCopy(model.language).report}: ${model.job.serviceTitle}`,
   });
+  if (shared?.ok) return { ...shared, fileName: artifact.fileName };
+  if (["cancelled", "prepared"].includes(shared?.method)) {
+    return { ...shared, artifact, fileName: artifact.fileName, saveAvailable: true };
+  }
+  let downloaded = false;
+  try { downloaded = downloadArtifact(artifact) === true; } catch { /* Retain the PDF for explicit Save. */ }
+  return { ...shared, ok: downloaded, method: downloaded ? "download" : "save-required",
+    artifact, fileName: artifact.fileName, saveAvailable: !downloaded };
 }
 
 export async function printCustomerJobHistoryReport(
