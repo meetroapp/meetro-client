@@ -93,6 +93,8 @@ test("all five tabs retain exact Emergency Job, expose common exports, and expor
     assert.match(overview, /Emergency Plumbing: Outside main waterline is leaking water/);
     assert.match(overview, /Liam Molina/); assert.match(overview, /Handyman LLC/); assert.match(overview, /\$350\.00/);
     assert.match(overview, /Project assessment/); assert.match(overview, /COMPLETE/);
+    assert.match(overview, /Job status/);
+    assert.doesNotMatch(overview, /Contact status/);
     const originalCalls = [...calls];
     for (const tab of ["Overview", "Jobs", "Quotes", "Invoices", "Documents / Photos", "Overview"]) {
       await click(tab);
@@ -133,6 +135,14 @@ test("History controls, visit labels, empty states, and export notices use all f
     for (const language of ["en", "es", "fr", "pt-BR"]) {
       await render(JOB, language);
       const copy = getCustomerJobHistoryReportCopy(language), historyCopy = getCustomerRelationshipsCopy(language);
+      assert.ok(historyCopy.jobStatus);
+
+      // The prior locale intentionally ends on Documents / Photos.
+      // Changing language does not change Job identity or reset the active tab,
+      // so explicitly return to Overview before asserting Overview-only copy.
+      await click(historyCopy.overview);
+
+      assert.ok(document.body.textContent.includes(historyCopy.jobStatus));
       for (const key of ["evaluationVisit", "workVisit", "preparing", "noFinalizedInvoice", "noPhotos", "emailManualNotice", "failedNotice"]) assert.ok(copy[key]);
       await click(copy.email); assert.ok(document.body.textContent.includes(copy.emailManualNotice));
       await click(historyCopy.work); assert.ok(document.body.textContent.includes(copy.noWorkDetails));

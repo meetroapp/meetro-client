@@ -596,7 +596,7 @@ export default function CustomerCompletionHistory({
               </span>
               <span style={styles.historySummaryItem}>
                 <small>
-                  {historyCopy.status}
+                  {historyCopy.jobStatus}
                 </small>
                 <strong>
                   {historyCopy.completed}
