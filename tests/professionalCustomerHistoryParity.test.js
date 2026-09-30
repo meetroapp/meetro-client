@@ -60,7 +60,9 @@ test('native five tabs render canonical data, exact Job navigation and bounded p
   await act(async()=>buttons().find(b=>b.textContent==='Documents \/ Photos').click());assert.equal(document.querySelectorAll('img').length,1);
   await act(async()=>buttons().find(b=>b.textContent==='Load more').click());assert.equal(more,1);
   assert.equal(document.querySelectorAll('form').length,0);
-  assert.equal(buttons().find(b=>b.textContent==='Start New Job').disabled,true);
-  assert.equal(buttons().find(b=>b.textContent==='Message Customer').disabled,true);
+  assert.equal(buttons().some(b=>b.textContent==='Start New Job'),false);
+  assert.equal(buttons().some(b=>b.textContent==='Message Customer'),false);
+  assert.equal(buttons().some(b=>b.textContent==='Print'),true);
+  assert.equal(buttons().some(b=>b.textContent==='Share'),true);
  }finally {await act(async()=>root.unmount());await vite.close();dom.window.close();Object.assign(globalThis,old);delete globalThis.IS_REACT_ACT_ENVIRONMENT;}
 });

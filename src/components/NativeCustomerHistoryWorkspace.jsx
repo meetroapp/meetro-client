@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { customerHistoryStatusLabel } from "../utils/professionalCustomerHistory.js";
-import { getCanonicalConversationActionTarget } from "../utils/conversationActionRouting.js";
 import ProfessionalCustomerHistoryExport from "./ProfessionalCustomerHistoryExport.jsx";
 import ProfessionalCustomerHistoryTabs from "./ProfessionalCustomerHistoryTabs.jsx";
 import { buildProfessionalWorkCenterRoute } from "../utils/professionalWorkCenterRoute.js";
@@ -71,16 +70,6 @@ export default function NativeCustomerHistoryWorkspace({ subject, sourceState, l
     const money = row => amount({ currency: row.currency, totalMinor: row.totalMinor }, language);
     const jobTitle = id => history.jobs.find(job => job.jobId === id)?.serviceTitle || copy.job;
     return <section style={section} aria-label={copy.nativeHistory} data-native-customer-history-status={sourceState.status}>
-      <div style={card}>
-        <button type="button" style={button} disabled>{copy.startNewJob}</button>
-        <p>{copy.nativeNewJobUnavailable}</p>
-        <button type="button" style={button} disabled={!history.actionBridge?.conversationId} onClick={() => {
-          const target = getCanonicalConversationActionTarget({ conversationId: history.actionBridge?.conversationId },
-            { returnPage: "customerRelationshipsCenter", preferCommunicationCenterShell: true });
-          if (target.ok) setPage?.(target.route);
-        }}>{copy.messageCustomer}</button>
-        {!history.actionBridge?.conversationId && <p>{copy.nativeMessageUnavailable}</p>}
-      </div>
       <ProfessionalCustomerHistoryExport authority={subject} displayName={history.displayName} language={language} copy={copy} setPage={setPage} />
       <ProfessionalCustomerHistoryTabs copy={copy} focus={focus} onChange={setFocus} />
       {focus === "overview" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 12 }}>
