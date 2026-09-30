@@ -1,3 +1,5 @@
+import { customerHistoryStatusLabel } from "./professionalCustomerHistory.js";
+import { getCustomerRelationshipsCopy } from "./customerRelationshipsLanguage.js";
 import { Capacitor } from "@capacitor/core";
 import { jsPDF } from "jspdf";
 
@@ -423,13 +425,14 @@ export function buildCustomerJobHistoryReportModel({
   workPlan = null,
   assessment = null,
   language = "en",
+  includeActive = false,
 } = {}) {
   if (
     !history ||
-    history.status !== "COMPLETED" ||
+    !(history.status === "COMPLETED" || (includeActive && history.status === "ACTIVE")) ||
     !text(history.jobId, 100) ||
     !text(history.serviceTitle, 500) ||
-    !timestamp(history.completedAt)
+    (history.status === "COMPLETED" ? !timestamp(history.completedAt) : !timestamp(history.createdAt))
   ) {
     throw new TypeError(
       "Verified customer Job History is required."
@@ -485,6 +488,8 @@ export function buildCustomerJobHistoryReportModel({
 
       completedAt:
         timestamp(history.completedAt),
+      createdAt: timestamp(history.createdAt),
+      ...(includeActive ? { completionSummaryAvailable: Boolean(history.completionSummary) } : {}),
 
       sourceLabel:
         text(
@@ -1001,24 +1006,21 @@ export async function createCustomerJobHistoryPdfArtifact(
     fetchImpl = globalThis.fetch,
   } = {}
 ) {
-  if (
-    model?.schemaVersion !== 1 ||
-    !model?.job?.serviceTitle ||
-    !model?.job?.completedAt
-  ) {
+  const reportModel = model;
+  const customerReport = model?.schemaVersion === 2 && model?.reportType === "PROFESSIONAL_CUSTOMER_HISTORY";
+  const jobModels = customerReport ? model.jobReports.map(record => record.model) : [model];
+  if ((!customerReport && model?.schemaVersion !== 1) ||
+    (customerReport && (!model.customer?.displayName || !Array.isArray(model.jobReports))) ||
+    jobModels.some(job => job?.schemaVersion !== 1 || !job?.job?.serviceTitle ||
+      !(job.job.completedAt || (customerReport && job.job.status === "ACTIVE" && job.job.createdAt)))) {
     throw new TypeError(
       "Verified Job History report model is required."
     );
   }
 
-  const copy =
-    getCustomerJobHistoryReportCopy(model.language);
-
-  const media =
-    await prepareMedia(
-      model.media,
-      fetchImpl
-    );
+  const customerCopy = getCustomerRelationshipsCopy(model.language);
+  const copy = { ...getCustomerJobHistoryReportCopy(model.language),
+    ...(customerReport ? { report: customerCopy.professionalHistoryReport, readOnly: customerCopy.customerReportReadOnly } : {}) };
 
   const doc =
     new jsPDFImpl({
@@ -1238,6 +1240,24 @@ export async function createCustomerJobHistoryPdfArtifact(
     y += 3;
   }
 
+  if (customerReport) {
+    addText("MEETRO", PAGE.margin, { size: 12, style: "bold", color: COLORS.accent });
+    addText(copy.report, PAGE.margin, { size: 22, style: "bold" });
+    row(copy.customer, model.customer.displayName);
+    section(customerCopy.historySummary);
+    for (const [key, label] of [["activeJobs",customerCopy.activeJobs],["completedJobs",customerCopy.completedJobs],
+      ["quotes",customerCopy.quotes],["invoices",customerCopy.invoices],["documents",customerCopy.documentsLabel],["photos",customerCopy.photosLabel]]) {
+      row(label, model.summary[key]);
+    }
+    section(customerCopy.work);
+    for (const record of model.jobReports) bullet(record.model.job.serviceTitle,
+      `${record.jobId} · ${record.model.job.status === "COMPLETED" ? customerCopy.completed : customerCopy.active}`);
+    if (!model.jobReports.length) addText(customerCopy.noWork);
+    addText(customerCopy.customerReportReadOnly, PAGE.margin, {size:9,color:COLORS.muted});
+  }
+  for (const [jobIndex, model] of jobModels.entries()) {
+    if (customerReport && (jobIndex > 0 || jobModels.length)) { doc.addPage("letter", "portrait"); y = PAGE.margin; }
+    const media = await prepareMedia(model.media, fetchImpl);
   addText(
     "MEETRO",
     PAGE.margin,
@@ -1280,17 +1300,12 @@ export async function createCustomerJobHistoryPdfArtifact(
     model.job.professionalName
   );
 
-  row(
-    copy.completed,
-    date(
-      model.job.completedAt,
-      model.language
-    )
-  );
+  row(model.job.completedAt ? copy.completed : customerCopy.created,
+    date(model.job.completedAt || model.job.createdAt, model.language));
 
   row(
     copy.status,
-    model.job.status
+    customerReport ? customerHistoryStatusLabel(model.job.status,customerCopy) : model.job.status
   );
 
   if (
@@ -1544,32 +1559,34 @@ export async function createCustomerJobHistoryPdfArtifact(
     }
   } else {
     addText(copy.noWorkDetails);
-    row(
-      copy.work,
-      String(
-        model.job
-          .completionSummary
-          .workstreamCount
-      )
-    );
+    if (model.job.status === "COMPLETED" && (!customerReport || model.job.completionSummaryAvailable)) {
+      row(
+        copy.work,
+        String(
+          model.job
+            .completionSummary
+            .workstreamCount
+        )
+      );
 
-    row(
-      copy.completed,
-      String(
-        model.job
-          .completionSummary
-          .workItemCount
-      )
-    );
+      row(
+        copy.completed,
+        String(
+          model.job
+            .completionSummary
+            .workItemCount
+        )
+      );
 
-    row(
-      copy.customerUpdates,
-      String(
-        model.job
-          .completionSummary
-          .customerUpdateCount
-      )
-    );
+      row(
+        copy.customerUpdates,
+        String(
+          model.job
+            .completionSummary
+            .customerUpdateCount
+        )
+      );
+    }
   }
 
   if (model.quotes.length) {
@@ -1832,6 +1849,14 @@ export async function createCustomerJobHistoryPdfArtifact(
     }
   }
 
+  if (customerReport) {
+    const payments = jobModels.length ? reportModel.jobReports[jobIndex].payments : [];
+    if (payments?.length) {
+      section(customerCopy.paymentHistory);
+      for (const payment of payments) bullet(customerCopy.depositReceived,
+        `${money(payment.amountMinor, payment.currency, model.language)} · ${date(payment.receivedAt || payment.receivedDate, model.language)}`);
+    }
+  }
   ensureSpace(doc.splitTextToSize(copy.readOnly, contentWidth).length * 9 * 1.3 + 8);
   addText(
     copy.readOnly,
@@ -1842,6 +1867,10 @@ export async function createCustomerJobHistoryPdfArtifact(
     }
   );
 
+  }
+
+  const reportName = customerReport ? model.customer.displayName : model.job.serviceTitle;
+  const reportTitle = `${copy.report} — ${reportName}`;
   const pages =
     doc.getNumberOfPages();
 
@@ -1891,7 +1920,7 @@ export async function createCustomerJobHistoryPdfArtifact(
 
   doc.setProperties({
     title:
-      `${copy.report} — ${model.job.serviceTitle}`,
+      reportTitle,
     subject:
       copy.readOnly,
     author: "Meetro",
@@ -1903,13 +1932,12 @@ export async function createCustomerJobHistoryPdfArtifact(
 
   const dateSegment =
     String(
-      model.job.completedAt
+      customerReport ? "" : model.job.completedAt
     ).slice(0, 10);
 
   const fileName =
-    `Meetro-Job-History-${safeFileSegment(
-      model.job.serviceTitle
-    )}-${dateSegment}.pdf`;
+    customerReport ? `Meetro-Customer-History-${safeFileSegment(reportName)}.pdf` :
+    `Meetro-Job-History-${safeFileSegment(reportName)}-${dateSegment}.pdf`;
 
   return Object.freeze({
     doc,
@@ -1918,7 +1946,7 @@ export async function createCustomerJobHistoryPdfArtifact(
     contentType:
       "application/pdf",
     title:
-      `${copy.report} — ${model.job.serviceTitle}`,
+      reportTitle,
   });
 }
 
@@ -1967,7 +1995,7 @@ export async function shareCustomerJobHistoryReport(
     await shareArtifact({
       artifact,
       message:
-        `${getCustomerJobHistoryReportCopy(model.language).report}: ${model.job.serviceTitle}`,
+        model.reportType === "PROFESSIONAL_CUSTOMER_HISTORY" ? `${getCustomerRelationshipsCopy(model.language).professionalHistoryReport}: ${model.customer.displayName}` : `${getCustomerJobHistoryReportCopy(model.language).report}: ${model.job.serviceTitle}`,
     });
 
   if (shared?.method === "cancelled") return shared;
@@ -2036,17 +2064,16 @@ export async function emailCustomerJobHistoryReport(
   } = {}
 ) {
   const copy = getCustomerJobHistoryReportCopy(model.language);
-  const subject = `${copy.emailSubject} — ${model.job.serviceTitle}`;
+  const customerReport = model?.reportType === "PROFESSIONAL_CUSTOMER_HISTORY";
+  const reportName = customerReport ? model.customer.displayName : model.job.serviceTitle;
+  const subject = `${customerReport ? getCustomerRelationshipsCopy(model.language).professionalHistoryReport : copy.emailSubject} — ${reportName}`;
 
   const message =
     [
-      copy.emailIntro,
+      customerReport ? getCustomerRelationshipsCopy(model.language).professionalHistoryReport : copy.emailIntro,
       "",
-      model.job.serviceTitle,
-      `${getCustomerJobHistoryReportCopy(model.language).completed}: ${date(
-        model.job.completedAt,
-        model.language
-      )}`,
+      reportName,
+      ...(customerReport ? [] : [`${copy.completed}: ${date(model.job.completedAt, model.language)}`]),
     ].join("\n");
 
   if (
@@ -2094,7 +2121,8 @@ export async function emailCustomerJobHistoryReport(
         ? "email-draft"
         : "unavailable",
 
-    fileName: `Meetro-Job-History-${safeFileSegment(model.job.serviceTitle)}-${String(model.job.completedAt).slice(0, 10)}.pdf`,
+    fileName: customerReport ? `Meetro-Customer-History-${safeFileSegment(reportName)}.pdf` :
+      `Meetro-Job-History-${safeFileSegment(reportName)}-${String(model.job.completedAt).slice(0, 10)}.pdf`,
 
     manualAttachment:
       draftOpened === true,

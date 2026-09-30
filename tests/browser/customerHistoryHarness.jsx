@@ -38,6 +38,18 @@ window.fetch = async (input) => {
   const url = new URL(String(input), window.location.href);
   const path = url.pathname + url.search;
   window.__customerHistoryReads = (window.__customerHistoryReads || 0) + 1;
+  if (path.startsWith("/professional/businesses/10/native-customers")) {
+    const subject = {kind:"MEETRO_ACCOUNT",contractorProfileId:10,homeownerUserId:17};
+    const nativeJobs = jobs.map(job => ({jobId:job.jobId,sourceType:"ordinary_request_selection",serviceTitle:job.title,
+      createdAt:job.createdAt,completedAt:job.completedAt || null,completionState:job.completionState,
+      approvedQuote:null,completionSummary:{workstreamCount:0,workItemCount:0,customerUpdateCount:0}}));
+    if (url.pathname.endsWith("/history")) return json({success:true,nativeCustomerHistory:{
+      contractVersion:2,subject,displayName:"Native Alex",jobs:nativeJobs,
+      summary:{activeJobs:5,completedJobs:9,quotes:0,invoices:0,documents:0,photos:0},
+      quotes:[],invoices:[],documents:[],media:[],actionBridge:{canStartNewJob:false,conversationId:null},pagination:{limit:20,nextCursor:null}}});
+    return json({success:true,nativeCustomers:{contractVersion:1,customers:[{subject,displayName:"Native Alex",completedJobCount:9,
+      lastCompletedAt:"2026-09-14T10:00:00.000Z",sourceTypes:["ordinary_request_selection"]}],pagination:{limit:20,nextCursor:null}}});
+  }
   if (path === "/my-contractor-profile") return json({ profile: { id: 10 } });
   if (path.startsWith("/business-customer-relationships?")) return json({ success: true, relationships });
   const activityMatch = path.match(/^\/business-customer-relationships\/([^/]+)\/activity$/);

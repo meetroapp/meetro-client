@@ -1028,15 +1028,19 @@ function nativePage(value) {
 }
 
 function nativeJob(value) {
-  if (!exact(value, ["jobId", "sourceType", "serviceTitle", "completedAt", "approvedQuote", "completionSummary"])) return null;
+  const full = Object.hasOwn(value || {}, "completionState");
+  if (!exact(value, ["jobId", "sourceType", "serviceTitle", "completedAt", "approvedQuote", "completionSummary", ...(full ? ["createdAt", "completionState"] : [])])) return null;
   const approvedQuote = validateApprovedQuote(value.approvedQuote);
   const completionSummary = validateCompletionSummary(value.completionSummary);
   const jobId = uuid(value.jobId);
   const completedAt = timestamp(value.completedAt);
   const serviceTitle = text(value.serviceTitle, 500);
-  return jobId && completedAt && serviceTitle && approvedQuote !== false && completionSummary &&
+  return jobId && (completedAt || (full && value.completionState === "ACTIVE" && value.completedAt === null)) &&
+    (!full || (timestamp(value.createdAt) && ["ACTIVE", "COMPLETED"].includes(value.completionState) && (value.completionState === "COMPLETED") === Boolean(completedAt))) &&
+    serviceTitle && approvedQuote !== false && completionSummary &&
     ["emergency_request", "ordinary_request_selection", "existing_customer_request"].includes(value.sourceType)
-    ? { jobId, sourceType: value.sourceType, serviceTitle, completedAt, approvedQuote, completionSummary } : null;
+    ? { jobId, sourceType: value.sourceType, serviceTitle, completedAt, approvedQuote, completionSummary,
+      ...(full ? { createdAt: timestamp(value.createdAt), completionState: value.completionState } : {}) } : null;
 }
 
 export function validateNativeCustomers(value, { contractorProfileId } = {}) {
@@ -1062,30 +1066,76 @@ export function validateNativeCustomers(value, { contractorProfileId } = {}) {
   return { contractVersion: 1, customers, pagination };
 }
 
+const nativeQuoteKeys = ["quoteId", "parentQuoteId", "lineageType", "lineageLabel", "jobId", "documentNumber", "status", "classification", "customerDecision", "currency", "totalMinor", "createdAt", "updatedAt", "issuedAt", "decidedAt", "lastActivityAt", "linkedAt"];
+const nativeInvoiceKeys = ["invoiceId", "invoiceNumber", "jobId", "status", "currency", "totalMinor", "paidMinor", "balanceMinor", "invoiceDate", "createdAt", "updatedAt", "issuedAt", "lastActivityAt", "linkedAt"];
+const nativeDocumentKeys = ["documentId", "documentType", "documentNumber", "parentType", "parentId", "jobTitle", "status", "provenance", "createdAt", "issuedAt", "lastActivityAt"];
+const nativeMediaKeys = ["mediaId", "kind", "mediaType", "format", "secureUrl", "parentType", "parentId", "jobTitle", "provenance", "category", "createdAt"];
+
+function nativeEvidence(value, jobs) {
+  const summaryKeys = ["activeJobs", "completedJobs", "quotes", "invoices", "documents", "photos"];
+  if (!exact(value.summary, summaryKeys) || summaryKeys.some(key => !Number.isSafeInteger(value.summary[key]) || value.summary[key] < 0)) return null;
+  const ids = new Set(jobs.map(job => job.jobId));
+  const unique = (rows, key) => new Set(rows.map(row => row[key])).size === rows.length;
+  const safeMoney = row => /^[A-Z]{3}$/.test(row.currency) && Number.isSafeInteger(row.totalMinor) && row.totalMinor >= 0;
+  const quotes = value.quotes;
+  const invoices = value.invoices;
+  const documents = value.documents;
+  const media = value.media;
+  if (![quotes, invoices, documents, media].every(Array.isArray)) return null;
+  if (!unique(quotes, "quoteId") || !unique(invoices, "invoiceId") ||
+      new Set(documents.map(row => `${row.documentType}:${row.documentId}`)).size !== documents.length ||
+      new Set(media.map(row => `${row.parentId}:${row.mediaId}`)).size !== media.length) return null;
+  if (quotes.some(row => !exact(row, nativeQuoteKeys) || !uuid(row.quoteId) || !ids.has(row.jobId) ||
+    row.status !== "ISSUED" || !timestamp(row.issuedAt) || !safeMoney(row) ||
+    ![null, "APPROVED", "DECLINED"].includes(row.customerDecision) ||
+    (row.lineageType === null ? row.parentQuoteId !== null || row.lineageLabel !== "Original" :
+      !uuid(row.parentQuoteId) || !["REVISED_QUOTE", "SUPPLEMENTAL_QUOTE"].includes(row.lineageType) ||
+      row.lineageLabel !== (row.lineageType === "REVISED_QUOTE" ? "Revised" : "Additional")))) return null;
+  if (invoices.some(row => !exact(row, nativeInvoiceKeys) || !uuid(row.invoiceId) || !ids.has(row.jobId) ||
+    !["SENT", "PARTIALLY_PAID", "PAID"].includes(row.status) || !timestamp(row.issuedAt) || !safeMoney(row) ||
+    !Number.isSafeInteger(row.paidMinor) || row.paidMinor < 0 || !Number.isSafeInteger(row.balanceMinor) || row.balanceMinor < 0)) return null;
+  if (documents.some(row => !exact(row, nativeDocumentKeys) || row.parentType !== "JOB" || !ids.has(row.parentId) ||
+    !timestamp(row.issuedAt) || !(row.documentType === "QUOTE" ? row.provenance === "CANONICAL_QUOTE" &&
+      quotes.some(q => q.quoteId === row.documentId && q.jobId === row.parentId) : row.documentType === "INVOICE" &&
+      row.provenance === "CANONICAL_INVOICE" && invoices.some(i => i.invoiceId === row.documentId && i.jobId === row.parentId)))) return null;
+  if (media.some(row => {
+    let url; try { url = new URL(row.secureUrl); } catch { return true; }
+    return !exact(row, nativeMediaKeys) || !text(row.mediaId) || row.parentType !== "JOB" || !ids.has(row.parentId) ||
+      row.kind !== "PHOTO" || row.mediaType !== "IMAGE" || row.category !== "REQUEST_PHOTO" || row.provenance !== "JOB_REQUEST" ||
+      url.protocol !== "https:" || url.hostname !== "res.cloudinary.com";
+  })) return null;
+  return { summary: { ...value.summary }, quotes: quotes.map(row => ({ ...row })), invoices: invoices.map(row => ({ ...row })),
+    documents: documents.map(row => ({ ...row })), media: media.map(row => ({ ...row })) };
+}
+
 export function validateNativeCustomerHistory(value, { contractorProfileId, homeownerUserId } = {}) {
   const profileId = integer(contractorProfileId);
   const homeownerId = integer(homeownerUserId);
-  if (!profileId || !homeownerId || !exact(value, ["contractVersion", "subject", "displayName", "jobs", "pagination"]) ||
-      value.contractVersion !== 1 || !Array.isArray(value.jobs) || value.jobs.length > 50) return null;
+  const full = value?.contractVersion === 2;
+  if (!profileId || !homeownerId || !exact(value, ["contractVersion", "subject", "displayName", "jobs", "pagination", ...(full ? ["summary", "quotes", "invoices", "documents", "media", "actionBridge"] : [])]) ||
+      ![1, 2].includes(value.contractVersion) || !Array.isArray(value.jobs) || value.jobs.length > 50) return null;
   const subject = nativeSubject(value.subject, profileId, homeownerId);
   const jobs = value.jobs.map(nativeJob);
   const pagination = nativePage(value.pagination);
   const displayName = text(value.displayName, 500);
-  return subject && displayName && pagination && jobs.every(Boolean) &&
-    new Set(jobs.map(job => job.jobId)).size === jobs.length
-    ? { contractVersion: 1, subject, displayName, jobs, pagination } : null;
+  if (!subject || !displayName || !pagination || !jobs.every(Boolean) ||
+      new Set(jobs.map(job => job.jobId)).size !== jobs.length) return null;
+  if (full && (!exact(value.actionBridge, ["canStartNewJob", "conversationId"]) || value.actionBridge.canStartNewJob !== false ||
+    (value.actionBridge.conversationId !== null && !integer(value.actionBridge.conversationId)))) return null;
+  const evidence = full ? nativeEvidence(value, jobs) : {};
+  return evidence ? { contractVersion: value.contractVersion, subject, displayName, jobs, pagination, ...evidence, ...(full ? { actionBridge: { ...value.actionBridge } } : {}) } : null;
 }
 
 export function validateNativeCustomerJobHistory(value, { contractorProfileId, homeownerUserId, jobId } = {}) {
   const profileId = integer(contractorProfileId);
   const homeownerId = integer(homeownerUserId);
   if (!profileId || !homeownerId || !exact(value, ["contractVersion", "subject", "displayName", "job"]) ||
-      value.contractVersion !== 1) return null;
+      ![1, 2].includes(value.contractVersion)) return null;
   const subject = nativeSubject(value.subject, profileId, homeownerId);
   const job = nativeJob(value.job);
   const displayName = text(value.displayName, 500);
   return subject && job?.jobId === uuid(jobId) && displayName
-    ? { contractVersion: 1, subject, displayName, job } : null;
+    ? { contractVersion: value.contractVersion, subject, displayName, job } : null;
 }
 
 function nativeIds(contractorProfileId, homeownerUserId = null) {

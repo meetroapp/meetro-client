@@ -32,7 +32,7 @@ function canonicalActivity(overrides = {}) {
       contactStatus: "ACTIVE",
     },
     work: [],
-    quotes: [],
+    quotes: [{quoteId: "44444444-4444-4444-8444-444444444444", jobId: JOB_ID, status: "ISSUED", issuedAt: "2026-08-24T13:00:00.000Z"}],
     invoices: [],
     documents: [{
       documentId: "44444444-4444-4444-8444-444444444444",
@@ -42,6 +42,7 @@ function canonicalActivity(overrides = {}) {
       parentId: JOB_ID,
       jobTitle: "Kitchen repair",
       status: "ISSUED",
+      issuedAt: "2026-08-24T13:00:00.000Z",
       provenance: "CANONICAL_QUOTE",
       lastActivityAt: "2026-08-24T13:00:00.000Z",
     }],
@@ -101,7 +102,7 @@ test("activity validation fails closed for missing arrays or unsafe media URLs",
 });
 
 test("Documents / Photos view renders Job-grouped canonical documents and media", () => {
-  assert.match(pageSource, /\["documents", copy\.documentsPhotos\]/);
+  assert.match(readFileSync(new URL("../src/components/ProfessionalCustomerHistoryTabs.jsx", import.meta.url), "utf8"), /\["documents", copy\.documentsPhotos\]/);
   assert.match(pageSource, /function RelationshipDocumentsMedia/);
   assert.match(pageSource, /group\.jobTitle/);
   assert.match(pageSource, /item\.parentId/);

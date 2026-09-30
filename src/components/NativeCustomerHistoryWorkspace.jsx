@@ -1,4 +1,9 @@
 import { useEffect, useState } from "react";
+import { customerHistoryStatusLabel } from "../utils/professionalCustomerHistory.js";
+import { getCanonicalConversationActionTarget } from "../utils/conversationActionRouting.js";
+import ProfessionalCustomerHistoryExport from "./ProfessionalCustomerHistoryExport.jsx";
+import ProfessionalCustomerHistoryTabs from "./ProfessionalCustomerHistoryTabs.jsx";
+import { buildProfessionalWorkCenterRoute } from "../utils/professionalWorkCenterRoute.js";
 import { fetchNativeCustomerJobHistory } from "../utils/jobCompletionApi.js";
 
 const locale = { en: "en-US", es: "es", fr: "fr", "pt-BR": "pt-BR" };
@@ -16,6 +21,7 @@ function amount(value, language) {
 }
 
 export default function NativeCustomerHistoryWorkspace({ subject, sourceState, language, copy, setPage, onRetry, onLoadMore }) {
+  const [focus, setFocus] = useState("overview");
   const [selectedJobId, setSelectedJobId] = useState("");
   const [detailRefreshKey, setDetailRefreshKey] = useState(0);
   const [detailState, setDetailState] = useState({ status: "idle", detail: null });
@@ -57,6 +63,74 @@ export default function NativeCustomerHistoryWorkspace({ subject, sourceState, l
   }
 
   const history = sourceState.history;
+  if (history?.contractVersion === 2) {
+    const open = jobId => {
+      const route = buildProfessionalWorkCenterRoute({ jobId, returnPage: "customerRelationshipsCenter" });
+      if (route) setPage?.(route);
+    };
+    const money = row => amount({ currency: row.currency, totalMinor: row.totalMinor }, language);
+    const jobTitle = id => history.jobs.find(job => job.jobId === id)?.serviceTitle || copy.job;
+    return <section style={section} aria-label={copy.nativeHistory} data-native-customer-history-status={sourceState.status}>
+      <div style={card}>
+        <button type="button" style={button} disabled>{copy.startNewJob}</button>
+        <p>{copy.nativeNewJobUnavailable}</p>
+        <button type="button" style={button} disabled={!history.actionBridge?.conversationId} onClick={() => {
+          const target = getCanonicalConversationActionTarget({ conversationId: history.actionBridge?.conversationId },
+            { returnPage: "customerRelationshipsCenter", preferCommunicationCenterShell: true });
+          if (target.ok) setPage?.(target.route);
+        }}>{copy.messageCustomer}</button>
+        {!history.actionBridge?.conversationId && <p>{copy.nativeMessageUnavailable}</p>}
+      </div>
+      <ProfessionalCustomerHistoryExport authority={subject} displayName={history.displayName} language={language} copy={copy} setPage={setPage} />
+      <ProfessionalCustomerHistoryTabs copy={copy} focus={focus} onChange={setFocus} />
+      {focus === "overview" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 12 }}>
+        {[[copy.activeJobs,history.summary.activeJobs],[copy.completedJobs,history.summary.completedJobs],
+          [copy.quotes,history.summary.quotes],[copy.invoices,history.summary.invoices],
+          [copy.documentsPhotos,history.summary.documents + history.summary.photos]].map(([label,count]) =>
+          <article key={label} style={card}><strong>{count}</strong><p>{label}</p></article>)}
+      </div>}
+      {focus === "work" && ["ACTIVE","COMPLETED"].map(state => <section key={state} style={section}>
+        <h5>{state === "ACTIVE" ? copy.activeJobs : copy.completedJobs}</h5>
+        {history.jobs.filter(job => job.completionState === state).length === 0 && <p>{copy.noWork}</p>}
+        {history.jobs.filter(job => job.completionState === state).map(job => <article key={job.jobId} style={card} data-native-job-history={job.jobId}>
+          <h5>{job.serviceTitle}</h5><p>{job.completedAt ? copy.completed : copy.created}: {date(job.completedAt || job.createdAt, language)}</p>
+          <button type="button" style={button} onClick={() => open(job.jobId)} aria-label={`${copy.openJob}: ${job.serviceTitle}`}>{copy.openJob}</button>
+        </article>)}
+      </section>)}
+      {focus === "quotes" && <section style={section}>
+        {history.quotes.length === 0 && <p>{copy.noQuotes}</p>}
+        {history.quotes.map(quote => <article key={quote.quoteId} style={card}>
+          <h5>{quote.documentNumber || copy.quote} · {quote.lineageType === "REVISED_QUOTE" ? copy.revisedQuote : quote.lineageType === "SUPPLEMENTAL_QUOTE" ? copy.additionalQuote : copy.originalQuote}</h5>
+          <p>{jobTitle(quote.jobId)} · {customerHistoryStatusLabel(quote.status,copy)}</p>
+          {quote.customerDecision && <p>{copy.decision}: {customerHistoryStatusLabel(quote.customerDecision,copy)}</p>}
+          <p>{copy.issued}: {date(quote.issuedAt,language)} · {copy.total}: {money(quote)}</p>
+          <button type="button" style={button} onClick={() => open(quote.jobId)}>{copy.openJob}</button>
+        </article>)}
+      </section>}
+      {focus === "invoices" && <section style={section}>
+        {history.invoices.length === 0 && <p>{copy.noInvoices}</p>}
+        {history.invoices.map(invoice => <article key={invoice.invoiceId} style={card}>
+          <h5>{invoice.invoiceNumber}</h5><p>{jobTitle(invoice.jobId)} · {customerHistoryStatusLabel(invoice.status,copy)}</p>
+          <p>{copy.total}: {money(invoice)} · {copy.paid}: {amount({currency:invoice.currency,totalMinor:invoice.paidMinor},language)} · {copy.balance}: {amount({currency:invoice.currency,totalMinor:invoice.balanceMinor},language)}</p>
+          <p>{copy.issued}: {date(invoice.issuedAt,language)}</p>
+          <button type="button" style={button} onClick={() => open(invoice.jobId)}>{copy.openJob}</button>
+        </article>)}
+      </section>}
+      {focus === "documents" && <section style={section}>
+        {history.documents.length + history.media.length === 0 && <p>{copy.noDocumentsPhotos}</p>}
+        {history.documents.map(doc => <article key={`${doc.documentType}:${doc.documentId}`} style={card}>
+          <h5>{doc.documentNumber || (doc.documentType === "QUOTE" ? copy.quote : copy.invoice)}</h5>
+          <p>{doc.jobTitle || jobTitle(doc.parentId)} · {doc.provenance === "CANONICAL_QUOTE" ? copy.canonicalQuote : copy.canonicalInvoice}</p>
+          <button type="button" style={button} onClick={() => open(doc.parentId)}>{copy.openJob}</button>
+        </article>)}
+        {history.media.map(photo => <a key={`${photo.parentId}:${photo.mediaId}`} style={card} href={photo.secureUrl} target="_blank" rel="noreferrer" aria-label={`${copy.openPhoto}: ${jobTitle(photo.parentId)}`}>
+          <img src={photo.secureUrl} alt={copy.requestPhoto} loading="lazy" style={{maxWidth:"100%",width:240,height:"auto"}} /><p>{jobTitle(photo.parentId)} · {copy.requestPhoto}</p>
+        </a>)}
+      </section>}
+      {sourceState.pageError && <div role="alert"><p>{copy.nativeHistoryUnavailable}</p><button type="button" style={button} onClick={onLoadMore} disabled={sourceState.loadingMore}>{copy.retry}</button></div>}
+      {history.pagination.nextCursor && !sourceState.pageError && <button type="button" style={button} onClick={onLoadMore} disabled={sourceState.loadingMore}>{sourceState.loadingMore ? copy.loading : copy.loadMoreNative}</button>}
+    </section>;
+  }
   return <section style={section} aria-label={copy.nativeHistory} data-native-customer-history-status={sourceState.status}>
     <h4>{copy.nativeHistory}</h4>
     {sourceState.status === "loading" && <p role="status">{copy.loading}</p>}

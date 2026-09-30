@@ -20,6 +20,9 @@ import { createBusinessCustomerJobCommandKey } from "../utils/businessCustomerRe
 import ProfessionalJobHistoryWorkspace from "../components/ProfessionalJobHistoryWorkspace.jsx";
 import { fetchProfessionalJobHistory, fetchNativeCustomers, fetchNativeCustomerHistory } from "../utils/jobCompletionApi.js";
 import { loadBusinessContactProfileId } from "../utils/businessContactsApi.js";
+import ProfessionalCustomerHistoryExport from "../components/ProfessionalCustomerHistoryExport.jsx";
+import ProfessionalCustomerHistoryTabs from "../components/ProfessionalCustomerHistoryTabs.jsx";
+import { mergeNativeCustomerHistoryPage } from "../utils/professionalCustomerHistory.js";
 import NativeCustomerHistoryWorkspace from "../components/NativeCustomerHistoryWorkspace.jsx";
 import { getAuthenticatedIdentitySnapshot, subscribeAuthenticatedIdentity } from "../utils/session.js";
 
@@ -581,9 +584,7 @@ function CustomerRelationshipsCenter({ setPage }) {
         if (nativeHistoryGenerationRef.current !== generation || nativeHistoryMoreRef.current !== request) return;
         setNativeHistory(current => {
           if (current.identityKey !== request.identityKey || current.history?.pagination.nextCursor !== cursor) return current;
-          const seen = new Set(current.history.jobs.map(job => job.jobId));
-          return { ...current, loadingMore: false, pageError: "", history: {
-            ...page, jobs: [...current.history.jobs, ...page.jobs.filter(job => !seen.has(job.jobId))] } };
+          return { ...current, loadingMore: false, pageError: "", history: mergeNativeCustomerHistoryPage(current.history, page) };
         });
       })
       .catch(() => {
@@ -818,27 +819,14 @@ function CustomerRelationshipsCenter({ setPage }) {
               </form>
             )}
 
+            {activityState.status === "ready" && activityState.activity && <ProfessionalCustomerHistoryExport
+              key={relationship.id}
+              authority={{kind:"PRIVATE_CONTACT",relationshipId:relationship.id,contractorProfileId:relationship.contractorProfileId,businessContactId:relationship.businessContactId}}
+              displayName={contactName(contact,copy.contactName)} language={language} copy={copy} setPage={navigate} />}
+
             <div style={activityHeader}>
               <h4 style={activityTitle}>{copy.relationshipActivity}</h4>
-              <div style={activityNavigation} aria-label={copy.relationshipActivity}>
-                {[
-                  ["overview", copy.overview],
-                  ["work", copy.work],
-                  ["quotes", copy.quotes],
-                  ["invoices", copy.invoices],
-                  ["documents", copy.documentsPhotos],
-                ].map(([focus, label]) => (
-                  <button
-                    key={focus}
-                    type="button"
-                    style={activityFocus === focus ? activityTabActive : activityTab}
-                    aria-pressed={activityFocus === focus}
-                    onClick={() => setActivityFocus(focus)}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <ProfessionalCustomerHistoryTabs copy={copy} focus={activityFocus} onChange={setActivityFocus} />
             </div>
 
             {activityState.status === "loading" && (
@@ -1141,7 +1129,7 @@ function RelationshipActivity({ activity, focus, copy, language, onOpenJob }) {
       render: (item) => (
         <ActivityRow
           key={item.quoteId}
-          title={text(item.documentNumber) || copy.quote}
+          title={`${text(item.documentNumber) || copy.quote} · ${item.lineageType === "REVISED_QUOTE" ? copy.revisedQuote : item.lineageType === "SUPPLEMENTAL_QUOTE" ? copy.additionalQuote : copy.originalQuote}`}
           status={text(item.status)}
           secondaryStatus={text(item.customerDecision)}
           secondaryStatusLabel={copy.decision}

@@ -87,6 +87,18 @@ function validatedActivityItem(value, label) {
   return Object.freeze({ ...value });
 }
 
+function validatedQuoteActivityItem(value) {
+  const item = validatedActivityItem(value, "Quote");
+  const lineageType = item.lineageType || null;
+  const label = lineageType === "REVISED_QUOTE" ? "Revised" : lineageType === "SUPPLEMENTAL_QUOTE" ? "Additional" : "Original";
+  if ((lineageType && !["REVISED_QUOTE", "SUPPLEMENTAL_QUOTE"].includes(lineageType)) ||
+      (item.lineageLabel && item.lineageLabel !== label) ||
+      (item.parentQuoteId && !UUID_PATTERN.test(item.parentQuoteId))) {
+    throw new BusinessCustomerRelationshipApiError({ code: "BUSINESS_CUSTOMER_RELATIONSHIP_ACTIVITY_RESPONSE_INVALID" });
+  }
+  return Object.freeze({ ...item, parentQuoteId: item.parentQuoteId || null, lineageType, lineageLabel: label });
+}
+
 function validatedDocumentActivityItem(value) {
   const item = validatedActivityItem(value, "document");
   if (
@@ -151,9 +163,11 @@ function validatedActivity(value, relationshipId) {
     visits: Object.freeze((value.visits || []).map(item => validatedActivityItem(item, "Visit"))),
     workPerformed: Object.freeze((value.workPerformed || []).map(item => validatedActivityItem(item, "work performed"))),
     work: Object.freeze(value.work.map((item) => validatedActivityItem(item, "work"))),
-    quotes: Object.freeze(value.quotes.map((item) => validatedActivityItem(item, "Quote"))),
-    invoices: Object.freeze(value.invoices.map((item) => validatedActivityItem(item, "Invoice"))),
-    documents: Object.freeze(value.documents.map(validatedDocumentActivityItem)),
+    quotes: Object.freeze(value.quotes.filter(item => item.status === "ISSUED" && item.issuedAt).map(validatedQuoteActivityItem)),
+    invoices: Object.freeze(value.invoices.filter(item => item.status !== "DRAFT" && item.issuedAt).map((item) => validatedActivityItem(item, "Invoice"))),
+    documents: Object.freeze(value.documents.filter(item => item.status !== "DRAFT" && item.issuedAt &&
+      (item.documentType === "QUOTE" ? value.quotes.some(q => q.quoteId === item.documentId && q.jobId === item.parentId && q.status === "ISSUED" && q.issuedAt) :
+        value.invoices.some(i => i.invoiceId === item.documentId && i.jobId === item.parentId && i.status !== "DRAFT" && i.issuedAt))).map(validatedDocumentActivityItem)),
     media: Object.freeze(value.media.map(validatedMediaActivityItem)),
   });
 }
