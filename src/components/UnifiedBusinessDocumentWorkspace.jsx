@@ -858,8 +858,21 @@ function CompletedInvoiceReviewIntro() {
 
 function CompletedJobInvoiceManualEditor({ invoice, preparation, onPreview, onApply, onCancel }) {
   const originalRef = useRef(structuredClone(invoice));
+  const editorRef = useRef(null);
   const [draft, setDraft] = useState(() => structuredClone(invoice));
   const rows = Array.isArray(draft.lineItems) ? draft.lineItems : [];
+
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      editorRef.current?.scrollIntoView?.({
+        behavior: "smooth",
+        block: "start",
+        inline: "nearest",
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, []);
   function update(patch) {
     setDraft((current) => {
       const next = { ...current, ...patch };
@@ -871,7 +884,12 @@ function CompletedJobInvoiceManualEditor({ invoice, preparation, onPreview, onAp
     update({ lineItems: rows.map((row, rowIndex) => rowIndex === index ? { ...row, [field]: value } : row) });
   }
   return (
-    <section className="business-document-manual business-document-invoice-manual" role="region" aria-labelledby="business-document-invoice-manual-title">
+    <section
+      ref={editorRef}
+      className="business-document-manual business-document-invoice-manual"
+      role="region"
+      aria-labelledby="business-document-invoice-manual-title"
+    >
       <header><div><span>Manual entry</span><h2 id="business-document-invoice-manual-title">Edit the live Invoice</h2></div><button type="button" onClick={() => onCancel(originalRef.current)}>Cancel</button></header>
       <fieldset className="business-document-manual-fields"><legend>Invoice details</legend><div>
         <label>Customer<input value={preparation.customerName} readOnly aria-readonly="true" /></label>
@@ -6543,7 +6561,17 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       />
       <div className="business-document-mobile-switch" role="tablist" aria-label="Workspace view"><button type="button" role="tab" aria-selected={mobilePane === "conversation"} onClick={() => setMobilePane("conversation")}>Conversation</button><button type="button" role="tab" aria-selected={mobilePane === "preview"} onClick={() => setMobilePane("preview")}>Preview</button></div>
       <main className={`business-document-main ${documentPhotos.length ? "has-evidence" : ""}`}>
-        <section className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`} aria-labelledby="business-document-conversation-title">
+        <section
+          className={`business-document-conversation ${mobilePane === "conversation" ? "mobile-active" : ""}`}
+          aria-labelledby="business-document-conversation-title"
+          data-inline-manual-open={
+            activeDocument === "invoice" &&
+            invoicePreparation &&
+            manualState?.mode === "manual"
+              ? "true"
+              : undefined
+          }
+        >
           <h2 id="business-document-conversation-title" className="business-document-visually-hidden">{activeDocument === "quote" ? "Quote conversation" : "Invoice conversation"}</h2>
           <div className="business-document-conversation-context" data-document-chat-region="context">
             <div className="business-document-control-toolbar" aria-label="Workspace controls"><button type="button" className="business-document-control-primary" aria-label="Let Meetro prefill the form" aria-pressed={manualState?.mode === "prefill"} data-assisted-active={invoicePreparation && activeDocument === "invoice" && !manualState ? "true" : undefined} aria-controls="business-document-prefill-details" onClick={usePrefill}><MeetroIcon name="assistant" size={17} decorative /><span>Let Meetro prefill</span></button><button type="button" className="business-document-control-primary" aria-label="Fill the form manually" aria-pressed={manualState?.mode === "manual"} aria-expanded={invoicePreparation && activeDocument === "invoice" ? manualState?.mode === "manual" : undefined} onClick={() => openManualEditor("first")}><MeetroIcon name="editPortfolio" size={17} decorative /><span>Fill form manually</span></button><BusinessDocumentHowItWorksControl aria-label="How it works" title="How it works" expanded={howItWorksOpen} triggerRef={howItWorksTriggerRef} onToggle={() => setHowItWorksOpen((open) => !open)} /></div>

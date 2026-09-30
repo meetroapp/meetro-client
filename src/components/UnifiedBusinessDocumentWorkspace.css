@@ -4206,3 +4206,30 @@
     min-height: 44px;
   }
 }
+
+/* TASK 63J4E2-B2D4P — completed-job Invoice manual form scroll ownership */
+@media (min-width: 901px) {
+  .business-document-workspace[data-active-document="invoice"]
+    .business-document-conversation[data-inline-manual-open="true"] {
+    grid-template-rows: minmax(0, 1fr);
+  }
+
+  .business-document-workspace[data-active-document="invoice"]
+    .business-document-conversation[data-inline-manual-open="true"]
+    .business-document-conversation-context {
+    min-height: 0;
+    height: 100%;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-padding-block: 12px;
+  }
+
+  .business-document-workspace[data-active-document="invoice"]
+    .business-document-conversation[data-inline-manual-open="true"]
+    .business-document-chat-shell,
+  .business-document-workspace[data-active-document="invoice"]
+    .business-document-conversation[data-inline-manual-open="true"]
+    .business-document-conversation-footer {
+    display: none;
+  }
+}
