@@ -35,6 +35,9 @@ test("direct review page uses authenticated canonical adapters without browser a
   assert.match(source, /fetchCustomerJobQuotes\(\{ jobId: route\.jobId/);
   assert.match(source, /fetchCustomerQuoteDetail\(\{[\s\S]*quoteId: route\.quoteId[\s\S]*jobId: route\.jobId/);
   assert.match(source, /quote\.quoteId === route\.quoteId && quote\.jobId === route\.jobId/);
+  assert.match(source, /function focusQuoteDetail\(quoteId\)/);
+  assert.match(source, /onSelectQuote=\{focusQuoteDetail\}/);
+  assert.doesNotMatch(source, /onSelectQuote=\{\(\) => \{\}\}/);
   assert.doesNotMatch(source, /localStorage|sessionStorage|customerName|title.*match/i);
 });
 

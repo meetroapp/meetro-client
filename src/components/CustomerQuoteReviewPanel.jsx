@@ -180,6 +180,9 @@ export default function CustomerQuoteReviewPanel({
                     {statusLabel(item.businessStatus, language)}
                   </span>
                 </div>
+                {item.quoteNumber && (
+                  <strong>{item.quoteNumber}</strong>
+                )}
                 <strong style={styles.listTotal}>
                   {currency(item.totalMinor, item.currency, language)}
                 </strong>
@@ -222,7 +225,11 @@ export default function CustomerQuoteReviewPanel({
               <span style={styles.lineageBadge}>
                 {lineageLabel(quote.lineageLabel, language)}
               </span>
-              <h3 id="customer-quote-detail-title" style={styles.detailTitle}>
+              <h3
+                id="customer-quote-detail-title"
+                tabIndex={-1}
+                style={styles.detailTitle}
+              >
                 {statusLabel(quote.businessStatus, language)}
               </h3>
               {quote.businessStatus === "APPROVED" && (
@@ -239,9 +246,11 @@ export default function CustomerQuoteReviewPanel({
               <p style={styles.detailDate}>
                 {t("customerQuoteIssuedBy", language)}: {job?.issuerName || "—"}
               </p>
-              <p style={styles.detailDate}>
-                {t("customerQuoteVersion", language)} {quote.decisionCommandVersion}
-              </p>
+              {quote.quoteNumber && (
+                <p style={styles.detailDate}>
+                  {t("quoteDeliveryQuote", language)}: {quote.quoteNumber}
+                </p>
+              )}
             </div>
             <div style={styles.totalBlock}>
               <span>{t("customerQuoteTotal", language)}</span>
@@ -412,8 +421,12 @@ export default function CustomerQuoteReviewPanel({
               {t("customerQuoteProject", language)}: {job?.title || "—"}
               <br />
               {t("customerQuoteIssuedBy", language)}: {job?.issuerName || "—"}
-              <br />
-              {t("customerQuoteVersion", language)} {quote.decisionCommandVersion}
+              {quote.quoteNumber && (
+                <>
+                  <br />
+                  {t("quoteDeliveryQuote", language)}: {quote.quoteNumber}
+                </>
+              )}
             </p>
             <strong style={styles.dialogTotal}>
               {currency(quote.totalMinor, quote.currency, language)}

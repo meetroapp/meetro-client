@@ -27,7 +27,9 @@ test("customer Quote review exposes list, detail, lineage, and terminal business
   assert.match(componentSource, /quote\.exclusions/);
   assert.match(componentSource, /job\?\.title/);
   assert.match(componentSource, /job\?\.issuerName/);
+  assert.match(componentSource, /quote\.quoteNumber/);
   assert.match(componentSource, /quote\.decisionCommandVersion/);
+  assert.doesNotMatch(componentSource, /customerQuoteVersion/);
   assert.match(componentSource, /quote\.customerTermsSnapshot\.paymentTerms/);
   assert.match(componentSource, /quote\.customerTermsSnapshot\.agreement\.acceptanceTerms/);
   assert.match(componentSource, /quote\.customerTermsSnapshot\.agreement\.cancellationTerms/);

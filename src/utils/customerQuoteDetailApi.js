@@ -209,6 +209,7 @@ function normalizeQuote(value, { expectedQuoteId, expectedJobId }) {
     !exactKeys(value, [
       "quoteId",
       "jobId",
+      "quoteNumber",
       "status",
       "businessStatus",
       "customerDecision",
@@ -230,6 +231,10 @@ function normalizeQuote(value, { expectedQuoteId, expectedJobId }) {
 
   const quoteId = uuid(value.quoteId);
   const jobId = uuid(value.jobId);
+  const quoteNumber =
+    value.quoteNumber == null
+      ? null
+      : text(value.quoteNumber, 80);
   const totalMinor = nonNegativeInteger(value.totalMinor);
   const currency = text(value.currency, 3);
   const issuedAt = timestamp(value.issuedAt);
@@ -260,6 +265,7 @@ function normalizeQuote(value, { expectedQuoteId, expectedJobId }) {
   if (
     quoteId !== expectedQuoteId ||
     !jobId ||
+    (value.quoteNumber != null && !quoteNumber) ||
     (expectedJobId && jobId !== expectedJobId) ||
     value.status !== "ISSUED" ||
     !BUSINESS_STATUSES.includes(value.businessStatus) ||
@@ -281,6 +287,7 @@ function normalizeQuote(value, { expectedQuoteId, expectedJobId }) {
   return Object.freeze({
     quoteId,
     jobId,
+    quoteNumber,
     status: "ISSUED",
     businessStatus: value.businessStatus,
     customerDecision: value.customerDecision,

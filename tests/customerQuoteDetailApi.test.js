@@ -30,6 +30,7 @@ function quote(overrides = {}) {
   return {
     quoteId: QUOTE_ID,
     jobId: JOB_ID,
+    quoteNumber: "Q-0000025",
     status: "ISSUED",
     businessStatus: "WAITING_ON_CUSTOMER",
     customerDecision: null,
@@ -68,6 +69,7 @@ test("customer detail accepts and freezes the exact customer-safe contract", () 
   assert.equal(normalized.source, "CUSTOMER_QUOTE_DETAIL");
   assert.equal(normalized.quote.quoteId, QUOTE_ID);
   assert.equal(normalized.quote.jobId, JOB_ID);
+  assert.equal(normalized.quote.quoteNumber, "Q-0000025");
   assert.equal(normalized.quote.scopeItems[0].amountMinor, 265000);
   assert.equal(normalized.quote.decisionCommandVersion, 7);
   assert.equal(

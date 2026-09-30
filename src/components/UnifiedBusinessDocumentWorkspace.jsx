@@ -1506,7 +1506,6 @@ function QuoteIssueReviewDialog({ state, onCancel, onConfirm }) {
           <div><dt>Customer</dt><dd>{readiness?.customerName || "Unavailable"}</dd></div>
           <div><dt>Project</dt><dd>{readiness?.projectTitle || "Unavailable"}</dd></div>
           <div><dt>Quote</dt><dd>{documentNumber}</dd></div>
-          <div><dt>Version</dt><dd>{readiness?.documentVersion || "—"}</dd></div>
           <div><dt>Total</dt><dd>{money(readiness?.total)} USD</dd></div>
         </dl>
         <p className="business-document-delivery-truth">
@@ -1518,14 +1517,14 @@ function QuoteIssueReviewDialog({ state, onCancel, onConfirm }) {
                   ? "The accepted agreement remains unchanged. No new customer decision is required."
                   : declinedCopy
                     ? "The declined decision remains unchanged. Commercial revision remains a separate action."
-                    : "The same exact Quote version remains available for customer review."
+                    : "The same exact Quote remains available for customer review."
                 : "The customer can now review and accept this quote."
             : acceptedCopy
-              ? "This sends the same immutable Quote version only. It does not reopen acceptance, change terms, record payment, or schedule work."
+              ? "This sends the same immutable Quote only. It does not reopen acceptance, change terms, record payment, or schedule work."
               : declinedCopy
                 ? "This sends the unchanged historical Quote only. To change commercial terms, use the governed Quote revision workflow."
                 : copyDelivery
-                  ? "This sends the same immutable Quote version only. It does not create a revision or change customer decision authority."
+                  ? "This sends the same immutable Quote only. It does not create a revision or change customer decision authority."
             : externalCustomer
               ? "Issuing does not mean the customer received or approved the Quote. Delivery, customer approval evidence, payment, scheduling, and work remain separate actions."
               : "Once sent, this quote will be available for the customer to review and accept. Sending the quote does not mean the customer has accepted it or made a payment. Scheduling and work remain separate next steps."}

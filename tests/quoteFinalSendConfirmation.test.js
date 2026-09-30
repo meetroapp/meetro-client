@@ -33,6 +33,28 @@ test("Quote final confirmation uses WorkspaceDialog and explicit customer-facing
   assert.doesNotMatch(dialog, /window\.confirm|>OK<|>Continue<|>Yes</);
 });
 
+test("Quote issue result uses Quote number without exposing internal document version", () => {
+  const dialog = block(
+    "function QuoteIssueReviewDialog",
+    "function ExternalQuoteApprovalDialog"
+  );
+
+  assert.match(
+    dialog,
+    /<dt>Quote<\/dt><dd>\{documentNumber\}<\/dd>/
+  );
+
+  assert.doesNotMatch(
+    dialog,
+    /<dt>Version<\/dt>|readiness\?\.documentVersion/
+  );
+
+  assert.doesNotMatch(
+    dialog,
+    /immutable Quote version|exact Quote version remains/
+  );
+});
+
 test("email Quote review opens final confirmation without invoking transport", () => {
   const request = block(
     "function requestDeliverySend()",

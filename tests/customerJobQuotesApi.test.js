@@ -16,6 +16,7 @@ function quote(overrides = {}) {
   return {
     quoteId: IDS.quote,
     jobId: IDS.job,
+    quoteNumber: "Q-0000025",
     businessStatus: "WAITING_ON_CUSTOMER",
     status: "ISSUED",
     customerDecision: null,
@@ -58,6 +59,7 @@ test("strict discovery adapter accepts the exact customer allowlisted contract",
   assert.equal(normalized.job.id, IDS.job);
   assert.equal(normalized.job.issuerName, "All Handyman Services");
   assert.equal(normalized.quotes[0].quoteId, IDS.quote);
+  assert.equal(normalized.quotes[0].quoteNumber, "Q-0000025");
   assert.equal(normalized.quotes[0].actions.canApprove, true);
   assert.equal(Object.isFrozen(normalized.quotes), true);
 });

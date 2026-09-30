@@ -80,6 +80,25 @@ export default function CustomerQuoteReviewRoute({ setPage }) {
     setPage?.(buildCustomerQuoteConversationReturnRoute(route.conversationId));
   }
 
+  function focusQuoteDetail(quoteId) {
+    if (
+      quoteId !== route.quoteId ||
+      typeof document === "undefined"
+    ) return;
+
+    const heading =
+      document.getElementById("customer-quote-detail-title");
+
+    if (!heading) return;
+
+    heading.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+
+    heading.focus({ preventScroll: true });
+  }
+
   async function handleDecision({
     quoteId,
     action,
@@ -108,7 +127,7 @@ export default function CustomerQuoteReviewRoute({ setPage }) {
         discovery={discovery}
         detail={detail}
         selectedQuoteId={route.valid ? route.quoteId : ""}
-        onSelectQuote={() => {}}
+        onSelectQuote={focusQuoteDetail}
         onCloseReview={returnToConversation}
         closeReviewLabel={t("quoteDeliveryBackToConversation", language)}
         onDecision={handleDecision}

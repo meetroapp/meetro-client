@@ -13,7 +13,8 @@ const jobId = "60000000-0000-4000-8000-000000000006";
 const quoteId = "10000000-0000-4000-8000-000000000001";
 const issuedAt = "2026-08-12T12:00:00.000Z";
 const summary = {
-  quoteId, jobId, businessStatus: "WAITING_ON_CUSTOMER", status: "ISSUED",
+  quoteId, jobId, quoteNumber: "Q-0000025",
+  businessStatus: "WAITING_ON_CUSTOMER", status: "ISSUED",
   customerDecision: null, totalMinor: 92500, currency: "USD",
   lineageLabel: "Original", createdAt: issuedAt, updatedAt: issuedAt,
   issuedAt, decidedAt: null,
@@ -31,7 +32,8 @@ test("shared customer review renders the exact Emergency Quote with null request
   const detail = normalizeCustomerQuoteDetail({
     success: true, code: "CUSTOMER_QUOTE_FOUND",
     quote: {
-      quoteId, jobId, status: "ISSUED", businessStatus: "WAITING_ON_CUSTOMER",
+      quoteId, jobId, quoteNumber: "Q-0000025",
+      status: "ISSUED", businessStatus: "WAITING_ON_CUSTOMER",
       customerDecision: null, lineageLabel: "Original", totalMinor: 92500,
       currency: "USD", scopeItems: [{ description: "Repair leak", quantity: 1,
         amountMinor: 92500 }], conditions: [], exclusions: [], issuedAt,
@@ -56,6 +58,8 @@ test("shared customer review renders the exact Emergency Quote with null request
     assert.match(html, /Emergency leak/);
     assert.match(html, /ABC Plumbing/);
     assert.match(html, /Repair leak/);
+    assert.match(html, /Q-0000025/);
+    assert.doesNotMatch(html, /Quote version 3/);
     assert.match(html, /customer-quote-detail-title/);
   } finally {
     await vite.close();

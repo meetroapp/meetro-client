@@ -42,7 +42,7 @@ export const customerQuoteLanguage = Object.freeze({
     customerQuoteDecline: "Decline Quote",
     customerQuoteApproveConfirmTitle: "Accept this Quote?",
     customerQuoteApproveConfirmBody:
-      "This records your acceptance of this exact Quote, version, terms, and total.",
+      "This records your acceptance of this exact Quote, terms, and total.",
     customerQuoteDeclineConfirmTitle: "Decline this Quote?",
     customerQuoteDeclineConfirmBody:
       "This records your decision for this exact Quote. You can continue the conversation about next steps.",
@@ -146,7 +146,7 @@ export const customerQuoteLanguage = Object.freeze({
     customerQuoteDecline: "Rechazar cotización",
     customerQuoteApproveConfirmTitle: "¿Aceptar esta cotización?",
     customerQuoteApproveConfirmBody:
-      "Esto registra tu aceptación de esta cotización, versión, términos y total exactos.",
+      "Esto registra tu aceptación de esta cotización exacta, sus términos y su total.",
     customerQuoteDeclineConfirmTitle: "¿Rechazar esta cotización?",
     customerQuoteDeclineConfirmBody:
       "Esto registra tu decisión para esta cotización exacta. Puedes continuar la conversación sobre los próximos pasos.",
@@ -250,7 +250,7 @@ export const customerQuoteLanguage = Object.freeze({
     customerQuoteDecline: "Refuser le devis",
     customerQuoteApproveConfirmTitle: "Accepter ce devis ?",
     customerQuoteApproveConfirmBody:
-      "Ceci enregistre votre acceptation de ce devis, de cette version, de ces conditions et de ce total précis.",
+      "Ceci enregistre votre acceptation de ce devis précis, de ses conditions et de son total.",
     customerQuoteDeclineConfirmTitle: "Refuser ce devis ?",
     customerQuoteDeclineConfirmBody:
       "Ceci enregistre votre décision pour ce devis précis. Vous pouvez poursuivre la conversation sur les prochaines étapes.",
@@ -354,7 +354,7 @@ export const customerQuoteLanguage = Object.freeze({
     customerQuoteDecline: "Recusar orçamento",
     customerQuoteApproveConfirmTitle: "Aceitar este orçamento?",
     customerQuoteApproveConfirmBody:
-      "Isso registra sua aceitação deste orçamento, versão, termos e total exatos.",
+      "Isso registra sua aceitação deste orçamento exato, de seus termos e do total.",
     customerQuoteDeclineConfirmTitle: "Recusar este orçamento?",
     customerQuoteDeclineConfirmBody:
       "Isso registra sua decisão para este orçamento exato. Você pode continuar a conversa sobre os próximos passos.",
