@@ -591,6 +591,10 @@ body,
 .work-center-metric-card--warning .work-center-metric-card__value { color: #d85f0c; }
 .work-center-metric-card--violet .work-center-metric-card__value { color: #6240a4; }
 
+.professional-invoice-workspace .work-center-metric-grid {
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 230px), 1fr));
+}
+
 .professional-invoice-workspace .work-center-metric-card__value {
   white-space: nowrap;
   overflow-wrap: normal;
@@ -910,6 +914,19 @@ body,
   .professional-invoice-workspace .work-center-metric-card__value {
     font-size: clamp(21px, 5.7vw, 24px);
     letter-spacing: -0.02em;
+  }
+
+  .professional-invoice-workspace .work-center-metric-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .professional-invoice-workspace .work-center-metric-card {
+    gap: 6px;
+  }
+
+  .professional-invoice-workspace .work-center-metric-card__icon {
+    width: 32px;
+    height: 32px;
   }
 
   .work-center-metric-card:last-child:nth-child(odd) {

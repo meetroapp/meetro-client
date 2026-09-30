@@ -85,18 +85,26 @@ export default function ProfessionalInvoiceWorkspace({
   const [reminderDraft, setReminderDraft] = useState("");
   const [paymentDraft, setPaymentDraft] = useState(emptyPaymentDraft);
   const selectedInvoiceIdRef = useRef("");
+  const workspaceRequestRef = useRef(0);
   const reminderAttemptRef = useRef({ signature: "", key: "" });
   useAskMeetroContext({ invoiceId: selected?.invoiceId, jobId: selected?.jobId, conversationId: selected?.conversationId, label: selected?.invoiceNumber });
 
   const loadWorkspace = useCallback(async () => {
-    const value = await fetchProfessionalInvoiceWorkspace({
-      limit: 50,
-      period: revenuePeriod,
-      setPage,
-    });
-    setWorkspace(value);
-    setWorkspacePhase("ready");
-    return value;
+    const requestId = ++workspaceRequestRef.current;
+    try {
+      const value = await fetchProfessionalInvoiceWorkspace({
+        limit: 50,
+        period: revenuePeriod,
+        setPage,
+      });
+      if (requestId !== workspaceRequestRef.current) return null;
+      setWorkspace(value);
+      setWorkspacePhase("ready");
+      return value;
+    } catch (error) {
+      if (requestId !== workspaceRequestRef.current) return null;
+      throw error;
+    }
   }, [revenuePeriod, setPage]);
 
   const resetPaymentInteraction = useCallback(() => {
@@ -124,7 +132,7 @@ export default function ProfessionalInvoiceWorkspace({
       setWorkspacePhase("loading");
       void loadWorkspace().catch(() => active && setWorkspacePhase("error"));
     });
-    return () => { active = false; };
+    return () => { active = false; workspaceRequestRef.current += 1; };
   }, [initialInvoiceId, loadWorkspace]);
 
   useEffect(() => {
@@ -620,7 +628,7 @@ export default function ProfessionalInvoiceWorkspace({
           </p>
         )}
 
-      {workspace?.readyJobs.length > 0 && (
+      {revenueIsCurrent && workspace?.readyJobs.length > 0 && (
         <section style={styles.band} aria-label={copy.ready}>
           <h3 style={styles.subheading}>{copy.ready}</h3>
           <div style={styles.list}>
@@ -649,11 +657,16 @@ export default function ProfessionalInvoiceWorkspace({
         </section>
       )}
 
-      {workspace?.invoices.length > 0 ? (
-        <section style={styles.band} aria-label={copy.invoice}>
-          <h3 style={styles.subheading}>{copy.invoice}</h3>
+      {revenueIsCurrent && workspace?.invoices.length > 0 ? (
+        <div>
+        {[
+          { label: copy.invoice, records: workspace.invoices.filter(invoice => invoice.status !== "DRAFT") },
+          { label: copy.drafts, records: workspace.invoices.filter(invoice => invoice.status === "DRAFT") },
+        ].filter(group => group.records.length > 0).map(group => (
+        <section key={group.label} style={styles.band} aria-label={group.label}>
+          <h3 style={styles.subheading}>{group.label}</h3>
           <div style={styles.list}>
-            {workspace.invoices.map((invoice) => (
+            {group.records.map((invoice) => (
               <button
                 key={invoice.invoiceId}
                 type="button"
@@ -682,6 +695,8 @@ export default function ProfessionalInvoiceWorkspace({
             ))}
           </div>
         </section>
+        ))}
+        </div>
       ) : phase === "ready" && workspace?.readyJobs.length === 0 ? (
         <WorkCenterEmptyState
           icon="payment"
