@@ -139,6 +139,14 @@ export default function ProfessionalJobHistoryWorkspace({
           <button type="button" style={styles.secondaryButton} onClick={onRetry}>{copy.retry}</button>
         </div>
       )}
+      {sourceState?.status === "ready" && (sourceState?.pageError || sourceState?.error) && (
+        <div role="alert" style={styles.error}>
+          <p>{copy.pageUnavailable}</p>
+          {history?.pagination.nextCursor && (
+            <button type="button" style={styles.secondaryButton} onClick={onLoadMore} disabled={sourceState?.loadingMore}>{copy.retry}</button>
+          )}
+        </div>
+      )}
       {sourceState?.status === "ready" && history?.jobs.length === 0 && (
         <WorkCenterEmptyState
           icon="jobHistory"
@@ -163,7 +171,7 @@ export default function ProfessionalJobHistoryWorkspace({
           </button>
         ))}
       </div>
-      {history?.pagination.nextCursor && (
+      {history?.pagination.nextCursor && !(sourceState?.status === "ready" && (sourceState?.pageError || sourceState?.error)) && (
         <button
           type="button"
           style={styles.secondaryButton}

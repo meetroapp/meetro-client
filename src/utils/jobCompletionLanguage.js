@@ -38,6 +38,7 @@ const COPY = Object.freeze({
     loadMore: "Load More",
     customerCompletionBody: "The professional recorded the approved work as completed.",
     messageProfessional: "Message Professional",
+    pageUnavailable: "More completed work could not be loaded. Your existing results are still available.",
   }),
   es: Object.freeze({
     completionReview: "Revisión de finalización",
@@ -78,6 +79,7 @@ const COPY = Object.freeze({
     loadMore: "Cargar más",
     customerCompletionBody: "El profesional registró el trabajo aprobado como completado.",
     messageProfessional: "Enviar mensaje al profesional",
+    pageUnavailable: "No se pudo cargar más trabajo completado. Los resultados anteriores siguen disponibles.",
   }),
   fr: Object.freeze({
     completionReview: "Vérification de l’achèvement",
@@ -118,6 +120,7 @@ const COPY = Object.freeze({
     loadMore: "Afficher plus",
     customerCompletionBody: "Le professionnel a enregistré le travail approuvé comme terminé.",
     messageProfessional: "Écrire au professionnel",
+    pageUnavailable: "Le chargement des autres interventions terminées a échoué. Les résultats déjà chargés restent disponibles.",
   }),
   "pt-BR": Object.freeze({
     completionReview: "Revisão de conclusão",
@@ -158,6 +161,7 @@ const COPY = Object.freeze({
     loadMore: "Carregar mais",
     customerCompletionBody: "O profissional registrou o trabalho aprovado como concluído.",
     messageProfessional: "Enviar mensagem ao profissional",
+    pageUnavailable: "Não foi possível carregar mais trabalhos concluídos. Os resultados já carregados continuam disponíveis.",
   }),
 });
 

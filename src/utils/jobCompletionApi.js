@@ -1009,3 +1009,130 @@ export function fetchCustomerJobHistory({ jobId, setPage, authFetchImpl = authFe
     authFetchImpl
   );
 }
+
+function nativeSubject(value, profileId, homeownerId = null) {
+  if (!exact(value, ["kind", "contractorProfileId", "homeownerUserId"])) return null;
+  const contractorProfileId = integer(value.contractorProfileId);
+  const homeownerUserId = integer(value.homeownerUserId);
+  return value.kind === "MEETRO_ACCOUNT" && contractorProfileId === profileId &&
+    homeownerUserId && (homeownerId == null || homeownerUserId === homeownerId)
+    ? { kind: "MEETRO_ACCOUNT", contractorProfileId, homeownerUserId } : null;
+}
+
+function nativePage(value) {
+  if (!exact(value, ["limit", "nextCursor"])) return null;
+  const limit = integer(value.limit);
+  const nextCursor = value.nextCursor == null ? null : text(value.nextCursor, 1000);
+  return limit && limit <= 50 && (value.nextCursor == null || nextCursor)
+    ? { limit, nextCursor } : null;
+}
+
+function nativeJob(value) {
+  if (!exact(value, ["jobId", "sourceType", "serviceTitle", "completedAt", "approvedQuote", "completionSummary"])) return null;
+  const approvedQuote = validateApprovedQuote(value.approvedQuote);
+  const completionSummary = validateCompletionSummary(value.completionSummary);
+  const jobId = uuid(value.jobId);
+  const completedAt = timestamp(value.completedAt);
+  const serviceTitle = text(value.serviceTitle, 500);
+  return jobId && completedAt && serviceTitle && approvedQuote !== false && completionSummary &&
+    ["emergency_request", "ordinary_request_selection", "existing_customer_request"].includes(value.sourceType)
+    ? { jobId, sourceType: value.sourceType, serviceTitle, completedAt, approvedQuote, completionSummary } : null;
+}
+
+export function validateNativeCustomers(value, { contractorProfileId } = {}) {
+  const profileId = integer(contractorProfileId);
+  if (!profileId || !exact(value, ["contractVersion", "customers", "pagination"]) ||
+      value.contractVersion !== 1 || !Array.isArray(value.customers) || value.customers.length > 50) return null;
+  const pagination = nativePage(value.pagination);
+  const customers = value.customers.map(row => {
+    if (!exact(row, ["subject", "displayName", "completedJobCount", "lastCompletedAt", "sourceTypes"])) return null;
+    const subject = nativeSubject(row.subject, profileId);
+    const displayName = text(row.displayName, 500);
+    const completedJobCount = integer(row.completedJobCount, { zero: true });
+    const lastCompletedAt = row.lastCompletedAt == null ? null : timestamp(row.lastCompletedAt);
+    const sourceTypes = row.sourceTypes;
+    if (!subject || !displayName || completedJobCount == null ||
+        (row.lastCompletedAt != null && !lastCompletedAt) || !Array.isArray(sourceTypes) ||
+        sourceTypes.length > 3 || sourceTypes.some(source => !["emergency_request", "ordinary_request_selection", "existing_customer_request"].includes(source)) ||
+        new Set(sourceTypes).size !== sourceTypes.length) return null;
+    return { subject, displayName, completedJobCount, lastCompletedAt, sourceTypes };
+  });
+  if (!pagination || customers.some(row => !row) ||
+      new Set(customers.map(row => row.subject.homeownerUserId)).size !== customers.length) return null;
+  return { contractVersion: 1, customers, pagination };
+}
+
+export function validateNativeCustomerHistory(value, { contractorProfileId, homeownerUserId } = {}) {
+  const profileId = integer(contractorProfileId);
+  const homeownerId = integer(homeownerUserId);
+  if (!profileId || !homeownerId || !exact(value, ["contractVersion", "subject", "displayName", "jobs", "pagination"]) ||
+      value.contractVersion !== 1 || !Array.isArray(value.jobs) || value.jobs.length > 50) return null;
+  const subject = nativeSubject(value.subject, profileId, homeownerId);
+  const jobs = value.jobs.map(nativeJob);
+  const pagination = nativePage(value.pagination);
+  const displayName = text(value.displayName, 500);
+  return subject && displayName && pagination && jobs.every(Boolean) &&
+    new Set(jobs.map(job => job.jobId)).size === jobs.length
+    ? { contractVersion: 1, subject, displayName, jobs, pagination } : null;
+}
+
+export function validateNativeCustomerJobHistory(value, { contractorProfileId, homeownerUserId, jobId } = {}) {
+  const profileId = integer(contractorProfileId);
+  const homeownerId = integer(homeownerUserId);
+  if (!profileId || !homeownerId || !exact(value, ["contractVersion", "subject", "displayName", "job"]) ||
+      value.contractVersion !== 1) return null;
+  const subject = nativeSubject(value.subject, profileId, homeownerId);
+  const job = nativeJob(value.job);
+  const displayName = text(value.displayName, 500);
+  return subject && job?.jobId === uuid(jobId) && displayName
+    ? { contractVersion: 1, subject, displayName, job } : null;
+}
+
+function nativeIds(contractorProfileId, homeownerUserId = null) {
+  const profileId = integer(contractorProfileId);
+  const homeownerId = homeownerUserId == null ? null : integer(homeownerUserId);
+  if (!profileId || (homeownerUserId != null && !homeownerId)) {
+    throw new JobCompletionApiError({ status: 400, code: "INVALID_NATIVE_CUSTOMER_SUBJECT" });
+  }
+  return { profileId, homeownerId };
+}
+
+export function fetchNativeCustomers({ contractorProfileId, limit = 20, cursor = "", setPage, authFetchImpl = authFetch } = {}) {
+  try {
+    const { profileId } = nativeIds(contractorProfileId);
+    const boundedLimit = integer(limit);
+    if (!boundedLimit || boundedLimit > 50 || (cursor && !text(cursor, 1000))) throw new Error("page");
+    const query = new URLSearchParams({ limit: String(boundedLimit) });
+    if (cursor) query.set("cursor", cursor);
+    return read(`/professional/businesses/${profileId}/native-customers?${query}`, "nativeCustomers",
+      value => validateNativeCustomers(value, { contractorProfileId: profileId }), setPage, authFetchImpl);
+  } catch {
+    return Promise.reject(new JobCompletionApiError({ status: 400, code: "INVALID_NATIVE_CUSTOMER_PAGE" }));
+  }
+}
+
+export function fetchNativeCustomerHistory({ contractorProfileId, homeownerUserId, limit = 20, cursor = "", setPage, authFetchImpl = authFetch } = {}) {
+  try {
+    const { profileId, homeownerId } = nativeIds(contractorProfileId, homeownerUserId);
+    const boundedLimit = integer(limit);
+    if (!boundedLimit || boundedLimit > 50 || (cursor && !text(cursor, 1000))) throw new Error("page");
+    const query = new URLSearchParams({ limit: String(boundedLimit) });
+    if (cursor) query.set("cursor", cursor);
+    return read(`/professional/businesses/${profileId}/native-customers/${homeownerId}/history?${query}`,
+      "nativeCustomerHistory", value => validateNativeCustomerHistory(value, { contractorProfileId: profileId, homeownerUserId: homeownerId }), setPage, authFetchImpl);
+  } catch {
+    return Promise.reject(new JobCompletionApiError({ status: 400, code: "INVALID_NATIVE_CUSTOMER_PAGE" }));
+  }
+}
+
+export function fetchNativeCustomerJobHistory({ contractorProfileId, homeownerUserId, jobId, setPage, authFetchImpl = authFetch } = {}) {
+  try {
+    const { profileId, homeownerId } = nativeIds(contractorProfileId, homeownerUserId);
+    const canonicalJobId = uuid(jobId);
+    if (!canonicalJobId) throw new Error("job");
+    return read(`/professional/businesses/${profileId}/native-customers/${homeownerId}/jobs/${canonicalJobId}/history`,
+      "nativeCustomerJobHistory", value => validateNativeCustomerJobHistory(value, { contractorProfileId: profileId, homeownerUserId: homeownerId, jobId: canonicalJobId }), setPage, authFetchImpl);
+  } catch {
+    return Promise.reject(new JobCompletionApiError({ status: 400, code: "INVALID_NATIVE_CUSTOMER_JOB" }));
+  }
+}

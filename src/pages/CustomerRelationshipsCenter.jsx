@@ -1,5 +1,5 @@
 import useAskMeetroContext from "../hooks/useAskMeetroContext.js";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
 import { getLanguage } from "../utils/language";
@@ -17,6 +17,11 @@ import {
 } from "../utils/customerRelationshipsWorkspace.js";
 import { buildProfessionalWorkCenterRoute } from "../utils/professionalWorkCenterRoute.js";
 import { createBusinessCustomerJobCommandKey } from "../utils/businessCustomerRelationshipsApi.js";
+import ProfessionalJobHistoryWorkspace from "../components/ProfessionalJobHistoryWorkspace.jsx";
+import { fetchProfessionalJobHistory, fetchNativeCustomers, fetchNativeCustomerHistory } from "../utils/jobCompletionApi.js";
+import { loadBusinessContactProfileId } from "../utils/businessContactsApi.js";
+import NativeCustomerHistoryWorkspace from "../components/NativeCustomerHistoryWorkspace.jsx";
+import { getAuthenticatedIdentitySnapshot, subscribeAuthenticatedIdentity } from "../utils/session.js";
 
 const DATE_LOCALES = Object.freeze({
   en: "en-US",
@@ -89,6 +94,29 @@ function CustomerRelationshipsCenter({ setPage }) {
     error: "",
     idempotencyKey: "",
   });
+  const [canonicalHistorySource, setCanonicalHistorySource] = useState({
+    status: "loading",
+    history: null,
+    error: "",
+    pageError: "",
+    loadingMore: false,
+    identityKey: "",
+    consumedCursors: [],
+  });
+  const [canonicalHistoryRefreshKey, setCanonicalHistoryRefreshKey] = useState(0);
+  const [nativeDirectoryRefreshKey, setNativeDirectoryRefreshKey] = useState(0);
+  const [nativeHistoryRefreshKey, setNativeHistoryRefreshKey] = useState(0);
+  const [nativeDirectory, setNativeDirectory] = useState({ status: "loading", profileId: null, customers: [], pagination: null, pageError: "", loadingMore: false, identityKey: "" });
+  const [selectedNativeCustomer, setSelectedNativeCustomer] = useState(null);
+  const [nativeHistory, setNativeHistory] = useState({ status: "idle", history: null, pageError: "", loadingMore: false, identityKey: "" });
+  const authenticatedIdentity = useSyncExternalStore(subscribeAuthenticatedIdentity, getAuthenticatedIdentitySnapshot);
+  const historyIdentityKey = JSON.stringify([authenticatedIdentity.status, authenticatedIdentity.userId, authenticatedIdentity.sessionGeneration]);
+  const historyGenerationRef = useRef(0);
+  const historyLoadMoreRef = useRef(null);
+  const nativeDirectoryGenerationRef = useRef(0);
+  const nativeDirectoryMoreRef = useRef(null);
+  const nativeHistoryGenerationRef = useRef(0);
+  const nativeHistoryMoreRef = useRef(null);
   const setPageRef = useRef(setPage);
   const activityRequestRef = useRef(0);
   const detailRequestRef = useRef(0);
@@ -99,6 +127,106 @@ function CustomerRelationshipsCenter({ setPage }) {
   useAskMeetroContext(workspaceState.status === "ready" && workspaceState.detail
     ? { businessContactId: workspaceState.detail.contact?.id, relationshipId: workspaceState.detail.relationship?.id, label: workspaceState.detail.contact?.displayName || "" }
     : {});
+
+  useEffect(() => {
+    let active = true;
+    const generation = ++historyGenerationRef.current;
+    historyLoadMoreRef.current = null;
+    queueMicrotask(() => {
+      if (active && generation === historyGenerationRef.current) {
+        setCanonicalHistorySource({
+          status: "loading",
+          history: null,
+          error: "",
+          pageError: "",
+          loadingMore: false,
+          identityKey: historyIdentityKey,
+          consumedCursors: [],
+        });
+      }
+    });
+
+    void fetchProfessionalJobHistory({ limit: 20, setPage: navigate })
+      .then((history) => {
+        if (!active || generation !== historyGenerationRef.current) return;
+        setCanonicalHistorySource({
+          status: "ready",
+          history,
+          error: "",
+          pageError: "",
+          loadingMore: false,
+          identityKey: historyIdentityKey,
+          consumedCursors: [],
+        });
+      })
+      .catch((error) => {
+        if (!active || generation !== historyGenerationRef.current) return;
+        setCanonicalHistorySource({
+          status: "error",
+          history: null,
+          error: String(error?.code || "JOB_HISTORY_FAILED"),
+          pageError: "",
+          loadingMore: false,
+          identityKey: historyIdentityKey,
+          consumedCursors: [],
+        });
+      });
+
+    return () => {
+      active = false;
+      historyGenerationRef.current += 1;
+      historyLoadMoreRef.current = null;
+    };
+  }, [canonicalHistoryRefreshKey, navigate, historyIdentityKey]);
+
+  useEffect(() => {
+    let active = true;
+    const generation = ++nativeDirectoryGenerationRef.current;
+    nativeDirectoryMoreRef.current = null;
+    queueMicrotask(() => {
+      if (active && generation === nativeDirectoryGenerationRef.current) {
+        setNativeDirectory({ status: "loading", profileId: null, customers: [], pagination: null, pageError: "", loadingMore: false, identityKey: historyIdentityKey });
+        setSelectedNativeCustomer(null);
+      }
+    });
+    void loadBusinessContactProfileId({ setPage: navigate })
+      .then(profileId => fetchNativeCustomers({ contractorProfileId: profileId, setPage: navigate })
+        .then(directory => ({ profileId, directory })))
+      .then(({ profileId, directory }) => {
+        if (!active || generation !== nativeDirectoryGenerationRef.current) return;
+        setNativeDirectory({ status: "ready", profileId, customers: directory.customers, pagination: directory.pagination, pageError: "", loadingMore: false, identityKey: historyIdentityKey });
+      })
+      .catch(() => {
+        if (!active || generation !== nativeDirectoryGenerationRef.current) return;
+        setNativeDirectory({ status: "error", profileId: null, customers: [], pagination: null, pageError: "", loadingMore: false, identityKey: historyIdentityKey });
+      });
+    return () => { active = false; nativeDirectoryGenerationRef.current += 1; nativeDirectoryMoreRef.current = null; };
+  }, [historyIdentityKey, nativeDirectoryRefreshKey, navigate]);
+
+  const selectedNativeId = selectedNativeCustomer?.subject.homeownerUserId || null;
+  const selectedNativeProfileId = selectedNativeCustomer?.subject.contractorProfileId || null;
+  const nativeSubjectKey = JSON.stringify([historyIdentityKey, selectedNativeProfileId, selectedNativeId]);
+  useEffect(() => {
+    let active = true;
+    const generation = ++nativeHistoryGenerationRef.current;
+    nativeHistoryMoreRef.current = null;
+    if (!selectedNativeId || !selectedNativeProfileId) return () => { active = false; nativeHistoryGenerationRef.current += 1; };
+    queueMicrotask(() => {
+      if (active && generation === nativeHistoryGenerationRef.current) {
+        setNativeHistory({ status: "loading", history: null, pageError: "", loadingMore: false, identityKey: nativeSubjectKey });
+      }
+    });
+    void fetchNativeCustomerHistory({ contractorProfileId: selectedNativeProfileId, homeownerUserId: selectedNativeId, setPage: navigate })
+      .then(history => {
+        if (!active || generation !== nativeHistoryGenerationRef.current) return;
+        setNativeHistory({ status: "ready", history, pageError: "", loadingMore: false, identityKey: nativeSubjectKey });
+      })
+      .catch(() => {
+        if (!active || generation !== nativeHistoryGenerationRef.current) return;
+        setNativeHistory({ status: "error", history: null, pageError: "", loadingMore: false, identityKey: nativeSubjectKey });
+      });
+    return () => { active = false; nativeHistoryGenerationRef.current += 1; nativeHistoryMoreRef.current = null; };
+  }, [selectedNativeId, selectedNativeProfileId, nativeSubjectKey, nativeHistoryRefreshKey, navigate]);
 
   const loadActivity = useCallback(async (relationshipId) => {
     if (!relationshipId) return;
@@ -168,6 +296,8 @@ function CustomerRelationshipsCenter({ setPage }) {
   }, [loadActivity, loadedRelationshipId]);
 
   async function openRelationship(relationshipId) {
+    setSelectedNativeCustomer(null);
+    setNativeHistory({ status: "idle", history: null, pageError: "", loadingMore: false, identityKey: "" });
     const requestId = detailRequestRef.current + 1;
     detailRequestRef.current = requestId;
     setActivityFocus("overview");
@@ -207,6 +337,8 @@ function CustomerRelationshipsCenter({ setPage }) {
 
   function showDirectory() {
     detailRequestRef.current += 1;
+    setSelectedNativeCustomer(null);
+    setNativeHistory({ status: "idle", history: null, pageError: "", loadingMore: false, identityKey: "" });
     setActivityFocus("overview");
     setNewJobState({
       open: false,
@@ -352,9 +484,136 @@ function CustomerRelationshipsCenter({ setPage }) {
     navigate(route);
   }
 
+  function loadMoreCanonicalHistory() {
+    const cursor = canonicalHistorySource.history?.pagination.nextCursor;
+    const generation = historyGenerationRef.current;
+    if (!cursor || canonicalHistorySource.status !== "ready" || canonicalHistorySource.identityKey !== historyIdentityKey ||
+      canonicalHistorySource.loadingMore || historyLoadMoreRef.current || canonicalHistorySource.consumedCursors?.includes(cursor)) return;
+
+    const request = { generation, cursor, identityKey: historyIdentityKey };
+    historyLoadMoreRef.current = request;
+
+    setCanonicalHistorySource((current) => ({
+      ...current,
+      loadingMore: true,
+      pageError: "",
+    }));
+
+    void fetchProfessionalJobHistory({
+      limit: 20,
+      cursor,
+      setPage: navigate,
+    })
+      .then((nextPage) => {
+        if (historyGenerationRef.current !== generation || historyLoadMoreRef.current !== request) return;
+        setCanonicalHistorySource((current) => {
+          if (current.identityKey !== request.identityKey || current.status !== "ready" ||
+            current.history?.pagination.nextCursor !== cursor || current.consumedCursors?.includes(cursor)) return current;
+          return {
+            ...current,
+            status: "ready",
+            error: "",
+            pageError: "",
+            loadingMore: false,
+            consumedCursors: [...(current.consumedCursors || []), cursor],
+            history: {
+              ...nextPage,
+              jobs: [...(current.history?.jobs || []), ...nextPage.jobs],
+            },
+          };
+        });
+      })
+      .catch((error) => {
+        if (historyGenerationRef.current !== generation || historyLoadMoreRef.current !== request) return;
+        setCanonicalHistorySource((current) => ({
+          ...current,
+          loadingMore: false,
+          pageError: current.identityKey === request.identityKey && current.history?.pagination.nextCursor === cursor
+            ? String(error?.code || "JOB_HISTORY_FAILED")
+            : current.pageError,
+        }));
+      })
+      .finally(() => {
+        if (historyLoadMoreRef.current === request) historyLoadMoreRef.current = null;
+      });
+  }
+
+  function loadMoreNativeDirectory() {
+    const cursor = nativeDirectory.pagination?.nextCursor;
+    const generation = nativeDirectoryGenerationRef.current;
+    if (!cursor || nativeDirectory.status !== "ready" || nativeDirectory.identityKey !== historyIdentityKey ||
+        nativeDirectory.loadingMore || nativeDirectoryMoreRef.current) return;
+    const request = { generation, cursor, profileId: nativeDirectory.profileId, identityKey: historyIdentityKey };
+    nativeDirectoryMoreRef.current = request;
+    setNativeDirectory(current => ({ ...current, loadingMore: true, pageError: "" }));
+    void fetchNativeCustomers({ contractorProfileId: request.profileId, cursor, setPage: navigate })
+      .then(page => {
+        if (nativeDirectoryGenerationRef.current !== generation || nativeDirectoryMoreRef.current !== request) return;
+        setNativeDirectory(current => {
+          if (current.profileId !== request.profileId || current.identityKey !== request.identityKey ||
+              current.pagination?.nextCursor !== cursor) return current;
+          const seen = new Set(current.customers.map(row => row.subject.homeownerUserId));
+          return { ...current, loadingMore: false, pageError: "", pagination: page.pagination,
+            customers: [...current.customers, ...page.customers.filter(row => !seen.has(row.subject.homeownerUserId))] };
+        });
+      })
+      .catch(() => {
+        if (nativeDirectoryGenerationRef.current !== generation || nativeDirectoryMoreRef.current !== request) return;
+        setNativeDirectory(current => ({ ...current, loadingMore: false,
+          pageError: current.profileId === request.profileId && current.pagination?.nextCursor === cursor ? "NATIVE_CUSTOMERS_UNAVAILABLE" : current.pageError }));
+      })
+      .finally(() => { if (nativeDirectoryMoreRef.current === request) nativeDirectoryMoreRef.current = null; });
+  }
+
+  function loadMoreNativeHistory() {
+    const cursor = nativeHistory.history?.pagination.nextCursor;
+    const generation = nativeHistoryGenerationRef.current;
+    if (!cursor || nativeHistory.status !== "ready" || nativeHistory.identityKey !== nativeSubjectKey ||
+        nativeHistory.loadingMore || nativeHistoryMoreRef.current || !selectedNativeCustomer) return;
+    const request = { generation, cursor, identityKey: nativeSubjectKey,
+      profileId: selectedNativeCustomer.subject.contractorProfileId,
+      homeownerId: selectedNativeCustomer.subject.homeownerUserId };
+    nativeHistoryMoreRef.current = request;
+    setNativeHistory(current => ({ ...current, loadingMore: true, pageError: "" }));
+    void fetchNativeCustomerHistory({ contractorProfileId: request.profileId,
+      homeownerUserId: request.homeownerId, cursor, setPage: navigate })
+      .then(page => {
+        if (nativeHistoryGenerationRef.current !== generation || nativeHistoryMoreRef.current !== request) return;
+        setNativeHistory(current => {
+          if (current.identityKey !== request.identityKey || current.history?.pagination.nextCursor !== cursor) return current;
+          const seen = new Set(current.history.jobs.map(job => job.jobId));
+          return { ...current, loadingMore: false, pageError: "", history: {
+            ...page, jobs: [...current.history.jobs, ...page.jobs.filter(job => !seen.has(job.jobId))] } };
+        });
+      })
+      .catch(() => {
+        if (nativeHistoryGenerationRef.current !== generation || nativeHistoryMoreRef.current !== request) return;
+        setNativeHistory(current => ({ ...current, loadingMore: false,
+          pageError: current.identityKey === request.identityKey && current.history?.pagination.nextCursor === cursor
+            ? "NATIVE_CUSTOMER_HISTORY_UNAVAILABLE" : current.pageError }));
+      })
+      .finally(() => { if (nativeHistoryMoreRef.current === request) nativeHistoryMoreRef.current = null; });
+  }
+
+  function openNativeCustomer(item) {
+    if (item?.subject?.kind !== "MEETRO_ACCOUNT" ||
+        item.subject.contractorProfileId !== nativeDirectory.profileId ||
+        !Number.isSafeInteger(item.subject.homeownerUserId)) return;
+    detailRequestRef.current += 1;
+    activityRequestRef.current += 1;
+    setNativeHistory({ status: "loading", history: null, pageError: "", loadingMore: false, identityKey: "" });
+    setSelectedNativeCustomer(item);
+  }
+
   const detail = workspaceState.detail;
   const relationship = detail?.relationship || null;
   const contact = detail?.contact || null;
+  const visibleNativeCustomer = nativeDirectory.identityKey === historyIdentityKey &&
+    nativeDirectory.status === "ready" &&
+    nativeDirectory.profileId === selectedNativeCustomer?.subject.contractorProfileId
+    ? selectedNativeCustomer : null;
+  const privateWorkspaceVisible = workspaceState.status === "ready" &&
+    !selectedNativeCustomer;
 
   return (
     <div className="app-page meetro-responsive-page" style={page}>
@@ -387,7 +646,7 @@ function CustomerRelationshipsCenter({ setPage }) {
           </section>
         )}
 
-        {workspaceState.status === "ready" && detail && !relationship && (
+        {privateWorkspaceVisible && detail && !relationship && (
           <section style={detailCard} aria-labelledby="no-customer-relationship-title">
             <div style={detailHeader}>
               <div style={contactAvatar} aria-hidden="true">
@@ -420,7 +679,7 @@ function CustomerRelationshipsCenter({ setPage }) {
           </section>
         )}
 
-        {workspaceState.status === "ready" && relationship && contact && (
+        {privateWorkspaceVisible && detail && relationship && contact && (
           <section style={detailCard} aria-labelledby="customer-relationship-detail-title">
             <div style={detailHeader}>
               <div style={contactAvatar} aria-hidden="true">
@@ -613,18 +872,41 @@ function CustomerRelationshipsCenter({ setPage }) {
           </section>
         )}
 
-        {workspaceState.status === "ready" && !detail && (
+        {visibleNativeCustomer && (
+          <section style={detailCard} aria-label={copy.nativeHistory} data-native-customer={visibleNativeCustomer.subject.homeownerUserId}>
+            <div style={detailHeader}>
+              <span style={contactAvatar} aria-hidden="true">{visibleNativeCustomer.displayName.slice(0, 1).toUpperCase()}</span>
+              <div style={minWidthZero}>
+                <p style={eyebrow}>{copy.nativeSourceLabel}</p>
+                <h3 style={detailTitle}>{visibleNativeCustomer.displayName}</h3>
+              </div>
+            </div>
+            <button type="button" style={secondaryButton} onClick={showDirectory}>{copy.backToRelationships}</button>
+            <NativeCustomerHistoryWorkspace
+              key={`${visibleNativeCustomer.subject.contractorProfileId}:${visibleNativeCustomer.subject.homeownerUserId}`}
+              subject={visibleNativeCustomer.subject}
+              sourceState={nativeHistory.identityKey === nativeSubjectKey ? nativeHistory : { status: "loading", history: null, pageError: "", loadingMore: false }}
+              language={language}
+              copy={copy}
+              setPage={navigate}
+              onRetry={() => setNativeHistoryRefreshKey(value => value + 1)}
+              onLoadMore={loadMoreNativeHistory}
+            />
+          </section>
+        )}
+
+        {workspaceState.status === "ready" && !detail && !selectedNativeCustomer && (
           <section aria-labelledby="customer-relationship-list-title">
             {workspaceState.relationships.length === 0 ? (
               <div style={stateCard} role="status">
-                <h3 style={stateTitle}>{copy.emptyTitle}</h3>
-                <p style={stateText}>{copy.emptyText}</p>
+                <h3 style={stateTitle}>{copy.privateContacts}</h3>
+                <p style={stateText}>{copy.noPrivateContacts}</p>
               </div>
             ) : (
               <>
                 <div style={sectionHeading}>
                   <h3 id="customer-relationship-list-title" style={sectionTitle}>
-                    {copy.relationshipList}
+                    {copy.privateContacts}
                   </h3>
                   <span style={countBadge}>{workspaceState.relationships.length}</span>
                 </div>
@@ -669,7 +951,64 @@ function CustomerRelationshipsCenter({ setPage }) {
           </section>
         )}
 
-        {workspaceState.status === "ready" && (
+        {!selectedNativeCustomer && !(privateWorkspaceVisible && detail) && (
+          <section style={{ marginTop: "22px", minWidth: 0 }} aria-labelledby="native-customers-title">
+            <div style={sectionHeading}>
+              <h3 id="native-customers-title" style={sectionTitle}>{copy.meetroCustomers}</h3>
+              {nativeDirectory.status === "ready" && <span style={countBadge}>{nativeDirectory.customers.length}</span>}
+            </div>
+            {nativeDirectory.status === "loading" && <p role="status">{copy.loading}</p>}
+            {nativeDirectory.status === "error" && <div style={stateCard} role="alert">
+              <p>{copy.nativeHistoryUnavailable}</p>
+              <button type="button" style={secondaryButton} onClick={() => setNativeDirectoryRefreshKey(value => value + 1)}>{copy.retry}</button>
+            </div>}
+            {nativeDirectory.status === "ready" && nativeDirectory.customers.length === 0 && <p role="status">{copy.noNativeCustomers}</p>}
+            {nativeDirectory.status === "ready" && <div style={relationshipList}>
+              {nativeDirectory.customers.map(item => <button key={`${item.subject.contractorProfileId}:${item.subject.homeownerUserId}`}
+                type="button" style={relationshipRow} onClick={() => openNativeCustomer(item)}
+                aria-label={`${copy.openNativeCustomer}: ${item.displayName}`}>
+                <span style={contactAvatar} aria-hidden="true">{item.displayName.slice(0, 1).toUpperCase()}</span>
+                <span style={relationshipRowBody}>
+                  <strong style={relationshipName}>{item.displayName}</strong>
+                  <span style={relationshipMeta}>{copy.completedJobs}: {item.completedJobCount}</span>
+                  {item.lastCompletedAt && <span style={relationshipMeta}>{copy.completed} {formatEstablishedDate(item.lastCompletedAt, language)}</span>}
+                </span>
+                <span style={activeBadge}>{copy.nativeSourceLabel}</span>
+                <span style={rowChevron} aria-hidden="true">›</span>
+              </button>)}
+            </div>}
+            {nativeDirectory.status === "ready" && nativeDirectory.pageError && <div role="alert" style={stateCard}>
+              <p>{copy.nativeHistoryUnavailable}</p>
+              <button type="button" style={secondaryButton} disabled={nativeDirectory.loadingMore} onClick={loadMoreNativeDirectory}>{copy.retry}</button>
+            </div>}
+            {nativeDirectory.status === "ready" && nativeDirectory.pagination?.nextCursor && !nativeDirectory.pageError &&
+              <button type="button" style={secondaryButton} disabled={nativeDirectory.loadingMore} onClick={loadMoreNativeDirectory}>
+                {nativeDirectory.loadingMore ? copy.loading : copy.loadMoreNative}
+              </button>}
+          </section>
+        )}
+
+        {workspaceState.status === "ready" && !detail && !selectedNativeCustomer && (
+          <section
+            style={{ marginTop: "22px" }}
+            aria-label={copy.completedWorkDirectory}
+            data-customer-history-authority="canonical-professional-job-history"
+          >
+            <ProfessionalJobHistoryWorkspace
+              sourceState={canonicalHistorySource.identityKey === historyIdentityKey
+                ? canonicalHistorySource
+                : { status: "loading", history: null, error: "", pageError: "", loadingMore: false }}
+              language={language}
+              setPage={navigate}
+              onRetry={() =>
+                setCanonicalHistoryRefreshKey((value) => value + 1)
+              }
+              onLoadMore={loadMoreCanonicalHistory}
+            />
+          </section>
+        )}
+
+        {privateWorkspaceVisible && detail && (
           <p style={readOnlyNote}>{copy.readOnly}</p>
         )}
       </main>
