@@ -16,6 +16,7 @@ for (const [audience, getModel] of [['Professional', professionalModel], ['Homeo
       } }), downloadArtifact: () => { throw Error('Supported sharing must not download'); } });
     assert.equal(result.method, 'web-pdf');
     assert.equal(artifact.blob.type, 'application/pdf');
+    assert.deepEqual(Object.keys(calls[0]).sort(), ['files']);
     const file = calls[0].files[0];
     assert.ok(file instanceof File); assert.ok(file.size > 1000);
     assert.equal(file.type, 'application/pdf'); assert.equal(file.name, artifact.fileName);
@@ -108,7 +109,11 @@ test('slow paginated preparation keeps the exact PDF for the next click without 
   const model = professionalModel(); const artifact = await createCustomerJobHistoryPdfArtifact(model); let activeClick = false; let calls = 0;
   const shareArtifact = input => shareHistoryPdfArtifact({ ...input, isNative: false, navigatorObject: {
     userActivation: { get isActive() { return activeClick; } }, canShare: () => true,
-    share: async ({ files }) => { calls++; assert.deepEqual(await files[0].arrayBuffer(), await artifact.blob.arrayBuffer()); },
+    share: async input => {
+      calls++;
+      assert.deepEqual(Object.keys(input).sort(), ['files']);
+      assert.deepEqual(await input.files[0].arrayBuffer(), await artifact.blob.arrayBuffer());
+    },
   } });
   const first = await shareCustomerJobHistoryReport(model, { createArtifact: () => artifact, shareArtifact });
   assert.equal(first.method, 'prepared'); assert.equal(calls, 0);

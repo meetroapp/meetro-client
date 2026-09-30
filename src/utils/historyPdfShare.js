@@ -36,7 +36,10 @@ export async function shareHistoryPdfArtifact({ artifact, message, isNative = Ca
   // exact prepared PDF and let the next Share click invoke the OS directly.
   if (navigatorObject.userActivation?.isActive === false) return { ok: false, method: 'prepared', reason: 'activation-expired' };
   try {
-    await navigatorObject.share({ title: artifact.title, text: message, files: [file] });
+    // Web History sharing is file-first. Passing both title and text causes some
+    // desktop share targets to render duplicate report descriptions and is not
+    // required to hand off the canonical PDF.
+    await navigatorObject.share({ files: [file] });
     return { ok: true, method: 'web-pdf' };
   } catch (error) {
     // Web Share uses AbortError for both dismissal and absence of share targets.
