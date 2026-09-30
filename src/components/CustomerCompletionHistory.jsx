@@ -6,6 +6,12 @@ import { fetchCustomerJobWorkPlan } from "../utils/workPlanApi.js";
 import { fetchCustomerEfr } from "../utils/customerEfrApi.js";
 import { getJobCompletionCopy } from "../utils/jobCompletionLanguage.js";
 import { getCustomerRelationshipsCopy } from "../utils/customerRelationshipsLanguage.js";
+import {
+  buildCustomerJobHistoryReportModel,
+  emailCustomerJobHistoryReport,
+  printCustomerJobHistoryReport,
+  shareCustomerJobHistoryReport,
+} from "../utils/customerJobHistoryReport.js";
 
 function localeFor(language) {
   return { en: "en-US", es: "es", fr: "fr", "pt-BR": "pt-BR" }[language] || "en-US";
@@ -135,6 +141,11 @@ export default function CustomerCompletionHistory({
   const historyCopy = getCustomerRelationshipsCopy(language);
 
   const [activeTab, setActiveTab] = useState("overview");
+
+  const [reportState, setReportState] = useState({
+    busy: "",
+    notice: "",
+  });
 
   const [state, setState] = useState({
     status: "loading",
@@ -346,6 +357,109 @@ export default function CustomerCompletionHistory({
     (invoice ? 1 : 0) +
     media.length;
 
+  function historyReportModel() {
+    return buildCustomerJobHistoryReportModel({
+      history,
+      quotes,
+      invoice,
+      workPlan,
+      assessment,
+      language,
+    });
+  }
+
+  async function runHistoryReportAction(action) {
+    if (reportState.busy) return;
+
+    setReportState({
+      busy: action,
+      notice: "",
+    });
+
+    try {
+      const model =
+        historyReportModel();
+
+      let result;
+
+      if (action === "print") {
+        result =
+          await printCustomerJobHistoryReport(
+            model
+          );
+      } else if (action === "share") {
+        result =
+          await shareCustomerJobHistoryReport(
+            model
+          );
+      } else if (action === "email") {
+        result =
+          await emailCustomerJobHistoryReport(
+            model
+          );
+      } else {
+        return;
+      }
+
+      const notice = (() => {
+        if (!result?.ok) {
+          return "Job History PDF is unavailable on this device.";
+        }
+
+        if (
+          action === "print" &&
+          result.printFromShareSheet
+        ) {
+          return "Job History PDF is ready. Choose Print from the share sheet.";
+        }
+
+        if (
+          action === "print"
+        ) {
+          return "Print-ready Job History PDF opened.";
+        }
+
+        if (
+          action === "email" &&
+          result.manualAttachment
+        ) {
+          return "Job History PDF downloaded and an email draft opened. Attach the downloaded PDF before sending.";
+        }
+
+        if (
+          action === "email" &&
+          result.chooseEmailApp
+        ) {
+          return "Job History PDF is ready. Choose Mail or your email app from the share sheet.";
+        }
+
+        if (
+          action === "share" &&
+          result.method === "download"
+        ) {
+          return "System sharing is unavailable, so the Job History PDF was downloaded instead.";
+        }
+
+        if (action === "share") {
+          return "Job History PDF is ready to share.";
+        }
+
+        return "Job History PDF is ready.";
+      })();
+
+      setReportState({
+        busy: "",
+        notice,
+      });
+    } catch {
+      setReportState({
+        busy: "",
+        notice:
+          "Job History PDF could not be prepared. Nothing was changed or sent.",
+      });
+    }
+  }
+
   return (
     <section
       style={styles.historyWorkspace}
@@ -382,6 +496,59 @@ export default function CustomerCompletionHistory({
         <strong style={styles.historyCompleted}>
           {copy.workCompleted}
         </strong>
+
+        <div
+          style={styles.historyReportActions}
+          aria-label="Job History report actions"
+        >
+          <button
+            type="button"
+            style={styles.historyReportButton}
+            disabled={Boolean(reportState.busy)}
+            onClick={() =>
+              void runHistoryReportAction("print")
+            }
+          >
+            {reportState.busy === "print"
+              ? "Preparing…"
+              : "Print"}
+          </button>
+
+          <button
+            type="button"
+            style={styles.historyReportButton}
+            disabled={Boolean(reportState.busy)}
+            onClick={() =>
+              void runHistoryReportAction("share")
+            }
+          >
+            {reportState.busy === "share"
+              ? "Preparing…"
+              : "Share"}
+          </button>
+
+          <button
+            type="button"
+            style={styles.historyReportButton}
+            disabled={Boolean(reportState.busy)}
+            onClick={() =>
+              void runHistoryReportAction("email")
+            }
+          >
+            {reportState.busy === "email"
+              ? "Preparing…"
+              : "Email"}
+          </button>
+        </div>
+
+        {reportState.notice ? (
+          <p
+            role="status"
+            style={styles.historyReportNotice}
+          >
+            {reportState.notice}
+          </p>
+        ) : null}
       </header>
 
       <nav
@@ -1575,6 +1742,38 @@ const styles = {
     padding: 9,
     fontSize: 12,
     overflowWrap: "anywhere",
+  },
+
+
+
+  historyReportActions: {
+    display: "flex",
+    justifyContent: "center",
+    gap: 8,
+    flexWrap: "wrap",
+    width: "100%",
+    marginTop: 8,
+  },
+
+  historyReportButton: {
+    minHeight: 44,
+    minWidth: 92,
+    padding: "9px 14px",
+    border: "1px solid #0b5d3b",
+    borderRadius: 999,
+    color: "#0b5d3b",
+    background: "#ffffff",
+    fontWeight: 850,
+    cursor: "pointer",
+  },
+
+  historyReportNotice: {
+    margin: "4px 0 0",
+    maxWidth: 620,
+    color: "#526258",
+    fontSize: 12,
+    lineHeight: 1.45,
+    textAlign: "center",
   },
 
 
