@@ -48,7 +48,7 @@ test("Home uses canonical customer History when legacy workflow storage is disab
   assert.match(api, /\/customer\/jobs\/history\?/);
   assert.match(home, /fetchCustomerJobHistoryList/);
   assert.match(home, /canonicalHistory: true/);
-  assert.match(home, /function CanonicalHistoryDetailsSheet/);
-  assert.equal((home.match(/<CanonicalHistoryDetailsSheet/g) || []).length, 2);
+  assert.match(home, /function HomeownerJobHistoryWorkspace/);
+  assert.equal((home.match(/<HomeownerJobHistoryWorkspace/g) || []).length, 1);
   assert.equal((home.match(/<CustomerCompletionHistory/g) || []).length, 1);
 });

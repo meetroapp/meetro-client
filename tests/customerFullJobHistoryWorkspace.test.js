@@ -18,7 +18,7 @@ const home = source(
 );
 
 test(
-  "Review Details preserves the existing accessible exact-Job History sheet",
+  "View History preserves accessible exact-Job navigation in the main workspace",
   () => {
     assert.match(
       home,
@@ -37,17 +37,17 @@ test(
 
     assert.match(
       home,
-      /function CanonicalHistoryDetailsSheet/
+      /function HomeownerJobHistoryWorkspace/
     );
 
     assert.match(
       home,
-      /role="dialog"/
+      /data-homeowner-history-workspace=\{jobId\}/
     );
 
     assert.match(
       home,
-      /aria-modal="true"/
+      /className="homeowner-history-detail"/
     );
 
     assert.match(
@@ -57,7 +57,7 @@ test(
 
     assert.match(
       home,
-      /if \(invoker\?\.isConnected\) invoker\.focus\(\)/
+      /historyReturnJobRef\.current = canonicalHistoryJobId/
     );
 
     assert.doesNotMatch(

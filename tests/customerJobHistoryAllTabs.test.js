@@ -9,6 +9,7 @@ import react from "@vitejs/plugin-react";
 import { validateJobHistoryDetail } from "../src/utils/jobCompletionApi.js";
 import { normalizeCustomerJobQuotes } from "../src/utils/customerJobQuotesApi.js";
 import { buildCustomerJobHistoryReportModel, getCustomerJobHistoryReportCopy } from "../src/utils/customerJobHistoryReport.js";
+import { getJobCompletionCopy } from "../src/utils/jobCompletionLanguage.js";
 import { getCustomerRelationshipsCopy } from "../src/utils/customerRelationshipsLanguage.js";
 
 const JOB = "6f40641c-2f06-4971-aeaa-65598ba777b1";
@@ -64,7 +65,7 @@ async function withWorkspace(run) {
   const vite = await createServer({ root: process.cwd(), configFile: false, cacheDir: "/tmp/meetro-task63j4c1/vite-tests", optimizeDeps: { noDiscovery: true }, server: { middlewareMode: true, hmr: false, ws: false }, plugins: [react(), {
     name: "history-c1-projection-fixture", enforce: "pre",
     transform(source, id) {
-      if (id.endsWith("/Home.jsx")) return source.replace("export default Home;", "export { CanonicalHistoryDetailsSheet }; export default Home;");
+      if (id.endsWith("/Home.jsx")) return source.replace("export default Home;", "export { HomeownerJobHistoryWorkspace }; export default Home;");
       if (!id.endsWith("/CustomerCompletionHistory.jsx")) return null;
       return source.replace(/import\s*\{([^}]+)\}\s*from\s*["']\.\.\/utils\/(?:jobCompletionApi|customerJobQuotesApi|invoicePaymentApi|workPlanApi|customerEfrApi|customerJobHistoryReport)\.js["'];/g,
         (_, names) => names.split(",").map(name => name.trim()).filter(Boolean).map(name => `const ${name} = (...args) => globalThis.__historyC1.${name}(...args);`).join("\n"));
@@ -96,17 +97,17 @@ test("all five tabs retain exact Emergency Job, expose common exports, and expor
     assert.match(overview, /Job status/);
     assert.doesNotMatch(overview, /Contact status/);
     const originalCalls = [...calls];
-    for (const tab of ["Overview", "Jobs", "Quotes", "Invoices", "Documents / Photos", "Overview"]) {
+    for (const tab of ["Overview", "Job", "Quotes", "Invoice", "Documents / Photos", "Overview"]) {
       await click(tab);
       const workspace = document.querySelector("[data-customer-full-job-history]");
       assert.equal(workspace.dataset.customerFullJobHistory, JOB);
       assert.equal(document.querySelectorAll('[aria-label="Job History report actions"]').length, 1);
-      if (tab === "Jobs") assert.match(workspace.textContent, /No additional recorded work-detail entries/);
+      if (tab === "Job") assert.match(workspace.textContent, /No additional recorded work-detail entries/);
       if (tab === "Quotes") {
         assert.equal((workspace.textContent.match(/Q-0000025/g) || []).length, 1);
         assert.match(workspace.textContent, /Original/); assert.doesNotMatch(workspace.textContent, /Revision \d/);
       }
-      if (tab === "Invoices") assert.match(workspace.textContent, /No finalized invoice is available for this Job yet/);
+      if (tab === "Invoice") assert.match(workspace.textContent, /No finalized invoice is available for this Job yet/);
       if (tab === "Documents / Photos") {
         assert.match(workspace.textContent, /Q-0000025/); assert.match(workspace.textContent, /Canonical Quote/);
         assert.match(workspace.textContent, /No customer-visible request photos/); assert.equal(workspace.querySelectorAll("img").length, 0);
@@ -145,8 +146,8 @@ test("History controls, visit labels, empty states, and export notices use all f
       assert.ok(document.body.textContent.includes(historyCopy.jobStatus));
       for (const key of ["evaluationVisit", "workVisit", "preparing", "noFinalizedInvoice", "noPhotos", "emailManualNotice", "failedNotice"]) assert.ok(copy[key]);
       await click(copy.email); assert.ok(document.body.textContent.includes(copy.emailManualNotice));
-      await click(historyCopy.work); assert.ok(document.body.textContent.includes(copy.noWorkDetails));
-      await click(historyCopy.invoices); assert.ok(document.body.textContent.includes(copy.noFinalizedInvoice));
+      await click(getJobCompletionCopy(language).homeownerJob); assert.ok(document.body.textContent.includes(copy.noWorkDetails));
+      await click(getJobCompletionCopy(language).homeownerInvoice); assert.ok(document.body.textContent.includes(copy.noFinalizedInvoice));
       await click(historyCopy.documentsPhotos); assert.ok(document.body.textContent.includes(copy.noPhotos));
     }
   });
@@ -195,8 +196,8 @@ test("same History reads automatically present finalized Invoice, payment histor
     api.fetchCustomerJobWorkPlan = async () => ({ jobId: JOB, workstreams: [{ id: "workstream", title: "Recorded repair", status: "COMPLETED", activities: [{ id: "activity", statement: "Repaired the waterline", status: "COMPLETED", performedAt: DATE }], updates: [{ statement: "Water service restored" }] }] });
     api.fetchCustomerJobInvoice = async () => ({ jobId: JOB, invoiceNumber: "INV-fixture-finalized", status: "PARTIALLY_PAID", issuedAt: DATE, currency: "USD", totalMinor: 35000, paidMinor: 17500, balanceMinor: 17500, lineItems: [{ sequence: 1, type: "approvedWork", description: "Waterline repair", quantity: 1, lineTotalMinor: 35000 }], payments: [{ amountMinor: 17500, currency: "USD", method: "Card", recordedAt: DATE, receivedDate: "2026-09-29" }] });
     await render();
-    await click("Jobs"); assert.match(document.body.textContent, /Repaired the waterline/); assert.match(document.body.textContent, /Water service restored/);
-    await click("Invoices"); assert.match(document.body.textContent, /INV-fixture-finalized/); assert.match(document.body.textContent, /PARTIALLY_PAID/); assert.match(document.body.textContent, /\$175\.00/); assert.match(document.body.textContent, /Payment history/);
+    await click("Job"); assert.match(document.body.textContent, /Repaired the waterline/); assert.match(document.body.textContent, /Water service restored/);
+    await click("Invoice"); assert.match(document.body.textContent, /INV-fixture-finalized/); assert.match(document.body.textContent, /PARTIALLY_PAID/); assert.match(document.body.textContent, /\$175\.00/); assert.match(document.body.textContent, /Payment history/);
     await click("Documents / Photos");
     assert.match(document.body.textContent, /Canonical Invoice/);
     assert.equal(document.querySelector("img").src, "https://res.cloudinary.com/demo/image/upload/request.jpg");
@@ -208,31 +209,27 @@ test("same History reads automatically present finalized Invoice, payment histor
   });
 });
 
-test("actual Review Details sheet contains focus, survives every tab, closes on Escape, and restores focus", async () => {
+test("main History workspace preserves exact Job through every tab and returns without modal focus locking", async () => {
   await withWorkspace(async ({ dom, root, vite, click }) => {
-    const { CanonicalHistoryDetailsSheet: Sheet } = await vite.ssrLoadModule("/src/pages/Home.jsx");
-    const invoker = document.createElement("button"); invoker.textContent = "Review Details"; document.body.prepend(invoker); invoker.focus();
+    const { HomeownerJobHistoryWorkspace: Workspace } = await vite.ssrLoadModule("/src/pages/Home.jsx");
+    const invoker = document.createElement("button"); invoker.textContent = "View History"; document.body.prepend(invoker);
     const setPage = () => {};
     function Harness() {
       const [open, setOpen] = React.useState(true);
-      return open ? React.createElement(Sheet, { jobId: JOB, language: "en", invoker, setPage, onClose: () => setOpen(false) }) : null;
+      return open ? React.createElement(Workspace, { jobId: JOB, language: "en", setPage, onClose: () => { setOpen(false); invoker.focus(); } }) : null;
     }
     await act(async () => root.render(React.createElement(Harness)));
     await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
-    const dialog = document.querySelector('[role="dialog"][aria-modal="true"]');
-    assert.ok(dialog); assert.ok(dialog.contains(document.activeElement));
-    for (const tab of ["Overview", "Jobs", "Quotes", "Invoices", "Documents / Photos", "Overview"]) {
-      await click(tab); assert.equal(document.querySelector('[role="dialog"]'), dialog);
-      assert.equal(dialog.querySelector('[data-customer-full-job-history]').dataset.customerFullJobHistory, JOB);
+    const workspace = document.querySelector('[data-homeowner-history-workspace]');
+    assert.ok(workspace); assert.equal(document.querySelector('[aria-modal="true"]'), null);
+    assert.equal(document.activeElement, workspace.querySelector("button"));
+    assert.equal(document.body.style.overflow, ""); assert.equal(invoker.inert, undefined);
+    for (const tab of ["Overview", "Job", "Quotes", "Invoice", "Documents / Photos", "Overview"]) {
+      await click(tab); assert.equal(document.querySelector('[data-homeowner-history-workspace]'), workspace);
+      assert.equal(workspace.querySelector('[data-customer-full-job-history]').dataset.customerFullJobHistory, JOB);
     }
-    const buttons = [...dialog.querySelectorAll("button:not([disabled])")];
-    buttons.at(-1).focus();
-    await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true })));
-    assert.equal(document.activeElement, buttons[0]);
-    await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Tab", shiftKey: true, bubbles: true, cancelable: true })));
-    assert.equal(document.activeElement, buttons.at(-1));
-    await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
-    assert.equal(document.querySelector('[role="dialog"]'), null);
+    await act(async () => workspace.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+    assert.equal(document.querySelector('[data-homeowner-history-workspace]'), null);
     assert.equal(document.activeElement, invoker); assert.equal(document.body.style.overflow, "");
   });
 });

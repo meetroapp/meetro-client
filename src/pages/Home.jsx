@@ -368,7 +368,17 @@ function Home({ setPage }) {
   const [historyDetailsRequest, setHistoryDetailsRequest] = useState(null);
   const [canonicalHistoryJobId, setCanonicalHistoryJobId] = useState("");
   const canonicalHistoryInvokerRef = useRef(null);
+  const historyReturnJobRef = useRef("");
   const [canonicalCustomerHistory, setCanonicalCustomerHistory] = useState(null);
+  useEffect(() => {
+    if (canonicalHistoryJobId || !historyReturnJobRef.current) return;
+    const jobId = historyReturnJobRef.current;
+    historyReturnJobRef.current = "";
+    const buttons = [...document.querySelectorAll("[data-history-open-job]")];
+    const invoker = buttons.find(button => button.dataset.historyOpenJob === jobId && button.getClientRects().length);
+    (invoker || buttons.find(button => button.dataset.historyOpenJob === jobId))?.focus();
+  }, [canonicalHistoryJobId]);
+
   const [canonicalSpotlightBusinesses, setCanonicalSpotlightBusinesses] =
     useState(null);
   const [backendHomeownerRequests, setBackendHomeownerRequests] = useState([]);
@@ -454,6 +464,7 @@ function Home({ setPage }) {
     title: job.serviceTitle,
     professionalName: job.professionalName,
     completedAt: job.completedAt,
+    approvedQuote: job.approvedQuote,
     finalAmount: job.approvedQuote ? job.approvedQuote.totalMinor / 100 : 0,
     paymentStatus: "completed",
     canonicalHistory: true,
@@ -1108,6 +1119,24 @@ function Home({ setPage }) {
     );
   }
 
+  if (canonicalHistoryJobId) {
+    return (
+      <div className="app-page meetro-responsive-page homeowner-home-dashboard homeowner-history-page" style={pageWrapper}>
+        <TopBar setPage={setPage} unreadCount={homeownerUnreadMessageCount} />
+        <HomeownerJobHistoryWorkspace
+          jobId={canonicalHistoryJobId}
+          language={language}
+          setPage={setPage}
+          onClose={() => {
+            historyReturnJobRef.current = canonicalHistoryJobId;
+            setCanonicalHistoryJobId("");
+          }}
+        />
+        <BottomNav setPage={setPage} currentPage="home" />
+      </div>
+    );
+  }
+
   if (homeView === "serviceHistory") {
     return (
       <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
@@ -1167,15 +1196,7 @@ function Home({ setPage }) {
           />
         )}
 
-        {canonicalHistoryJobId && (
-          <CanonicalHistoryDetailsSheet
-            jobId={canonicalHistoryJobId}
-            language={language}
-            setPage={setPage}
-            invoker={canonicalHistoryInvokerRef.current}
-            onClose={() => setCanonicalHistoryJobId("")}
-          />
-        )}
+
 
         <BottomNav setPage={setPage} currentPage="home" />
       </div>
@@ -1183,7 +1204,7 @@ function Home({ setPage }) {
   }
 
   return (
-    <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
+    <div className={`app-page meetro-responsive-page homeowner-home-dashboard ${myProjectsTab === "history" ? "homeowner-history-list-view" : ""}`} style={pageWrapper}>
       <style>{homeLayoutMediaStyles}</style>
       <TopBar setPage={setPage} unreadCount={homeownerUnreadMessageCount} />
       <header className="home-dashboard-welcome"><h1>Good morning!</h1><p>Your home, our community.</p></header>
@@ -1279,7 +1300,7 @@ function Home({ setPage }) {
             )
           ) : historyRequests.length > 0 ? (
             <div style={projectHistoryList}>
-              {historyRequests.slice(0, 3).map((request) => (
+              {historyRequests.map((request) => (
                 <HistoryRequestCard
                   key={request.requestId || request.id}
                   request={request}
@@ -1327,7 +1348,7 @@ function Home({ setPage }) {
             <h3 style={landscapeProjectsTitle}>{t("homeMyProjectsHistory", language)}</h3>
             {historyRequests.length > 0 ? (
               <div style={landscapeProjectsList}>
-                {historyRequests.slice(0, 2).map((request) => (
+                {(myProjectsTab === "history" ? [] : historyRequests.slice(0, 2)).map((request) => (
                   <HistoryRequestCard
                     key={request.requestId || request.id}
                     request={request}
@@ -1555,15 +1576,7 @@ function Home({ setPage }) {
         />
       )}
 
-        {canonicalHistoryJobId && (
-          <CanonicalHistoryDetailsSheet
-            jobId={canonicalHistoryJobId}
-            language={language}
-            setPage={setPage}
-            invoker={canonicalHistoryInvokerRef.current}
-            onClose={() => setCanonicalHistoryJobId("")}
-          />
-        )}
+
 
       <BottomNav setPage={setPage} currentPage="home" />
     </div>
@@ -2653,98 +2666,50 @@ function ServiceHistoryDetailsSheet({
   );
 }
 
-function CanonicalHistoryDetailsSheet({ jobId, language, setPage, invoker, onClose }) {
+function HomeownerJobHistoryWorkspace({ jobId, language, setPage, onClose }) {
   const copy = getJobCompletionCopy(language);
-  const overlayRef = useRef(null);
-  const dialogRef = useRef(null);
-  const closeRef = useRef(null);
-  const onCloseRef = useRef(onClose);
-  onCloseRef.current = onClose;
-
-  useEffect(() => {
-    const overlay = overlayRef.current;
-    const dialog = dialogRef.current;
-    const siblings = overlay?.parentElement
-      ? [...overlay.parentElement.children].filter((element) => element !== overlay)
-      : [];
-    const previousInert = siblings.map((element) => [element, element.inert]);
-    siblings.forEach((element) => { element.inert = true; });
-    const previousBodyOverflow = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    closeRef.current?.focus();
-
-    function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        onCloseRef.current?.();
-        return;
-      }
-      if (event.key !== "Tab" || !dialog) return;
-      const focusable = [...dialog.querySelectorAll('a[href], button:not([disabled]), input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])')]
-        .filter((element) => !element.hasAttribute("hidden") && element.getAttribute("aria-hidden") !== "true");
-      if (!focusable.length) {
-        event.preventDefault();
-        dialog.focus();
-        return;
-      }
-      const first = focusable[0];
-      const last = focusable[focusable.length - 1];
-      if (event.shiftKey && (document.activeElement === first || !dialog.contains(document.activeElement))) {
-        event.preventDefault();
-        last.focus();
-      } else if (!event.shiftKey && (document.activeElement === last || !dialog.contains(document.activeElement))) {
-        event.preventDefault();
-        first.focus();
-      }
-    }
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => {
-      document.removeEventListener("keydown", handleKeyDown);
-      previousInert.forEach(([element, wasInert]) => { element.inert = wasInert; });
-      document.body.style.overflow = previousBodyOverflow;
-      if (invoker?.isConnected) invoker.focus();
-    };
-  }, [invoker]);
+  const backRef = useRef(null);
+  useEffect(() => { backRef.current?.focus(); }, [jobId]);
 
   return (
-    <div ref={overlayRef} style={detailsSheetOverlay} onClick={onClose}>
-      <section
-        ref={dialogRef}
-        role="dialog"
-        aria-modal="true"
-        aria-label={copy.historyDialogLabel}
-        tabIndex={-1}
-        style={detailsSheet}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <div style={detailsSheetHandle}></div>
-        <div style={detailsSheetHeader}>
-          <div>
-            <p style={eyebrow}>{t("homeServiceDetails", language)}</p>
-            <h3 style={detailsSheetTitle}>{copy.history}</h3>
-          </div>
-          <button
-            ref={closeRef}
-            type="button"
-            style={detailsSheetClose}
-            aria-label={copy.historyDialogClose}
-            onClick={onClose}
-          >
-            ×
-          </button>
-        </div>
-        <CustomerCompletionHistory
-          jobId={jobId}
-          language={language}
-          setPage={setPage}
-        />
-      </section>
-    </div>
+    <section className="homeowner-history-detail" aria-label={copy.history}
+      data-homeowner-history-workspace={jobId}
+      onKeyDown={event => {
+        if (event.key === "Escape") { event.preventDefault(); onClose(); }
+      }}>
+      <button ref={backRef} type="button" className="homeowner-history-back" onClick={onClose}>
+        <span aria-hidden="true">←</span> {copy.homeownerBackToHistory}
+      </button>
+      <CustomerCompletionHistory jobId={jobId} language={language} setPage={setPage} />
+    </section>
   );
 }
 
 function HistoryRequestCard({ request, language, setPage, onDetails }) {
+  if (request.canonicalHistory) {
+    const copy = getJobCompletionCopy(language);
+    const amount = request.approvedQuote
+      ? formatLocaleCurrency(request.approvedQuote.totalMinor / 100, request.approvedQuote.currency, {}, language)
+      : "";
+    return (
+      <article className="homeowner-history-card" data-homeowner-history-card={request.jobId}>
+        <span className="homeowner-history-completed">{copy.completed}</span>
+        <div className="homeowner-history-card-heading">
+          <h3>{request.title || t("homeCompletedService", language)}</h3>
+          {amount && <strong className="homeowner-history-money">{amount}</strong>}
+        </div>
+        <p>{request.professionalName || t("homeProfessionalUnavailable", language)}</p>
+        <p className="homeowner-history-date">{copy.completedOn} {request.completedAt
+          ? formatLocaleDate(request.completedAt, { month: "short", day: "numeric", year: "numeric" }, language)
+          : t("homeDatePending", language)}</p>
+        <button type="button" className="homeowner-history-view" data-history-open-job={request.jobId}
+          onClick={event => onDetails?.(request, event.currentTarget)}>
+          {copy.viewHistory} <span aria-hidden="true">→</span>
+        </button>
+      </article>
+    );
+  }
+
   const lifecycle = getHomeownerLifecycleStage(request, language);
   const isClosed = request.status === "closed" || lifecycle.key === "history";
   const completedDate = request.completedAt

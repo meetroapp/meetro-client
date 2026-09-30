@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./CustomerCompletionHistory.css";
 import { fetchCustomerJobHistory } from "../utils/jobCompletionApi.js";
 import { fetchCustomerJobQuotes } from "../utils/customerJobQuotesApi.js";
 import { fetchCustomerJobInvoice } from "../utils/invoicePaymentApi.js";
@@ -457,6 +458,7 @@ export default function CustomerCompletionHistory({
 
   return (
     <section
+      className="homeowner-job-history"
       style={styles.historyWorkspace}
       aria-labelledby="customer-job-history-title"
       data-customer-job-history-job-id={
@@ -467,9 +469,7 @@ export default function CustomerCompletionHistory({
       }
     >
       <header style={styles.historyHero}>
-        <span style={styles.eyebrow}>
-          {historyCopy.title}
-        </span>
+        <span style={styles.historyCompleted}>{historyCopy.completed}</span>
 
         <h2
           id="customer-job-history-title"
@@ -488,9 +488,9 @@ export default function CustomerCompletionHistory({
           )}
         </p>
 
-        <strong style={styles.historyCompleted}>
-          {copy.workCompleted}
-        </strong>
+        {history.approvedQuote && <strong className="homeowner-history-money">
+          {displayMoney(history.approvedQuote, language)}
+        </strong>}
 
         <div
           style={styles.historyReportActions}
@@ -554,9 +554,9 @@ export default function CustomerCompletionHistory({
           (tab) => {
             const labels = {
               overview: historyCopy.overview,
-              work: historyCopy.work,
+              work: copy.homeownerJob,
               quotes: historyCopy.quotes,
-              invoices: historyCopy.invoices,
+              invoices: copy.homeownerInvoice,
               documents:
                 historyCopy.documentsPhotos,
             };
@@ -1502,22 +1502,22 @@ const styles = {
 
   historyHero: {
     display: "grid",
-    justifyItems: "center",
+    justifyItems: "start",
     gap: 6,
     minWidth: 0,
-    padding: "20px 16px",
+    padding: "16px",
     border: "1px solid #dce5d8",
     borderRadius: 18,
     background:
       "linear-gradient(135deg, #fffdfa 0%, #eef8f1 100%)",
-    textAlign: "center",
+    textAlign: "left",
   },
 
   historyTitle: {
     margin: 0,
     maxWidth: "100%",
     color: "#123b27",
-    fontSize: "clamp(24px, 4vw, 38px)",
+    fontSize: "clamp(22px, 3vw, 28px)",
     lineHeight: 1.1,
     overflowWrap: "anywhere",
   },
@@ -1543,8 +1543,8 @@ const styles = {
 
   historyTab: {
     flex: "0 0 auto",
-    minHeight: 44,
-    padding: "9px 14px",
+    minHeight: "var(--homeowner-history-tab-height, 44px)",
+    padding: "6px 12px",
     border: "1px solid #ccd9cf",
     borderRadius: 999,
     color: "#31543f",
@@ -1555,8 +1555,8 @@ const styles = {
 
   historyTabActive: {
     flex: "0 0 auto",
-    minHeight: 44,
-    padding: "9px 14px",
+    minHeight: "var(--homeowner-history-tab-height, 44px)",
+    padding: "6px 12px",
     border: "1px solid #0b5d3b",
     borderRadius: 999,
     color: "#fff",
@@ -1662,7 +1662,8 @@ const styles = {
   },
 
   historyAmount: {
-    color: "#16773f",
+    color: "#0B5D3B",
+    whiteSpace: "nowrap",
   },
 
   historyAmountGrid: {
@@ -1751,7 +1752,7 @@ const styles = {
 
   historyReportActions: {
     display: "flex",
-    justifyContent: "center",
+    justifyContent: "flex-start",
     gap: 8,
     flexWrap: "wrap",
     width: "100%",
@@ -1759,9 +1760,9 @@ const styles = {
   },
 
   historyReportButton: {
-    minHeight: 44,
-    minWidth: 92,
-    padding: "9px 14px",
+    minHeight: "var(--homeowner-history-control-height, 44px)",
+    minWidth: 0,
+    padding: "6px 12px",
     border: "1px solid #0b5d3b",
     borderRadius: 999,
     color: "#0b5d3b",

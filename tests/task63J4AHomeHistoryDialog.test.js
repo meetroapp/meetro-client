@@ -15,7 +15,7 @@ const jobs = [
   { jobId: JOB_B, requestId: 22, relationshipId: 102, conversationId: 202, sourceType: "ordinary_request", sourceLabel: "Job Request", serviceTitle: "Second Ordinary Job", professionalName: "Fixture Pro", completedAt: "2026-09-27T12:00:00Z", approvedQuote: null },
 ];
 
-test("actual Home History controls mount a focus-contained, dismissible exact-Job sheet in both branches", async () => {
+test("actual Home History controls open a responsive exact-Job workspace and return in both branches", async () => {
   const vite = await createServer({ root: cwd(), configFile: false, cacheDir: "/tmp/task63j4a-home-vite", optimizeDeps: { noDiscovery: true, include: [] }, server: { middlewareMode: true, hmr: false }, plugins: [{
     name: "mock-home-history-reads", enforce: "pre",
     transform(source, id) {
@@ -55,30 +55,33 @@ test("actual Home History controls mount a focus-contained, dismissible exact-Jo
       try {
         await act(async () => root.render(React.createElement(Home, { setPage() {} })));
         await act(async () => { await new Promise((resolve) => setTimeout(resolve, 0)); });
-        const cards = [...document.querySelectorAll("button")].filter((button) => button.textContent.includes(t("viewDetails", locale)));
-        assert.ok(cards.length >= 2, `${branch}: canonical History buttons visible; buttons=${[...document.querySelectorAll("button")].map((button) => button.textContent.trim()).slice(0, 40).join("|")}`);
+        if (branch === "landing") {
+          const historyTab = [...document.querySelectorAll(".home-my-projects-tabs button")].find(button => button.textContent === t("homeMyProjectsHistory", locale));
+          await act(async () => historyTab.click());
+        }
+        const cards = [...document.querySelectorAll("[data-history-open-job]")];
+        assert.equal(cards.length, 2, `${branch}: one card for each canonical Job`);
         cards[0].focus();
         await act(async () => cards[0].click());
-        const dialog = document.querySelector('[role="dialog"][aria-modal="true"]');
-        assert.ok(dialog, `${branch}: dialog mounted`);
-        assert.equal(dialog.getAttribute("aria-label"), getJobCompletionCopy(locale).historyDialogLabel);
-        assert.match(dialog.textContent, /First Emergency Job/);
-        assert.ok(dialog.textContent.includes(getJobCompletionCopy(locale).emergencyPreservedRecordBody));
-        assert.equal(document.activeElement, dialog.querySelector("button[aria-label]"));
-        assert.equal(dialog.querySelector("button[aria-label]").getAttribute("aria-label"), getJobCompletionCopy(locale).historyDialogClose);
-        assert.match(dialog.textContent, new RegExp(getJobCompletionCopy(locale).workCompleted, "i"));
-        const tab = new dom.window.KeyboardEvent("keydown", { key: "Tab", bubbles: true, cancelable: true });
-        await act(async () => document.dispatchEvent(tab));
-        assert.ok(dialog.contains(document.activeElement));
-        await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
-        assert.equal(document.querySelector('[role="dialog"][aria-modal="true"]'), null);
-        assert.equal(document.activeElement, cards[0]);
-        await act(async () => cards[0].click());
-        assert.ok(document.querySelector('[role="dialog"][aria-modal="true"]'));
-        await act(async () => document.querySelector('[role="dialog"][aria-modal="true"]').parentElement.click());
-        assert.equal(document.querySelector('[role="dialog"][aria-modal="true"]'), null);
-        await act(async () => cards[1].click());
-        assert.match(document.querySelector('[role="dialog"][aria-modal="true"]').textContent, new RegExp(getJobCompletionCopy(locale).historyUnavailable, "i"));
+        const workspace = document.querySelector('[data-homeowner-history-workspace]');
+        assert.ok(workspace, `${branch}: main workspace mounted`);
+        assert.equal(workspace.dataset.homeownerHistoryWorkspace, JOB_A);
+        assert.equal(document.querySelector('[aria-modal="true"]'), null);
+        assert.match(workspace.textContent, /First Emergency Job/);
+        assert.ok(workspace.textContent.includes(getJobCompletionCopy(locale).emergencyPreservedRecordBody));
+        const back = workspace.querySelector("button");
+        assert.equal(document.activeElement, back);
+        assert.ok(back.textContent.includes(getJobCompletionCopy(locale).homeownerBackToHistory));
+        await act(async () => back.click());
+        assert.equal(document.querySelector('[data-homeowner-history-workspace]'), null);
+        const restored = document.querySelector(`[data-history-open-job="${JOB_A}"]`);
+        assert.equal(document.activeElement, restored);
+        await act(async () => restored.click());
+        assert.ok(document.querySelector('[data-homeowner-history-workspace]'));
+        await act(async () => document.querySelector('[data-homeowner-history-workspace]').dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true, cancelable: true })));
+        assert.equal(document.querySelector('[data-homeowner-history-workspace]'), null);
+        await act(async () => document.querySelector(`[data-history-open-job="${JOB_B}"]`).click());
+        assert.match(document.querySelector('[data-homeowner-history-workspace]').textContent, new RegExp(getJobCompletionCopy(locale).historyUnavailable, "i"));
         assert.deepEqual(globalThis.__j4CompletionCalls.slice(-1), [JOB_B]);
       } finally {
         await act(async () => root.unmount());
