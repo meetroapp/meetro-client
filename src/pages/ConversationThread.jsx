@@ -7246,6 +7246,14 @@ const handleImageUpload = (event) => {
                     invoice={msg.invoiceShare}
                     language={language}
                     canReview={currentViewerRole === "homeowner"}
+                    audience={
+                      currentViewerRole === "homeowner"
+                        ? "customer"
+                        : "professional"
+                    }
+                    businessContextId={canonicalConversationDetail?.participants?.business?.userId || ""}
+                    conversationContextId={canonicalConversationId || ""}
+                    setPage={setPage}
                     onReview={() => {
                       const route = buildCustomerInvoiceReviewRoute({
                         invoiceId: msg.reference?.invoiceId,

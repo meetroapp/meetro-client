@@ -10,6 +10,8 @@ import { runEmergencyWorkCenterTransition } from '../utils/emergencyWorkCenterAc
 import { canonicalEvaluationContentToForm } from '../utils/canonicalEvaluation.js';
 import { loadCanonicalEvaluationForRecord, saveCanonicalEvaluationDraft, completeCanonicalEvaluationDraft } from '../utils/evaluationAuthorityController.js';
 import { validateCanonicalQuoteProjection } from '../utils/canonicalQuoteRead.js';
+import { shouldShowWorkCenterDepositRecord } from '../utils/workCenterLifecyclePresentation.js';
+import { getJobCompletionCopy } from '../utils/jobCompletionLanguage.js';
 import { fetchProfessionalJobHistoryDetail } from '../utils/jobCompletionApi.js';
 import { fetchProfessionalJobInvoice } from '../utils/invoicePaymentApi.js';
 import { authFetch } from '../utils/authFetch.js';
@@ -166,32 +168,36 @@ function EmergencyHistory({record,setPage,language}) {
 }
 
 export default function EmergencyWorkCenterDetail({record,liveJob,setPage,language='en',onRefresh}) {
+  const copy=getJobCompletionCopy(language);
   const [pending,setPending]=useState(false),[error,setError]=useState('');
   const [opened,setOpened]=useState('');
   const valid=emergencyIdentityMatches(record,liveJob);
   const action=valid?emergencyPrimaryAction(liveJob):null;
+  const depositVisible=valid&&shouldShowWorkCenterDepositRecord(liveJob.deposit);
   const actionSection={START_EVALUATION:'evaluation',EDIT_EVALUATION:'evaluation',CREATE_QUOTE:'quote',REVIEW_QUOTE:'quote',VIEW_DEPOSIT:'deposit',CREATE_FINAL_INVOICE:'invoice',VIEW_INVOICE:'invoice',VIEW_JOB_HISTORY:'history'}[action?.code]||'';
-  const section=opened||actionSection;
+  const safeOpened=opened==='deposit'&&!depositVisible?'':opened;
+  const section=safeOpened||actionSection;
   async function primary() {
     if(!action||pending)return;
     if(['MARK_EN_ROUTE','MARK_ARRIVED','START_WORK','COMPLETE_WORK'].includes(action.code)) {
       if(action.code==='COMPLETE_WORK'&&!window.confirm('Confirm this Emergency work is complete?'))return;
       setPending(true);setError('');
       try{await runEmergencyWorkCenterTransition({record,action:action.code,setPage});}catch(e){setError(e.message);}finally{onRefresh();setPending(false);}
-    }else setOpened(actionSection);
+    }else if(actionSection!=='deposit'||depositVisible)setOpened(actionSection);
   }
   return <div className="emergency-work-center" data-emergency-job={record.jobId}>
     <section className="emergency-work-center__current"><WorkCenterSourceBadge record={record} language={language}/><h2>{valid?liveJob.stage.label:'Current status unavailable'}</h2>
+      {valid&&liveJob.deposit?.state==='NOT_REQUIRED'&&<p data-emergency-deposit-state="NOT_REQUIRED"><strong>{copy.depositLabel}:</strong> {copy.depositNotRequired}</p>}
       {valid&&liveJob.blocker&&<p>{liveJob.blocker.label}</p>}{error&&<p role="alert">{error}</p>}
       {action&&<button className="emergency-work-center__primary" disabled={pending} onClick={primary}>{pending?'Updating…':action.label}</button>}
       <button disabled={pending} onClick={onRefresh}>Refresh status</button>
     </section>
     {valid&&<nav aria-label="Emergency Job records" className="emergency-work-center__actions">
-      {['evaluation','quote',...(liveJob.deposit?['deposit']:[]),...(liveJob.invoice||liveJob.stage.code==='JOB_COMPLETED'?['invoice','history']:[])].map(name=><button key={name} aria-pressed={section===name} onClick={()=>setOpened(name)}>{name[0].toUpperCase()+name.slice(1)}</button>)}
+      {['evaluation','quote',...(depositVisible?['deposit']:[]),...(liveJob.invoice||liveJob.stage.code==='JOB_COMPLETED'?['invoice','history']:[])].map(name=><button key={name} aria-pressed={section===name} onClick={()=>setOpened(name)}>{name[0].toUpperCase()+name.slice(1)}</button>)}
     </nav>}
     {valid&&section==='evaluation'&&<EmergencyEvaluation record={record} liveJob={liveJob} setPage={setPage} onRefresh={onRefresh}/>}
     {valid&&section==='quote'&&<EmergencyQuotes record={record} liveJob={liveJob} setPage={setPage} onRefresh={onRefresh} language={language}/>}
-    {valid&&section==='deposit'&&<ProfessionalDepositCard jobId={record.jobId} quoteId={liveJob.quote?.quoteId} sourceType="emergency_request" setPage={setPage} showRequestAction={false} onCanonicalChange={onRefresh}/>}
+    {valid&&depositVisible&&section==='deposit'&&<ProfessionalDepositCard jobId={record.jobId} quoteId={liveJob.quote?.quoteId} sourceType="emergency_request" setPage={setPage} showRequestAction={false} onCanonicalChange={onRefresh}/>}
     {valid&&section==='invoice'&&(liveJob.invoice?<ProfessionalInvoiceWorkspace initialInvoiceId={liveJob.invoice.invoiceId} expectedJobId={record.jobId} language={language} setPage={setPage}/>:<CompletedJobInvoiceHandoff jobId={record.jobId} language={language} setPage={setPage}/>)}
     {valid&&section==='history'&&<EmergencyHistory record={record} setPage={setPage} language={language}/>}
   </div>;

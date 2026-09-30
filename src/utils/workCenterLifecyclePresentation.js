@@ -43,6 +43,26 @@ function normalized(value) {
   return typeof value === "string" ? value.trim() : "";
 }
 
+export function resolveEmergencyWorkCenterBucket({ liveJob } = {}) {
+  const stageCode = normalized(liveJob?.stage?.code).toUpperCase();
+  const actionCode = normalized(liveJob?.nextAction?.code).toUpperCase();
+
+  if (
+    stageCode === "PAID" ||
+    actionCode === "REVIEW_PAID_INVOICE" ||
+    actionCode === "VIEW_JOB_HISTORY"
+  ) {
+    return "closed";
+  }
+
+  return "active";
+}
+
+export function shouldShowWorkCenterDepositRecord(deposit) {
+  if (!deposit) return false;
+  return normalized(deposit.state || deposit.status).toUpperCase() !== "NOT_REQUIRED";
+}
+
 function depositRequiresAction(deposit) {
   const state = normalized(deposit?.state || deposit?.status).toUpperCase();
   return Boolean(
