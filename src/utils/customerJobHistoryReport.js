@@ -1724,8 +1724,6 @@ export async function createCustomerJobHistoryPdfArtifact(
     }
   }
 
-  section(copy.readOnly);
-
   addText(
     copy.readOnly,
     PAGE.margin,
@@ -1888,6 +1886,31 @@ export async function shareCustomerJobHistoryReport(
   });
 }
 
+
+function openCustomerJobHistoryEmailDraft({
+  recipient = "",
+  subject = "",
+  message = "",
+  locationObject = globalThis.location,
+} = {}) {
+  if (!locationObject) {
+    return false;
+  }
+
+  const body = [
+    message,
+    "",
+    "Please attach the Meetro Job History PDF before sending.",
+  ].join("\n");
+
+  locationObject.href =
+    `mailto:${encodeURIComponent(recipient)}` +
+    `?subject=${encodeURIComponent(subject)}` +
+    `&body=${encodeURIComponent(body)}`;
+
+  return true;
+}
+
 export async function emailCustomerJobHistoryReport(
   model,
   {
@@ -1897,11 +1920,14 @@ export async function emailCustomerJobHistoryReport(
     shareArtifact =
       shareBusinessDocumentPdfArtifact,
 
-    downloadArtifact =
-      downloadBusinessDocumentPdfArtifact,
-
     openEmailDraft =
-      openBusinessDocumentEmailDraft,
+      openCustomerJobHistoryEmailDraft,
+
+    isNative =
+      Capacitor.isNativePlatform(),
+
+    platform =
+      Capacitor.getPlatform(),
   } = {}
 ) {
   const artifact =
@@ -1921,32 +1947,31 @@ export async function emailCustomerJobHistoryReport(
       )}`,
     ].join("\n");
 
-  const shared =
-    await shareArtifact({
-      artifact,
-      message,
-    });
+  if (
+    isNative &&
+    ["ios", "android"].includes(
+      platform
+    )
+  ) {
+    const shared =
+      await shareArtifact({
+        artifact,
+        message,
+      });
 
-  if (shared?.ok) {
     return Object.freeze({
-      ...shared,
+      ok:
+        shared?.ok === true,
+
+      method:
+        shared?.method ||
+        "unavailable",
+
       fileName:
         artifact.fileName,
-      chooseEmailApp: true,
-    });
-  }
 
-  const downloaded =
-    downloadArtifact(
-      artifact
-    );
-
-  if (!downloaded) {
-    return Object.freeze({
-      ok: false,
-      method: "unavailable",
-      fileName:
-        artifact.fileName,
+      chooseEmailApp:
+        shared?.ok === true,
     });
   }
 
@@ -1960,13 +1985,20 @@ export async function emailCustomerJobHistoryReport(
   return Object.freeze({
     ok:
       draftOpened === true,
+
     method:
       draftOpened
         ? "email-draft"
-        : "download",
+        : "unavailable",
+
     fileName:
       artifact.fileName,
-    manualAttachment: true,
+
+    manualAttachment:
+      draftOpened === true,
+
+    attachmentDownloaded:
+      false,
   });
 }
 

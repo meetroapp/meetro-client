@@ -423,7 +423,7 @@ export default function CustomerCompletionHistory({
           action === "email" &&
           result.manualAttachment
         ) {
-          return "Job History PDF downloaded and an email draft opened. Attach the downloaded PDF before sending.";
+          return "Email draft opened. Browsers cannot attach the PDF automatically. Use Share to save the Job History PDF, then attach it before sending.";
         }
 
         if (

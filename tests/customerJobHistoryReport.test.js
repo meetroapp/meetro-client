@@ -317,13 +317,14 @@ test(
 );
 
 test(
-  "Email falls back to download plus explicit email draft attachment workflow",
+  "Web Email opens an email draft directly without invoking Share or Download",
   async () => {
     const model =
       buildCustomerJobHistoryReportModel(
         fixture()
       );
 
+    let shared = false;
     let downloaded = false;
     let draft = null;
 
@@ -347,12 +348,19 @@ test(
                 "application/pdf",
             }),
 
+          isNative: false,
+          platform: "web",
+
           shareArtifact:
-            async () => ({
-              ok: false,
-              method:
-                "fallback",
-            }),
+            async () => {
+              shared = true;
+
+              return {
+                ok: true,
+                method:
+                  "web-pdf",
+              };
+            },
 
           downloadArtifact:
             () => {
@@ -384,13 +392,131 @@ test(
     );
 
     assert.equal(
+      result.attachmentDownloaded,
+      false
+    );
+
+    assert.equal(
+      shared,
+      false
+    );
+
+    assert.equal(
       downloaded,
-      true
+      false
     );
 
     assert.match(
       draft.subject,
       /Meetro Job History/
+    );
+  }
+);
+
+test(
+  "Native Email keeps the PDF share sheet so Mail can receive the file",
+  async () => {
+    const model =
+      buildCustomerJobHistoryReportModel(
+        fixture()
+      );
+
+    let shared = false;
+    let draftOpened = false;
+
+    const result =
+      await emailCustomerJobHistoryReport(
+        model,
+        {
+          createArtifact:
+            async () => ({
+              blob:
+                new Blob(
+                  ["%PDF-test"],
+                  {
+                    type:
+                      "application/pdf",
+                  }
+                ),
+              fileName:
+                "history.pdf",
+              contentType:
+                "application/pdf",
+            }),
+
+          isNative: true,
+          platform: "ios",
+
+          shareArtifact:
+            async () => {
+              shared = true;
+
+              return {
+                ok: true,
+                method:
+                  "native-pdf",
+              };
+            },
+
+          openEmailDraft:
+            () => {
+              draftOpened = true;
+              return true;
+            },
+        }
+      );
+
+    assert.equal(
+      result.ok,
+      true
+    );
+
+    assert.equal(
+      result.method,
+      "native-pdf"
+    );
+
+    assert.equal(
+      result.chooseEmailApp,
+      true
+    );
+
+    assert.equal(
+      shared,
+      true
+    );
+
+    assert.equal(
+      draftOpened,
+      false
+    );
+  }
+);
+
+test(
+  "PDF renders the read-only statement once rather than as a duplicate heading",
+  () => {
+    const source =
+      readFileSync(
+        new URL(
+          "../src/utils/customerJobHistoryReport.js",
+          import.meta.url
+        ),
+        "utf8"
+      );
+
+    assert.doesNotMatch(
+      source,
+      /section\s*\(\s*copy\.readOnly\s*\)/
+    );
+
+    assert.equal(
+      (
+        source.match(
+          /addText\s*\(\s*copy\.readOnly/g
+        ) || []
+      ).length,
+      1
     );
   }
 );
