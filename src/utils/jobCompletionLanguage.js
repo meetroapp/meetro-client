@@ -39,6 +39,9 @@ const COPY = Object.freeze({
     customerCompletionBody: "The professional recorded the approved work as completed.",
     messageProfessional: "Message Professional",
     pageUnavailable: "More completed work could not be loaded. Your existing results are still available.",
+    emergencyPreservedRecordBody: "Emergency Evaluation, findings, recommendations, approved Quote, completion, and billing remain linked to this Job.",
+    historyDialogLabel: "Completed Job History",
+    historyDialogClose: "Close completed Job History",
   }),
   es: Object.freeze({
     completionReview: "Revisión de finalización",
@@ -80,6 +83,9 @@ const COPY = Object.freeze({
     customerCompletionBody: "El profesional registró el trabajo aprobado como completado.",
     messageProfessional: "Enviar mensaje al profesional",
     pageUnavailable: "No se pudo cargar más trabajo completado. Los resultados anteriores siguen disponibles.",
+    emergencyPreservedRecordBody: "La evaluación de emergencia, los hallazgos, las recomendaciones, la cotización aprobada, la finalización y la facturación siguen vinculadas a este trabajo.",
+    historyDialogLabel: "Historial del trabajo completado",
+    historyDialogClose: "Cerrar historial del trabajo completado",
   }),
   fr: Object.freeze({
     completionReview: "Vérification de l’achèvement",
@@ -121,6 +127,9 @@ const COPY = Object.freeze({
     customerCompletionBody: "Le professionnel a enregistré le travail approuvé comme terminé.",
     messageProfessional: "Écrire au professionnel",
     pageUnavailable: "Le chargement des autres interventions terminées a échoué. Les résultats déjà chargés restent disponibles.",
+    emergencyPreservedRecordBody: "L’évaluation d’urgence, les constats, les recommandations, le devis approuvé, l’achèvement et la facturation restent liés à cette intervention.",
+    historyDialogLabel: "Historique de l’intervention terminée",
+    historyDialogClose: "Fermer l’historique de l’intervention terminée",
   }),
   "pt-BR": Object.freeze({
     completionReview: "Revisão de conclusão",
@@ -162,6 +171,9 @@ const COPY = Object.freeze({
     customerCompletionBody: "O profissional registrou o trabalho aprovado como concluído.",
     messageProfessional: "Enviar mensagem ao profissional",
     pageUnavailable: "Não foi possível carregar mais trabalhos concluídos. Os resultados já carregados continuam disponíveis.",
+    emergencyPreservedRecordBody: "A avaliação de emergência, as constatações, as recomendações, o orçamento aprovado, a conclusão e o faturamento permanecem vinculados a este trabalho.",
+    historyDialogLabel: "Histórico do trabalho concluído",
+    historyDialogClose: "Fechar histórico do trabalho concluído",
   }),
 });
 
