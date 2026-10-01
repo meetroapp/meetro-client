@@ -10,6 +10,180 @@ export const PERSONAL_PROFILE_IMAGE_MAX_BYTES = 10 * 1024 * 1024;
 export const STAGING_MEDIA_API_ORIGIN =
   "https://athletic-rebirth-staging.up.railway.app";
 
+export const PROFILE_PHOTO_DISPLAY_VERSION = 1;
+export const PROFILE_PHOTO_DISPLAY_MAX_ZOOM = 4;
+
+export const PROFILE_PHOTO_DISPLAY_DEFAULT = Object.freeze({
+  version: PROFILE_PHOTO_DISPLAY_VERSION,
+  focus_x: 0.5,
+  focus_y: 0.5,
+  zoom: 1,
+});
+
+const PROFILE_PHOTO_DISPLAY_FIELDS = Object.freeze([
+  "version",
+  "focus_x",
+  "focus_y",
+  "zoom",
+]);
+
+function isPlainDisplayRecord(value) {
+  return Boolean(value) &&
+    typeof value === "object" &&
+    !Array.isArray(value);
+}
+
+export function validatePersonalProfilePhotoDisplay(value) {
+  if (!isPlainDisplayRecord(value)) {
+    return failure("PROFILE_DISPLAY_INVALID");
+  }
+
+  const keys = Object.keys(value).sort();
+  const expected = [...PROFILE_PHOTO_DISPLAY_FIELDS].sort();
+
+  if (
+    keys.length !== expected.length ||
+    keys.some((key, index) => key !== expected[index])
+  ) {
+    return failure("PROFILE_DISPLAY_INVALID");
+  }
+
+  if (value.version !== PROFILE_PHOTO_DISPLAY_VERSION) {
+    return failure("PROFILE_DISPLAY_VERSION_INVALID");
+  }
+
+  for (const key of ["focus_x", "focus_y", "zoom"]) {
+    if (typeof value[key] !== "number" || !Number.isFinite(value[key])) {
+      return failure("PROFILE_DISPLAY_INVALID");
+    }
+  }
+
+  if (
+    value.focus_x < 0 ||
+    value.focus_x > 1 ||
+    value.focus_y < 0 ||
+    value.focus_y > 1 ||
+    value.zoom < 1 ||
+    value.zoom > PROFILE_PHOTO_DISPLAY_MAX_ZOOM
+  ) {
+    return failure("PROFILE_DISPLAY_RANGE_INVALID");
+  }
+
+  return {
+    ok: true,
+    display: {
+      version: PROFILE_PHOTO_DISPLAY_VERSION,
+      focus_x: value.focus_x,
+      focus_y: value.focus_y,
+      zoom: value.zoom,
+    },
+  };
+}
+
+export function normalizePersonalProfilePhotoDisplay(value) {
+  const validated = validatePersonalProfilePhotoDisplay(value);
+  return validated.ok
+    ? validated.display
+    : { ...PROFILE_PHOTO_DISPLAY_DEFAULT };
+}
+
+export function getPersonalProfilePhotoFocusBounds(zoom = 1) {
+  const numericZoom =
+    typeof zoom === "number" && Number.isFinite(zoom)
+      ? zoom
+      : 1;
+
+  const safeZoom = Math.min(
+    PROFILE_PHOTO_DISPLAY_MAX_ZOOM,
+    Math.max(1, numericZoom)
+  );
+
+  const radius =
+    (safeZoom - 1) /
+    (2 * safeZoom);
+
+  return {
+    min: 0.5 - radius,
+    max: 0.5 + radius,
+  };
+}
+
+export function constrainPersonalProfilePhotoDisplay(value) {
+  const display =
+    normalizePersonalProfilePhotoDisplay(value);
+
+  const bounds =
+    getPersonalProfilePhotoFocusBounds(
+      display.zoom
+    );
+
+  const clamp = (coordinate) =>
+    Math.min(
+      bounds.max,
+      Math.max(bounds.min, coordinate)
+    );
+
+  return {
+    ...display,
+    focus_x: clamp(display.focus_x),
+    focus_y: clamp(display.focus_y),
+  };
+}
+
+function formatProfilePhotoPercent(value) {
+  const numeric = Number(value);
+
+  if (!Number.isFinite(numeric)) return "0";
+
+  const rounded = Number(
+    numeric.toFixed(9)
+  );
+
+  return String(
+    Object.is(rounded, -0) ? 0 : rounded
+  );
+}
+
+export function getPersonalProfilePhotoDisplayStyle(value) {
+  const display =
+    constrainPersonalProfilePhotoDisplay(value);
+
+  const zoomPercent =
+    display.zoom * 100;
+
+  /*
+   * Canonical avatar geometry:
+   *
+   * 1. The image element itself is zoomed by enlarging its
+   *    width and height.
+   * 2. Its anchor is the exact center of the circular viewport.
+   * 3. translate percentages are relative to the image itself.
+   * 4. Moving by -focus_x / -focus_y therefore places the
+   *    selected normalized focal point exactly at viewport center.
+   *
+   * This is independent of the rendered avatar size, so the
+   * same saved focal point produces the same crop at 42px,
+   * 76px, or any other square Meetro avatar.
+   */
+  return {
+    position: "absolute",
+    width: `${zoomPercent.toFixed(3)}%`,
+    height: `${zoomPercent.toFixed(3)}%`,
+    maxWidth: "none",
+    maxHeight: "none",
+    left: "50%",
+    top: "50%",
+    objectPosition: "50% 50%",
+    transform:
+      `translate(${formatProfilePhotoPercent(
+        -display.focus_x * 100
+      )}%, ${formatProfilePhotoPercent(
+        -display.focus_y * 100
+      )}%)`,
+    transformOrigin: "0 0",
+  };
+}
+
 export function isPersonalProfilePhotoUploadEnabled({
   apiUrl = API_URL,
   env = import.meta.env,
@@ -279,6 +453,76 @@ export async function persistPersonalProfileImage({
     });
   }
   return data?.user || null;
+}
+
+export async function savePersonalProfilePhotoDisplay({
+  display,
+  authFetchImpl = authFetch,
+  setPage,
+  onDiagnostic = reportProfileMediaDiagnostic,
+} = {}) {
+  const validated = validatePersonalProfilePhotoDisplay(display);
+
+  if (!validated.ok) return validated;
+
+  let result;
+
+  try {
+    result = await authFetchImpl(
+      "/auth/profile-photo/display",
+      {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          purpose: "personal_profile",
+          display: validated.display,
+        }),
+      },
+      setPage
+    );
+  } catch {
+    reportFailure(onDiagnostic, {
+      purpose: "personal_profile",
+      stage: "display-persistence",
+      endpoint: "/auth/profile-photo/display",
+      status: 0,
+      code: "PROFILE_DISPLAY_PERSISTENCE_NETWORK_FAILED",
+    });
+
+    return failure("PROFILE_DISPLAY_SAVE_FAILED");
+  }
+
+  const data = getSuccessfulData(
+    result,
+    "PROFILE_DISPLAY_UPDATED"
+  );
+
+  if (!data) {
+    reportFailure(onDiagnostic, {
+      purpose: "personal_profile",
+      stage: "display-persistence",
+      endpoint: "/auth/profile-photo/display",
+      status: Number(result?.response?.status || 0),
+      code:
+        result?.data?.code ||
+        "PROFILE_DISPLAY_PERSISTENCE_REJECTED",
+    });
+
+    return failure("PROFILE_DISPLAY_SAVE_FAILED");
+  }
+
+  const savedDisplay = normalizePersonalProfilePhotoDisplay(
+    data.profile_photo_display ||
+      data.user?.profile_photo_display ||
+      validated.display
+  );
+
+  return {
+    ok: true,
+    code: "PROFILE_DISPLAY_UPDATED",
+    display: savedDisplay,
+    user: data.user || null,
+  };
 }
 
 export async function uploadPersonalProfilePhoto({

@@ -340,6 +340,25 @@ function applyLiveConversationAvatar(record = {}, viewerRole = "") {
   };
 }
 
+function getIdentityAvatarImageStyle(identity = {}, viewerRole = "") {
+  const rawType = String(
+    identity?.type ||
+      identity?.relationshipType ||
+      identity?.relationship_type ||
+      identity?.typeLabel ||
+      ""
+  ).toLowerCase();
+
+  const normalizedViewerRole = String(viewerRole || "").toLowerCase();
+
+  const businessParticipant =
+    identity?.type === "business" ||
+    /business|professional|vendor|provider/.test(rawType) ||
+    normalizedViewerRole === "homeowner";
+
+  return businessParticipant ? businessLogoAvatarImage : avatarImage;
+}
+
 function saveConversationRegistryItem(item) {
   const registry = getConversationRegistry();
   const existing = registry.find((entry) => String(entry.id) === String(item.id));
@@ -3982,7 +4001,7 @@ function MessagesInbox({ setPage, currentPage }) {
             <img
               src={rowIdentity.avatar}
               alt={rowIdentity.displayName}
-              style={avatarImage}
+              style={getIdentityAvatarImageStyle(rowIdentity, activeViewerRole)}
             />
           ) : (
             rowIdentity.initials
@@ -4134,7 +4153,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 <img
                   src={contextIdentity.avatar}
                   alt={contextIdentity.displayName}
-                  style={avatarImage}
+                  style={getIdentityAvatarImageStyle(contextIdentity, activeViewerRole)}
                 />
               ) : (
                 contextIdentity.initials
@@ -5852,7 +5871,7 @@ function MessagesInbox({ setPage, currentPage }) {
                             <img
                               src={relationship.avatar}
                               alt={relationship.name}
-                              style={avatarImage}
+                              style={getIdentityAvatarImageStyle(relationship, activeViewerRole)}
                             />
                           ) : (
                             relationship.initials
@@ -6842,7 +6861,7 @@ function MessagesInbox({ setPage, currentPage }) {
                     <img
                       src={rowIdentity.avatar}
                       alt={rowIdentity.displayName}
-                      style={avatarImage}
+                      style={getIdentityAvatarImageStyle(rowIdentity, activeViewerRole)}
                     />
                   ) : (
                     rowIdentity.initials
@@ -8821,6 +8840,14 @@ const avatarImage = {
   height: "100%",
   objectFit: "cover",
   display: "block",
+};
+
+const businessLogoAvatarImage = {
+  ...avatarImage,
+  objectFit: "contain",
+  padding: "3px",
+  boxSizing: "border-box",
+  background: "#ffffff",
 };
 
 const splitAvatarCircle = {

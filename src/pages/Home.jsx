@@ -1587,7 +1587,6 @@ function TopBar({ setPage, unreadCount = 0 }) {
   return (
     <div className="home-top-bar" style={topBar}>
       <div className="home-brand-wrap" style={brandWrap}>
-        <span className="home-dashboard-brand-mark" aria-hidden="true">M</span>
         <span className="home-dashboard-brand-copy">
           <strong className="home-brand-main" style={brandMain}>Meetro</strong>
           <small className="home-brand-badge" style={brandBadge}>Community</small>
@@ -3500,7 +3499,10 @@ const spotlightLogoWrap = {
 const spotlightLogoImage = {
   width: "100%",
   height: "100%",
-  objectFit: "cover",
+  objectFit: "contain",
+  padding: "4px",
+  boxSizing: "border-box",
+  background: "#ffffff",
   display: "block",
 };
 

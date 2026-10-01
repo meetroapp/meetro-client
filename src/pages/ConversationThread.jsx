@@ -2581,6 +2581,8 @@ useEffect(() => {
     status: t("relationshipMeetroLinked", language),
   });
   const activeLogo = threadRelationshipIdentity.avatar;
+  const activeIdentityUsesBusinessLogo =
+    currentViewerRole !== "business";
 
   const relationshipContactEmail = firstIdentityValue(
     relationshipDetailSource.customerEmail,
@@ -5974,7 +5976,15 @@ const handleImageUpload = (event) => {
           >
             <div style={avatar}>
               {activeLogo ? (
-                <img src={activeLogo} alt={activeHeaderName} style={avatarImage} />
+                <img
+                  src={activeLogo}
+                  alt={activeHeaderName}
+                  style={
+                    activeIdentityUsesBusinessLogo
+                      ? businessLogoAvatarImage
+                      : avatarImage
+                  }
+                />
               ) : (
                 activeHeaderName
                   .split(" ")
@@ -9602,6 +9612,14 @@ const avatarImage = {
   height: "100%",
   objectFit: "cover",
   borderRadius: "50%",
+};
+
+const businessLogoAvatarImage = {
+  ...avatarImage,
+  objectFit: "contain",
+  padding: "3px",
+  boxSizing: "border-box",
+  background: "#ffffff",
 };
 
 const name = {

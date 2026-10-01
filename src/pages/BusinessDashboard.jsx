@@ -1712,9 +1712,11 @@ const brandBadge = {
 };
 
 const profileMini = {
-  width: "50px",
-  height: "50px",
-  borderRadius: "18px",
+  width: "62px",
+  height: "62px",
+  borderRadius: "999px",
+  padding: "6px",
+  overflow: "hidden",
   border: "1px solid rgba(255,255,255,0.18)",
   background: "rgba(255,255,255,0.08)",
   color: "white",
@@ -1730,7 +1732,13 @@ const profileMini = {
 const miniAvatar = {
   width: "100%",
   height: "100%",
-  objectFit: "cover",
+  objectFit: "contain",
+  padding: "4px",
+  boxSizing: "border-box",
+  background: "#ffffff",
+  borderRadius: "999px",
+  padding: "6px",
+  boxSizing: "border-box",
 };
 
 const profileInitial = {

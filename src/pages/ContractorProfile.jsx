@@ -2465,7 +2465,10 @@ const circleLogoFrame = {
 const circleLogoImage = {
   width: "100%",
   height: "100%",
-  objectFit: "cover",
+  objectFit: "contain",
+  padding: "6px",
+  boxSizing: "border-box",
+  background: "#ffffff",
   display: "block",
 };
 

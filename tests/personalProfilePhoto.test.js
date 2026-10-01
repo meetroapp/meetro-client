@@ -5,12 +5,18 @@ import test from "node:test";
 import { t } from "../src/utils/language.js";
 import {
   PERSONAL_PROFILE_IMAGE_MAX_BYTES,
+  PROFILE_PHOTO_DISPLAY_DEFAULT,
   STAGING_MEDIA_API_ORIGIN,
+  constrainPersonalProfilePhotoDisplay,
   createTemporaryProfilePhotoPreview,
+  getPersonalProfilePhotoDisplayStyle,
   isPersonalProfilePhotoUploadEnabled,
+  normalizePersonalProfilePhotoDisplay,
   reportProfileMediaDiagnostic,
+  savePersonalProfilePhotoDisplay,
   uploadPersonalProfilePhoto,
   validatePersonalProfileImageFile,
+  validatePersonalProfilePhotoDisplay,
 } from "../src/utils/personalProfilePhoto.js";
 import {
   getStorageSafeAuthenticatedUser,
@@ -249,10 +255,17 @@ test("authenticated user cache excludes profile image authority and base64 value
     email: "owner@example.test",
     profile_photo_url: cloudinaryResponse().secure_url,
     profilePhoto: "data:image/jpeg;base64,unsafe",
+    profile_photo_display: {
+      version: 1,
+      focus_x: 0.25,
+      focus_y: 0.4,
+      zoom: 1.5,
+    },
   };
   const safe = getStorageSafeAuthenticatedUser(user);
   assert.equal(safe.profile_photo_url, undefined);
   assert.equal(safe.profilePhoto, undefined);
+  assert.equal(safe.profile_photo_display, undefined);
   const reconciled = reconcileAuthenticatedUser(user, storage);
   assert.equal(reconciled.user.profile_photo_url, user.profile_photo_url);
   assert.doesNotMatch(JSON.stringify(stored), /profile_photo|data:image|res\.cloudinary\.com/);
@@ -273,6 +286,324 @@ test("profile photo UI uses governed formats and no FileReader or personal photo
   assert.match(source, /uploadBusinessProfileLogo/);
 });
 
+
+test("personal profile display model is bounded and produces reusable framing styles", () => {
+  assert.deepEqual(
+    normalizePersonalProfilePhotoDisplay(null),
+    PROFILE_PHOTO_DISPLAY_DEFAULT
+  );
+
+  const display = {
+    version: 1,
+    focus_x: 0.25,
+    focus_y: 0.7,
+    zoom: 2,
+  };
+
+  assert.equal(
+    validatePersonalProfilePhotoDisplay(display).ok,
+    true
+  );
+
+  assert.deepEqual(
+    normalizePersonalProfilePhotoDisplay(display),
+    display
+  );
+
+  const style =
+    getPersonalProfilePhotoDisplayStyle(display);
+
+  assert.equal(style.position, "absolute");
+  assert.equal(style.width, "200.000%");
+  assert.equal(style.height, "200.000%");
+  assert.equal(style.left, "50%");
+  assert.equal(style.top, "50%");
+  assert.equal(style.objectPosition, "50% 50%");
+  assert.equal(
+    style.transform,
+    "translate(-25%, -70%)"
+  );
+  assert.equal(style.transformOrigin, "0 0");
+
+  const runtimeCase =
+    getPersonalProfilePhotoDisplayStyle({
+      version: 1,
+      focus_x: 0.48903125,
+      focus_y: 0.611484375,
+      zoom: 1.4,
+    });
+
+  assert.equal(
+    runtimeCase.width,
+    "140.000%"
+  );
+
+  assert.equal(
+    runtimeCase.height,
+    "140.000%"
+  );
+
+  assert.equal(
+    runtimeCase.transform,
+    "translate(-48.903125%, -61.1484375%)"
+  );
+
+  const constrainedAtDefault =
+    constrainPersonalProfilePhotoDisplay({
+      version: 1,
+      focus_x: 0,
+      focus_y: 1,
+      zoom: 1,
+    });
+
+  assert.deepEqual(
+    constrainedAtDefault,
+    PROFILE_PHOTO_DISPLAY_DEFAULT
+  );
+
+  const constrainedAtTwo =
+    constrainPersonalProfilePhotoDisplay({
+      version: 1,
+      focus_x: 0,
+      focus_y: 1,
+      zoom: 2,
+    });
+
+  assert.deepEqual(
+    constrainedAtTwo,
+    {
+      version: 1,
+      focus_x: 0.25,
+      focus_y: 0.75,
+      zoom: 2,
+    }
+  );
+
+  for (const invalid of [
+    { ...display, focus_x: -0.01 },
+    { ...display, focus_y: 1.01 },
+    { ...display, zoom: 0.99 },
+    { ...display, zoom: 4.01 },
+    { ...display, zoom: "2" },
+    { ...display, extra: true },
+  ]) {
+    assert.equal(
+      validatePersonalProfilePhotoDisplay(invalid).ok,
+      false
+    );
+  }
+});
+
+
+test("personal profile focal renderer is pixel-size independent", () => {
+  const display = {
+    version: 1,
+    focus_x: 0.43,
+    focus_y: 0.61,
+    zoom: 1.6,
+  };
+
+  const style =
+    getPersonalProfilePhotoDisplayStyle(display);
+
+  // Geometry contains only normalized percentages.
+  // No Profile/Home pixel dimensions participate.
+  assert.deepEqual(
+    {
+      width: style.width,
+      height: style.height,
+      left: style.left,
+      top: style.top,
+      transform: style.transform,
+    },
+    {
+      width: "160.000%",
+      height: "160.000%",
+      left: "50%",
+      top: "50%",
+      transform: "translate(-43%, -61%)",
+    }
+  );
+
+  const profileSource = readFileSync(
+    "src/pages/Profile.jsx",
+    "utf8"
+  );
+
+  const navSource = readFileSync(
+    "src/components/BottomNav.jsx",
+    "utf8"
+  );
+
+  assert.match(
+    profileSource,
+    /const homeownerAvatarViewport = \{[\s\S]*position: "relative"[\s\S]*overflow: "hidden"/
+  );
+
+  assert.match(
+    profileSource,
+    /const profilePhotoEditorPreview = \{[\s\S]*position: "relative"[\s\S]*overflow: "hidden"/
+  );
+
+  assert.match(
+    navSource,
+    /const sidebarPersonalPhotoWrap = \{[\s\S]*position: "relative"[\s\S]*overflow: "hidden"/
+  );
+});
+
+test("personal profile display save uses only the governed framing endpoint and safe payload", async () => {
+  const requests = [];
+
+  const display = {
+    version: 1,
+    focus_x: 0.31,
+    focus_y: 0.42,
+    zoom: 1.75,
+  };
+
+  const result =
+    await savePersonalProfilePhotoDisplay({
+      display,
+      authFetchImpl: async (endpoint, options) => {
+        requests.push({ endpoint, options });
+
+        return {
+          response: { ok: true },
+          data: {
+            success: true,
+            code: "PROFILE_DISPLAY_UPDATED",
+            profile_photo_display: display,
+            user: {
+              id: 7,
+              username: "Owner",
+              profile_photo_url:
+                cloudinaryResponse().secure_url,
+              profile_photo_display: display,
+            },
+          },
+        };
+      },
+    });
+
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.display, display);
+  assert.equal(requests.length, 1);
+  assert.equal(
+    requests[0].endpoint,
+    "/auth/profile-photo/display"
+  );
+  assert.equal(requests[0].options.method, "PATCH");
+
+  const payload = JSON.parse(
+    requests[0].options.body
+  );
+
+  assert.deepEqual(payload, {
+    purpose: "personal_profile",
+    display,
+  });
+
+  assert.equal(
+    Object.hasOwn(payload, "media"),
+    false
+  );
+});
+
+test("personal profile display save fails closed before network for malformed framing", async () => {
+  let called = false;
+
+  const result =
+    await savePersonalProfilePhotoDisplay({
+      display: {
+        version: 1,
+        focus_x: 2,
+        focus_y: 0.5,
+        zoom: 1,
+      },
+      authFetchImpl: async () => {
+        called = true;
+        throw new Error("must not be called");
+      },
+    });
+
+  assert.equal(result.ok, false);
+  assert.equal(called, false);
+});
+
+test("Profile owns the accessible personal photo adjust editor and applies saved framing", () => {
+  const profile = readFileSync(
+    "src/pages/Profile.jsx",
+    "utf8"
+  );
+
+  assert.match(
+    profile,
+    /t\("adjustProfilePhoto"\)/
+  );
+
+  assert.match(
+    profile,
+    /role="dialog"[\s\S]*aria-modal="true"[\s\S]*profile-photo-adjust-title/
+  );
+
+  assert.match(
+    profile,
+    /type="range"[\s\S]*PROFILE_PHOTO_DISPLAY_MAX_ZOOM/
+  );
+
+  assert.match(
+    profile,
+    /onPointerDown=\{[\s\S]*handleProfilePhotoPointerDown/
+  );
+
+  assert.match(
+    profile,
+    /constrainPersonalProfilePhotoDisplay/
+  );
+
+  assert.match(
+    profile,
+    /savePersonalProfilePhotoDisplay/
+  );
+
+  assert.match(
+    profile,
+    /getPersonalProfilePhotoDisplayStyle\([\s\S]*profilePhotoDisplay/
+  );
+
+  assert.match(
+    profile,
+    /window\.dispatchEvent\([\s\S]*meetro-profile-photo-updated/
+  );
+});
+
+test("desktop personal sidebar consumes the same canonical framing without local authority", () => {
+  const nav = readFileSync(
+    "src/components/BottomNav.jsx",
+    "utf8"
+  );
+
+  assert.match(
+    nav,
+    /profile_photo_display/
+  );
+
+  assert.match(
+    nav,
+    /normalizePersonalProfilePhotoDisplay/
+  );
+
+  assert.match(
+    nav,
+    /getPersonalProfilePhotoDisplayStyle\([\s\S]*sidebarPersonalPhotoDisplay/
+  );
+
+  assert.doesNotMatch(
+    nav,
+    /localStorage\.setItem\([\s\S]*profile_photo_display/
+  );
+});
+
 test("profile image states are localized in all supported public languages", () => {
   for (const language of ["en", "es", "fr", "pt-BR"]) {
     for (const key of [
@@ -284,8 +615,94 @@ test("profile image states are localized in all supported public languages", () 
       "profileImageTooLarge",
       "profileImageUploadFailed",
       "profileImageSaveFailed",
+      "adjustProfilePhoto",
+      "profilePhotoAdjustTitle",
+      "profilePhotoAdjustHelp",
+      "profilePhotoZoom",
+      "profilePhotoReset",
+      "profilePhotoPositionUpdated",
+      "profilePhotoPositionSaveFailed",
     ]) {
       assert.ok(t(key, language), `${language} is missing ${key}`);
     }
   }
+});
+
+
+test("personal profile avatar visibly exposes add and change photo affordance", () => {
+  const source = readFileSync("src/pages/Profile.jsx", "utf8");
+
+  assert.match(source, /data-profile-photo-action=\{profilePhoto \? "change" : "add"\}/);
+  assert.match(source, /const avatarEditBadge = \{/);
+  assert.match(
+    source,
+    /profilePhoto \? \([\s\S]*name="editPortfolio"[\s\S]*\) : \([\s\S]*avatarAddPhotoPlus[\s\S]*>\+<\/span>/
+  );
+
+  assert.match(
+    source,
+    /const homeownerAvatarImage = \{[\s\S]*?objectFit: "cover"/
+  );
+
+  assert.match(
+    source,
+    /changeProfilePhoto[\s\S]*chooseProfilePhoto/
+  );
+});
+
+
+test("personal desktop chrome uses the homeowner photo and removes the duplicate Home brand M", () => {
+  const profile = readFileSync("src/pages/Profile.jsx", "utf8");
+  const home = readFileSync("src/pages/Home.jsx", "utf8");
+  const nav = readFileSync("src/components/BottomNav.jsx", "utf8");
+  const businessDashboard = readFileSync(
+    "src/pages/BusinessDashboard.jsx",
+    "utf8"
+  );
+
+  assert.doesNotMatch(
+    home,
+    /<span className="home-dashboard-brand-mark" aria-hidden="true">M<\/span>/
+  );
+
+  assert.match(
+    home,
+    /<strong className="home-brand-main" style=\{brandMain\}>Meetro<\/strong>/
+  );
+  assert.match(
+    home,
+    /<small className="home-brand-badge" style=\{brandBadge\}>Community<\/small>/
+  );
+
+  assert.match(nav, /const \[sidebarPersonalPhoto, setSidebarPersonalPhoto\]/);
+  assert.match(
+    nav,
+    /authFetch\(\s*"\/auth\/me",\s*\{ cache: "no-store" \},\s*setPage\s*\)/
+  );
+  assert.match(nav, /"meetro-profile-photo-updated"/);
+
+  assert.match(
+    nav,
+    /activeMode === "personal" && sidebarPersonalPhoto \? \([\s\S]*src=\{sidebarPersonalPhoto\}[\s\S]*sidebarPersonalPhotoImage[\s\S]*getPersonalProfilePhotoDisplayStyle/
+  );
+
+  assert.match(
+    nav,
+    /const sidebarPersonalPhotoImage = \{[\s\S]*objectFit: "cover"[\s\S]*borderRadius: "999px"/
+  );
+
+  assert.match(
+    nav,
+    /\) : \(\s*"M"\s*\)/
+  );
+
+  assert.match(
+    profile,
+    /window\.dispatchEvent\(new Event\("meetro-profile-photo-updated"\)\)/
+  );
+
+  assert.match(
+    businessDashboard,
+    /<span className="home-dashboard-brand-mark" aria-hidden="true">M<\/span>/
+  );
 });

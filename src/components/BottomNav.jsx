@@ -27,6 +27,12 @@ import {
   subscribeAlertCounts,
 } from "../utils/alertCountCoordinator";
 import MeetroIcon from "./MeetroIcon";
+import { authFetch } from "../utils/authFetch";
+import {
+  PROFILE_PHOTO_DISPLAY_DEFAULT,
+  getPersonalProfilePhotoDisplayStyle,
+  normalizePersonalProfilePhotoDisplay,
+} from "../utils/personalProfilePhoto";
 import { getCommunicationAttention } from "../utils/communicationAttention";
 import {
   getWorkCenterTotalUnread,
@@ -118,6 +124,10 @@ function BottomNav({ setPage, currentPage = "" }) {
     )
   );
   const [notificationTick, setNotificationTick] = useState(0);
+  const [sidebarPersonalPhoto, setSidebarPersonalPhoto] = useState("");
+  const [sidebarPersonalPhotoDisplay, setSidebarPersonalPhotoDisplay] = useState(
+    () => ({ ...PROFILE_PHOTO_DISPLAY_DEFAULT })
+  );
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [profileContextCardOpen, setProfileContextCardOpen] = useState(false);
   const [profileContextCardPosition, setProfileContextCardPosition] = useState({
@@ -166,6 +176,71 @@ function BottomNav({ setPage, currentPage = "" }) {
       window.removeEventListener("meetroAuthExpired", handleAuthExpired);
     };
   }, [currentPage]);
+
+  useEffect(() => {
+    if (activeMode !== "personal") {
+      setSidebarPersonalPhoto("");
+      setSidebarPersonalPhotoDisplay({
+        ...PROFILE_PHOTO_DISPLAY_DEFAULT,
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const loadSidebarPersonalPhoto = async () => {
+      try {
+        const result = await authFetch(
+          "/auth/me",
+          { cache: "no-store" },
+          setPage
+        );
+
+        if (cancelled) return;
+
+        const photo =
+          result?.response?.ok === true
+            ? String(result?.data?.user?.profile_photo_url || "").trim()
+            : "";
+
+        const display =
+          result?.response?.ok === true
+            ? normalizePersonalProfilePhotoDisplay(
+                result?.data?.user?.profile_photo_display
+              )
+            : { ...PROFILE_PHOTO_DISPLAY_DEFAULT };
+
+        setSidebarPersonalPhoto(photo);
+        setSidebarPersonalPhotoDisplay(display);
+      } catch {
+        if (!cancelled) {
+          setSidebarPersonalPhoto("");
+          setSidebarPersonalPhotoDisplay({
+            ...PROFILE_PHOTO_DISPLAY_DEFAULT,
+          });
+        }
+      }
+    };
+
+    void loadSidebarPersonalPhoto();
+
+    const refreshPersonalPhoto = () => {
+      void loadSidebarPersonalPhoto();
+    };
+
+    window.addEventListener(
+      "meetro-profile-photo-updated",
+      refreshPersonalPhoto
+    );
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(
+        "meetro-profile-photo-updated",
+        refreshPersonalPhoto
+      );
+    };
+  }, [activeMode, setPage]);
 
   useEffect(() => {
     setAlertCountIdentity(alertCountIdentity);
@@ -903,7 +978,30 @@ function BottomNav({ setPage, currentPage = "" }) {
         aria-label={t("navigationPrimaryDesktop", language)}
       >
         <div style={sidebarBrand}>
-          <div style={sidebarBrandMark} aria-hidden="true">M</div>
+          <div
+            style={{
+              ...sidebarBrandMark,
+              ...(activeMode === "personal" && sidebarPersonalPhoto
+                ? sidebarPersonalPhotoWrap
+                : {}),
+            }}
+            aria-hidden="true"
+          >
+            {activeMode === "personal" && sidebarPersonalPhoto ? (
+              <img
+                src={sidebarPersonalPhoto}
+                alt=""
+                style={{
+                  ...sidebarPersonalPhotoImage,
+                  ...getPersonalProfilePhotoDisplayStyle(
+                    sidebarPersonalPhotoDisplay
+                  ),
+                }}
+              />
+            ) : (
+              "M"
+            )}
+          </div>
           <div style={sidebarBrandCopy}>
             <strong style={sidebarBrandTitle}>Meetro</strong>
             <span style={sidebarBrandSubtitle}>
@@ -1239,6 +1337,24 @@ const sidebarBrandMark = {
   fontSize: "18px",
   fontWeight: "950",
   boxShadow: "0 14px 30px rgba(31,77,52,0.22)",
+};
+
+const sidebarPersonalPhotoWrap = {
+  position: "relative",
+  borderRadius: "999px",
+  overflow: "hidden",
+  background: "#ffffff",
+  boxShadow: "0 10px 24px rgba(31,77,52,0.18)",
+};
+
+const sidebarPersonalPhotoImage = {
+  width: "100%",
+  height: "100%",
+  borderRadius: "999px",
+  objectFit: "cover",
+  display: "block",
+  userSelect: "none",
+  WebkitUserDrag: "none",
 };
 
 const sidebarBrandCopy = {

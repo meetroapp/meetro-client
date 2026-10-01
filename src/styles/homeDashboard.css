@@ -371,7 +371,7 @@
   #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-topbar-actions {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 16px;
   }
   #root[data-app-layout="tablet"] .business-dashboard .home-dashboard-ask-button,
   #root[data-app-layout="desktop"] .business-dashboard .home-dashboard-ask-button { display: none !important; }

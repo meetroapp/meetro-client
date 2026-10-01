@@ -54,8 +54,14 @@ import {
   requestTeamExperienceMode,
 } from "../utils/teamExperienceMode";
 import {
+  PROFILE_PHOTO_DISPLAY_DEFAULT,
+  PROFILE_PHOTO_DISPLAY_MAX_ZOOM,
+  constrainPersonalProfilePhotoDisplay,
   createTemporaryProfilePhotoPreview,
+  getPersonalProfilePhotoDisplayStyle,
   isPersonalProfilePhotoUploadEnabled,
+  normalizePersonalProfilePhotoDisplay,
+  savePersonalProfilePhotoDisplay,
   uploadPersonalProfilePhoto,
   validatePersonalProfileImageFile,
 } from "../utils/personalProfilePhoto";
@@ -118,6 +124,7 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const [profileNotice, setProfileNotice] = useState("");
   const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
   const previewPhotoRef = useRef(null);
+  const profilePhotoDragRef = useRef(null);
   const [testFeedbackOpen, setTestFeedbackOpen] = useState(false);
   const [testFeedbackSaved, setTestFeedbackSaved] = useState(false);
   const [testFeedback, setTestFeedback] = useState({
@@ -132,6 +139,15 @@ function Profile({ setPage, currentPage, embedded = false }) {
   const [profilePhoto, setProfilePhoto] = useState(
     getScopedProfilePhoto(localStorage.getItem("activeAccountMode") || "personal")
   );
+  const [profilePhotoDisplay, setProfilePhotoDisplay] = useState(
+    () => ({ ...PROFILE_PHOTO_DISPLAY_DEFAULT })
+  );
+  const [profilePhotoEditorOpen, setProfilePhotoEditorOpen] = useState(false);
+  const [profilePhotoEditorDraft, setProfilePhotoEditorDraft] = useState(
+    () => ({ ...PROFILE_PHOTO_DISPLAY_DEFAULT })
+  );
+  const [profilePhotoDisplaySaving, setProfilePhotoDisplaySaving] = useState(false);
+  const [profilePhotoDisplayError, setProfilePhotoDisplayError] = useState("");
   const personalProfilePhotoEnabled = isPersonalProfilePhotoUploadEnabled();
   const businessLogoUploadEnabled = isBusinessLogoUploadEnabled();
   const profilePhotoUploadEnabled = activeMode === "business"
@@ -154,15 +170,44 @@ function Profile({ setPage, currentPage, embedded = false }) {
   useEffect(() => {
     if (activeMode === "business") {
       setProfilePhoto(getScopedProfilePhoto(activeMode, businessProfile));
+      setProfilePhotoDisplay({ ...PROFILE_PHOTO_DISPLAY_DEFAULT });
+      setProfilePhotoEditorOpen(false);
       return;
     }
+
     setProfilePhoto(user?.profile_photo_url || "");
+    setProfilePhotoDisplay(
+      normalizePersonalProfilePhotoDisplay(
+        user?.profile_photo_display
+      )
+    );
   }, [activeMode, businessProfile, user]);
 
   useEffect(() => () => {
     previewPhotoRef.current?.revoke();
     previewPhotoRef.current = null;
   }, []);
+
+  useEffect(() => {
+    if (!profilePhotoEditorOpen) return undefined;
+
+    const handleKeyDown = (event) => {
+      if (
+        event.key === "Escape" &&
+        !profilePhotoDisplaySaving
+      ) {
+        profilePhotoDragRef.current = null;
+        setProfilePhotoDisplayError("");
+        setProfilePhotoEditorOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [profilePhotoEditorOpen, profilePhotoDisplaySaving]);
 
   useEffect(() => {
     if (activeMode !== "business") return;
@@ -295,6 +340,11 @@ function Profile({ setPage, currentPage, embedded = false }) {
 
           if (activeMode !== "business") {
             setProfilePhoto(savedPhoto);
+            setProfilePhotoDisplay(
+              normalizePersonalProfilePhotoDisplay(
+                nextUser.profile_photo_display
+              )
+            );
           }
         }
       } catch (error) {
@@ -365,10 +415,182 @@ function Profile({ setPage, currentPage, embedded = false }) {
 
     const reconciled = reconcileAuthenticatedUser(result.user);
     const canonicalUser = reconciled.ok ? reconciled.user : result.user;
+    const nextDisplay = normalizePersonalProfilePhotoDisplay(
+      canonicalUser?.profile_photo_display
+    );
+
     setUser(canonicalUser);
     setProfilePhoto(canonicalUser.profile_photo_url);
+    setProfilePhotoDisplay(nextDisplay);
+    setProfilePhotoEditorDraft(nextDisplay);
+    setProfilePhotoDisplayError("");
+    setProfilePhotoEditorOpen(true);
     setProfileNotice(t("profilePhotoUpdated"));
     window.dispatchEvent(new Event("meetro-profile-photo-updated"));
+  }
+
+  function openProfilePhotoEditor() {
+    if (
+      activeMode === "business" ||
+      !profilePhoto ||
+      profilePhotoUploading
+    ) {
+      return;
+    }
+
+    profilePhotoDragRef.current = null;
+    setProfilePhotoEditorDraft(
+      constrainPersonalProfilePhotoDisplay(
+        profilePhotoDisplay
+      )
+    );
+    setProfilePhotoDisplayError("");
+    setProfilePhotoEditorOpen(true);
+  }
+
+  function closeProfilePhotoEditor() {
+    if (profilePhotoDisplaySaving) return;
+
+    profilePhotoDragRef.current = null;
+    setProfilePhotoDisplayError("");
+    setProfilePhotoEditorOpen(false);
+  }
+
+  function handleProfilePhotoPointerDown(event) {
+    if (profilePhotoDisplaySaving) return;
+
+    const rect = event.currentTarget.getBoundingClientRect();
+
+    profilePhotoDragRef.current = {
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      width: Math.max(1, rect.width),
+      height: Math.max(1, rect.height),
+      startDisplay: {
+        ...profilePhotoEditorDraft,
+      },
+    };
+
+    event.currentTarget.setPointerCapture?.(
+      event.pointerId
+    );
+  }
+
+  function handleProfilePhotoPointerMove(event) {
+    const drag = profilePhotoDragRef.current;
+
+    if (
+      !drag ||
+      drag.pointerId !== event.pointerId ||
+      profilePhotoDisplaySaving
+    ) {
+      return;
+    }
+
+    const deltaX =
+      (event.clientX - drag.startX) / drag.width;
+    const deltaY =
+      (event.clientY - drag.startY) / drag.height;
+
+    setProfilePhotoEditorDraft(
+      constrainPersonalProfilePhotoDisplay({
+        ...drag.startDisplay,
+        focus_x:
+          drag.startDisplay.focus_x - deltaX,
+        focus_y:
+          drag.startDisplay.focus_y - deltaY,
+      })
+    );
+  }
+
+  function handleProfilePhotoPointerEnd(event) {
+    const drag = profilePhotoDragRef.current;
+
+    if (!drag || drag.pointerId !== event.pointerId) {
+      return;
+    }
+
+    event.currentTarget.releasePointerCapture?.(
+      event.pointerId
+    );
+
+    profilePhotoDragRef.current = null;
+  }
+
+  function resetProfilePhotoEditor() {
+    if (profilePhotoDisplaySaving) return;
+
+    profilePhotoDragRef.current = null;
+    setProfilePhotoEditorDraft({
+      ...PROFILE_PHOTO_DISPLAY_DEFAULT,
+    });
+    setProfilePhotoDisplayError("");
+  }
+
+  async function saveProfilePhotoEditor() {
+    if (profilePhotoDisplaySaving) return;
+
+    setProfilePhotoDisplaySaving(true);
+    setProfilePhotoDisplayError("");
+
+    const result = await savePersonalProfilePhotoDisplay({
+      display: profilePhotoEditorDraft,
+      setPage,
+    });
+
+    setProfilePhotoDisplaySaving(false);
+
+    if (!result.ok) {
+      setProfilePhotoDisplayError(
+        t("profilePhotoPositionSaveFailed")
+      );
+      return;
+    }
+
+    const nextDisplay =
+      normalizePersonalProfilePhotoDisplay(
+        result.display
+      );
+
+    setProfilePhotoDisplay(nextDisplay);
+
+    if (result.user) {
+      const reconciled =
+        reconcileAuthenticatedUser(result.user);
+
+      if (reconciled.ok) {
+        setUser(reconciled.user);
+      } else {
+        setUser((current) =>
+          current
+            ? {
+                ...current,
+                profile_photo_display: nextDisplay,
+              }
+            : current
+        );
+      }
+    } else {
+      setUser((current) =>
+        current
+          ? {
+              ...current,
+              profile_photo_display: nextDisplay,
+            }
+          : current
+      );
+    }
+
+    setProfilePhotoEditorDraft(nextDisplay);
+    setProfilePhotoEditorOpen(false);
+    setProfileNotice(
+      t("profilePhotoPositionUpdated")
+    );
+
+    window.dispatchEvent(
+      new Event("meetro-profile-photo-updated")
+    );
   }
 
   function handleLogout() {
@@ -871,15 +1093,47 @@ function Profile({ setPage, currentPage, embedded = false }) {
               ...homeownerAvatarWrap,
               ...(mediaUploadDeferred ? deferredAvatarWrap : {}),
             }}
-            title={mediaUploadDeferred ? mediaDeferredCopy.detail : undefined}
+            title={
+              mediaUploadDeferred
+                ? mediaDeferredCopy.detail
+                : t(profilePhoto ? "changeProfilePhoto" : "chooseProfilePhoto")
+            }
           >
             {profilePhoto ? (
-              <img src={profilePhoto} alt={t("profile")} style={homeownerAvatarImage} />
+              <span style={homeownerAvatarViewport}>
+                <img
+                  src={profilePhoto}
+                  alt={t("profile")}
+                  style={{
+                    ...homeownerAvatarImage,
+                    ...getPersonalProfilePhotoDisplayStyle(
+                      profilePhotoDisplay
+                    ),
+                  }}
+                  draggable={false}
+                />
+              </span>
             ) : (
               <div style={homeownerAvatarFallback}>
                 <MeetroIcon name="profile" size={36} decorative />
               </div>
             )}
+
+            <span
+              style={avatarEditBadge}
+              data-profile-photo-action={profilePhoto ? "change" : "add"}
+              aria-hidden="true"
+            >
+              {profilePhoto ? (
+              <MeetroIcon
+                name="editPortfolio"
+                size={14}
+                decorative
+              />
+            ) : (
+              <span style={avatarAddPhotoPlus}>+</span>
+            )}
+            </span>
 
             <input
               type="file"
@@ -897,8 +1151,178 @@ function Profile({ setPage, currentPage, embedded = false }) {
               {homeownerCity ? `${homeownerCity} · ` : ""}
               {t("memberSince")} {memberSinceLabel}
             </p>
+
+            {profilePhoto && activeMode !== "business" ? (
+              <button
+                type="button"
+                style={adjustProfilePhotoButton}
+                onClick={openProfilePhotoEditor}
+                disabled={
+                  profilePhotoUploading ||
+                  profilePhotoDisplaySaving
+                }
+              >
+                {t("adjustProfilePhoto")}
+              </button>
+            ) : null}
           </div>
         </section>
+
+        {profilePhotoEditorOpen &&
+          profilePhoto &&
+          activeMode !== "business" ? (
+            <div
+              style={profilePhotoEditorBackdrop}
+              role="presentation"
+              onPointerDown={(event) => {
+                if (
+                  event.target === event.currentTarget
+                ) {
+                  closeProfilePhotoEditor();
+                }
+              }}
+            >
+              <section
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="profile-photo-adjust-title"
+                style={profilePhotoEditorDialog}
+              >
+                <div style={profilePhotoEditorHeader}>
+                  <div>
+                    <h2
+                      id="profile-photo-adjust-title"
+                      style={profilePhotoEditorTitle}
+                    >
+                      {t("profilePhotoAdjustTitle")}
+                    </h2>
+                    <p style={profilePhotoEditorHelp}>
+                      {t("profilePhotoAdjustHelp")}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    aria-label={t("close")}
+                    style={profilePhotoEditorClose}
+                    onClick={closeProfilePhotoEditor}
+                    disabled={profilePhotoDisplaySaving}
+                  >
+                    ×
+                  </button>
+                </div>
+
+                <div style={profilePhotoEditorPreviewShell}>
+                  <div
+                    style={profilePhotoEditorPreview}
+                    onPointerDown={
+                      handleProfilePhotoPointerDown
+                    }
+                    onPointerMove={
+                      handleProfilePhotoPointerMove
+                    }
+                    onPointerUp={
+                      handleProfilePhotoPointerEnd
+                    }
+                    onPointerCancel={
+                      handleProfilePhotoPointerEnd
+                    }
+                  >
+                    <img
+                      src={profilePhoto}
+                      alt=""
+                      draggable={false}
+                      style={{
+                        ...profilePhotoEditorImage,
+                        ...getPersonalProfilePhotoDisplayStyle(
+                          profilePhotoEditorDraft
+                        ),
+                      }}
+                    />
+                  </div>
+                </div>
+
+                <label style={profilePhotoZoomControl}>
+                  <span style={profilePhotoZoomLabel}>
+                    <span>{t("profilePhotoZoom")}</span>
+                    <strong>
+                      {Math.round(
+                        profilePhotoEditorDraft.zoom *
+                          100
+                      )}
+                      %
+                    </strong>
+                  </span>
+
+                  <input
+                    type="range"
+                    min="1"
+                    max={PROFILE_PHOTO_DISPLAY_MAX_ZOOM}
+                    step="0.05"
+                    value={profilePhotoEditorDraft.zoom}
+                    disabled={profilePhotoDisplaySaving}
+                    aria-label={t("profilePhotoZoom")}
+                    onChange={(event) => {
+                      const zoom = Number(
+                        event.target.value
+                      );
+
+                      setProfilePhotoEditorDraft(
+                        (current) =>
+                          constrainPersonalProfilePhotoDisplay({
+                            ...current,
+                            zoom,
+                          })
+                      );
+                    }}
+                    style={profilePhotoZoomRange}
+                  />
+                </label>
+
+                {profilePhotoDisplayError ? (
+                  <p
+                    role="alert"
+                    style={profilePhotoEditorError}
+                  >
+                    {profilePhotoDisplayError}
+                  </p>
+                ) : null}
+
+                <div style={profilePhotoEditorActions}>
+                  <button
+                    type="button"
+                    style={profilePhotoEditorSecondary}
+                    onClick={resetProfilePhotoEditor}
+                    disabled={profilePhotoDisplaySaving}
+                  >
+                    {t("profilePhotoReset")}
+                  </button>
+
+                  <span style={profilePhotoEditorActionSpacer} />
+
+                  <button
+                    type="button"
+                    style={profilePhotoEditorSecondary}
+                    onClick={closeProfilePhotoEditor}
+                    disabled={profilePhotoDisplaySaving}
+                  >
+                    {t("cancel")}
+                  </button>
+
+                  <button
+                    type="button"
+                    style={profilePhotoEditorPrimary}
+                    onClick={saveProfilePhotoEditor}
+                    disabled={profilePhotoDisplaySaving}
+                  >
+                    {profilePhotoDisplaySaving
+                      ? `${t("save")}…`
+                      : t("save")}
+                  </button>
+                </div>
+              </section>
+            </div>
+          ) : null}
 
         {teamWorkMembership &&
           ["FIELD_EMPLOYEE", "BOOKKEEPER_FINANCE"].includes(
@@ -1410,10 +1834,14 @@ function Profile({ setPage, currentPage, embedded = false }) {
             ...compactAvatarWrap,
             ...(mediaUploadDeferred ? deferredAvatarWrap : {}),
           }}
-          title={mediaUploadDeferred ? mediaDeferredCopy.detail : undefined}
+          title={
+            mediaUploadDeferred
+              ? mediaDeferredCopy.detail
+              : t(profilePhoto ? "changeLogo" : "uploadLogo")
+          }
         >
           {profilePhoto ? (
-            <img src={profilePhoto} alt={t("profile")} style={compactAvatarImage} />
+            <img src={profilePhoto} alt={t("profile")} style={compactBusinessLogoImage} />
           ) : (
             <div style={compactAvatarFallback}>
               <MeetroIcon
@@ -1423,6 +1851,22 @@ function Profile({ setPage, currentPage, embedded = false }) {
               />
             </div>
           )}
+
+          <span
+            style={avatarEditBadge}
+            data-business-logo-action={profilePhoto ? "change" : "add"}
+            aria-hidden="true"
+          >
+            {profilePhoto ? (
+              <MeetroIcon
+                name="editPortfolio"
+                size={14}
+                decorative
+              />
+            ) : (
+              <span style={avatarAddPhotoPlus}>+</span>
+            )}
+          </span>
 
           <input
             type="file"
@@ -2211,6 +2655,40 @@ const compactAvatarImage = {
   boxShadow: "var(--meetro-shadow-soft)",
 };
 
+const compactBusinessLogoImage = {
+  ...compactAvatarImage,
+  objectFit: "contain",
+  padding: "5px",
+  boxSizing: "border-box",
+  background: "#ffffff",
+};
+
+const avatarAddPhotoPlus = {
+  display: "block",
+  marginTop: "-2px",
+  color: "#ffffff",
+  fontSize: "21px",
+  lineHeight: 1,
+  fontWeight: "950",
+};
+
+const avatarEditBadge = {
+  position: "absolute",
+  right: "-3px",
+  bottom: "-3px",
+  width: "27px",
+  height: "27px",
+  borderRadius: "999px",
+  display: "grid",
+  placeItems: "center",
+  border: "3px solid #fffdf8",
+  background: "var(--meetro-color-forest, #0B5D3B)",
+  color: "#ffffff",
+  boxShadow: "0 6px 14px rgba(20,53,31,0.28)",
+  pointerEvents: "none",
+  zIndex: 2,
+};
+
 const compactAvatarFallback = {
   width: "62px",
   height: "62px",
@@ -2284,13 +2762,27 @@ const homeownerAvatarWrap = {
   cursor: "pointer",
 };
 
-const homeownerAvatarImage = {
+const homeownerAvatarViewport = {
+  position: "relative",
   width: "76px",
   height: "76px",
   borderRadius: "999px",
-  objectFit: "cover",
+  overflow: "hidden",
+  display: "block",
+  boxSizing: "border-box",
   border: "3px solid rgba(255, 253, 248, 0.94)",
   boxShadow: "0 14px 30px rgba(20,53,31,0.28)",
+  background: "#ffffff",
+};
+
+const homeownerAvatarImage = {
+  width: "100%",
+  height: "100%",
+  borderRadius: "999px",
+  objectFit: "cover",
+  display: "block",
+  userSelect: "none",
+  WebkitUserDrag: "none",
 };
 
 const homeownerAvatarFallback = {
@@ -2304,6 +2796,176 @@ const homeownerAvatarFallback = {
   justifyContent: "center",
   border: "3px solid rgba(255, 253, 248, 0.94)",
   boxShadow: "0 14px 30px rgba(20,53,31,0.28)",
+};
+
+const adjustProfilePhotoButton = {
+  marginTop: "10px",
+  minHeight: "36px",
+  padding: "7px 12px",
+  borderRadius: "999px",
+  border: "1px solid rgba(255,255,255,0.34)",
+  background: "rgba(255,255,255,0.12)",
+  color: "#ffffff",
+  fontSize: "12px",
+  lineHeight: 1,
+  fontWeight: "900",
+  cursor: "pointer",
+};
+
+const profilePhotoEditorBackdrop = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 10050,
+  display: "grid",
+  placeItems: "center",
+  padding: "20px",
+  background: "rgba(15,23,42,0.54)",
+  backdropFilter: "blur(8px)",
+  WebkitBackdropFilter: "blur(8px)",
+};
+
+const profilePhotoEditorDialog = {
+  width: "min(100%, 430px)",
+  maxHeight: "min(92vh, 720px)",
+  overflowY: "auto",
+  boxSizing: "border-box",
+  borderRadius: "24px",
+  border: "1px solid rgba(229,231,235,0.92)",
+  background: "#ffffff",
+  boxShadow: "0 24px 70px rgba(15,23,42,0.26)",
+  padding: "20px",
+  color: "#111827",
+};
+
+const profilePhotoEditorHeader = {
+  display: "grid",
+  gridTemplateColumns: "minmax(0, 1fr) auto",
+  gap: "14px",
+  alignItems: "start",
+};
+
+const profilePhotoEditorTitle = {
+  margin: 0,
+  color: "#111827",
+  fontSize: "20px",
+  lineHeight: 1.2,
+  fontWeight: "950",
+};
+
+const profilePhotoEditorHelp = {
+  margin: "6px 0 0",
+  color: "#6B7280",
+  fontSize: "13px",
+  lineHeight: 1.45,
+  fontWeight: "650",
+};
+
+const profilePhotoEditorClose = {
+  width: "40px",
+  height: "40px",
+  borderRadius: "999px",
+  border: "1px solid #E5E7EB",
+  background: "#FAFAFC",
+  color: "#374151",
+  fontSize: "24px",
+  lineHeight: 1,
+  cursor: "pointer",
+};
+
+const profilePhotoEditorPreviewShell = {
+  display: "grid",
+  placeItems: "center",
+  padding: "22px 0 18px",
+};
+
+const profilePhotoEditorPreview = {
+  position: "relative",
+  width: "min(64vw, 250px)",
+  aspectRatio: "1 / 1",
+  borderRadius: "999px",
+  overflow: "hidden",
+  touchAction: "none",
+  cursor: "grab",
+  background: "#F1FAF5",
+  border: "5px solid #ffffff",
+  boxShadow:
+    "0 0 0 1px #D1D5DB, 0 18px 44px rgba(15,23,42,0.16)",
+};
+
+const profilePhotoEditorImage = {
+  width: "100%",
+  height: "100%",
+  objectFit: "cover",
+  display: "block",
+  userSelect: "none",
+  WebkitUserDrag: "none",
+  pointerEvents: "none",
+};
+
+const profilePhotoZoomControl = {
+  display: "grid",
+  gap: "9px",
+};
+
+const profilePhotoZoomLabel = {
+  display: "flex",
+  justifyContent: "space-between",
+  gap: "12px",
+  color: "#374151",
+  fontSize: "13px",
+  fontWeight: "850",
+};
+
+const profilePhotoZoomRange = {
+  width: "100%",
+  accentColor: "#0B5D3B",
+};
+
+const profilePhotoEditorError = {
+  margin: "12px 0 0",
+  padding: "10px 12px",
+  borderRadius: "12px",
+  background: "#FEF2F2",
+  color: "#B91C1C",
+  fontSize: "12px",
+  lineHeight: 1.4,
+  fontWeight: "750",
+};
+
+const profilePhotoEditorActions = {
+  display: "flex",
+  alignItems: "center",
+  gap: "9px",
+  marginTop: "18px",
+  flexWrap: "wrap",
+};
+
+const profilePhotoEditorActionSpacer = {
+  flex: "1 1 auto",
+};
+
+const profilePhotoEditorSecondary = {
+  minHeight: "42px",
+  padding: "9px 14px",
+  borderRadius: "999px",
+  border: "1px solid #D1D5DB",
+  background: "#ffffff",
+  color: "#374151",
+  fontSize: "13px",
+  fontWeight: "850",
+  cursor: "pointer",
+};
+
+const profilePhotoEditorPrimary = {
+  minHeight: "42px",
+  padding: "9px 16px",
+  borderRadius: "999px",
+  border: "1px solid #0B5D3B",
+  background: "#0B5D3B",
+  color: "#ffffff",
+  fontSize: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
 };
 
 const homeownerHeroContent = {

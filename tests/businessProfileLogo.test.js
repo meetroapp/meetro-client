@@ -226,3 +226,113 @@ test("shared Profile business mode uses the governed Business Logo authority", (
   assert.match(source, /setProfilePhoto\(result\.profile\.image_url\)/);
   assert.doesNotMatch(source, /readAsDataURL|new FileReader/);
 });
+
+
+test("business logos keep full-logo contain framing across core identity surfaces", () => {
+  const contractor = readFileSync("src/pages/ContractorProfile.jsx", "utf8");
+  const profile = readFileSync("src/pages/Profile.jsx", "utf8");
+  const dashboard = readFileSync("src/pages/BusinessDashboard.jsx", "utf8");
+  const home = readFileSync("src/pages/Home.jsx", "utf8");
+  const messages = readFileSync("src/pages/MessagesInbox.jsx", "utf8");
+  const thread = readFileSync("src/pages/ConversationThread.jsx", "utf8");
+
+  assert.match(
+    contractor,
+    /const circleLogoImage = \{[\s\S]*?objectFit: "contain"[\s\S]*?background: "#ffffff"/
+  );
+
+  assert.match(
+    profile,
+    /const compactBusinessLogoImage = \{[\s\S]*?objectFit: "contain"[\s\S]*?background: "#ffffff"/
+  );
+
+  assert.match(
+    dashboard,
+    /const miniAvatar = \{[\s\S]*?objectFit: "contain"[\s\S]*?background: "#ffffff"/
+  );
+
+  assert.match(
+    home,
+    /const spotlightLogoImage = \{[\s\S]*?objectFit: "contain"[\s\S]*?background: "#ffffff"/
+  );
+
+  assert.match(
+    messages,
+    /function getIdentityAvatarImageStyle[\s\S]*?businessLogoAvatarImage/
+  );
+  assert.match(
+    messages,
+    /const businessLogoAvatarImage = \{[\s\S]*?objectFit: "contain"/
+  );
+
+  assert.match(
+    thread,
+    /const activeIdentityUsesBusinessLogo =[\s\S]*?currentViewerRole !== "business"/
+  );
+  assert.match(
+    thread,
+    /const businessLogoAvatarImage = \{[\s\S]*?objectFit: "contain"/
+  );
+});
+
+
+test("Business Dashboard header enlarges the logo while preserving Business Profile navigation", () => {
+  const dashboard = readFileSync("src/pages/BusinessDashboard.jsx", "utf8");
+  const styles = readFileSync("src/styles/homeDashboard.css", "utf8");
+
+  assert.match(
+    dashboard,
+    /className="home-dashboard-profile-button"[\s\S]*onClick=\{openBusinessProfile\}/
+  );
+
+  assert.match(
+    dashboard,
+    /const profileMini = \{[\s\S]*?width: "62px"[\s\S]*?height: "62px"[\s\S]*?borderRadius: "20px"/
+  );
+
+  assert.match(
+    dashboard,
+    /const miniAvatar = \{[\s\S]*?objectFit: "contain"[\s\S]*?background: "#ffffff"/
+  );
+
+  assert.match(
+    styles,
+    /#root\[data-app-layout="tablet"\] \.business-dashboard \.home-dashboard-topbar-actions,[\s\S]*?#root\[data-app-layout="desktop"\] \.business-dashboard \.home-dashboard-topbar-actions \{[\s\S]*?gap: 16px;/
+  );
+
+  assert.match(
+    styles,
+    /#root\[data-app-layout="mobile"\] \.business-dashboard \.home-dashboard-profile-button \{[\s\S]*?flex: 0 0 44px;[\s\S]*?width: 44px !important;[\s\S]*?height: 44px !important;/
+  );
+
+  assert.match(
+    styles,
+    /#root\[data-app-layout="desktop"\] \.business-dashboard \.home-dashboard-notification \{[\s\S]*?width: 42px;[\s\S]*?min-height: 42px;/
+  );
+});
+
+
+test("Business Dashboard header uses a circular logo control while preserving Business Profile navigation", () => {
+  const dashboard = readFileSync("src/pages/BusinessDashboard.jsx", "utf8");
+  const styles = readFileSync("src/styles/homeDashboard.css", "utf8");
+
+  assert.match(
+    dashboard,
+    /className="home-dashboard-profile-button"[\s\S]*onClick=\{openBusinessProfile\}/
+  );
+
+  assert.match(
+    dashboard,
+    /const profileMini = \{[\s\S]*?width: "62px"[\s\S]*?height: "62px"[\s\S]*?borderRadius: "999px"[\s\S]*?padding: "6px"[\s\S]*?overflow: "hidden"/
+  );
+
+  assert.match(
+    dashboard,
+    /const miniAvatar = \{[\s\S]*?objectFit: "contain"[\s\S]*?background: "#ffffff"[\s\S]*?borderRadius: "999px"[\s\S]*?padding: "6px"[\s\S]*?boxSizing: "border-box"/
+  );
+
+  assert.match(
+    styles,
+    /#root\[data-app-layout="tablet"\] \.business-dashboard \.home-dashboard-topbar-actions,[\s\S]*?#root\[data-app-layout="desktop"\] \.business-dashboard \.home-dashboard-topbar-actions \{[\s\S]*?gap: 16px;/
+  );
+});

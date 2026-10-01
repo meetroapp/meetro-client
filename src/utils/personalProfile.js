@@ -15,6 +15,8 @@ const PROFILE_MEDIA_FIELDS = Object.freeze([
   "avatarUrl",
   "image_url",
   "imageUrl",
+  "profile_photo_display",
+  "profilePhotoDisplay",
 ]);
 
 export function getStorageSafeAuthenticatedUser(user) {
