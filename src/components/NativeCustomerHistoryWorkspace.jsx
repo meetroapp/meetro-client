@@ -98,39 +98,129 @@ export default function NativeCustomerHistoryWorkspace({ subject, displayName = 
             <span>{label}</span>
           </article>)}
       </div>}
-      {focus === "work" && ["ACTIVE","COMPLETED"].map(state => <section key={state} style={section}>
-        <h5>{state === "ACTIVE" ? copy.activeJobs : copy.completedJobs}</h5>
-        {history.jobs.filter(job => job.completionState === state).length === 0 && <p>{copy.noWork}</p>}
-        {history.jobs.filter(job => job.completionState === state).map(job => <article key={job.jobId} className="customer-history-record-card" style={card} data-native-job-history={job.jobId}>
-          <h5>{job.serviceTitle}</h5><p>{job.completedAt ? copy.completed : copy.created}: {date(job.completedAt || job.createdAt, language)}</p>
-          <button type="button" style={button} onClick={() => open(job.jobId)} aria-label={`${copy.openJob}: ${job.serviceTitle}`}>{copy.openJob}</button>
-        </article>)}
-      </section>)}
+      {focus === "work" && ["ACTIVE","COMPLETED"].map(state => {
+        const jobs = history.jobs.filter(job => job.completionState === state);
+        return <section key={state} className="customer-history-record-section">
+          <div className="customer-history-section-heading">
+            <h3>{state === "ACTIVE" ? copy.activeJobs : copy.completedJobs}</h3>
+            <span>{jobs.length}</span>
+          </div>
+          {jobs.length === 0 && <p className="customer-history-empty">{copy.noWork}</p>}
+          {jobs.map(job => <article
+            key={job.jobId}
+            className="customer-history-record-card customer-history-record-row"
+            style={card}
+            data-native-job-history={job.jobId}
+          >
+            <span
+              className={`customer-history-record-type customer-history-record-type--${state === "ACTIVE" ? "work" : "complete"}`}
+              aria-hidden="true"
+            >
+              {state === "ACTIVE" ? "JOB" : "✓"}
+            </span>
+            <div className="customer-history-record-main">
+              <h5>{job.serviceTitle}</h5>
+              <p>{job.completedAt ? copy.completed : copy.created}: {date(job.completedAt || job.createdAt, language)}</p>
+            </div>
+            <button
+              type="button"
+              className="customer-history-record-open"
+              onClick={() => open(job.jobId)}
+              aria-label={`${copy.openJob}: ${job.serviceTitle}`}
+            >
+              <span className="customer-history-record-open-label">{copy.openJob}</span>
+              <span className="customer-history-record-chevron" aria-hidden="true">›</span>
+            </button>
+          </article>)}
+        </section>;
+      })}
       {focus === "quotes" && <section style={section}>
         {history.quotes.length === 0 && <p>{copy.noQuotes}</p>}
-        {history.quotes.map(quote => <article key={quote.quoteId} className="customer-history-record-card" style={card}>
-          <h5>{quote.documentNumber || copy.quote} · {quote.lineageType === "REVISED_QUOTE" ? copy.revisedQuote : quote.lineageType === "SUPPLEMENTAL_QUOTE" ? copy.additionalQuote : copy.originalQuote}</h5>
-          <p>{jobTitle(quote.jobId)} · {customerHistoryStatusLabel(quote.status,copy)}</p>
-          {quote.customerDecision && <p>{copy.decision}: {customerHistoryStatusLabel(quote.customerDecision,copy)}</p>}
-          <p>{copy.issued}: {date(quote.issuedAt,language)} · {copy.total}: {money(quote)}</p>
-          <button type="button" style={button} onClick={() => open(quote.jobId)}>{copy.openJob}</button>
+        {history.quotes.map(quote => <article
+          key={quote.quoteId}
+          className="customer-history-record-card customer-history-record-row"
+          style={card}
+        >
+          <span className="customer-history-record-type customer-history-record-type--quote" aria-hidden="true">Q</span>
+          <div className="customer-history-record-main">
+            <div className="customer-history-record-title-row">
+              <h5>{quote.documentNumber || copy.quote} · {quote.lineageType === "REVISED_QUOTE" ? copy.revisedQuote : quote.lineageType === "SUPPLEMENTAL_QUOTE" ? copy.additionalQuote : copy.originalQuote}</h5>
+              <span className="customer-history-status-chip">{customerHistoryStatusLabel(quote.status,copy)}</span>
+            </div>
+            <p>{jobTitle(quote.jobId)}</p>
+            {quote.customerDecision && <p>{copy.decision}: {customerHistoryStatusLabel(quote.customerDecision,copy)}</p>}
+            <p>{copy.issued}: {date(quote.issuedAt,language)} · {copy.total}: {money(quote)}</p>
+          </div>
+          <button
+            type="button"
+            className="customer-history-record-open"
+            onClick={() => open(quote.jobId)}
+            aria-label={`${copy.openJob}: ${jobTitle(quote.jobId)}`}
+          >
+            <span className="customer-history-record-open-label">{copy.openJob}</span>
+            <span className="customer-history-record-chevron" aria-hidden="true">›</span>
+          </button>
         </article>)}
       </section>}
       {focus === "invoices" && <section style={section}>
         {history.invoices.length === 0 && <p>{copy.noInvoices}</p>}
-        {history.invoices.map(invoice => <article key={invoice.invoiceId} className="customer-history-record-card" style={card}>
-          <h5>{invoice.invoiceNumber}</h5><p>{jobTitle(invoice.jobId)} · {customerHistoryStatusLabel(invoice.status,copy)}</p>
-          <p>{copy.total}: {money(invoice)} · {copy.paid}: {amount({currency:invoice.currency,totalMinor:invoice.paidMinor},language)} · {copy.balance}: {amount({currency:invoice.currency,totalMinor:invoice.balanceMinor},language)}</p>
-          <p>{copy.issued}: {date(invoice.issuedAt,language)}</p>
-          <button type="button" style={button} onClick={() => open(invoice.jobId)}>{copy.openJob}</button>
+        {history.invoices.map(invoice => <article
+          key={invoice.invoiceId}
+          className="customer-history-record-card customer-history-record-row"
+          style={card}
+        >
+          <span className="customer-history-record-type customer-history-record-type--invoice" aria-hidden="true">INV</span>
+          <div className="customer-history-record-main">
+            <div className="customer-history-record-title-row">
+              <h5>{invoice.invoiceNumber}</h5>
+              <span className="customer-history-status-chip">{customerHistoryStatusLabel(invoice.status,copy)}</span>
+            </div>
+            <p>{jobTitle(invoice.jobId)}</p>
+            <p>{copy.total}: {money(invoice)} · {copy.paid}: {amount({currency:invoice.currency,totalMinor:invoice.paidMinor},language)} · {copy.balance}: {amount({currency:invoice.currency,totalMinor:invoice.balanceMinor},language)}</p>
+            <p>{copy.issued}: {date(invoice.issuedAt,language)}</p>
+          </div>
+          <button
+            type="button"
+            className="customer-history-record-open"
+            onClick={() => open(invoice.jobId)}
+            aria-label={`${copy.openJob}: ${jobTitle(invoice.jobId)}`}
+          >
+            <span className="customer-history-record-open-label">{copy.openJob}</span>
+            <span className="customer-history-record-chevron" aria-hidden="true">›</span>
+          </button>
         </article>)}
       </section>}
       {focus === "documents" && <section style={section}>
         {history.documents.length + history.media.length === 0 && <p>{copy.noDocumentsPhotos}</p>}
-        {history.documents.map(doc => <article key={`${doc.documentType}:${doc.documentId}`} className="customer-history-record-card" style={card}>
-          <h5>{doc.documentNumber || (doc.documentType === "QUOTE" ? copy.quote : copy.invoice)}</h5>
-          <p>{doc.jobTitle || jobTitle(doc.parentId)} · {doc.provenance === "CANONICAL_QUOTE" ? copy.canonicalQuote : copy.canonicalInvoice}</p>
-          <button type="button" style={button} onClick={() => open(doc.parentId)}>{copy.openJob}</button>
+        {history.documents.map(doc => <article
+          key={`${doc.documentType}:${doc.documentId}`}
+          className="customer-history-record-card customer-history-record-row"
+          style={card}
+        >
+          <span
+            className={`customer-history-record-type customer-history-record-type--${doc.documentType === "QUOTE" ? "quote" : "invoice"}`}
+            aria-hidden="true"
+          >
+            {doc.documentType === "QUOTE" ? "Q" : "INV"}
+          </span>
+          <div className="customer-history-record-main">
+            <div className="customer-history-record-title-row">
+              <h5>{doc.documentNumber || (doc.documentType === "QUOTE" ? copy.quote : copy.invoice)}</h5>
+              <span className="customer-history-status-chip">
+                {doc.provenance === "CANONICAL_QUOTE" ? copy.canonicalQuote : copy.canonicalInvoice}
+              </span>
+            </div>
+            <p>{doc.jobTitle || jobTitle(doc.parentId)}</p>
+          </div>
+          <button
+            type="button"
+            className="customer-history-record-open"
+            onClick={() => open(doc.parentId)}
+            aria-label={`${copy.openJob}: ${doc.jobTitle || jobTitle(doc.parentId)}`}
+          >
+            <span className="customer-history-record-open-label">{copy.openJob}</span>
+            <span className="customer-history-record-chevron" aria-hidden="true">›</span>
+          </button>
         </article>)}
         {history.media.map(photo => <a key={`${photo.parentId}:${photo.mediaId}`} style={card} href={photo.secureUrl} target="_blank" rel="noreferrer" aria-label={`${copy.openPhoto}: ${jobTitle(photo.parentId)}`}>
           <img src={photo.secureUrl} alt={copy.requestPhoto} loading="lazy" style={{maxWidth:"100%",width:240,height:"auto"}} /><p>{jobTitle(photo.parentId)} · {copy.requestPhoto}</p>

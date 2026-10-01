@@ -375,3 +375,275 @@
   font-size: 15px;
   line-height: 1;
 }
+
+/* ==========================================================
+   R2 PATCH 2 — Compact operational History records
+   Presentation only.
+   ========================================================== */
+
+.customer-history-back-button {
+  margin-bottom: 6px;
+  padding-left: 2px;
+  padding-right: 4px;
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+
+.customer-history-back-button:hover {
+  background: #F1FAF5;
+}
+
+/* Lighter navigation: preserve touch targets without a heavy outer slab. */
+.customer-history-tabs {
+  gap: 3px;
+  padding: 0 0 6px;
+  border: 0;
+  border-bottom: 1px solid #E5E7EB;
+  border-radius: 0;
+  background: transparent;
+}
+
+.customer-history-tab {
+  padding: 8px 11px;
+  border-radius: 12px;
+  color: #6B7280;
+}
+
+.customer-history-tab[aria-pressed="true"] {
+  background: #F1FAF5;
+  color: #0B5D3B;
+  box-shadow: inset 0 0 0 1px rgba(11, 93, 59, 0.10);
+}
+
+/* Section hierarchy */
+.customer-history-record-section {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.customer-history-record-section + .customer-history-record-section {
+  margin-top: 4px;
+}
+
+.customer-history-section-heading {
+  min-width: 0;
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 0 2px;
+}
+
+.customer-history-section-heading h3 {
+  margin: 0;
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.25;
+  font-weight: 750;
+}
+
+.customer-history-section-heading > span {
+  min-width: 28px;
+  height: 26px;
+  padding: 0 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #F1FAF5;
+  color: #0B5D3B;
+  font-size: 11px;
+  line-height: 1;
+  font-weight: 750;
+  box-sizing: border-box;
+}
+
+.customer-history-empty {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid #E5E7EB;
+  border-radius: 14px;
+  background: #FFFFFF;
+  color: #6B7280;
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+/* Operational row */
+.customer-history-record-card.customer-history-record-row {
+  width: 100%;
+  min-width: 0;
+  min-height: 72px;
+  display: grid !important;
+  grid-template-columns: 38px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 10px 10px 12px !important;
+  border: 1px solid #E5E7EB !important;
+  border-radius: 16px !important;
+  background: #FFFFFF !important;
+  box-shadow: none !important;
+  text-align: left;
+}
+
+.customer-history-record-main {
+  min-width: 0;
+}
+
+.customer-history-record-main h5,
+.customer-history-record-card.customer-history-record-row h5 {
+  min-width: 0;
+  margin: 0;
+  color: #111827;
+  font-size: 14px;
+  line-height: 1.3;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.customer-history-record-main p,
+.customer-history-record-card.customer-history-record-row p {
+  margin: 3px 0 0;
+  color: #6B7280;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
+.customer-history-record-title-row {
+  min-width: 0;
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+/* Small semantic document / workflow tiles. */
+.customer-history-record-type {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 12px;
+  font-size: 10px;
+  line-height: 1;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  flex-shrink: 0;
+}
+
+.customer-history-record-type--work {
+  background: #E8F5EE;
+  color: #0B5D3B;
+}
+
+.customer-history-record-type--complete {
+  background: #F1FAF5;
+  color: #10B981;
+  font-size: 15px;
+}
+
+.customer-history-record-type--quote {
+  background: rgba(245, 158, 11, 0.12);
+  color: #B45309;
+}
+
+.customer-history-record-type--invoice {
+  background: rgba(37, 99, 235, 0.10);
+  color: #2563EB;
+  font-size: 9px;
+}
+
+/* Status stays neutral unless its semantics are explicitly known. */
+.customer-history-status-chip {
+  max-width: 46%;
+  flex: 0 0 auto;
+  padding: 4px 7px;
+  border-radius: 999px;
+  background: #F3F4F6;
+  color: #6B7280;
+  font-size: 9px;
+  line-height: 1.2;
+  font-weight: 700;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+
+/* Trailing action keeps the entire row visually compact while retaining
+   a full 44px accessible touch target. */
+.customer-history-record-open {
+  min-width: 44px;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 12px;
+  background: transparent;
+  color: #0B5D3B;
+  font: inherit;
+  font-size: 11px;
+  line-height: 1.2;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.customer-history-record-open:hover {
+  background: #F1FAF5;
+}
+
+.customer-history-record-open-label {
+  display: none;
+}
+
+.customer-history-record-chevron {
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 500;
+}
+
+.customer-history-record-open:focus-visible {
+  outline: 2px solid #10B981;
+  outline-offset: 2px;
+}
+
+/* Keep rows efficient on iPhone. */
+@media (max-width: 430px) {
+  .customer-history-record-card.customer-history-record-row {
+    grid-template-columns: 36px minmax(0, 1fr) 44px;
+    gap: 9px;
+    min-height: 68px;
+    padding: 9px 7px 9px 10px !important;
+  }
+
+  .customer-history-record-type {
+    width: 34px;
+    height: 34px;
+    border-radius: 11px;
+  }
+
+  .customer-history-status-chip {
+    max-width: 42%;
+  }
+}
+
+/* iPad/Desktop may show the explicit action label without turning
+   the record into a large button card. */
+#root[data-app-layout="tablet"] .customer-history-record-open-label,
+#root[data-app-layout="desktop"] .customer-history-record-open-label {
+  display: inline;
+}
+
+#root[data-app-layout="tablet"] .customer-history-record-open,
+#root[data-app-layout="desktop"] .customer-history-record-open {
+  padding-inline: 10px;
+}
