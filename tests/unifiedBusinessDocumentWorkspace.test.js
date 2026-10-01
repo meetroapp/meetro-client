@@ -1712,7 +1712,7 @@ test("Satisfied Deposit to Invoice re-resolves exact Quote authority and payment
 
   assert.match(
     depositContinuation,
-    /switchDocument\("invoice",\s*\{\s*depositSatisfied:\s*true/
+    /switchDocument\("invoice",\s*\{\s*depositGateCleared:\s*true,\s*depositSatisfied:\s*true/
   );
 
   assert.match(

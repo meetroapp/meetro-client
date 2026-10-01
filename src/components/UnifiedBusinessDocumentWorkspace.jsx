@@ -4628,7 +4628,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     if (
       documentType === "invoice" &&
       activeDocument === "quote" &&
-      options.depositSatisfied !== true
+      options.depositGateCleared !== true
     ) {
       const pricing = quoteCustomerPricingProjection(quote);
       if (pricing.deposit.mode !== "NONE") {
@@ -4792,6 +4792,7 @@ function QuoteInvoiceBusinessDocumentWorkspace({
     if (!initialized) return;
 
     switchDocument("invoice", {
+      depositGateCleared: true,
       depositSatisfied: true,
     });
   }
@@ -6874,7 +6875,6 @@ function QuoteInvoiceBusinessDocumentWorkspace({
       job={depositRequestContext.job}
       quote={depositRequestContext.quote}
       onDocumentChange={handleDepositDocumentChange}
-      onBack={() => requestExit(onBack)}
     /></div> : null}
     </>
   );

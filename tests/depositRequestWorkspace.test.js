@@ -118,6 +118,60 @@ test("workspace exposes explicit prepare, review, send, retry, resend, history, 
   assert.match(source, /if \(!eligible\) \{/);
 });
 
+test("Deposit Request navigation stays inside the shared Quote and Invoice workspace", () => {
+  const depositSource = readFileSync(
+    new URL("../src/components/DepositRequestWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+  const workspaceSource = readFileSync(
+    new URL("../src/components/UnifiedBusinessDocumentWorkspace.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.doesNotMatch(depositSource, /\bonBack\b/);
+  assert.doesNotMatch(depositSource, /Leave Deposit Request workspace/);
+  assert.doesNotMatch(
+    depositSource,
+    /<button[^>]*className="business-document-back"/
+  );
+  assert.match(
+    depositSource,
+    /onClick=\{\(\) => onDocumentChange\("quote"\)\}>Open Quote<\/button>/
+  );
+
+  assert.match(
+    depositSource,
+    /const invoiceAllowed = Boolean\([\s\S]*!authority \|\| \["NOT_REQUIRED", "SATISFIED"\]\.includes\(authority\.state\)/
+  );
+  assert.match(
+    depositSource,
+    /const depositGateCleared = Boolean\([\s\S]*authority && \["NOT_REQUIRED", "SATISFIED"\]\.includes\(authority\.state\)/
+  );
+  assert.match(
+    depositSource,
+    /onDocumentChange\("invoice", \{[\s\S]*depositGateCleared,[\s\S]*depositSatisfied,[\s\S]*\}\)/
+  );
+
+  const mountStart = workspaceSource.lastIndexOf("{depositRequestContext ?");
+  assert.notEqual(mountStart, -1);
+  const mount = workspaceSource.slice(mountStart);
+
+  assert.match(
+    mount,
+    /onDocumentChange=\{handleDepositDocumentChange\}/
+  );
+  assert.doesNotMatch(mount, /onBack=/);
+
+  assert.match(
+    workspaceSource,
+    /options\.depositGateCleared !== true/
+  );
+  assert.match(
+    workspaceSource,
+    /options\.depositSatisfied !== true/
+  );
+});
+
 test("business document order is Quote, Deposit Request, Invoice", () => {
   const source = readFileSync(
     new URL(
@@ -548,7 +602,7 @@ test("R4 visible Quote to Invoice tab routes through Deposit Request when Quote 
   assert.match(source, /quoteCustomerPricingProjection\(quote\)/);
   assert.match(source, /pricing\.deposit\.mode !== "NONE"/);
   assert.match(source, /openDepositRequest\(\)/);
-  assert.match(source, /options\.depositSatisfied !== true/);
+  assert.match(source, /options\.depositGateCleared !== true/);
 });
 
 test("Deposit Request wide desktop owns two independently scrollable panes", () => {
@@ -746,7 +800,7 @@ test("Satisfied Deposit Request stops requesting payment and exposes the governe
   assert.match(source, /Continue to Invoice/);
   assert.match(
     source,
-    /onDocumentChange\("invoice", \{ depositSatisfied: true \}\)/
+    /onDocumentChange\("invoice", \{[\s\S]*depositGateCleared: true,[\s\S]*depositSatisfied: true,[\s\S]*\}\)/
   );
 });
 

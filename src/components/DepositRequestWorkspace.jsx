@@ -123,7 +123,7 @@ function deliveryLabel(deliveries) {
   return "Send Deposit Request";
 }
 
-export default function DepositRequestWorkspace({ setPage, job = {}, quote = {}, onBack, onDocumentChange }) {
+export default function DepositRequestWorkspace({ setPage, job = {}, quote = {}, onDocumentChange }) {
   const [phase, setPhase] = useState("loading");
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
@@ -164,6 +164,9 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
       authority.remainingMinor > 0
   );
   const invoiceAllowed = Boolean(
+    !authority || ["NOT_REQUIRED", "SATISFIED"].includes(authority.state)
+  );
+  const depositGateCleared = Boolean(
     authority && ["NOT_REQUIRED", "SATISFIED"].includes(authority.state)
   );
   const depositSatisfied = authority?.state === "SATISFIED";
@@ -568,13 +571,13 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
 
   if (phase === "loading") return <div className="app-page meetro-form-page"><p role="status">Loading the exact deposit requirement…</p></div>;
   if (phase === "error") {
-    return <div className="app-page meetro-form-page" role="alert"><h1>Deposit Request unavailable</h1><p>{error || "The Deposit Request workspace could not be loaded."}</p><button type="button" onClick={onBack}>Go Back</button></div>;
+    return <div className="app-page meetro-form-page" role="alert"><h1>Deposit Request unavailable</h1><p>{error || "The Deposit Request workspace could not be loaded."}</p><button type="button" onClick={() => onDocumentChange("quote")}>Open Quote</button></div>;
   }
 
   return (
     <div className="app-page meetro-wide-page business-document-workspace deposit-request-workspace">
       <header className="business-document-header">
-        <button type="button" className="business-document-back" onClick={onBack} aria-label="Leave Deposit Request workspace">←</button>
+        <span className="business-document-back" aria-hidden="true" style={{ visibility: "hidden", pointerEvents: "none" }} />
         <div><div className="business-document-title-row"><h1>{content.projectTitle || "Deposit Request"}</h1><span>{depositSatisfied ? "Deposit satisfied" : authority?.state === "NOT_REQUIRED" ? "No deposit required" : eligible ? "Ready for review" : "Preparation only"}</span></div><p>{content.customerName ? `Customer: ${content.customerName}` : jobId ? "Customer carries forward from Quote" : "Quote not selected"}</p></div>
         <div className="business-document-header-actions"><span>{document ? `Saved · v${document.version}` : "Not saved"}</span></div>
       </header>
@@ -586,7 +589,10 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
           type="button"
           disabled={!invoiceAllowed}
           title={!invoiceAllowed ? "Record the required deposit before continuing to Invoice." : undefined}
-          onClick={() => onDocumentChange("invoice", { depositSatisfied: true })}
+          onClick={() => onDocumentChange("invoice", {
+            depositGateCleared,
+            depositSatisfied,
+          })}
         >
           Invoice
         </button>
@@ -1148,6 +1154,7 @@ export default function DepositRequestWorkspace({ setPage, job = {}, quote = {},
                 type="button"
                 onClick={() =>
                   onDocumentChange("invoice", {
+                    depositGateCleared: true,
                     depositSatisfied: true,
                   })
                 }
