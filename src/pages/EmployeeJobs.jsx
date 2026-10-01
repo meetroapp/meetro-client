@@ -1,4 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { capturePunchPosition } from "../utils/punchPosition.js";
+import "../styles/employeePunch.css";
+import AuthorizedPunchLocations from "../components/AuthorizedPunchLocations";
 import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
 import EmployeeShell from "../components/EmployeeShell";
@@ -326,6 +329,7 @@ function EmployeeJobs({ setPage, roleMembership = null }) {
 }
 
 function ManagerWorkspace({ jobs, members, drafts, workingJobId, onToggle, onSave, businessId, setPage }) {
+  const [locationAssignmentId, setLocationAssignmentId] = useState("");
   if (!jobs.length) {
     return <section style={cardStyle}><h2 style={headingStyle}>No eligible Jobs</h2><p style={copyStyle}>No active Job owned by this exact business is available for assignment.</p></section>;
   }
@@ -368,6 +372,18 @@ function ManagerWorkspace({ jobs, members, drafts, workingJobId, onToggle, onSav
               {workingJobId === job.id ? "Recording…" : "Save exact assignments"}
             </button>
           </div>
+          {(job.assignments || []).filter(item => item.state === "ACTIVE" && item.memberStatus === "ACTIVE" && ["MANAGER", "FIELD_EMPLOYEE"].includes(item.memberRole)).map(item => (
+            <div key={item.id} style={{ marginTop: 12 }}>
+              <button type="button" style={{ ...primaryButton, background: "#eef5f2", color: "#234b32", maxWidth: "100%", overflowWrap: "anywhere" }} disabled={workingJobId === job.id} onClick={() => setLocationAssignmentId(item.id)}>
+                Authorized Punch Locations · {item.memberName || item.memberEmail || "Assigned Team member"}
+              </button>
+              {locationAssignmentId === item.id && <AuthorizedPunchLocations
+                key={`${businessId}:${item.id}:${item.membershipId}:${item.version}`}
+                businessId={businessId} assignmentId={item.id} employeeMembershipId={item.membershipId} setPage={setPage}
+                onClose={() => setLocationAssignmentId("")}
+              />}
+            </div>
+          ))}
           {(job.assignments || []).some((item) => item.state === "UNASSIGNED") && (
             <details style={historyStyle}>
               <summary>Assignment history</summary>
@@ -1287,22 +1303,6 @@ function formatTimerClock(seconds) {
     .join(":");
 }
 
-function boundaryLocation(requested) {
-  if (!requested) return Promise.resolve({ status: "NOT_REQUESTED" });
-  if (!navigator.geolocation) return Promise.resolve({ status: "UNAVAILABLE" });
-  return new Promise((resolve) => {
-    navigator.geolocation.getCurrentPosition(
-      (position) => resolve({
-        status: "CAPTURED",
-        latitude: position.coords.latitude,
-        longitude: position.coords.longitude,
-      }),
-      (error) => resolve({ status: error?.code === 1 ? "DENIED" : "UNAVAILABLE" }),
-      { enableHighAccuracy: false, timeout: 10000, maximumAge: 60000 }
-    );
-  });
-}
-
 export function TimeEvidencePanel({
   businessId,
   job,
@@ -1313,7 +1313,14 @@ export function TimeEvidencePanel({
   const language = useLanguage();
   const [time, setTime] = useState(null);
   const [category, setCategory] = useState(() => job && assignment ? "JOB_WORK" : "GENERAL");
-  const [includeLocation, setIncludeLocation] = useState(false);
+  const pendingPunch = useRef(null);
+  const submitting = useRef(false);
+  const mounted = useRef(false);
+  const captureEpoch = useRef(0);
+  useEffect(() => {mounted.current=true;return()=>{mounted.current=false;};},[]);
+  useEffect(() => {captureEpoch.current++;pendingPunch.current=null;},[businessId,job?.id,assignment?.id,assignment?.activationVersion]);
+  const [verifiedSite, setVerifiedSite] = useState("");
+  const [checking, setChecking] = useState(false);
   const [working, setWorking] = useState(false);
   const [error, setError] = useState("");
   const [now, setNow] = useState(0);
@@ -1342,46 +1349,44 @@ export function TimeEvidencePanel({
     };
   }, [time?.activeSession]);
 
-  async function clockIn() {
-    setWorking(true);
-    setError("");
-    try {
-      const location = await boundaryLocation(includeLocation);
-      await clockInTime({
-        businessId,
-        category,
-        jobId: category === "JOB_WORK" ? job.id : null,
-        assignmentId: category === "JOB_WORK" ? assignment.id : null,
-        location,
-        idempotencyKey: operationKey("clock-in"),
-      }, setPage);
-      await load();
-    } catch (clockError) {
-      setError(clockError.message || t("fieldClockInFailed", language));
-    } finally {
-      setWorking(false);
-    }
-  }
+  const currentAssignment = time?.activeSession ? {
+    id: time.activeSession.punchAssignmentId || time.activeSession.assignmentId || assignment?.id,
+    jobId: time.activeSession.punchJobId || time.activeSession.jobId || job?.id,
+    activationVersion: time.activeSession.punchAssignmentActivationVersion || time.activeSession.assignmentActivationVersion || assignment?.activationVersion,
+  } : {id:assignment?.id,jobId:job?.id,activationVersion:assignment?.activationVersion};
+  const punchAvailable = Boolean(currentAssignment.id && currentAssignment.jobId && currentAssignment.activationVersion);
 
-  async function clockOut() {
-    if (!time?.activeSession) return;
-    setWorking(true);
-    setError("");
+  async function punchBoundary(action) {
+    if (submitting.current || !punchAvailable) return;
+    submitting.current = true;
+    setWorking(true);setError("");setVerifiedSite("");
     try {
-      const location = await boundaryLocation(includeLocation);
-      await clockOutTime({
-        businessId,
-        sessionId: time.activeSession.id,
-        location,
-        idempotencyKey: operationKey("clock-out"),
-      }, setPage);
+      const contextKey = JSON.stringify([businessId,currentAssignment.id,currentAssignment.jobId,currentAssignment.activationVersion,time?.activeSession?.id,category,action]);
+      let attempt = pendingPunch.current;
+      if (!attempt || attempt.contextKey !== contextKey) {
+        setChecking(true);
+        const epoch = captureEpoch.current;
+        const location = await capturePunchPosition();
+        if (!mounted.current || epoch !== captureEpoch.current) return;
+        setChecking(false);
+        attempt = {contextKey,payload:{businessId,jobId:currentAssignment.jobId,assignmentId:currentAssignment.id,assignmentActivationVersion:currentAssignment.activationVersion,location,idempotencyKey:operationKey(action),...(action==='clock-in'?{category}:{sessionId:time.activeSession.id})}};
+        pendingPunch.current = attempt;
+      }
+      const result = await (action==='clock-in'?clockInTime:clockOutTime)(attempt.payload,setPage);
+      pendingPunch.current = null;
+      setVerifiedSite(result.verification?.siteLabel || t("fieldPunchAuthorized", language));
       await load();
     } catch (clockError) {
-      setError(clockError.message || t("fieldClockOutFailed", language));
+      if (clockError.status && clockError.status < 500) pendingPunch.current = null;
+      const messageKey = {PUNCH_PERMISSION_DENIED:"fieldPunchPermission",PUNCH_LOCATION_UNAVAILABLE:"fieldPunchUnavailable",PUNCH_POSITION_INVALID:"fieldPunchUnavailable",PUNCH_NOT_FOREGROUND:"fieldPunchUnavailable",PUNCH_OUTSIDE_SITE:"fieldPunchOutside",PUNCH_SITE_STALE:"fieldPunchChanged",PUNCH_AUTHORITY_CHANGED:"fieldPunchChanged",TIME_JOB_ASSIGNMENT_REQUIRED:"fieldPunchChanged",PUNCH_SAMPLE_UNUSABLE:"fieldPunchUnavailable"}[clockError.code];
+      setError(t(messageKey || "fieldPunchFailed", language));
     } finally {
-      setWorking(false);
+      setChecking(false);setWorking(false);submitting.current = false;
     }
   }
+  const clockIn = () => punchBoundary('clock-in');
+  const clockOut = () => punchBoundary('clock-out');
+  const punchStatus = working ? t(checking ? "fieldPunchChecking" : "fieldPunchVerifying", language) : verifiedSite ? t("fieldPunchVerified", language, {siteLabel:verifiedSite}) : t(!punchAvailable ? "fieldPunchSelect" : "fieldPunchRequired", language);
 
   const active = time?.activeSession;
   const jobWorkAvailable = Boolean(job?.id && assignment?.id);
@@ -1431,8 +1436,10 @@ export function TimeEvidencePanel({
                 t("fieldStartedAt", language, {
                   time: formatSchedule(active.clockedInAt, language),
                 })
-              : t("fieldChooseThenClockIn", language)}
+              : job?.title || t("fieldAssignedJob", language)}
           </p>
+
+          {!active && <p className="employee-time-hero-copy">{t("fieldChooseThenClockIn", language)}</p>}
 
           <button
             type="button"
@@ -1442,10 +1449,7 @@ export function TimeEvidencePanel({
                 : "employee-time-clock-button"
             }
             disabled={
-              working ||
-              (!active &&
-                category === "JOB_WORK" &&
-                !jobWorkAvailable)
+              working || !punchAvailable
             }
             onClick={active ? clockOut : clockIn}
           >
@@ -1455,10 +1459,10 @@ export function TimeEvidencePanel({
               decorative
             />
             {working
-              ? t("fieldRecording", language)
+              ? t(checking ? "fieldPunchChecking" : "fieldPunchVerifying", language)
               : active
-              ? t("fieldClockOut", language)
-              : t("fieldClockIn", language)}
+              ? t("fieldPunchOut", language)
+              : t("fieldPunchIn", language)}
           </button>
         </section>
 
@@ -1563,54 +1567,9 @@ export function TimeEvidencePanel({
 
         <section className="employee-time-location">
           <div className="employee-time-location-main">
-            <span
-              className="employee-time-location-icon"
-              aria-hidden="true"
-            >
-              <MeetroIcon
-                name="location"
-                size={29}
-                decorative
-              />
-            </span>
-
-            <div>
-              <p className="employee-time-label">
-                {t("fieldLocationOptional", language)}
-              </p>
-
-              <h2>{t("fieldAddLocation", language)}</h2>
-
-              <p className="employee-time-section-copy">
-                {t("fieldAddLocationCopy", language)}
-              </p>
-            </div>
+            <MeetroIcon name="location" size={29} decorative />
+            <div><h2>{t("fieldPunchTitle", language)}</h2><p className="employee-time-section-copy">{t("fieldPunchCopy", language)}</p><p className="employee-punch-status" role="status" aria-live="polite">{punchStatus}</p></div>
           </div>
-
-          <label className="employee-time-location-toggle">
-            <input
-              type="checkbox"
-              checked={includeLocation}
-              onChange={(event) =>
-                setIncludeLocation(
-                  event.target.checked
-                )
-              }
-            />
-
-            <span
-              className="employee-time-switch"
-              aria-hidden="true"
-            >
-              <span />
-            </span>
-
-            <small>
-              {includeLocation
-                ? t("fieldLocationOn", language)
-                : t("fieldLocationOff", language)}
-            </small>
-          </label>
         </section>
 
         {error && (
@@ -1762,9 +1721,8 @@ export function TimeEvidencePanel({
                 t("fieldStartedAt", language, {
                   time: formatSchedule(active.clockedInAt, language),
                 })
-              : category === "JOB_WORK" &&
-                jobWorkAvailable
-              ? job?.title || t("fieldAssignedJob", language)
+              : job?.title
+              ? job.title
               : t("fieldCategoryTime", language, {
                   category: timeCategoryLabel(category, language),
                 })}
@@ -1779,10 +1737,7 @@ export function TimeEvidencePanel({
               : "employee-compact-clock-action"
           }
           disabled={
-            working ||
-            (!active &&
-              category === "JOB_WORK" &&
-              !jobWorkAvailable)
+            working || !punchAvailable
           }
           onClick={active ? clockOut : clockIn}
         >
@@ -1793,10 +1748,10 @@ export function TimeEvidencePanel({
           />
 
           {working
-            ? t("fieldRecording", language)
+            ? t(checking ? "fieldPunchChecking" : "fieldPunchVerifying", language)
             : active
-            ? t("fieldClockOut", language)
-            : t("fieldClockIn", language)}
+            ? t("fieldPunchOut", language)
+            : t("fieldPunchIn", language)}
         </button>
       </div>
 
@@ -1818,26 +1773,7 @@ export function TimeEvidencePanel({
           )}
         </div>
 
-        <label className="employee-compact-location">
-          <input
-            type="checkbox"
-            checked={includeLocation}
-            onChange={(event) =>
-              setIncludeLocation(event.target.checked)
-            }
-          />
-
-          <span
-            className="employee-compact-switch"
-            aria-hidden="true"
-          >
-            <span />
-          </span>
-
-          <span>
-            {t("fieldAddLocationCompact", language)}
-          </span>
-        </label>
+        <p className="employee-compact-location" role="status" aria-live="polite">{punchStatus}</p>
       </div>
 
       {!active &&

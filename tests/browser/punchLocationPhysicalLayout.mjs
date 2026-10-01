@@ -1,0 +1,31 @@
+import assert from 'node:assert/strict';import {mkdirSync,writeFileSync} from 'node:fs';import {createServer} from 'vite';
+const {chromium}=await import(process.env.PLAYWRIGHT_MODULE||'playwright');
+const output=process.env.PUNCH_LOCATION_QA_OUTPUT||'/private/tmp/meetro-63J4E8-B/evidence/layout';mkdirSync(output,{recursive:true});
+const vite=await createServer({root:process.cwd(),logLevel:'silent',plugins:[{name:'punch-location-local-fixture',enforce:'pre',transform(source,id){if(id.endsWith('/AuthorizedPunchLocations.jsx'))return source.replace(/import\s*\{([^}]+)\}\s*from\s*['"]\.\.\/utils\/punchLocationApi\.js['"];?/,(_,names)=>names.split(',').map(n=>n.trim()).map(n=>`const ${n} = (...args) => window.__punchManagementPorts.${n}(...args);`).join('\n'));}}],server:{host:'127.0.0.1',port:0}});await vite.listen();
+const browser=await chromium.launch({headless:true,executablePath:process.env.BROWSER_EXECUTABLE});const results=[];
+try{
+ for(const [width,height]of [[390,844],[820,1180],[1180,820],[1366,900]]){
+  const page=await browser.newPage({viewport:{width,height},hasTouch:true,isMobile:width<768,permissions:['geolocation'],geolocation:{latitude:26.64,longitude:-81.98,accuracy:8}});const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  await page.route('**/*',route=>new URL(route.request().url()).hostname==='127.0.0.1'?route.continue():route.abort());
+  await page.goto(`http://127.0.0.1:${vite.httpServer.address().port}/tests/browser/punchLocationFixture.html`);
+  await page.locator('[data-punch-site]').first().waitFor();assert.equal(await page.locator('[data-punch-site]').count(),3);
+  assert.match(await page.locator('[aria-label="Authorized Punch Locations"]').textContent(),/Alex Employee.*Kitchen service.*Business Customer Job/s);
+  assert.equal(await page.locator('.punch-site-state').allTextContents().then(v=>v.filter(x=>x==='Active').length),2);
+  assert.ok((await page.locator('.punch-site-state').allTextContents()).includes('Revoked'));
+  await page.screenshot({path:`${output}/locations-${width}.png`,fullPage:true});
+  const card=page.locator('[data-punch-site]').filter({hasText:'Business Warehouse'}).first();await card.getByRole('button',{name:'Revoke authorization'}).click();await card.getByRole('button',{name:'Activate authorization'}).waitFor();await card.getByRole('button',{name:'Activate authorization'}).click();await card.getByText('Authorization v3',{exact:false}).first().waitFor();
+  await page.getByLabel('Site name',{exact:true}).fill('Supply house pickup');await page.getByLabel('Street address',{exact:true}).fill('123 Business Supply Road');await page.getByLabel('City',{exact:true}).fill('Cape Coral');await page.getByLabel('State / region',{exact:true}).fill('FL');await page.getByLabel('Postal code',{exact:true}).fill('33990');await page.getByLabel('Country code (two letters)',{exact:true}).fill('US');await page.getByLabel('Location policy',{exact:true}).selectOption('33333333-3333-4333-8333-333333333333');
+  await page.getByRole('button',{name:'Use Current Location',exact:true}).click();await page.getByText('Position captured',{exact:false}).waitFor();await page.getByLabel('I am at this location and confirm this position for the named site.').check();
+  const measure=await page.evaluate(()=>({width:document.documentElement.clientWidth,scrollWidth:document.documentElement.scrollWidth,fields:[...document.querySelectorAll('.punch-location-fields input,.punch-location-fields select')].map(n=>({width:n.clientWidth,scrollWidth:n.scrollWidth})),buttons:[...document.querySelectorAll('.authorized-punch-locations button')].filter(n=>n.getBoundingClientRect().height>0).map(n=>({height:n.getBoundingClientRect().height,left:n.getBoundingClientRect().left,right:n.getBoundingClientRect().right})),columns:getComputedStyle(document.querySelector('.punch-location-fields')).gridTemplateColumns}));
+  assert.ok(measure.scrollWidth<=measure.width+1,`Overflow at ${width}`);assert.ok(measure.buttons.every(b=>b.height>=44&&b.left>=0&&b.right<=width));assert.ok(measure.fields.every(f=>f.width>0&&f.scrollWidth<=f.width+1));
+  await page.screenshot({path:`${output}/capture-${width}.png`,fullPage:true});
+  await page.getByRole('button',{name:'Save and authorize location'}).click();await page.locator('[data-punch-site]').filter({hasText:'Supply house pickup'}).waitFor();
+  const payload=await page.evaluate(()=>window.__punchManagementPorts.calls.find(c=>c[0]==='site')[2]);assert.equal(payload.employeeMembershipId,'22222222-2222-4222-8222-222222222222');assert.equal(payload.site.capture.accuracyMeters,8);assert.equal(payload.site.capture.latitude,26.64);assert.equal(payload.expectedAssignmentVersion,1);
+  // Customer source selection retains its canonical revision and never copies manual address authority.
+  await page.getByLabel('Location source',{exact:true}).selectOption('CUSTOMER_JOB');assert.equal(await page.getByLabel('Street address',{exact:true}).count(),0);assert.match(await page.locator('form').last().textContent(),/123 Customer Property/);
+  await page.getByLabel('Site name',{exact:true}).fill('Customer reviewed location');await page.getByLabel('Location policy',{exact:true}).selectOption('33333333-3333-4333-8333-333333333333');await page.getByRole('button',{name:'Use Current Location'}).click();await page.getByText('Position captured',{exact:false}).waitFor();await page.getByLabel('I am at this location and confirm this position for the named site.').check();await page.getByRole('button',{name:'Save and authorize location'}).click();await page.locator('[data-punch-site]').filter({hasText:'Customer reviewed location'}).waitFor();
+  const customerPayload=await page.evaluate(()=>window.__punchManagementPorts.calls.filter(c=>c[0]==='site').at(-1)[2]);assert.equal(customerPayload.site.customerSourceRevision,'a'.repeat(64));assert.equal(customerPayload.site.address,undefined);
+  assert.deepEqual(errors,[]);results.push({width,height,...measure,manualCapturePreserved:true,customerSourceRevisionPreserved:true,activationAndRevocation:true,pageErrors:errors});await page.close();
+ }
+ writeFileSync(`${output}/results.json`,JSON.stringify(results,null,2));console.log('PASS: business location management and foreground capture at all four required viewports.');
+}finally{await browser.close();await vite.close();}

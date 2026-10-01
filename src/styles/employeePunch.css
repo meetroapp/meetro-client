@@ -1,0 +1,8 @@
+.employee-punch-status { margin: 12px 0 0; color: #475569; font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
+.employee-punch-status[role="alert"] { color: #a33b35; }
+.employee-compact-location { font-size: 13px; line-height: 1.4; color: #475569; }
+.employee-time-location { min-width: 0; }
+.employee-time-location-main { min-width: 0; }
+.employee-time-location-main > div { min-width: 0; }
+.employee-time-clock-button,.employee-compact-clock-action { min-height: 44px; white-space: normal; }
+.employee-time-page { padding-bottom: calc(100px + env(safe-area-inset-bottom)); }

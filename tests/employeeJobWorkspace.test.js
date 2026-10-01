@@ -112,7 +112,9 @@ test("employee Job workspace exposes governed Clock In and Clock Out without pay
   assert.match(pageSource, /fieldClockIn/);
   assert.match(pageSource, /fieldClockOut/);
   assert.match(pageSource, /fieldOfficialTimeCopy/);
-  assert.match(pageSource, /fieldAddLocationCompact/);
+  assert.match(pageSource, /capturePunchPosition/);
+  assert.match(pageSource, /fieldPunchRequired/);
+  assert.doesNotMatch(pageSource, /boundaryLocation\(includeLocation\)/);
   assert.match(pageSource, /fieldTimeHistory/);
   assert.match(pageSource, /fieldClockOutDoesNotComplete/);
   assert.equal(t("fieldOfficialTimeCopy", "en"), "Meetro records the official time when you clock in or out.");

@@ -70,8 +70,9 @@ test("Field presentation translation leaves canonical status and time-category p
   }
   assert.match(jobsSource, /toStatus: operations\.nextStatus/);
   assert.match(jobsSource, /category,/);
-  assert.match(jobsSource, /jobId: category === "JOB_WORK"/);
-  assert.match(jobsSource, /assignmentId: category === "JOB_WORK"/);
+  assert.match(jobsSource, /jobId:currentAssignment\.jobId/);
+  assert.match(jobsSource, /assignmentId:currentAssignment\.id/);
+  assert.match(jobsSource, /assignmentActivationVersion:currentAssignment\.activationVersion/);
 });
 
 test("Personal and Work switching creates no second Field language authority", () => {
@@ -100,6 +101,7 @@ test("every Field Employee translation key is populated in all four supported la
     time: "{time}",
     timeZone: "{timeZone}",
     version: "{version}",
+    siteLabel: "{siteLabel}",
   };
 
   for (const language of languages) {
