@@ -456,9 +456,6 @@ export function hasMeaningfulBusinessDocumentDraft(payload = {}) {
     "balanceDue",
     "terms",
     "paymentTerms",
-    "pricingDisplayMode",
-    "materialsDisplayMode",
-    "depositMode",
     "depositPercent",
     "depositFixedAmount",
     "estimatedDuration",
@@ -468,6 +465,18 @@ export function hasMeaningfulBusinessDocumentDraft(payload = {}) {
     "customerMessage",
     "quoteReference",
   ];
+
+  // Fresh document presentation defaults are system state, not authored work.
+  // A deliberate non-default choice remains meaningful.
+  const hasMeaningfulNonDefaultSettings = [
+    ["pricingDisplayMode", "DETAILED_LINE_ITEMS"],
+    ["materialsDisplayMode", "SHOW_SEPARATELY"],
+    ["depositMode", "NONE"],
+  ].some(([key, defaultValue]) => {
+    const value = fingerprintText(content[key]).toUpperCase();
+    return Boolean(value && value !== defaultValue);
+  });
+
   const hasMeaningfulAgreement = Object.values(
     normalizeBusinessDocumentAgreement(content.agreement)
   ).some((value) => Array.isArray(value)
@@ -496,6 +505,7 @@ export function hasMeaningfulBusinessDocumentDraft(payload = {}) {
   });
   return Boolean(
     meaningfulScalarFields.some((key) => fingerprintText(content[key])) ||
+    hasMeaningfulNonDefaultSettings ||
     hasMeaningfulAgreement ||
     hasMeaningfulRows ||
     hasMeaningfulCollections ||
