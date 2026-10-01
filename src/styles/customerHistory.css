@@ -382,6 +382,10 @@
    ========================================================== */
 
 .customer-history-back-button {
+  display: flex;
+  width: max-content;
+  margin-left: 0;
+  margin-right: auto;
   margin-bottom: 6px;
   padding-left: 2px;
   padding-right: 4px;
