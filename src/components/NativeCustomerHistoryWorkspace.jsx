@@ -19,7 +19,7 @@ function amount(value, language) {
   return new Intl.NumberFormat(locale[language] || locale.en, { style: "currency", currency: value.currency }).format(value.totalMinor / 100);
 }
 
-export default function NativeCustomerHistoryWorkspace({ subject, sourceState, language, copy, setPage, onRetry, onLoadMore }) {
+export default function NativeCustomerHistoryWorkspace({ subject, displayName = "", sourceState, language, copy, setPage, onRetry, onLoadMore }) {
   const [focus, setFocus] = useState("overview");
   const [selectedJobId, setSelectedJobId] = useState("");
   const [detailRefreshKey, setDetailRefreshKey] = useState(0);
@@ -69,26 +69,46 @@ export default function NativeCustomerHistoryWorkspace({ subject, sourceState, l
     };
     const money = row => amount({ currency: row.currency, totalMinor: row.totalMinor }, language);
     const jobTitle = id => history.jobs.find(job => job.jobId === id)?.serviceTitle || copy.job;
-    return <section style={section} aria-label={copy.nativeHistory} data-native-customer-history-status={sourceState.status}>
-      <ProfessionalCustomerHistoryExport authority={subject} displayName={history.displayName} language={language} copy={copy} setPage={setPage} />
+    return <section
+      className="customer-history-workspace-body"
+      style={section}
+      aria-label={copy.nativeHistory}
+      data-native-customer-history-status={sourceState.status}
+    >
+      <header className="customer-history-identity">
+        <span className="customer-history-avatar" aria-hidden="true">
+          {(history.displayName || "C").slice(0, 1).toUpperCase()}
+        </span>
+        <div className="customer-history-identity-copy">
+          <p className="customer-history-eyebrow">{copy.nativeSourceLabel}</p>
+          <h2 className="customer-history-customer-name">{history.displayName}</h2>
+          <p className="customer-history-context">{copy.title}</p>
+        </div>
+        <ProfessionalCustomerHistoryExport authority={subject} displayName={history.displayName} language={language} copy={copy} setPage={setPage} />
+      </header>
+
       <ProfessionalCustomerHistoryTabs copy={copy} focus={focus} onChange={setFocus} />
-      {focus === "overview" && <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit,minmax(130px,1fr))", gap: 12 }}>
+
+      {focus === "overview" && <div className="customer-history-metric-grid">
         {[[copy.activeJobs,history.summary.activeJobs],[copy.completedJobs,history.summary.completedJobs],
           [copy.quotes,history.summary.quotes],[copy.invoices,history.summary.invoices],
           [copy.documentsPhotos,history.summary.documents + history.summary.photos]].map(([label,count]) =>
-          <article key={label} style={card}><strong>{count}</strong><p>{label}</p></article>)}
+          <article key={label} className="customer-history-metric-card">
+            <strong>{count}</strong>
+            <span>{label}</span>
+          </article>)}
       </div>}
       {focus === "work" && ["ACTIVE","COMPLETED"].map(state => <section key={state} style={section}>
         <h5>{state === "ACTIVE" ? copy.activeJobs : copy.completedJobs}</h5>
         {history.jobs.filter(job => job.completionState === state).length === 0 && <p>{copy.noWork}</p>}
-        {history.jobs.filter(job => job.completionState === state).map(job => <article key={job.jobId} style={card} data-native-job-history={job.jobId}>
+        {history.jobs.filter(job => job.completionState === state).map(job => <article key={job.jobId} className="customer-history-record-card" style={card} data-native-job-history={job.jobId}>
           <h5>{job.serviceTitle}</h5><p>{job.completedAt ? copy.completed : copy.created}: {date(job.completedAt || job.createdAt, language)}</p>
           <button type="button" style={button} onClick={() => open(job.jobId)} aria-label={`${copy.openJob}: ${job.serviceTitle}`}>{copy.openJob}</button>
         </article>)}
       </section>)}
       {focus === "quotes" && <section style={section}>
         {history.quotes.length === 0 && <p>{copy.noQuotes}</p>}
-        {history.quotes.map(quote => <article key={quote.quoteId} style={card}>
+        {history.quotes.map(quote => <article key={quote.quoteId} className="customer-history-record-card" style={card}>
           <h5>{quote.documentNumber || copy.quote} · {quote.lineageType === "REVISED_QUOTE" ? copy.revisedQuote : quote.lineageType === "SUPPLEMENTAL_QUOTE" ? copy.additionalQuote : copy.originalQuote}</h5>
           <p>{jobTitle(quote.jobId)} · {customerHistoryStatusLabel(quote.status,copy)}</p>
           {quote.customerDecision && <p>{copy.decision}: {customerHistoryStatusLabel(quote.customerDecision,copy)}</p>}
@@ -98,7 +118,7 @@ export default function NativeCustomerHistoryWorkspace({ subject, sourceState, l
       </section>}
       {focus === "invoices" && <section style={section}>
         {history.invoices.length === 0 && <p>{copy.noInvoices}</p>}
-        {history.invoices.map(invoice => <article key={invoice.invoiceId} style={card}>
+        {history.invoices.map(invoice => <article key={invoice.invoiceId} className="customer-history-record-card" style={card}>
           <h5>{invoice.invoiceNumber}</h5><p>{jobTitle(invoice.jobId)} · {customerHistoryStatusLabel(invoice.status,copy)}</p>
           <p>{copy.total}: {money(invoice)} · {copy.paid}: {amount({currency:invoice.currency,totalMinor:invoice.paidMinor},language)} · {copy.balance}: {amount({currency:invoice.currency,totalMinor:invoice.balanceMinor},language)}</p>
           <p>{copy.issued}: {date(invoice.issuedAt,language)}</p>
@@ -107,7 +127,7 @@ export default function NativeCustomerHistoryWorkspace({ subject, sourceState, l
       </section>}
       {focus === "documents" && <section style={section}>
         {history.documents.length + history.media.length === 0 && <p>{copy.noDocumentsPhotos}</p>}
-        {history.documents.map(doc => <article key={`${doc.documentType}:${doc.documentId}`} style={card}>
+        {history.documents.map(doc => <article key={`${doc.documentType}:${doc.documentId}`} className="customer-history-record-card" style={card}>
           <h5>{doc.documentNumber || (doc.documentType === "QUOTE" ? copy.quote : copy.invoice)}</h5>
           <p>{doc.jobTitle || jobTitle(doc.parentId)} · {doc.provenance === "CANONICAL_QUOTE" ? copy.canonicalQuote : copy.canonicalInvoice}</p>
           <button type="button" style={button} onClick={() => open(doc.parentId)}>{copy.openJob}</button>
@@ -120,9 +140,23 @@ export default function NativeCustomerHistoryWorkspace({ subject, sourceState, l
       {history.pagination.nextCursor && !sourceState.pageError && <button type="button" style={button} onClick={onLoadMore} disabled={sourceState.loadingMore}>{sourceState.loadingMore ? copy.loading : copy.loadMoreNative}</button>}
     </section>;
   }
-  return <section style={section} aria-label={copy.nativeHistory} data-native-customer-history-status={sourceState.status}>
-    <h4>{copy.nativeHistory}</h4>
-    {sourceState.status === "loading" && <p role="status">{copy.loading}</p>}
+  return <section
+    className="customer-history-workspace-body"
+    style={section}
+    aria-label={copy.nativeHistory}
+    data-native-customer-history-status={sourceState.status}
+  >
+    <header className="customer-history-identity customer-history-identity--loading">
+      <span className="customer-history-avatar" aria-hidden="true">
+        {(displayName || "C").slice(0, 1).toUpperCase()}
+      </span>
+      <div className="customer-history-identity-copy">
+        <p className="customer-history-eyebrow">{copy.nativeSourceLabel}</p>
+        <h2 className="customer-history-customer-name">{displayName || copy.nativeHistory}</h2>
+        <p className="customer-history-context">{copy.title}</p>
+      </div>
+    </header>
+    {sourceState.status === "loading" && <p className="customer-history-loading-status" role="status">{copy.loading}</p>}
     {sourceState.status === "error" && <div role="alert" style={card}>
       <p>{copy.nativeHistoryUnavailable}</p>
       <button type="button" style={button} onClick={onRetry}>{copy.retry}</button>

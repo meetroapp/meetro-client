@@ -4,7 +4,6 @@ import { getCustomerJobHistoryReportCopy, printCustomerJobHistoryReport, shareCu
 import { historyReportNotice } from '../utils/historyPdfShare.js';
 import { downloadBusinessDocumentPdfArtifact } from '../utils/businessDocumentDeviceShare.js';
 
-const button = { minHeight: 44, padding: '9px 14px', border: '1px solid #64748b', borderRadius: 6, background: '#fff', fontWeight: 700, cursor: 'pointer' };
 const empty = { busy: false, notice: '', artifact: null, model: null, saveAvailable: false };
 export default function ProfessionalCustomerHistoryExport({ authority, displayName, language, copy, setPage }) {
   const scope = JSON.stringify([authority.kind, authority.contractorProfileId, authority.homeownerUserId, authority.relationshipId, authority.businessContactId, language]);
@@ -37,12 +36,20 @@ export default function ProfessionalCustomerHistoryExport({ authority, displayNa
     try { saved = downloadBusinessDocumentPdfArtifact(current.artifact); } catch { /* Preserve explicit retry. */ }
     setState({ ...current, scope, notice: saved ? reportCopy.downloadNotice : reportCopy.saveRequired });
   }
-  return <section aria-label={copy.professionalHistoryReport} style={{ minWidth: 0 }}>
-    <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>{['print', 'share'].map(kind =>
-      <button key={kind} type="button" style={button} disabled={current.busy} onClick={() => void run(kind)}>
+  return <section className="professional-customer-history-export" aria-label={copy.professionalHistoryReport}>
+    <div className="customer-history-export-actions">{['print', 'share'].map(kind =>
+      <button
+        key={kind}
+        type="button"
+        className={`customer-history-export-button customer-history-export-button--${kind}`}
+        disabled={current.busy}
+        onClick={() => void run(kind)}
+      >
         {current.busy ? reportCopy.preparing : reportCopy[kind]}
       </button>)}</div>
-    {current.notice && <p role="status" aria-live="polite">{current.notice}</p>}
-    {current.saveAvailable && current.artifact && <button type="button" style={button} onClick={save}>{reportCopy.savePdf}</button>}
+    {current.notice && <p className="customer-history-export-notice" role="status" aria-live="polite">{current.notice}</p>}
+    {current.saveAvailable && current.artifact && (
+      <button type="button" className="customer-history-save-button" onClick={save}>{reportCopy.savePdf}</button>
+    )}
   </section>;
 }

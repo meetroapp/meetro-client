@@ -1,0 +1,377 @@
+/*
+ * Professional Customer History
+ * Mobile-first Meetro business-workspace presentation.
+ *
+ * Presentation only:
+ * - no History authority
+ * - no routing authority
+ * - no document authority
+ * - no workflow mutations
+ */
+
+.customer-history-workspace {
+  margin-top: 12px !important;
+}
+
+.customer-history-customer-shell {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.customer-history-back-button {
+  min-height: 44px;
+  max-width: 100%;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin: 0 0 12px;
+  padding: 9px 12px;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.82);
+  color: #0B5D3B;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 4px 14px rgba(17, 24, 39, 0.04);
+  -webkit-backdrop-filter: blur(14px);
+  backdrop-filter: blur(14px);
+}
+
+.customer-history-workspace-body {
+  gap: 12px !important;
+}
+
+.customer-history-identity {
+  display: grid;
+  grid-template-columns: 48px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  min-width: 0;
+  padding: 14px;
+  border: 1px solid #E5E7EB;
+  border-radius: 18px;
+  background:
+    linear-gradient(
+      135deg,
+      rgba(255, 255, 255, 0.90),
+      rgba(241, 250, 245, 0.88)
+    );
+  box-shadow: 0 8px 24px rgba(17, 24, 39, 0.05);
+  -webkit-backdrop-filter: blur(18px) saturate(1.12);
+  backdrop-filter: blur(18px) saturate(1.12);
+}
+
+.customer-history-avatar {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  background: #E8F5EE;
+  color: #0B5D3B;
+  font-size: 19px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.customer-history-identity-copy {
+  min-width: 0;
+}
+
+.customer-history-eyebrow {
+  margin: 0;
+  color: #0B5D3B;
+  font-size: 10px;
+  line-height: 1.2;
+  font-weight: 800;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.customer-history-customer-name {
+  margin: 3px 0 0;
+  color: #111827;
+  font-size: clamp(22px, 6vw, 26px);
+  line-height: 1.12;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+  overflow-wrap: anywhere;
+}
+
+.customer-history-context {
+  margin: 3px 0 0;
+  color: #6B7280;
+  font-size: 12px;
+  line-height: 1.35;
+  font-weight: 500;
+}
+
+.professional-customer-history-export {
+  grid-column: 1 / -1;
+  min-width: 0;
+  display: grid;
+  gap: 7px;
+}
+
+.customer-history-export-actions {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.customer-history-export-button,
+.customer-history-save-button {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 9px 14px;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111827;
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.customer-history-export-button--share {
+  border-color: rgba(11, 93, 59, 0.20);
+  background: #E8F5EE;
+  color: #0B5D3B;
+}
+
+.customer-history-export-button:disabled,
+.customer-history-save-button:disabled {
+  cursor: wait;
+  opacity: 0.62;
+}
+
+.customer-history-export-notice {
+  margin: 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: #F1FAF5;
+  color: #0B5D3B;
+  font-size: 11px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.customer-history-save-button {
+  justify-self: start;
+  background: #FFFFFF;
+  color: #0B5D3B;
+}
+
+.customer-history-tabs {
+  width: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px;
+  box-sizing: border-box;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  border: 1px solid #E5E7EB;
+  border-radius: 14px;
+  background: #F3F4F6;
+  -webkit-overflow-scrolling: touch;
+}
+
+.customer-history-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.customer-history-tab {
+  flex: 0 0 auto;
+  min-height: 44px;
+  padding: 8px 12px;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: #6B7280;
+  font: inherit;
+  font-size: 12px;
+  line-height: 1.2;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.customer-history-tab[aria-pressed="true"] {
+  background: #FFFFFF;
+  color: #0B5D3B;
+  box-shadow: 0 2px 8px rgba(17, 24, 39, 0.07);
+}
+
+.customer-history-metric-grid {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.customer-history-metric-card {
+  min-width: 0;
+  min-height: 72px;
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  padding: 11px 12px;
+  box-sizing: border-box;
+  border: 1px solid #E5E7EB;
+  border-radius: 16px;
+  background: #FFFFFF;
+}
+
+.customer-history-metric-card strong {
+  color: #063D26;
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.customer-history-metric-card span {
+  color: #6B7280;
+  font-size: 11px;
+  line-height: 1.3;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.customer-history-metric-card:last-child {
+  grid-column: 1 / -1;
+}
+
+.customer-history-record-card {
+  border-color: #E5E7EB !important;
+  border-radius: 16px !important;
+  padding: 14px !important;
+  box-shadow: none !important;
+}
+
+.customer-history-record-card h5 {
+  margin: 0 0 6px;
+  color: #111827;
+  font-size: 15px;
+  line-height: 1.3;
+}
+
+.customer-history-record-card p {
+  margin: 5px 0;
+  color: #6B7280;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.customer-history-back-button:focus-visible,
+.customer-history-export-button:focus-visible,
+.customer-history-save-button:focus-visible,
+.customer-history-tab:focus-visible {
+  outline: 2px solid #10B981;
+  outline-offset: 2px;
+}
+
+/* iPad keeps the mobile-first composition because its post-sidebar
+   workspace can be much narrower than the physical device width. */
+#root[data-app-layout="tablet"] .customer-history-metric-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+#root[data-app-layout="tablet"] .customer-history-metric-card:last-child {
+  grid-column: auto;
+}
+
+/* Desktop expands the same mobile composition; it does not replace it. */
+#root[data-app-layout="desktop"] .customer-history-identity {
+  grid-template-columns: 48px minmax(0, 1fr) auto;
+  padding: 16px;
+}
+
+#root[data-app-layout="desktop"] .professional-customer-history-export {
+  grid-column: auto;
+  min-width: 190px;
+  justify-self: end;
+}
+
+#root[data-app-layout="desktop"] .customer-history-export-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
+#root[data-app-layout="desktop"] .customer-history-export-button {
+  min-width: 84px;
+}
+
+#root[data-app-layout="desktop"] .customer-history-export-notice {
+  max-width: 300px;
+  justify-self: end;
+}
+
+#root[data-app-layout="desktop"] .customer-history-save-button {
+  justify-self: end;
+}
+
+#root[data-app-layout="desktop"] .customer-history-tabs {
+  width: fit-content;
+  max-width: 100%;
+}
+
+#root[data-app-layout="desktop"] .customer-history-metric-grid {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+}
+
+#root[data-app-layout="desktop"] .customer-history-metric-card:last-child {
+  grid-column: auto;
+}
+
+/* Very narrow phones keep comfortable touch targets without wasting height. */
+@media (max-width: 430px) {
+  .customer-history-back-button {
+    margin-bottom: 10px;
+  }
+
+  .customer-history-identity {
+    padding: 12px;
+  }
+
+  .customer-history-tab {
+    padding-inline: 11px;
+  }
+
+  .customer-history-metric-card {
+    min-height: 68px;
+    padding: 10px 11px;
+  }
+}
+
+.customer-history-identity--loading {
+  margin-bottom: 0;
+}
+
+.customer-history-loading-status {
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid #E5E7EB;
+  border-radius: 12px;
+  background: #FFFFFF;
+  color: #6B7280;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 600;
+}
+
+.customer-history-back-button::before {
+  content: "←";
+  display: inline-block;
+  font-size: 15px;
+  line-height: 1;
+}

@@ -2,6 +2,7 @@ import useAskMeetroContext from "../hooks/useAskMeetroContext.js";
 import { useCallback, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import BottomNav from "../components/BottomNav";
 import BusinessToolsPageHeader from "../components/BusinessToolsPageHeader";
+import "../styles/customerHistory.css";
 import { getLanguage } from "../utils/language";
 import { getCustomerRelationshipsCopy } from "../utils/customerRelationshipsLanguage.js";
 import {
@@ -618,14 +619,20 @@ function CustomerRelationshipsCenter({ setPage }) {
 
   return (
     <div className="app-page meetro-responsive-page" style={page}>
-      <BusinessToolsPageHeader
-        title={copy.title}
-        description={copy.description}
-        categoryLabel={copy.category}
-        onBack={returnFromPage}
-      />
+      {!selectedNativeCustomer && (
+        <BusinessToolsPageHeader
+          title={copy.title}
+          description={copy.description}
+          categoryLabel={copy.category}
+          onBack={returnFromPage}
+        />
+      )}
 
-      <main style={workspace} aria-labelledby="customer-relationships-title">
+      <main
+        className={`customer-relationships-workspace${selectedNativeCustomer ? " customer-history-workspace" : ""}`}
+        style={workspace}
+        aria-labelledby="customer-relationships-title"
+      >
         <h2 id="customer-relationships-title" style={visuallyHidden}>
           {copy.title}
         </h2>
@@ -861,18 +868,22 @@ function CustomerRelationshipsCenter({ setPage }) {
         )}
 
         {visibleNativeCustomer && (
-          <section style={detailCard} aria-label={copy.nativeHistory} data-native-customer={visibleNativeCustomer.subject.homeownerUserId}>
-            <div style={detailHeader}>
-              <span style={contactAvatar} aria-hidden="true">{visibleNativeCustomer.displayName.slice(0, 1).toUpperCase()}</span>
-              <div style={minWidthZero}>
-                <p style={eyebrow}>{copy.nativeSourceLabel}</p>
-                <h3 style={detailTitle}>{visibleNativeCustomer.displayName}</h3>
-              </div>
-            </div>
-            <button type="button" style={secondaryButton} onClick={showDirectory}>{copy.backToRelationships}</button>
+          <section
+            className="customer-history-customer-shell"
+            aria-label={copy.nativeHistory}
+            data-native-customer={visibleNativeCustomer.subject.homeownerUserId}
+          >
+            <button
+              type="button"
+              className="customer-history-back-button"
+              onClick={showDirectory}
+            >
+              {copy.backToRelationships}
+            </button>
             <NativeCustomerHistoryWorkspace
               key={`${visibleNativeCustomer.subject.contractorProfileId}:${visibleNativeCustomer.subject.homeownerUserId}`}
               subject={visibleNativeCustomer.subject}
+              displayName={visibleNativeCustomer.displayName}
               sourceState={nativeHistory.identityKey === nativeSubjectKey ? nativeHistory : { status: "loading", history: null, pageError: "", loadingMore: false }}
               language={language}
               copy={copy}
