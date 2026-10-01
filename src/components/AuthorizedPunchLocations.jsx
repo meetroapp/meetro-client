@@ -65,7 +65,7 @@ export default function AuthorizedPunchLocations({businessId,assignmentId,employ
   const available=(data?.sites||[]).filter(site=>site.currentAuthority&&!site.currentAuthorization);
   return <section className="authorized-punch-locations" aria-label="Authorized Punch Locations">
     <header className="punch-locations-heading"><div><h3>Authorized Punch Locations</h3>{data&&<p>{data.assignment.memberName} · {data.assignment.jobTitle} · {sourceLabel(data.assignment.sourceType)}</p>}</div>{onClose&&<button type="button" onClick={onClose}>Close locations</button>}</header>
-    <p className="punch-locations-note">Configure the locations authorized for this employee assignment. Proximity verification is not enabled.</p>
+    <p className="punch-locations-note">Configure the locations authorized for this employee assignment. Location verification is required for Punch In and Punch Out.</p>
     {error&&<p role="alert" className="punch-locations-error">{error}</p>}{notice&&<p role="status" className="punch-locations-notice">{notice}</p>}
     {loading&&<p role="status">Loading assignment locations…</p>}
     {retry&&<div className="punch-locations-actions"><p>The result could not be confirmed. Retry the same request, or refresh before making new changes.</p><button disabled={busy} onClick={()=>execute(retry.method,retry.payload)}>Retry saved request</button><button disabled={busy} onClick={()=>{setRetry(null);resetForm();load();}}>Refresh before new changes</button></div>}
