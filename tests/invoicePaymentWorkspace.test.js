@@ -247,10 +247,46 @@ test("exact Invoice review hydrates one canonical detail read with one visible l
   assert.match(source, /if \(initialInvoiceId\) \{[\s\S]*setWorkspacePhase\("idle"\)/);
   assert.doesNotMatch(exactInvoiceEffect, /fetchProfessionalInvoiceWorkspace/);
   assert.match(exactInvoiceEffect, /fetchProfessionalInvoice\(\{ invoiceId: initialInvoiceId/);
-  assert.match(source, /const isLoading = phase === "loading" \|\| invoicePhase === "loading"/);
+  assert.match(
+    source,
+    /const isLoading\s*=\s*phase === "loading"\s*\|\|\s*invoicePhase === "loading"/
+  );
+
   assert.equal(
-    (source.match(/\{isLoading && <p role="status">\{copy\.loading\}<\/p>\}/g) || []).length,
+    (source.match(/\{isLoading && \(/g) || []).length,
     1
+  );
+
+  const loadingOwnerStart =
+    source.indexOf(
+      "{isLoading && ("
+    );
+
+  const loadingOwnerEnd =
+    source.indexOf(
+      "{!isLoading && hasError",
+      loadingOwnerStart
+    );
+
+  assert.ok(
+    loadingOwnerStart >= 0 &&
+    loadingOwnerEnd > loadingOwnerStart
+  );
+
+  const loadingOwner =
+    source.slice(
+      loadingOwnerStart,
+      loadingOwnerEnd
+    );
+
+  assert.match(
+    loadingOwner,
+    /role="status"/
+  );
+
+  assert.match(
+    loadingOwner,
+    /copy\.loading/
   );
   assert.doesNotMatch(source, /busy\.startsWith\("read:"\)/);
 });
@@ -276,4 +312,223 @@ test("Invoice copy is complete for active EN, ES, FR, and PT-BR locales", () => 
     assert.deepEqual(Object.keys(copy).sort(), keys);
     assert.equal(keys.every((key) => typeof copy[key] === "string" && copy[key].trim()), true);
   }
+});
+
+test("Revenue Date and Custom Range controls use native calendars and server-owned range authority", () => {
+  const source =
+    read("../src/components/ProfessionalInvoiceWorkspace.jsx");
+
+  for (const token of [
+    "revenueDate",
+    "revenueCustomRange",
+    "revenueChooseDate",
+    "revenueFrom",
+    "revenueTo",
+    "revenueApply",
+    "revenueCancel",
+  ]) {
+    assert.match(
+      source,
+      new RegExp(token)
+    );
+  }
+
+  assert.match(
+    source,
+    /data-revenue-date-trigger="true"/
+  );
+
+  assert.match(
+    source,
+    /data-revenue-range-trigger="true"/
+  );
+
+  assert.match(
+    source,
+    /data-revenue-range-editor/
+  );
+
+  assert.match(
+    source,
+    /data-revenue-date-input="true"/
+  );
+
+  assert.match(
+    source,
+    /data-revenue-start-date="true"/
+  );
+
+  assert.match(
+    source,
+    /data-revenue-end-date="true"/
+  );
+
+  assert.match(
+    source,
+    /data-revenue-range-apply="true"/
+  );
+
+  assert.match(
+    source,
+    /data-revenue-range-cancel="true"/
+  );
+
+  const revenueEditorStart =
+    source.indexOf(
+      "data-revenue-range-editor="
+    );
+
+  const revenueEditorEnd =
+    source.indexOf(
+      "{revenueMessage &&",
+      revenueEditorStart
+    );
+
+  assert.ok(
+    revenueEditorStart >= 0 &&
+    revenueEditorEnd > revenueEditorStart
+  );
+
+  const revenueEditorSource =
+    source.slice(
+      revenueEditorStart,
+      revenueEditorEnd
+    );
+
+  const nativeRevenueDateInputs =
+    revenueEditorSource.match(
+      /type="date"/g
+    ) || [];
+
+  assert.equal(
+    nativeRevenueDateInputs.length,
+    3
+  );
+
+  assert.match(
+    source,
+    /period:\s*revenuePeriod/
+  );
+
+  assert.match(
+    source,
+    /revenuePeriod === "CUSTOM_RANGE"[\s\S]*startDate:[\s\S]*revenueRange\.startDate[\s\S]*endDate:[\s\S]*revenueRange\.endDate/
+  );
+
+  assert.match(
+    source,
+    /setRevenuePeriod\("CUSTOM_RANGE"\)/
+  );
+
+  assert.match(
+    source,
+    /startDate > endDate/
+  );
+
+  assert.match(
+    source,
+    /revenueRangeMode === "DATE"/
+  );
+
+  assert.match(
+    source,
+    /revenueRangeMode === "RANGE"/
+  );
+
+  assert.doesNotMatch(
+    source,
+    /showPicker\s*\(/
+  );
+
+  const revenueStart =
+    source.indexOf(
+      "const revenue = workspace?.revenue"
+    );
+
+  const invoiceListStart =
+    source.indexOf(
+      "workspace?.readyJobs.length",
+      revenueStart
+    );
+
+  assert.ok(
+    revenueStart >= 0 &&
+    invoiceListStart > revenueStart
+  );
+
+  const financialPresentation =
+    source.slice(
+      revenueStart,
+      invoiceListStart
+    );
+
+  assert.doesNotMatch(
+    financialPresentation,
+    /\.reduce\(|localStorage|sessionStorage/
+  );
+});
+
+test("Revenue filter editor highlights immediately while financial authority still changes only on Apply", () => {
+  const source =
+    read("../src/components/ProfessionalInvoiceWorkspace.jsx");
+
+  assert.match(
+    source,
+    /const revenuePresetControlsActive =[\s\S]*revenueRangeEditor === ""/
+  );
+
+  assert.match(
+    source,
+    /const revenueDateControlActive =[\s\S]*revenueRangeEditor === "DATE"[\s\S]*revenuePeriod === "CUSTOM_RANGE"[\s\S]*revenueRangeMode === "DATE"/
+  );
+
+  assert.match(
+    source,
+    /const revenueCustomRangeControlActive =[\s\S]*revenueRangeEditor === "RANGE"[\s\S]*revenuePeriod === "CUSTOM_RANGE"[\s\S]*revenueRangeMode === "RANGE"/
+  );
+
+  assert.match(
+    source,
+    /aria-pressed=\{[\s\S]*revenueDateControlActive/
+  );
+
+  assert.match(
+    source,
+    /aria-pressed=\{[\s\S]*revenueCustomRangeControlActive/
+  );
+
+  assert.match(
+    source,
+    /setRevenueRangeEditor\("DATE"\)/
+  );
+
+  assert.match(
+    source,
+    /setRevenueRangeEditor\("RANGE"\)/
+  );
+
+  assert.match(
+    source,
+    /function cancelRevenueRangeEditor\(\)[\s\S]*setRevenueRangeEditor\(""\)/
+  );
+
+  assert.match(
+    source,
+    /function applyRevenueRangeSelection\(\)[\s\S]*setRevenuePeriod\("CUSTOM_RANGE"\)/
+  );
+
+  assert.match(
+    source,
+    /const isRevenueRefresh =[\s\S]*workspacePhase === "loading"[\s\S]*Boolean\(workspace\)/
+  );
+
+  assert.match(
+    source,
+    /isRevenueRefresh[\s\S]*copy\.revenueUpdating[\s\S]*copy\.loading/
+  );
+
+  assert.match(
+    source,
+    /data-revenue-refresh/
+  );
 });

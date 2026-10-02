@@ -11,6 +11,7 @@ const REVENUE_PERIODS = new Set([
   "LAST_30_DAYS",
   "LAST_90_DAYS",
   "THIS_YEAR",
+  "CUSTOM_RANGE",
 ]);
 
 const REVENUE_STATES = new Set([
@@ -19,6 +20,67 @@ const REVENUE_STATES = new Set([
   "MULTI_CURRENCY",
   "UNSAFE_FINANCIAL_HISTORY",
 ]);
+
+function normalizeRevenueRequestDate(value) {
+  const normalized =
+    typeof value === "string"
+      ? value.trim()
+      : "";
+
+  if (
+    !/^\d{4}-\d{2}-\d{2}$/.test(
+      normalized
+    )
+  ) {
+    return "";
+  }
+
+  const parsed =
+    new Date(
+      `${normalized}T00:00:00.000Z`
+    );
+
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed
+      .toISOString()
+      .slice(0, 10) !== normalized
+  ) {
+    return "";
+  }
+
+  return normalized;
+}
+
+function nextRevenueRequestDate(value) {
+  const normalized =
+    normalizeRevenueRequestDate(
+      value
+    );
+
+  if (!normalized) {
+    return "";
+  }
+
+  const parsed =
+    new Date(
+      `${normalized}T00:00:00.000Z`
+    );
+
+  parsed.setUTCDate(
+    parsed.getUTCDate() + 1
+  );
+
+  const next =
+    parsed
+      .toISOString()
+      .slice(0, 10);
+
+  return /^\d{4}-\d{2}-\d{2}$/.test(next)
+    ? next
+    : "";
+}
+
 
 function plain(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) return false;
@@ -574,15 +636,22 @@ function commandOptions(body, idempotencyKey) {
 export async function fetchProfessionalInvoiceWorkspace({
   limit = 20,
   period = "THIS_MONTH",
+  startDate = null,
+  endDate = null,
   setPage,
   authFetchImpl = authFetch,
 } = {}) {
-  const bounded = integer(limit);
+  const bounded =
+    integer(limit);
 
-  if (!bounded || bounded > 50) {
+  if (
+    !bounded ||
+    bounded > 50
+  ) {
     throw new InvoicePaymentApiError({
       status: 400,
-      code: "INVALID_INVOICE_WORKSPACE_PAGE",
+      code:
+        "INVALID_INVOICE_WORKSPACE_PAGE",
     });
   }
 
@@ -594,34 +663,135 @@ export async function fetchProfessionalInvoiceWorkspace({
   if (!exactPeriod) {
     throw new InvoicePaymentApiError({
       status: 400,
-      code: "INVALID_REVENUE_PERIOD",
-      message: "Choose a supported Revenue period.",
+      code:
+        "INVALID_REVENUE_PERIOD",
+      message:
+        "Choose a supported Revenue period.",
     });
   }
 
-  const data = await request(
-    `/professional/invoices/workspace?limit=${bounded}&period=${encodeURIComponent(exactPeriod)}`,
-    {
-      method: "GET",
-      cache: "no-store",
-    },
-    setPage,
-    authFetchImpl
-  );
+  const customDateRequested =
+    startDate != null ||
+    endDate != null;
+
+  let exactStartDate = "";
+  let exactEndDate = "";
+
+  if (
+    exactPeriod ===
+      "CUSTOM_RANGE"
+  ) {
+    exactStartDate =
+      normalizeRevenueRequestDate(
+        startDate
+      );
+
+    exactEndDate =
+      normalizeRevenueRequestDate(
+        endDate
+      );
+
+    if (
+      !exactStartDate ||
+      !exactEndDate ||
+      exactStartDate > exactEndDate
+    ) {
+      throw new InvoicePaymentApiError({
+        status: 400,
+        code:
+          "INVALID_REVENUE_RANGE",
+        message:
+          "Choose a valid Revenue date range.",
+      });
+    }
+  } else if (
+    customDateRequested
+  ) {
+    throw new InvoicePaymentApiError({
+      status: 400,
+      code:
+        "INVALID_REVENUE_RANGE",
+      message:
+        "Custom Revenue dates require Custom Range.",
+    });
+  }
+
+  let endpoint =
+    `/professional/invoices/workspace?limit=${bounded}` +
+    `&period=${encodeURIComponent(exactPeriod)}`;
+
+  if (
+    exactPeriod ===
+      "CUSTOM_RANGE"
+  ) {
+    endpoint +=
+      `&startDate=${encodeURIComponent(exactStartDate)}` +
+      `&endDate=${encodeURIComponent(exactEndDate)}`;
+  }
+
+  const data =
+    await request(
+      endpoint,
+      {
+        method: "GET",
+        cache: "no-store",
+      },
+      setPage,
+      authFetchImpl
+    );
 
   const workspace =
     validateInvoiceWorkspace(
       data.workspace
     );
 
+  if (!workspace) {
+    throw new InvoicePaymentApiError({
+      status: 502,
+      code:
+        "UNSAFE_INVOICE_WORKSPACE_RESPONSE",
+    });
+  }
+
+  const revenue =
+    workspace.revenue || null;
+
   if (
-    !workspace ||
-    (workspace.revenue && workspace.revenue.period !== exactPeriod)
+    revenue &&
+    revenue.period !== exactPeriod
   ) {
     throw new InvoicePaymentApiError({
       status: 502,
-      code: "UNSAFE_INVOICE_WORKSPACE_RESPONSE",
+      code:
+        "UNSAFE_INVOICE_WORKSPACE_RESPONSE",
     });
+  }
+
+  if (
+    revenue &&
+    exactPeriod ===
+      "CUSTOM_RANGE" &&
+    revenue.state !==
+      "TIME_ZONE_REQUIRED"
+  ) {
+    const expectedEndExclusive =
+      nextRevenueRequestDate(
+        exactEndDate
+      );
+
+    if (
+      !expectedEndExclusive ||
+      revenue.localStartDate !==
+        exactStartDate ||
+      revenue.localEndDateExclusive !==
+        expectedEndExclusive
+    ) {
+      throw new InvoicePaymentApiError({
+        status: 502,
+        code:
+          "UNSAFE_INVOICE_WORKSPACE_RESPONSE",
+      });
+    }
   }
 
   return workspace;

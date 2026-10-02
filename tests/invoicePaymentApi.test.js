@@ -483,3 +483,367 @@ test('external email and reminder transport reject a mismatched receipt and do n
   await assert.rejects(emailCanonicalInvoice({invoiceId:INVOICE_ID,expectedVersion:2,purpose,idempotencyKey:'email-key',authFetchImpl:async()=>({response:{ok:true,status:202},data:{success:true,delivery:{...delivery,invoiceId:QUOTE_ID}}})}),{code:'UNSAFE_INVOICE_EMAIL_RESPONSE'});
  }
 });
+
+test("Professional workspace sends governed CUSTOM_RANGE dates exactly", async () => {
+  const workspace = {
+    contractVersion: 1,
+
+    revenue: {
+      state: "READY",
+      period: "CUSTOM_RANGE",
+      timeZone: "America/New_York",
+      localStartDate: "2026-10-02",
+      localEndDateExclusive: "2026-10-10",
+      currency: null,
+      cashReceivedMinor: 0,
+      invoicedMinor: 0,
+      outstandingMinor: 0,
+      paidInvoices: 0,
+    },
+
+    summary: {
+      readyToInvoice: 0,
+      drafts: 0,
+      waitingForPayment: 0,
+      paid: 0,
+      totalOutstandingMinor: null,
+      currency: null,
+    },
+
+    readyJobs: [],
+    invoices: [],
+    limit: 50,
+  };
+
+  let endpoint = "";
+
+  const result =
+    await fetchProfessionalInvoiceWorkspace({
+      limit: 50,
+      period: "CUSTOM_RANGE",
+      startDate: "2026-10-02",
+      endDate: "2026-10-09",
+
+      authFetchImpl: async (
+        value,
+        options
+      ) => {
+        endpoint = value;
+
+        assert.deepEqual(
+          options,
+          {
+            method: "GET",
+            cache: "no-store",
+          }
+        );
+
+        return {
+          response: {
+            ok: true,
+            status: 200,
+          },
+
+          data: {
+            success: true,
+            workspace,
+          },
+        };
+      },
+    });
+
+  assert.equal(
+    endpoint,
+    "/professional/invoices/workspace?limit=50&period=CUSTOM_RANGE&startDate=2026-10-02&endDate=2026-10-09"
+  );
+
+  assert.equal(
+    result.revenue.period,
+    "CUSTOM_RANGE"
+  );
+
+  assert.equal(
+    result.revenue.localStartDate,
+    "2026-10-02"
+  );
+
+  assert.equal(
+    result.revenue.localEndDateExclusive,
+    "2026-10-10"
+  );
+});
+
+test("Professional workspace supports one exact Revenue date as an inclusive one-day CUSTOM_RANGE", async () => {
+  let endpoint = "";
+
+  const result =
+    await fetchProfessionalInvoiceWorkspace({
+      limit: 50,
+      period: "CUSTOM_RANGE",
+      startDate: "2026-10-02",
+      endDate: "2026-10-02",
+
+      authFetchImpl: async (
+        value
+      ) => {
+        endpoint = value;
+
+        return {
+          response: {
+            ok: true,
+            status: 200,
+          },
+
+          data: {
+            success: true,
+
+            workspace: {
+              contractVersion: 1,
+
+              revenue: {
+                state: "READY",
+                period: "CUSTOM_RANGE",
+                timeZone:
+                  "America/New_York",
+                localStartDate:
+                  "2026-10-02",
+                localEndDateExclusive:
+                  "2026-10-03",
+                currency: null,
+                cashReceivedMinor: 0,
+                invoicedMinor: 0,
+                outstandingMinor: 0,
+                paidInvoices: 0,
+              },
+
+              summary: {
+                readyToInvoice: 0,
+                drafts: 0,
+                waitingForPayment: 0,
+                paid: 0,
+                totalOutstandingMinor:
+                  null,
+                currency: null,
+              },
+
+              readyJobs: [],
+              invoices: [],
+              limit: 50,
+            },
+          },
+        };
+      },
+    });
+
+  assert.equal(
+    endpoint,
+    "/professional/invoices/workspace?limit=50&period=CUSTOM_RANGE&startDate=2026-10-02&endDate=2026-10-02"
+  );
+
+  assert.equal(
+    result.revenue.localStartDate,
+    "2026-10-02"
+  );
+
+  assert.equal(
+    result.revenue.localEndDateExclusive,
+    "2026-10-03"
+  );
+});
+
+test("Professional workspace rejects invalid Revenue ranges before fetch", async () => {
+  for (const input of [
+    {
+      period: "CUSTOM_RANGE",
+      startDate: "",
+      endDate: "2026-10-02",
+    },
+    {
+      period: "CUSTOM_RANGE",
+      startDate: "2026-10-02",
+      endDate: "",
+    },
+    {
+      period: "CUSTOM_RANGE",
+      startDate: "2026-10-10",
+      endDate: "2026-10-02",
+    },
+    {
+      period: "CUSTOM_RANGE",
+      startDate: "2026-02-30",
+      endDate: "2026-03-01",
+    },
+    {
+      period: "CUSTOM_RANGE",
+      startDate: "10/02/2026",
+      endDate: "2026-10-03",
+    },
+    {
+      period: "THIS_MONTH",
+      startDate: "2026-10-01",
+      endDate: "2026-10-02",
+    },
+  ]) {
+    let fetched = false;
+
+    await assert.rejects(
+      () =>
+        fetchProfessionalInvoiceWorkspace({
+          ...input,
+
+          authFetchImpl:
+            async () => {
+              fetched = true;
+
+              throw new Error(
+                "Invalid Revenue range must fail before fetch."
+              );
+            },
+        }),
+      (error) =>
+        error?.code ===
+          "INVALID_REVENUE_RANGE"
+    );
+
+    assert.equal(
+      fetched,
+      false
+    );
+  }
+});
+
+test("Professional workspace rejects CUSTOM_RANGE response boundary drift", async () => {
+  await assert.rejects(
+    () =>
+      fetchProfessionalInvoiceWorkspace({
+        limit: 50,
+        period: "CUSTOM_RANGE",
+        startDate: "2026-10-02",
+        endDate: "2026-10-09",
+
+        authFetchImpl:
+          async () => ({
+            response: {
+              ok: true,
+              status: 200,
+            },
+
+            data: {
+              success: true,
+
+              workspace: {
+                contractVersion: 1,
+
+                revenue: {
+                  state: "READY",
+                  period: "CUSTOM_RANGE",
+                  timeZone:
+                    "America/New_York",
+
+                  // Intentionally wrong.
+                  localStartDate:
+                    "2026-10-03",
+
+                  localEndDateExclusive:
+                    "2026-10-10",
+
+                  currency: null,
+                  cashReceivedMinor: 0,
+                  invoicedMinor: 0,
+                  outstandingMinor: 0,
+                  paidInvoices: 0,
+                },
+
+                summary: {
+                  readyToInvoice: 0,
+                  drafts: 0,
+                  waitingForPayment: 0,
+                  paid: 0,
+                  totalOutstandingMinor:
+                    null,
+                  currency: null,
+                },
+
+                readyJobs: [],
+                invoices: [],
+                limit: 50,
+              },
+            },
+          }),
+      }),
+    (error) =>
+      error?.code ===
+        "UNSAFE_INVOICE_WORKSPACE_RESPONSE"
+  );
+});
+
+test("Professional workspace permits CUSTOM_RANGE timezone-required response without inventing client dates", async () => {
+  const result =
+    await fetchProfessionalInvoiceWorkspace({
+      limit: 50,
+      period: "CUSTOM_RANGE",
+      startDate: "2026-10-02",
+      endDate: "2026-10-09",
+
+      authFetchImpl:
+        async () => ({
+          response: {
+            ok: true,
+            status: 200,
+          },
+
+          data: {
+            success: true,
+
+            workspace: {
+              contractVersion: 1,
+
+              revenue: {
+                state:
+                  "TIME_ZONE_REQUIRED",
+                period:
+                  "CUSTOM_RANGE",
+                timeZone: null,
+                localStartDate: null,
+                localEndDateExclusive:
+                  null,
+                currency: null,
+                cashReceivedMinor: null,
+                invoicedMinor: null,
+                outstandingMinor: null,
+                paidInvoices: null,
+              },
+
+              summary: {
+                readyToInvoice: 0,
+                drafts: 0,
+                waitingForPayment: 0,
+                paid: 0,
+                totalOutstandingMinor:
+                  null,
+                currency: null,
+              },
+
+              readyJobs: [],
+              invoices: [],
+              limit: 50,
+            },
+          },
+        }),
+    });
+
+  assert.equal(
+    result.revenue.state,
+    "TIME_ZONE_REQUIRED"
+  );
+
+  assert.equal(
+    result.revenue.localStartDate,
+    null
+  );
+
+  assert.equal(
+    result.revenue.localEndDateExclusive,
+    null
+  );
+});

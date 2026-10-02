@@ -61,6 +61,70 @@ const REVENUE_PERIOD_OPTIONS = Object.freeze([
   { value: "THIS_YEAR", copyKey: "revenueThisYear" },
 ]);
 
+function validRevenueDateKey(value) {
+  if (
+    typeof value !== "string" ||
+    !/^\d{4}-\d{2}-\d{2}$/.test(value)
+  ) {
+    return false;
+  }
+
+  const parsed =
+    new Date(
+      `${value}T00:00:00.000Z`
+    );
+
+  return (
+    !Number.isNaN(parsed.getTime()) &&
+    parsed
+      .toISOString()
+      .slice(0, 10) === value
+  );
+}
+
+function nextRevenueDateKey(value) {
+  if (!validRevenueDateKey(value)) {
+    return "";
+  }
+
+  const parsed =
+    new Date(
+      `${value}T00:00:00.000Z`
+    );
+
+  parsed.setUTCDate(
+    parsed.getUTCDate() + 1
+  );
+
+  return parsed
+    .toISOString()
+    .slice(0, 10);
+}
+
+function formatRevenueDateKey(
+  value,
+  language
+) {
+  if (!validRevenueDateKey(value)) {
+    return "";
+  }
+
+  return new Intl.DateTimeFormat(
+    language || "en",
+    {
+      year: "numeric",
+      month: "short",
+      day: "numeric",
+      timeZone: "UTC",
+    }
+  ).format(
+    new Date(
+      `${value}T12:00:00.000Z`
+    )
+  );
+}
+
+
 export default function ProfessionalInvoiceWorkspace({
   language = "en",
   setPage,
@@ -72,6 +136,17 @@ export default function ProfessionalInvoiceWorkspace({
   const workspaceCopy = getWorkCenterWorkspaceCopy(language);
   const [workspace, setWorkspace] = useState(null);
   const [revenuePeriod, setRevenuePeriod] = useState("THIS_MONTH");
+  const [revenueRange, setRevenueRange] = useState({
+    startDate: "",
+    endDate: "",
+  });
+  const [revenueRangeMode, setRevenueRangeMode] = useState("");
+  const [revenueRangeEditor, setRevenueRangeEditor] = useState("");
+  const [revenueRangeDraft, setRevenueRangeDraft] = useState({
+    startDate: "",
+    endDate: "",
+  });
+  const [revenueRangeError, setRevenueRangeError] = useState("");
   const [workspacePhase, setWorkspacePhase] = useState("idle");
   const [invoicePhase, setInvoicePhase] = useState("idle");
   const [selected, setSelected] = useState(null);
@@ -90,22 +165,31 @@ export default function ProfessionalInvoiceWorkspace({
   useAskMeetroContext({ invoiceId: selected?.invoiceId, jobId: selected?.jobId, conversationId: selected?.conversationId, label: selected?.invoiceNumber });
 
   const loadWorkspace = useCallback(async () => {
-    const requestId = ++workspaceRequestRef.current;
-    try {
-      const value = await fetchProfessionalInvoiceWorkspace({
+    const value =
+      await fetchProfessionalInvoiceWorkspace({
         limit: 50,
         period: revenuePeriod,
+        ...(revenuePeriod === "CUSTOM_RANGE"
+          ? {
+              startDate:
+                revenueRange.startDate,
+              endDate:
+                revenueRange.endDate,
+            }
+          : {}),
         setPage,
       });
-      if (requestId !== workspaceRequestRef.current) return null;
-      setWorkspace(value);
-      setWorkspacePhase("ready");
-      return value;
-    } catch (error) {
-      if (requestId !== workspaceRequestRef.current) return null;
-      throw error;
-    }
-  }, [revenuePeriod, setPage]);
+
+    setWorkspace(value);
+    setWorkspacePhase("ready");
+
+    return value;
+  }, [
+    revenuePeriod,
+    revenueRange.startDate,
+    revenueRange.endDate,
+    setPage,
+  ]);
 
   const resetPaymentInteraction = useCallback(() => {
     setShowPayment(false);
@@ -411,10 +495,184 @@ export default function ProfessionalInvoiceWorkspace({
     finally { setBusy(""); }
   }
 
+  function selectRevenuePreset(
+    value
+  ) {
+    const samePreset =
+      value === revenuePeriod &&
+      revenuePeriod !== "CUSTOM_RANGE";
+
+    setRevenueRangeEditor("");
+    setRevenueRangeError("");
+    setRevenueRangeMode("");
+
+    if (samePreset) {
+      return;
+    }
+
+    setWorkspacePhase("loading");
+    setRevenuePeriod(value);
+  }
+
+  function openRevenueDateEditor() {
+    const current =
+      revenuePeriod === "CUSTOM_RANGE" &&
+      revenueRangeMode === "DATE"
+        ? revenueRange.startDate
+        : "";
+
+    setRevenueRangeDraft({
+      startDate: current,
+      endDate: current,
+    });
+
+    setRevenueRangeError("");
+    setRevenueRangeEditor("DATE");
+  }
+
+  function openRevenueCustomRangeEditor() {
+    const useCurrent =
+      revenuePeriod === "CUSTOM_RANGE" &&
+      revenueRangeMode === "RANGE";
+
+    setRevenueRangeDraft({
+      startDate:
+        useCurrent
+          ? revenueRange.startDate
+          : "",
+      endDate:
+        useCurrent
+          ? revenueRange.endDate
+          : "",
+    });
+
+    setRevenueRangeError("");
+    setRevenueRangeEditor("RANGE");
+  }
+
+  function cancelRevenueRangeEditor() {
+    setRevenueRangeEditor("");
+    setRevenueRangeError("");
+  }
+
+  function applyRevenueRangeSelection() {
+    const mode =
+      revenueRangeEditor;
+
+    const startDate =
+      String(
+        revenueRangeDraft.startDate ||
+        ""
+      ).trim();
+
+    const endDate =
+      mode === "DATE"
+        ? startDate
+        : String(
+            revenueRangeDraft.endDate ||
+            ""
+          ).trim();
+
+    if (
+      mode === "DATE" &&
+      !validRevenueDateKey(startDate)
+    ) {
+      setRevenueRangeError(
+        copy.revenueDateRequired
+      );
+      return;
+    }
+
+    if (
+      mode === "RANGE" &&
+      (
+        !validRevenueDateKey(startDate) ||
+        !validRevenueDateKey(endDate) ||
+        startDate > endDate
+      )
+    ) {
+      setRevenueRangeError(
+        copy.revenueRangeInvalid
+      );
+      return;
+    }
+
+    if (
+      mode !== "DATE" &&
+      mode !== "RANGE"
+    ) {
+      return;
+    }
+
+    setRevenueRange({
+      startDate,
+      endDate,
+    });
+
+    setRevenueRangeMode(mode);
+    setRevenueRangeEditor("");
+    setRevenueRangeError("");
+    setWorkspacePhase("loading");
+    setRevenuePeriod("CUSTOM_RANGE");
+  }
+
   const revenue = workspace?.revenue || null;
 
+  const revenueRangeIsCurrent =
+    revenuePeriod !== "CUSTOM_RANGE" ||
+    revenue?.state ===
+      "TIME_ZONE_REQUIRED" ||
+    (
+      revenue?.localStartDate ===
+        revenueRange.startDate &&
+      revenue?.localEndDateExclusive ===
+        nextRevenueDateKey(
+          revenueRange.endDate
+        )
+    );
+
   const revenueIsCurrent =
-    revenue?.period === revenuePeriod;
+    revenue?.period === revenuePeriod &&
+    revenueRangeIsCurrent;
+
+  const revenueRangeLabel =
+    revenuePeriod === "CUSTOM_RANGE" &&
+    revenueRange.startDate &&
+    revenueRange.endDate
+      ? (
+          revenueRangeMode === "DATE"
+            ? formatRevenueDateKey(
+                revenueRange.startDate,
+                language
+              )
+            : `${formatRevenueDateKey(
+                revenueRange.startDate,
+                language
+              )} – ${formatRevenueDateKey(
+                revenueRange.endDate,
+                language
+              )}`
+        )
+      : "";
+
+  const revenuePresetControlsActive =
+    revenueRangeEditor === "";
+
+  const revenueDateControlActive =
+    revenueRangeEditor === "DATE" ||
+    (
+      revenueRangeEditor === "" &&
+      revenuePeriod === "CUSTOM_RANGE" &&
+      revenueRangeMode === "DATE"
+    );
+
+  const revenueCustomRangeControlActive =
+    revenueRangeEditor === "RANGE" ||
+    (
+      revenueRangeEditor === "" &&
+      revenuePeriod === "CUSTOM_RANGE" &&
+      revenueRangeMode === "RANGE"
+    );
 
   const revenueMoney = useCallback(
     (minor) => {
@@ -509,8 +767,19 @@ export default function ProfessionalInvoiceWorkspace({
     </div>
   ) : null;
   const phase = initialInvoiceId ? invoicePhase : workspacePhase;
-  const isLoading = phase === "loading" || invoicePhase === "loading";
-  const hasError = phase === "error" || invoicePhase === "error";
+
+  const isRevenueRefresh =
+    !initialInvoiceId &&
+    workspacePhase === "loading" &&
+    Boolean(workspace);
+
+  const isLoading =
+    phase === "loading" ||
+    invoicePhase === "loading";
+
+  const hasError =
+    phase === "error" ||
+    invoicePhase === "error";
 
   return (
     <section className="work-center-workspace professional-invoice-workspace" style={styles.workspace} data-invoice-workspace-phase={phase}>
@@ -526,42 +795,213 @@ export default function ProfessionalInvoiceWorkspace({
       />
 
       <UniversalAskMeetroEntry language={language} context={{ invoiceId: selected?.invoiceId, jobId: selected?.jobId, conversationId: selected?.conversationId }} contextName={selected?.invoiceNumber || "Invoices & Payments"} />
-      {isLoading && <p role="status">{copy.loading}</p>}
+      {isLoading && (
+        <p
+          role="status"
+          data-revenue-refresh={
+            isRevenueRefresh
+              ? "loading"
+              : undefined
+          }
+        >
+          {isRevenueRefresh
+            ? copy.revenueUpdating
+            : copy.loading}
+        </p>
+      )}
       {!isLoading && hasError && <p role="alert">{copy.unavailable}</p>}
       {notice && <p role="status" style={styles.notice}>{notice}</p>}
       {completionNotice && <InvoiceCompletionNotice onClose={() => setCompletionNotice(false)} />}
 
       {!initialInvoiceId && (
-        <div
-          style={styles.periodControls}
-          role="group"
-          aria-label={copy.revenuePeriod}
-          data-revenue-period={revenuePeriod}
-        >
-          {REVENUE_PERIOD_OPTIONS.map((option) => (
+        <div style={styles.revenuePeriodArea}>
+          <div
+            style={styles.periodControls}
+            role="group"
+            aria-label={copy.revenuePeriod}
+            data-revenue-period={revenuePeriod}
+            data-revenue-range-mode={revenueRangeMode || undefined}
+          >
+            {REVENUE_PERIOD_OPTIONS.map((option) => (
+              <button
+                key={option.value}
+                type="button"
+                disabled={workspacePhase === "loading" || Boolean(busy)}
+                aria-pressed={
+                  revenuePresetControlsActive &&
+                  revenuePeriod === option.value
+                }
+                style={{
+                  ...styles.periodButton,
+                  ...(revenuePresetControlsActive &&
+                  revenuePeriod === option.value
+                    ? styles.periodButtonActive
+                    : {}),
+                }}
+                onClick={() =>
+                  selectRevenuePreset(
+                    option.value
+                  )
+                }
+              >
+                {copy[option.copyKey]}
+              </button>
+            ))}
+
             <button
-              key={option.value}
               type="button"
-              aria-pressed={revenuePeriod === option.value}
-              disabled={
-                workspacePhase === "loading" ||
-                Boolean(busy)
+              disabled={workspacePhase === "loading" || Boolean(busy)}
+              aria-pressed={
+                revenueDateControlActive
               }
               style={{
                 ...styles.periodButton,
-                ...(revenuePeriod === option.value
+                ...(revenueDateControlActive
                   ? styles.periodButtonActive
                   : {}),
               }}
-              onClick={() => {
-                if (option.value === revenuePeriod) return;
-                setWorkspacePhase("loading");
-                setRevenuePeriod(option.value);
-              }}
+              onClick={openRevenueDateEditor}
+              data-revenue-date-trigger="true"
             >
-              {copy[option.copyKey]}
+              {copy.revenueDate}
             </button>
-          ))}
+
+            <button
+              type="button"
+              disabled={workspacePhase === "loading" || Boolean(busy)}
+              aria-pressed={
+                revenueCustomRangeControlActive
+              }
+              style={{
+                ...styles.periodButton,
+                ...(revenueCustomRangeControlActive
+                  ? styles.periodButtonActive
+                  : {}),
+              }}
+              onClick={openRevenueCustomRangeEditor}
+              data-revenue-range-trigger="true"
+            >
+              {copy.revenueCustomRange}
+            </button>
+          </div>
+
+          {revenueRangeLabel && (
+            <p
+              style={styles.revenueRangeLabel}
+              data-revenue-range-label="true"
+            >
+              {revenueRangeLabel}
+            </p>
+          )}
+
+          {revenueRangeEditor && (
+            <div
+              style={styles.revenueRangeEditor}
+              data-revenue-range-editor={
+                revenueRangeEditor
+              }
+            >
+              {revenueRangeEditor === "DATE" ? (
+                <label style={styles.revenueDateField}>
+                  <span>{copy.revenueChooseDate}</span>
+                  <input
+                    type="date"
+                    disabled={workspacePhase === "loading" || Boolean(busy)}
+                    value={
+                      revenueRangeDraft.startDate
+                    }
+                    onChange={(event) =>
+                      setRevenueRangeDraft({
+                        startDate:
+                          event.target.value,
+                        endDate:
+                          event.target.value,
+                      })
+                    }
+                    style={styles.revenueDateInput}
+                    data-revenue-date-input="true"
+                  />
+                </label>
+              ) : (
+                <div style={styles.revenueRangeFields}>
+                  <label style={styles.revenueDateField}>
+                    <span>{copy.revenueFrom}</span>
+                    <input
+                      type="date"
+                      disabled={workspacePhase === "loading" || Boolean(busy)}
+                      value={
+                        revenueRangeDraft.startDate
+                      }
+                      onChange={(event) =>
+                        setRevenueRangeDraft(
+                          (current) => ({
+                            ...current,
+                            startDate:
+                              event.target.value,
+                          })
+                        )
+                      }
+                      style={styles.revenueDateInput}
+                      data-revenue-start-date="true"
+                    />
+                  </label>
+
+                  <label style={styles.revenueDateField}>
+                    <span>{copy.revenueTo}</span>
+                    <input
+                      type="date"
+                      disabled={workspacePhase === "loading" || Boolean(busy)}
+                      value={
+                        revenueRangeDraft.endDate
+                      }
+                      onChange={(event) =>
+                        setRevenueRangeDraft(
+                          (current) => ({
+                            ...current,
+                            endDate:
+                              event.target.value,
+                          })
+                        )
+                      }
+                      style={styles.revenueDateInput}
+                      data-revenue-end-date="true"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {revenueRangeError && (
+                <p
+                  role="alert"
+                  style={styles.revenueRangeError}
+                  data-revenue-range-error="true"
+                >
+                  {revenueRangeError}
+                </p>
+              )}
+
+              <div style={styles.revenueRangeActions}>
+                <button
+                  type="button"
+                  style={styles.secondaryButton}
+                  onClick={cancelRevenueRangeEditor}
+                  data-revenue-range-cancel="true"
+                >
+                  {copy.revenueCancel}
+                </button>
+
+                <button
+                  type="button"
+                  disabled={workspacePhase === "loading" || Boolean(busy)}
+                  style={styles.primaryButton}
+                  onClick={applyRevenueRangeSelection}
+                  data-revenue-range-apply="true"
+                >
+                  {copy.revenueApply}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -791,6 +1231,64 @@ const styles = {
     boxSizing: "border-box",
   },
   notice: { margin: 0, padding: 12, borderLeft: "4px solid #0f766e", background: "#eff8f7" },
+  revenuePeriodArea: {
+    display: "grid",
+    gap: 10,
+    minWidth: 0,
+  },
+  revenueRangeLabel: {
+    margin: 0,
+    color: "#475449",
+    fontSize: 13,
+    fontWeight: 700,
+  },
+  revenueRangeEditor: {
+    display: "grid",
+    gap: 12,
+    width: "min(100%, 560px)",
+    padding: 14,
+    border: "1px solid #D1D5DB",
+    borderRadius: 10,
+    background: "#F7F6F2",
+    boxSizing: "border-box",
+  },
+  revenueRangeFields: {
+    display: "grid",
+    gridTemplateColumns:
+      "repeat(auto-fit, minmax(180px, 1fr))",
+    gap: 12,
+  },
+  revenueDateField: {
+    display: "grid",
+    gap: 6,
+    minWidth: 0,
+    color: "#1F2937",
+    fontSize: 13,
+    fontWeight: 800,
+  },
+  revenueDateInput: {
+    width: "100%",
+    minHeight: 44,
+    padding: "0 10px",
+    border: "1px solid #D1D5DB",
+    borderRadius: 8,
+    background: "#fff",
+    color: "#1F2937",
+    font: "inherit",
+    boxSizing: "border-box",
+  },
+  revenueRangeActions: {
+    display: "flex",
+    flexWrap: "wrap",
+    justifyContent: "flex-end",
+    gap: 8,
+  },
+  revenueRangeError: {
+    margin: 0,
+    color: "#DC2626",
+    fontSize: 13,
+    fontWeight: 700,
+  },
   periodControls: { display: "flex", flexWrap: "wrap", gap: 8, alignItems: "center" },
   periodButton: { minHeight: 40, padding: "0 12px", border: "1px solid #9aa89d", borderRadius: 999, background: "#fff", color: "#172317", fontWeight: 800, cursor: "pointer" },
   periodButtonActive: { background: "#1f5132", borderColor: "#1f5132", color: "#fff" },
