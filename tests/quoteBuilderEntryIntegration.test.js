@@ -251,11 +251,57 @@ function assertCustomerSnapshot(w, expected) {
   }
 }
 
+test("dashboard generic Quote starts clean and exits without an unsaved-changes dialog", async (t) => {
+  const w = await mount(t, {
+    stored: {
+      quoteBuilderSource: "business_dashboard_new_quote",
+      quoteBuilderReturnPage: "businessDashboard",
+    },
+  });
+
+  assert.equal(
+    w.snapshot().quote.recommendedSolution,
+    "",
+    "fresh dashboard Quote must not contain synthetic authored work"
+  );
+
+  assert.deepEqual(
+    w.workspace().dirty,
+    { quote: false, invoice: false },
+    "fresh dashboard Quote and hidden Invoice must both remain clean"
+  );
+
+  assert.equal(
+    Boolean(document.querySelector('[role="dialog"]')),
+    false,
+    "fresh dashboard Quote opens with no dialog"
+  );
+
+  await w.click("Leave Quote and Invoice workspace");
+
+  assert.equal(
+    Boolean(document.querySelector('[role="dialog"]')),
+    false,
+    "leaving untouched dashboard Quote must not open unsaved-changes dialog"
+  );
+
+  assert.deepEqual(
+    w.navigations,
+    ["businessDashboard"]
+  );
+});
+
 test("R4-E new external Customer initializes the actual Quote preview without saving a document", async (t) => {
   const w = await mount(t, { newExternalCustomer: true });
   assert.equal(Boolean(document.querySelector(".new-quote-customer-setup")), false);
   await w.click("+ Start New Quote");
-  await w.click("Discard Changes");
+  assert.equal(
+    [...document.querySelectorAll("button")].some(
+      (button) => button.textContent.trim() === "Discard Changes"
+    ),
+    false,
+    "clean Start New Quote must not require a discard decision"
+  );
   await w.click("External Customer");
   await w.click("Add New Customer");
   for (const [label, value] of Object.entries({ Name: contact.displayName, Email: contact.email, Phone: contact.phone, Address: contact.address })) {

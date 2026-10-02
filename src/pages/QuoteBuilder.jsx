@@ -833,7 +833,9 @@ function QuoteBuilder({ setPage, initialDocument = "quote" }) {
       selectedQuoteForEdit?.proposalSummary ||
       request.recommendedSolution ||
       request.proposalSummary ||
-      (isUniversalQuickQuote ? "" : defaultRecommendedSolution)
+      ((isUniversalQuickQuote || isGenericNewQuoteIntent)
+        ? ""
+        : defaultRecommendedSolution)
   );
   const [proposalType, setProposalType] = useState(
     selectedQuoteForEdit?.proposalType || selectedQuoteForEdit?.quoteMetadata?.proposalType || "Repair"

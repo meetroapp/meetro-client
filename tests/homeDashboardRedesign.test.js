@@ -314,3 +314,26 @@ test("Professional dashboard reuses one ordered section tree across phone, table
     }
   }
 });
+
+test("Dashboard Invoice Builder establishes Business Dashboard return authority", async (t) => {
+  const w = await mount(t, "BusinessDashboard");
+
+  const invoice = [...document.querySelectorAll("button")]
+    .find((button) => button.textContent.includes("Invoice Builder"));
+
+  assert.ok(invoice, "Invoice Builder shortcut");
+
+  await act(async () => {
+    invoice.click();
+  });
+
+  assert.equal(w.routes.at(-1), "invoiceBuilder");
+  assert.equal(
+    localStorage.getItem("invoiceBuilderSource"),
+    "business_dashboard_new_invoice"
+  );
+  assert.equal(
+    localStorage.getItem("invoiceBuilderReturnPage"),
+    "businessDashboard"
+  );
+});

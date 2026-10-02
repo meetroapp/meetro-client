@@ -993,7 +993,11 @@ function BusinessDashboard({ setPage }) {
       note: text.quickAccessInvoiceBuilderNote,
       tone: "#16a34a",
       toneBg: "rgba(22,163,74,0.13)",
-      onClick: () => setPage("invoiceBuilder"),
+      onClick: () => {
+        localStorage.setItem("invoiceBuilderSource", "business_dashboard_new_invoice");
+        localStorage.setItem("invoiceBuilderReturnPage", "businessDashboard");
+        setPage("invoiceBuilder");
+      },
     },
 
     { key: "timesheet", icon: "schedule", label: "Timesheet", note: "Track hours & work time", tone: "#3B82F6", toneBg: "#EFF6FF", onClick: () => setPage("teamOperations?view=timesheets") },
