@@ -130,3 +130,35 @@ test("portfolio preview does not introduce media ownership or persistence author
   assert.doesNotMatch(previewRenderBlock, /setPage\(/);
   assert.doesNotMatch(previewRenderBlock, /https:\/\/getmeetro\.com|https:\/\/meetro/i);
 });
+
+test("public business logo opens the shared view-only identity media preview", () => {
+  assert.match(
+    contractorDetailsSource,
+    /import \{\s*IdentityMediaPreviewDialog,\s*\} from "\.\.\/components\/RelationshipIdentityPage";/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /const \[\s*businessLogoPreviewOpen,\s*setBusinessLogoPreviewOpen,\s*\] = useState\(false\)/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /businessIdentity\.imageUrl \? \(\s*<button[\s\S]*setBusinessLogoPreviewOpen\(true\)[\s\S]*src=\{businessIdentity\.imageUrl\}/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /<IdentityMediaPreviewDialog[\s\S]*open=\{businessLogoPreviewOpen\}[\s\S]*src=\{businessIdentity\.imageUrl\}[\s\S]*setBusinessLogoPreviewOpen\(false\)/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /\) : \(\s*<div style=\{imagePlaceholder\}>[\s\S]*businessIdentity\.initials/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /const profileImageButton = \{[\s\S]*cursor: "zoom-in"/
+  );
+});

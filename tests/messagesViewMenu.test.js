@@ -821,3 +821,93 @@ test("Relationship detail labels exist in supported languages", () => {
     assert.notEqual(t("relationshipServiceArea", language), "relationshipServiceArea");
   }
 });
+
+test("relationship detail real avatars open a view-only image preview without hijacking communication navigation", () => {
+  const previewStart =
+    relationshipIdentityPageSource.indexOf(
+      "export function IdentityMediaPreviewDialog"
+    );
+  const previewEnd =
+    relationshipIdentityPageSource.indexOf(
+      "function initialsFor",
+      previewStart
+    );
+
+  assert.notEqual(previewStart, -1);
+  assert.notEqual(previewEnd, -1);
+
+  const previewSource =
+    relationshipIdentityPageSource.slice(
+      previewStart,
+      previewEnd
+    );
+
+  assert.match(
+    previewSource,
+    /role="dialog"/
+  );
+  assert.match(
+    previewSource,
+    /aria-modal="true"/
+  );
+  assert.match(
+    previewSource,
+    /event\.key !== "Escape"/
+  );
+  assert.match(
+    previewSource,
+    /event\.target === event\.currentTarget/
+  );
+  assert.match(
+    previewSource,
+    /aria-label="Close image preview"/
+  );
+  assert.match(
+    relationshipIdentityPageSource,
+    /const identityMediaPreviewImage = \{[\s\S]*?objectFit: "contain"[\s\S]*?\};/
+  );
+  assert.match(
+    previewSource,
+    /document\.body\.style\.overflow = "hidden"/
+  );
+  assert.match(
+    previewSource,
+    /previousFocus\.focus/
+  );
+
+  assert.doesNotMatch(
+    previewSource,
+    /upload|delete|download|share/i
+  );
+
+  assert.match(
+    relationshipIdentityPageSource,
+    /identity\.avatar \? \(\s*<button[\s\S]*setMediaPreviewOpen\(true\)/
+  );
+  assert.match(
+    relationshipIdentityPageSource,
+    /<IdentityMediaPreviewDialog[\s\S]*src=\{identity\.avatar\}/
+  );
+  assert.match(
+    relationshipIdentityPageSource,
+    /\) : \(\s*<div style=\{identityAvatar\}>\s*\{initials\}/
+  );
+
+  assert.doesNotMatch(
+    messagesSource,
+    /IdentityMediaPreviewDialog/
+  );
+  assert.doesNotMatch(
+    conversationThreadSource,
+    /IdentityMediaPreviewDialog/
+  );
+
+  assert.match(
+    messagesSource,
+    /onClick=\{\(\) => openConversationRow\(conversation, options\)\}/
+  );
+  assert.match(
+    conversationThreadSource,
+    /onClick=\{openRelationshipDetails\}/
+  );
+});

@@ -24,6 +24,74 @@ function BusinessTrustContext({ trustContext }) {
   );
 }
 
+function businessInitials(value = "") {
+  return (
+    String(value || "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .slice(0, 2)
+      .map((part) =>
+        part.charAt(0).toUpperCase()
+      )
+      .join("") || "B"
+  );
+}
+
+function BusinessIdentityAttribution({
+  businessName = "",
+  businessLogo = "",
+  expanded = false,
+}) {
+  if (!businessName && !businessLogo) {
+    return null;
+  }
+
+  return (
+    <div
+      style={
+        expanded
+          ? businessIdentityExpanded
+          : businessIdentityCompact
+      }
+      aria-label={
+        businessName
+          ? `Business: ${businessName}`
+          : "Business"
+      }
+    >
+      <span
+        style={
+          expanded
+            ? businessLogoFrameExpanded
+            : businessLogoFrame
+        }
+        aria-hidden="true"
+      >
+        {businessLogo ? (
+          <img
+            src={businessLogo}
+            alt=""
+            style={businessLogoImage}
+            loading={expanded ? "eager" : "lazy"}
+            decoding="async"
+          />
+        ) : (
+          <span style={businessLogoFallback}>
+            {businessInitials(businessName)}
+          </span>
+        )}
+      </span>
+
+      {businessName && (
+        <strong style={businessIdentityName}>
+          {businessName}
+        </strong>
+      )}
+    </div>
+  );
+}
+
 function ProjectMediaPreview({ project, expanded = false }) {
   const images = getBusinessPortfolioProjectImages(project);
   const [activeIndex, setActiveIndex] = useState(0);
@@ -117,6 +185,8 @@ export function PortfolioProjectGrid({ children, ariaLabel = "Portfolio projects
 export function PortfolioProjectCard({
   project,
   businessName = "",
+  businessLogo = "",
+  showBusinessIdentity = false,
   trustContext = null,
   status = null,
   onView,
@@ -142,9 +212,18 @@ export function PortfolioProjectCard({
         <h3 style={projectTitle}>{title}</h3>
         <p style={projectDescription}>{project?.description || "No description yet."}</p>
 
+        {showBusinessIdentity && (
+          <BusinessIdentityAttribution
+            businessName={businessName}
+            businessLogo={businessLogo}
+          />
+        )}
+
         <div style={projectTrustContext}>
           <span style={proofLabel}>Proof of work</span>
-          {businessName && <span style={businessNameLabel}>{businessName}</span>}
+          {businessName && !showBusinessIdentity && (
+            <span style={businessNameLabel}>{businessName}</span>
+          )}
         </div>
 
         <BusinessTrustContext trustContext={trustContext} />
@@ -167,6 +246,8 @@ export function PortfolioProjectCard({
 export function PortfolioProjectView({
   project,
   businessName = "",
+  businessLogo = "",
+  showBusinessIdentity = false,
   trustContext = null,
   visibilityContext = "",
   onBack,
@@ -193,7 +274,19 @@ export function PortfolioProjectView({
         <h1 id="portfolio-project-view-title" style={projectViewTitle}>
           {project.title || "Untitled project"}
         </h1>
-        {businessName && <p style={projectViewBusiness}>{businessName}</p>}
+        {showBusinessIdentity ? (
+          <BusinessIdentityAttribution
+            businessName={businessName}
+            businessLogo={businessLogo}
+            expanded
+          />
+        ) : (
+          businessName && (
+            <p style={projectViewBusiness}>
+              {businessName}
+            </p>
+          )
+        )}
         {visibilityContext && <p style={visibilityText}>{visibilityContext}</p>}
       </header>
 
@@ -257,6 +350,77 @@ const statusPill = { display: "inline-flex", padding: "7px 10px", borderRadius: 
 const secondaryPill = { ...statusPill, background: "rgba(238,244,234,0.9)", color: "var(--meetro-color-forest, #1f4d34)", borderColor: "rgba(31,77,52,0.22)" };
 const projectTitle = { fontSize: "22px", margin: "0 0 8px", lineHeight: 1.2, overflowWrap: "break-word" };
 const projectDescription = { color: "#4b5563", lineHeight: 1.6, whiteSpace: "pre-wrap", overflowWrap: "break-word", display: "-webkit-box", WebkitLineClamp: 3, WebkitBoxOrient: "vertical", overflow: "hidden", margin: "0 0 12px" };
+const businessIdentityCompact = {
+  display: "flex",
+  alignItems: "center",
+  gap: "10px",
+  minWidth: 0,
+  margin: "0 0 12px",
+};
+
+const businessIdentityExpanded = {
+  ...businessIdentityCompact,
+  width: "fit-content",
+  maxWidth: "100%",
+  justifyContent: "center",
+  margin: "12px auto 0",
+};
+
+const businessLogoFrame = {
+  width: "42px",
+  height: "42px",
+  flex: "0 0 42px",
+  borderRadius: "999px",
+  overflow: "hidden",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  boxSizing: "border-box",
+  background: "#ffffff",
+  border: "1px solid rgba(31,77,52,0.14)",
+  boxShadow: "0 6px 16px rgba(31,77,52,0.10)",
+};
+
+const businessLogoFrameExpanded = {
+  ...businessLogoFrame,
+  width: "52px",
+  height: "52px",
+  flexBasis: "52px",
+};
+
+const businessLogoImage = {
+  width: "100%",
+  height: "100%",
+  display: "block",
+  objectFit: "contain",
+  objectPosition: "center",
+  padding: "4px",
+  boxSizing: "border-box",
+  background: "#ffffff",
+};
+
+const businessLogoFallback = {
+  width: "100%",
+  height: "100%",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  background:
+    "linear-gradient(145deg, rgba(232,245,238,0.96), rgba(241,250,245,0.96))",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "13px",
+  fontWeight: 950,
+};
+
+const businessIdentityName = {
+  minWidth: 0,
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "14px",
+  lineHeight: 1.3,
+  fontWeight: 900,
+  overflowWrap: "anywhere",
+};
+
 const projectTrustContext = { display: "flex", alignItems: "center", gap: "7px", flexWrap: "wrap", color: "#5d665f", fontSize: "12px", marginTop: "auto" };
 const proofLabel = { color: "var(--meetro-color-forest, #1f4d34)", fontWeight: 900, textTransform: "uppercase", letterSpacing: "0.45px" };
 const businessNameLabel = { fontWeight: 750 };

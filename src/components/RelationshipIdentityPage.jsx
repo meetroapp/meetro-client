@@ -1,9 +1,127 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   glassPill,
   glassSurface,
   softPageSection,
 } from "../styles/liquidGlass";
+
+export function IdentityMediaPreviewDialog({
+  open = false,
+  src = "",
+  alt = "",
+  title = "",
+  onClose,
+}) {
+  const previousFocusRef = useRef(null);
+  const onCloseRef = useRef(onClose);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
+  useEffect(() => {
+    if (
+      !open ||
+      !src ||
+      typeof document === "undefined"
+    ) {
+      return undefined;
+    }
+
+    previousFocusRef.current =
+      document.activeElement;
+
+    const previousBodyOverflow =
+      document.body.style.overflow;
+
+    document.body.style.overflow = "hidden";
+
+    function handleKeyDown(event) {
+      if (event.key !== "Escape") return;
+
+      event.preventDefault();
+      onCloseRef.current?.();
+    }
+
+    document.addEventListener(
+      "keydown",
+      handleKeyDown
+    );
+
+    return () => {
+      document.removeEventListener(
+        "keydown",
+        handleKeyDown
+      );
+
+      document.body.style.overflow =
+        previousBodyOverflow;
+
+      const previousFocus =
+        previousFocusRef.current;
+
+      if (
+        previousFocus &&
+        typeof previousFocus.focus === "function" &&
+        document.contains(previousFocus)
+      ) {
+        try {
+          previousFocus.focus({
+            preventScroll: true,
+          });
+        } catch {
+          previousFocus.focus();
+        }
+      }
+    };
+  }, [open, src]);
+
+  if (!open || !src) return null;
+
+  const previewName =
+    String(title || alt || "Profile").trim() ||
+    "Profile";
+
+  return (
+    <div
+      style={identityMediaPreviewBackdrop}
+      onPointerDown={(event) => {
+        if (
+          event.target === event.currentTarget
+        ) {
+          onCloseRef.current?.();
+        }
+      }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label={`${previewName} image preview`}
+        style={identityMediaPreviewDialog}
+      >
+        <button
+          type="button"
+          aria-label="Close image preview"
+          title="Close"
+          autoFocus
+          style={identityMediaPreviewCloseButton}
+          onClick={() => onCloseRef.current?.()}
+        >
+          ×
+        </button>
+
+        <div style={identityMediaPreviewFrame}>
+          <img
+            src={src}
+            alt={alt || previewName}
+            draggable="false"
+            style={identityMediaPreviewImage}
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function initialsFor(value = "") {
   return String(value || "")
@@ -175,6 +293,14 @@ export default function RelationshipIdentityPage({
   const [showDeferredSections, setShowDeferredSections] = useState(
     deferredSections.length === 0
   );
+  const [
+    mediaPreviewOpen,
+    setMediaPreviewOpen,
+  ] = useState(false);
+
+  useEffect(() => {
+    setMediaPreviewOpen(false);
+  }, [identity.avatar]);
 
   useEffect(() => {
     if (deferredSections.length === 0) {
@@ -215,8 +341,16 @@ export default function RelationshipIdentityPage({
 
       <div style={identityHeader}>
         <div style={identityHeaderBlock}>
-          <div style={identityAvatar}>
-            {identity.avatar ? (
+          {identity.avatar ? (
+            <button
+              type="button"
+              style={identityAvatarButton}
+              aria-label={`View ${displayName} image`}
+              title={`View ${displayName} image`}
+              onClick={() =>
+                setMediaPreviewOpen(true)
+              }
+            >
               <img
                 src={identity.avatar}
                 alt={displayName}
@@ -224,10 +358,12 @@ export default function RelationshipIdentityPage({
                 loading="eager"
                 decoding="async"
               />
-            ) : (
-              initials
-            )}
-          </div>
+            </button>
+          ) : (
+            <div style={identityAvatar}>
+              {initials}
+            </div>
+          )}
 
           <div style={identityHeaderText}>
             <p style={identityEyebrow}>{typeLabel}</p>
@@ -325,9 +461,101 @@ export default function RelationshipIdentityPage({
           })}
         </div>
       )}
+
+      <IdentityMediaPreviewDialog
+        open={mediaPreviewOpen}
+        src={identity.avatar}
+        alt={displayName}
+        title={displayName}
+        onClose={() =>
+          setMediaPreviewOpen(false)
+        }
+      />
     </section>
   );
 }
+
+const identityMediaPreviewBackdrop = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 1700,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding:
+    "max(18px, env(safe-area-inset-top, 0px)) 18px max(18px, env(safe-area-inset-bottom, 0px))",
+  boxSizing: "border-box",
+  background: "rgba(15, 23, 42, 0.76)",
+  backdropFilter: "blur(12px)",
+  WebkitBackdropFilter: "blur(12px)",
+};
+
+const identityMediaPreviewDialog = {
+  position: "relative",
+  width: "min(92vw, 760px)",
+  height: "min(84dvh, 760px)",
+  maxWidth: "760px",
+  maxHeight: "760px",
+  minHeight: "280px",
+  borderRadius: "28px",
+  overflow: "hidden",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: "58px 18px 18px",
+  boxSizing: "border-box",
+  background: "rgba(255,255,255,0.97)",
+  border: "1px solid rgba(255,255,255,0.74)",
+  boxShadow:
+    "0 30px 80px rgba(15,23,42,0.38)",
+};
+
+const identityMediaPreviewCloseButton = {
+  position: "absolute",
+  top: "10px",
+  right: "10px",
+  zIndex: 2,
+  width: "44px",
+  height: "44px",
+  border: "1px solid rgba(15,23,42,0.12)",
+  borderRadius: "999px",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  padding: 0,
+  background: "rgba(255,255,255,0.94)",
+  color: "#111827",
+  fontSize: "28px",
+  lineHeight: 1,
+  fontWeight: "500",
+  cursor: "pointer",
+  boxShadow:
+    "0 8px 22px rgba(15,23,42,0.12)",
+};
+
+const identityMediaPreviewFrame = {
+  width: "100%",
+  height: "100%",
+  minWidth: 0,
+  minHeight: 0,
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
+  overflow: "hidden",
+  borderRadius: "20px",
+  background: "#f8fafc",
+};
+
+const identityMediaPreviewImage = {
+  display: "block",
+  width: "100%",
+  height: "100%",
+  maxWidth: "100%",
+  maxHeight: "100%",
+  objectFit: "contain",
+  objectPosition: "center",
+  userSelect: "none",
+};
 
 const identityPanel = {
   width: "100%",
@@ -397,6 +625,14 @@ const identityAvatarImage = {
   height: "100%",
   objectFit: "cover",
   display: "block",
+};
+
+const identityAvatarButton = {
+  ...identityAvatar,
+  padding: 0,
+  cursor: "zoom-in",
+  appearance: "none",
+  WebkitAppearance: "none",
 };
 
 const identityHeaderText = {

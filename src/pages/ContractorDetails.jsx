@@ -3,6 +3,9 @@ import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import {
+  IdentityMediaPreviewDialog,
+} from "../components/RelationshipIdentityPage";
+import {
   PortfolioProjectCard,
   PortfolioProjectGrid,
   PortfolioProjectView,
@@ -41,6 +44,10 @@ function ContractorDetails({ setPage, currentPage }) {
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [
+    businessLogoPreviewOpen,
+    setBusinessLogoPreviewOpen,
+  ] = useState(false);
 
   const [
     savedProfessionalState,
@@ -745,6 +752,8 @@ function ContractorDetails({ setPage, currentPage }) {
         <PortfolioProjectView
           project={selectedPortfolioProject}
           businessName={profileName}
+          businessLogo={businessIdentity.imageUrl}
+          showBusinessIdentity
           trustContext={businessReviewTrust}
           onBack={() => setSelectedProjectId("")}
         />
@@ -762,11 +771,32 @@ function ContractorDetails({ setPage, currentPage }) {
 
       <div className="meetro-visual-surface" style={cardStyle}>
         {businessIdentity.imageUrl ? (
-          <img
-            src={businessIdentity.imageUrl}
-            alt={profileName}
-            style={profileImage}
-          />
+          <button
+            type="button"
+            style={profileImageButton}
+            aria-label={
+              isSpanish
+                ? `Ver imagen de ${profileName}`
+                : `View ${profileName} image`
+            }
+            title={
+              isSpanish
+                ? `Ver imagen de ${profileName}`
+                : `View ${profileName} image`
+            }
+            onClick={() =>
+              setBusinessLogoPreviewOpen(true)
+            }
+          >
+            <img
+              src={businessIdentity.imageUrl}
+              alt={profileName}
+              style={{
+                ...profileImage,
+                marginBottom: 0,
+              }}
+            />
+          </button>
         ) : (
           <div style={imagePlaceholder}>
             {businessIdentity.initials}
@@ -983,6 +1013,8 @@ function ContractorDetails({ setPage, currentPage }) {
                 key={project.id}
                 project={project}
                 businessName={profileName}
+                businessLogo={businessIdentity.imageUrl}
+                showBusinessIdentity
                 trustContext={businessReviewTrust}
                 onView={(exactProjectId) => setSelectedProjectId(exactProjectId)}
               />
@@ -1142,6 +1174,16 @@ function ContractorDetails({ setPage, currentPage }) {
           </div>
         ))}
       </div>
+
+      <IdentityMediaPreviewDialog
+        open={businessLogoPreviewOpen}
+        src={businessIdentity.imageUrl}
+        alt={profileName}
+        title={profileName}
+        onClose={() =>
+          setBusinessLogoPreviewOpen(false)
+        }
+      />
 
       <BottomNav setPage={setPage} currentPage={currentPage} />
     </div>
@@ -1710,6 +1752,22 @@ const starButton = {
   background: "transparent",
   fontSize: "30px",
   cursor: "pointer",
+};
+
+const profileImageButton = {
+  width: "96px",
+  height: "96px",
+  border: 0,
+  borderRadius: "28px",
+  padding: 0,
+  margin: "0 0 18px",
+  background: "transparent",
+  overflow: "hidden",
+  display: "inline-block",
+  verticalAlign: "top",
+  cursor: "zoom-in",
+  appearance: "none",
+  WebkitAppearance: "none",
 };
 
 const profileImage = {

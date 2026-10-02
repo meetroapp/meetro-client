@@ -168,7 +168,7 @@ test("Spotlight CTA is a full-width bottom action with unchanged routing", () =>
   assert.match(homeSource, /setPage\("contractorDetails"\)/);
 });
 
-test("Home help cards preserve behavior in a responsive grounded layout", () => {
+test("Home help cards preserve the two canonical actions in a responsive grounded layout", () => {
   const help = sourceBetween(
     homeSource,
     '<section className="home-dashboard-help" style={quickHelpSection}>',
@@ -176,12 +176,12 @@ test("Home help cards preserve behavior in a responsive grounded layout", () => 
   );
 
   assert.match(help, /className="home-help-action-grid"/);
-  assert.equal((help.match(/className="home-help-action-card"/g) || []).length, 3);
+  assert.equal((help.match(/className="home-help-action-card"/g) || []).length, 2);
   assert.match(help, /onClick=\{\(\) => setPage\("upload"\)\}/);
   assert.match(help, /openActiveEmergencyFromHome\(activeEmergencyInfo\.isCompletedReview\)/);
   assert.match(help, /setPage\("emergency"\)/);
-  assert.match(help, /window\.dispatchEvent\(new Event\("meetro:assistant:open"\)\)/);
-  assert.match(homeSource, /gridTemplateColumns: "repeat\(3, minmax\(0, 1fr\)\)"/);
+  assert.doesNotMatch(help, /meetro:assistant:open/);
+  assert.match(homeSource, /gridTemplateColumns: "repeat\(2, minmax\(0, 1fr\)\)"/);
   assert.match(homeSource, /@media \(max-width: 600px\)[\s\S]*\.home-help-action-grid[\s\S]*grid-template-columns: 1fr !important/);
   assert.match(homeSource, /\.home-help-action-card:focus-visible/);
   assert.match(homeSource, /min-height: 64px !important/);
