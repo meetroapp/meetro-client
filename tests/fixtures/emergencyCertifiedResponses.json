@@ -2933,6 +2933,12 @@
         "visits": false,
         "workPlan": false
       },
+      "historyRecords": {
+        "deposits": [],
+        "media": [],
+        "visits": [],
+        "emergencyAssessment": null
+      },
       "actions": {
         "canMessageProfessional": true
       }

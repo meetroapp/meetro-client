@@ -69,8 +69,33 @@ test('canonical Invoice credit and Paid amounts pass strict source-aware schemas
 test('completion and both History contracts preserve Emergency source and not-applicable records',()=>{
  assert.ok(validateJobCompletionReview(f.completionReview.completionReview,{jobId:entry.jobId}));
  assert.ok(validateProfessionalJobHistory(f.historyList.jobHistory));
+
  for(const audience of ['professional','customer']){
-  const history=validateJobHistoryDetail(f[`${audience}History`].jobHistory,{jobId:entry.jobId,audience});assert.ok(history);assert.equal(history.sourceType,'emergency_request');assert.equal(history.requestId,null);assert.equal(history.relationshipId,entry.relationshipId);assert.equal(history.conversationId,f.identity.conversationId);assert.equal(history.preservedRecords.visits,false);assert.equal(history.preservedRecords.workPlan,false);
+  const history=validateJobHistoryDetail(
+   f[`${audience}History`].jobHistory,
+   {jobId:entry.jobId,audience}
+  );
+
+  assert.ok(history);
+  assert.equal(history.sourceType,'emergency_request');
+  assert.equal(history.requestId,null);
+  assert.equal(history.relationshipId,entry.relationshipId);
+  assert.equal(history.conversationId,f.identity.conversationId);
+  assert.equal(history.preservedRecords.visits,false);
+  assert.equal(history.preservedRecords.workPlan,false);
+
+  if(audience==='customer'){
+   assert.ok(history.historyRecords);
+   assert.deepEqual(history.historyRecords.deposits,[]);
+   assert.deepEqual(history.historyRecords.media,[]);
+   assert.deepEqual(history.historyRecords.visits,[]);
+   assert.equal(history.historyRecords.emergencyAssessment,null);
+  }else{
+   assert.equal(
+    Object.prototype.hasOwnProperty.call(history,'historyRecords'),
+    false
+   );
+  }
  }
 });
 
