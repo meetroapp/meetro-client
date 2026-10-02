@@ -59,13 +59,41 @@ test("public and owner surfaces use the same shared Portfolio project-card archi
   assert.match(sharedCard, /View Project/);
 });
 
+
+test("Portfolio card and Project View use independent media widths", () => {
+  assert.match(presentationSource, /const cardMediaGroup = \{/);
+  assert.match(presentationSource, /maxWidth: "360px"/);
+
+  assert.match(presentationSource, /const projectViewMediaGroup = \{/);
+  assert.match(presentationSource, /maxWidth: "680px"/);
+
+  assert.match(presentationSource, /const projectStoryCard = \{/);
+  assert.match(presentationSource, /maxWidth: "820px"/);
+});
+
 test("compact media stays fixed at 16:9 while canonical photos change", () => {
   assert.match(mediaPreview, /getBusinessPortfolioProjectImages\(project\)/);
   assert.match(presentationSource, /const cardMediaFrame = \{/);
   assert.match(presentationSource, /aspectRatio: "16 \/ 9"/);
   assert.match(presentationSource, /overflow: "hidden"/);
-  assert.match(presentationSource, /objectFit: "cover"/);
+  assert.match(
+    presentationSource,
+    /const mediaImage = \{[\s\S]*?objectFit: "contain"/
+  );
   assert.doesNotMatch(mediaPreview, /images\.map[\s\S]*<img[\s\S]*cardMediaFrame/);
+});
+
+
+test("Portfolio main photos show the complete image while thumbnails remain cropped", () => {
+  assert.match(
+    presentationSource,
+    /const mediaImage = \{[\s\S]*?objectFit: "contain"/
+  );
+
+  assert.match(
+    presentationSource,
+    /const thumbnailImage = \{[^\n]*objectFit: "cover"/
+  );
 });
 
 test("multi-photo cards expose truthful count, keyboard buttons, and wraparound navigation", () => {

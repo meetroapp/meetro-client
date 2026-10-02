@@ -320,7 +320,14 @@ const projectCard = {
   display: "flex",
   flexDirection: "column",
 };
-const cardMediaGroup = { padding: "14px 14px 0", minWidth: 0 };
+const cardMediaGroup = {
+  width: "100%",
+  maxWidth: "360px",
+  margin: "0 auto",
+  padding: "14px 14px 0",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
 const cardMediaFrame = {
   position: "relative",
   width: "100%",
@@ -330,13 +337,24 @@ const cardMediaFrame = {
   background: "#eef2ed",
   boxSizing: "border-box",
 };
-const projectViewMediaGroup = { width: "100%", maxWidth: "820px", margin: "0 auto" };
+const projectViewMediaGroup = {
+  width: "100%",
+  maxWidth: "680px",
+  margin: "0 auto",
+};
 const projectViewMediaFrame = {
   ...cardMediaFrame,
   borderRadius: "24px",
   boxShadow: "0 18px 42px rgba(20,53,31,0.14)",
 };
-const mediaImage = { width: "100%", height: "100%", objectFit: "cover", objectPosition: "center", display: "block" };
+const mediaImage = {
+  width: "100%",
+  height: "100%",
+  objectFit: "contain",
+  objectPosition: "center",
+  display: "block",
+  background: "#ffffff",
+};
 const emptyMediaState = { width: "100%", height: "100%", display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: "10px", padding: "24px", boxSizing: "border-box", background: "linear-gradient(135deg, #eef4ea, #f8f3e8)", color: "#5d665f", fontWeight: 800, textAlign: "center" };
 const carouselButton = { position: "absolute", top: "50%", transform: "translateY(-50%)", width: "44px", height: "44px", borderRadius: "999px", border: "1px solid rgba(255,255,255,0.36)", background: "rgba(20,53,31,0.78)", backdropFilter: "blur(8px)", color: "white", fontSize: "20px", fontWeight: 900, cursor: "pointer", zIndex: 2 };
 const photoPosition = { position: "absolute", left: "50%", bottom: "10px", transform: "translateX(-50%)", background: "rgba(20,53,31,0.8)", backdropFilter: "blur(8px)", border: "1px solid rgba(255,255,255,0.24)", color: "white", padding: "7px 11px", borderRadius: "999px", fontSize: "12px", fontWeight: 900, whiteSpace: "nowrap" };
