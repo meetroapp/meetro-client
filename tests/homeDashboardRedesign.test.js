@@ -97,6 +97,14 @@ test("Professional lead priority, useful zero schedule and exact approved shortc
   await act(async () => revenue.click());
   assert.equal(w.routes.at(-1), "contractorDashboard");
   assert.equal(localStorage.getItem("meetroWorkCenterTab"), "revenue");
+
+  const activeJobs = [...document.querySelectorAll(".business-dashboard-glance-grid button")]
+    .find((button) => button.textContent.includes("Active Jobs"));
+  assert.ok(activeJobs);
+  await act(async () => activeJobs.click());
+  assert.equal(w.routes.at(-1), "contractorDashboard");
+  assert.equal(localStorage.getItem("meetroWorkCenterTab"), "currentJobs");
+
   await act(async () => document.querySelector(".business-dashboard-hero-continue").click());
   assert.equal(w.routes.at(-1), "contractorDashboard");
   assert.equal(localStorage.getItem("meetroWorkCenterTab"), "schedule");

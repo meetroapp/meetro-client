@@ -6,7 +6,6 @@ import LoadingScreen from "../components/LoadingScreen";
 import MeetroIcon from "../components/MeetroIcon";
 import BusinessPlanStatusCard from "../components/BusinessPlanStatusCard";
 import { authFetch } from "../utils/authFetch";
-import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { getLanguage, t } from "../utils/language";
 import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
 import {
@@ -526,9 +525,6 @@ function BusinessDashboard({ setPage }) {
   }));
   const todayScheduleCount = canonicalScheduleCounts?.today || 0;
 
-  const homeownerRequests =
-    getStoredHomeownerRequests();
-
   const activeProjectsCount = professionalMetrics.activeWorkCount;
   const pendingQuotesCount = professionalMetrics.pendingQuoteCount;
   const quoteResponseAlertCount = professionalMetrics.quoteResponseAlertCount;
@@ -641,14 +637,8 @@ function BusinessDashboard({ setPage }) {
     openWorkCenterSection("schedule", { filter: "today" });
   }
 
-  function openFirstActiveProjectConversation() {
-    const project = homeownerRequests.find((item) =>
-      ["accepted", "scheduled", "active"].includes(String(item.status || "").toLowerCase())
-    );
-
-    if (project && openRelationshipConversation(project, "active")) return;
-
-    openWorkCenterSection("active");
+  function openCurrentJobs() {
+    openWorkCenterSection("currentJobs");
   }
 
   const unreadMessages = liveUnreadCount;
@@ -949,7 +939,7 @@ function BusinessDashboard({ setPage }) {
       ? {
           label: text.continueWork,
           note: text.inProgress,
-          onClick: openFirstActiveProjectConversation,
+          onClick: openCurrentJobs,
         }
       : {
           label: text.reviewBusinessReadiness,
@@ -1334,7 +1324,7 @@ function BusinessDashboard({ setPage }) {
                 value={activeProjectsCount}
                 note={activeProjectsCount > 0 ? text.inProgress : "No active jobs"}
                 detail={activeWorkPreviewLabel}
-                onClick={openFirstActiveProjectConversation}
+                onClick={openCurrentJobs}
               />
 
               <div
