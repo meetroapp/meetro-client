@@ -5,8 +5,19 @@ import {
   isCanonicalWorkCenterHydrationEnabled,
 } from './workCenterCanonicalHydration.js';
 
+export function getProfessionalWorkCenterActiveEntries(entries = []) {
+  return (Array.isArray(entries) ? entries : []).filter(
+    (entry) =>
+      entry?.liveJob?.stage?.code !== "JOB_COMPLETED"
+  );
+}
+
+export function getProfessionalWorkCenterActiveCount(entries = []) {
+  return getProfessionalWorkCenterActiveEntries(entries).length;
+}
+
 export async function fetchProfessionalWorkCenterEntries(options = {}) {
-  // Preserve the existing canonical Work Center environment boundary.
+  // Preserve the supported canonical Work Center environment boundary.
   if (!isCanonicalWorkCenterHydrationEnabled(options.apiUrl)) {
     return { status: 'disabled', reason: 'UNSUPPORTED_API_ENVIRONMENT', entries: [] };
   }

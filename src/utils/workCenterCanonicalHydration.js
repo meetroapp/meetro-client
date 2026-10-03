@@ -1,4 +1,7 @@
-import API_URL, { STAGING_API_URL } from "../api.js";
+import API_URL, {
+  PRODUCTION_API_URL,
+  STAGING_API_URL,
+} from "../api.js";
 import { authFetch } from "./authFetch.js";
 import {
   normalizeCanonicalConversationDetail,
@@ -88,7 +91,14 @@ function canonicalCompleteness(entry = {}) {
 }
 
 export function isCanonicalWorkCenterHydrationEnabled(apiUrl = API_URL) {
-  return normalizeApiUrl(apiUrl) === normalizeApiUrl(STAGING_API_URL);
+  const normalized = normalizeApiUrl(apiUrl);
+
+  return [
+    STAGING_API_URL,
+    PRODUCTION_API_URL,
+  ]
+    .map(normalizeApiUrl)
+    .includes(normalized);
 }
 
 export function isCanonicalWorkCenterEntry(record = {}) {

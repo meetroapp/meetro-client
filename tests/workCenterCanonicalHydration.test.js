@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { STAGING_API_URL } from "../src/api.js";
+import {
+  PRODUCTION_API_URL,
+  STAGING_API_URL,
+} from "../src/api.js";
 import {
   CANONICAL_WORK_CENTER_AUTHORITY,
   fetchCanonicalWorkCenterEntries,
@@ -12,6 +15,9 @@ import {
   normalizeCanonicalWorkCenterEntry,
 } from "../src/utils/workCenterCanonicalHydration.js";
 import { getWorkCenterLifecycleProjectionTarget } from "../src/utils/workCenterLifecycleProjection.js";
+import {
+  getProfessionalWorkCenterActiveCount,
+} from "../src/utils/professionalWorkCenterDiscovery.js";
 
 const canonicalSummary = {
   conversationId: 340,
@@ -365,21 +371,90 @@ test("live-state failure retains the canonical Job with truthful unavailable sta
   assert.equal(result.entries[0].liveJobUnavailableReason, "LIVE_JOB_NETWORK_ERROR");
 });
 
-test("production containment fails closed without issuing discovery calls", async () => {
+test("known Meetro Work Center environments are enabled and unknown APIs fail closed", async () => {
   let callCount = 0;
+
   const result = await fetchCanonicalWorkCenterEntries({
     apiUrl: "https://api.getmeetro.com",
     authFetchImpl: async () => {
       callCount += 1;
-      throw new Error("production discovery should remain disabled");
+      throw new Error("unsupported discovery should remain disabled");
     },
   });
 
-  assert.equal(isCanonicalWorkCenterHydrationEnabled(STAGING_API_URL), true);
-  assert.equal(isCanonicalWorkCenterHydrationEnabled("https://api.getmeetro.com"), false);
+  assert.equal(
+    isCanonicalWorkCenterHydrationEnabled(STAGING_API_URL),
+    true
+  );
+
+  assert.equal(
+    isCanonicalWorkCenterHydrationEnabled(PRODUCTION_API_URL),
+    true
+  );
+
+  assert.equal(
+    isCanonicalWorkCenterHydrationEnabled("https://api.getmeetro.com"),
+    false
+  );
+
   assert.equal(result.status, "disabled");
   assert.deepEqual(result.entries, []);
   assert.equal(callCount, 0);
+});
+
+test("production Work Center may perform authenticated read-only canonical discovery", async () => {
+  const calls = [];
+
+  const result = await fetchCanonicalWorkCenterEntries({
+    apiUrl: PRODUCTION_API_URL,
+    authFetchImpl: async (endpoint, options) => {
+      calls.push({ endpoint, options });
+
+      assert.equal(
+        endpoint,
+        "/conversations?perspective=professional"
+      );
+
+      return {
+        response: { ok: true, status: 200 },
+        data: { conversations: [] },
+      };
+    },
+  });
+
+  assert.equal(result.status, "ready");
+  assert.deepEqual(result.entries, []);
+  assert.deepEqual(
+    calls.map((call) => call.endpoint),
+    ["/conversations?perspective=professional"]
+  );
+});
+
+test("canonical Dashboard active count matches Work Center active records", () => {
+  const entries = [
+    {
+      jobId: "ordinary",
+      liveJob: {
+        stage: { code: "EVALUATION_NEEDED" },
+      },
+    },
+    {
+      jobId: "emergency",
+      sourceType: "emergency_request",
+      liveJob: null,
+    },
+    {
+      jobId: "completed",
+      liveJob: {
+        stage: { code: "JOB_COMPLETED" },
+      },
+    },
+  ];
+
+  assert.equal(
+    getProfessionalWorkCenterActiveCount(entries),
+    2
+  );
 });
 
 test("dashboard selection exposes canonical evidence without legacy command controls", () => {

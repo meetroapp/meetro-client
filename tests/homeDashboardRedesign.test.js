@@ -28,11 +28,13 @@ test.before(async () => {
       if (/\/authFetch(?:\.js)?$/.test(id)) return "\0dashboard-http";
       if (/\/professionalOpportunityCoordinator(?:\.js)?$/.test(id)) return "\0dashboard-leads";
       if (/\/professionalScheduleProjection(?:\.js)?$/.test(id)) return "\0dashboard-schedule";
+      if (/\/professionalWorkCenterDiscovery(?:\.js)?$/.test(id)) return "\0dashboard-work-center";
     },
     load(id) {
       if (id === "\0dashboard-http") return 'export const authFetch = (...args) => globalThis.__dashboardHttp(...args); export const clearMeetroSession = () => {}; export const announceAccountConnectionIssue = () => {}; export const handleAuthExpired = () => {};';
       if (id === "\0dashboard-leads") return 'export const PROFESSIONAL_OPPORTUNITY_PHASE = { LOADING: "loading" }; export const requestProfessionalOpportunities = () => {}; export const subscribeProfessionalOpportunities = (fn) => { fn({status:"ready", records:[{request_id:"lead-1", project_title:"Interior Painting", project_description:"Paint three rooms", city:"Cape Coral", state:"FL"}]}); return () => {}; };';
       if (id === "\0dashboard-schedule") return 'export const fetchProfessionalSchedule = async () => ({}); export const getProfessionalScheduleCounts = () => ({today:0, needsScheduling:2, waiting:0, changeRequested:0, inProgress:0}); export const groupProfessionalSchedule = () => ({today:[]});';
+      if (id === "\0dashboard-work-center") return 'export const fetchProfessionalWorkCenterEntries = async () => ({status:"ready",reason:"",entries:[{jobId:"ordinary-job",title:"Repair cracked wall section by front entry",liveJob:{stage:{code:"EVALUATION_NEEDED"}}},{jobId:"emergency-job",sourceType:"emergency_request",title:"Emergency job",liveJob:null}]}); export const getProfessionalWorkCenterActiveEntries = (entries=[]) => entries.filter((entry) => entry?.liveJob?.stage?.code !== "JOB_COMPLETED"); export const getProfessionalWorkCenterActiveCount = (entries=[]) => entries.filter((entry) => entry?.liveJob?.stage?.code !== "JOB_COMPLETED").length;';
     },
   }] });
 });
@@ -101,6 +103,7 @@ test("Professional lead priority, useful zero schedule and exact approved shortc
   const activeJobs = [...document.querySelectorAll(".business-dashboard-glance-grid button")]
     .find((button) => button.textContent.includes("Active Jobs"));
   assert.ok(activeJobs);
+  assert.match(activeJobs.textContent, /Active Jobs2/);
 
   localStorage.setItem("meetroWorkCenterTab", "currentJobs");
   localStorage.setItem("activeWorkCenterTab", "currentJobs");

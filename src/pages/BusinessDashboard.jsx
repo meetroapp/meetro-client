@@ -39,6 +39,11 @@ import {
   getProfessionalScheduleCounts,
   groupProfessionalSchedule,
 } from "../utils/professionalScheduleProjection";
+import {
+  fetchProfessionalWorkCenterEntries,
+  getProfessionalWorkCenterActiveCount,
+  getProfessionalWorkCenterActiveEntries,
+} from "../utils/professionalWorkCenterDiscovery.js";
 
 const profileLoadText = {
   en: {
@@ -116,6 +121,11 @@ function BusinessDashboard({ setPage }) {
   const [leadStatus, setLeadStatus] = useState(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
   const [authoritativeLeads, setAuthoritativeLeads] = useState([]);
   const [canonicalSchedule, setCanonicalSchedule] = useState(null);
+  const [canonicalWorkCenterSummary, setCanonicalWorkCenterSummary] =
+    useState({
+      status: "loading",
+      entries: [],
+    });
   const [professionalHomeDaypart, setProfessionalHomeDaypart] = useState(() =>
     getProfessionalHomeDaypart()
   );
@@ -261,6 +271,53 @@ function BusinessDashboard({ setPage }) {
         if (active) setCanonicalSchedule(null);
       });
     return () => { active = false; };
+  }, [profile?.id, setPage]);
+
+  useEffect(() => {
+    if (!profile?.id) return undefined;
+
+    let active = true;
+
+    setCanonicalWorkCenterSummary({
+      status: "loading",
+      entries: [],
+    });
+
+    void fetchProfessionalWorkCenterEntries({ setPage })
+      .then((result) => {
+        if (!active) return;
+
+        if (
+          result?.status === "ready" ||
+          (Array.isArray(result?.entries) &&
+            result.entries.length > 0)
+        ) {
+          setCanonicalWorkCenterSummary({
+            status: "ready",
+            entries: Array.isArray(result.entries)
+              ? result.entries
+              : [],
+          });
+          return;
+        }
+
+        setCanonicalWorkCenterSummary({
+          status: "unavailable",
+          entries: [],
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+
+        setCanonicalWorkCenterSummary({
+          status: "unavailable",
+          entries: [],
+        });
+      });
+
+    return () => {
+      active = false;
+    };
   }, [profile?.id, setPage]);
 
   async function fetchProfile() {
@@ -525,10 +582,22 @@ function BusinessDashboard({ setPage }) {
   }));
   const todayScheduleCount = canonicalScheduleCounts?.today || 0;
 
-  const activeProjectsCount = professionalMetrics.activeWorkCount;
+  const canonicalActiveWorkItems =
+    canonicalWorkCenterSummary.status === "ready"
+      ? getProfessionalWorkCenterActiveEntries(
+          canonicalWorkCenterSummary.entries
+        )
+      : [];
+
+  const activeProjectsCount =
+    canonicalWorkCenterSummary.status === "ready"
+      ? getProfessionalWorkCenterActiveCount(
+          canonicalWorkCenterSummary.entries
+        )
+      : null;
   const pendingQuotesCount = professionalMetrics.pendingQuoteCount;
   const quoteResponseAlertCount = professionalMetrics.quoteResponseAlertCount;
-  const activeWorkPreview = professionalMetrics.activeWorkItems?.[0];
+  const activeWorkPreview = canonicalActiveWorkItems[0];
   const pendingQuotePreview = professionalMetrics.pendingQuotes?.[0];
   const activeWorkPreviewLabel =
     activeWorkPreview?.projectTitle ||
@@ -1331,8 +1400,20 @@ function BusinessDashboard({ setPage }) {
               <GlanceItem
                 icon="briefcase"
                 title={text.activeJobs}
-                value={activeProjectsCount}
-                note={activeProjectsCount > 0 ? text.inProgress : "No active jobs"}
+                value={
+                  canonicalWorkCenterSummary.status === "ready"
+                    ? activeProjectsCount
+                    : "—"
+                }
+                note={
+                  canonicalWorkCenterSummary.status === "loading"
+                    ? t("loadingBusinessDashboard")
+                    : canonicalWorkCenterSummary.status === "unavailable"
+                      ? t("stateUnavailable")
+                      : activeProjectsCount > 0
+                        ? text.inProgress
+                        : "No active jobs"
+                }
                 detail={activeWorkPreviewLabel}
                 onClick={openWorkCenterLanding}
               />
