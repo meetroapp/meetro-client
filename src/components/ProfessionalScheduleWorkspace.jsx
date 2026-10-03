@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import CanonicalVisitScheduleHistory from "./CanonicalVisitScheduleHistory.jsx";
 import {
   activateCanonicalVisitAuthority,
@@ -257,6 +257,7 @@ export default function ProfessionalScheduleWorkspace({
   onRetry,
   onViewJob,
   workCenterJobs = [],
+  focusGroup = "",
 } = {}) {
   const workspaceCopy = getWorkCenterWorkspaceCopy(language);
   const confirmed = sourceState?.confirmed;
@@ -271,6 +272,33 @@ export default function ProfessionalScheduleWorkspace({
   const [error, setError] = useState("");
   const workspaceRef = useRef(null);
   const returnFocusRef = useRef(null);
+  const todayGroupRef = useRef(null);
+  const focusedGroupRef = useRef("");
+
+  useEffect(() => {
+    if (focusGroup !== "today") {
+      focusedGroupRef.current = "";
+      return undefined;
+    }
+
+    if (!confirmed || focusedGroupRef.current === "today") {
+      return undefined;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      const target = todayGroupRef.current;
+
+      if (!target) return;
+
+      focusedGroupRef.current = "today";
+      target.scrollIntoView?.({
+        behavior: "smooth",
+        block: "start",
+      });
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [confirmed, focusGroup]);
 
   async function readActive() {
     const schedule = await fetchProfessionalSchedule({ view: "active", limit: 50, setPage });
@@ -612,35 +640,53 @@ export default function ProfessionalScheduleWorkspace({
       {notice && <p role="status" style={styles.success}>{notice}</p>}
       {error && <p role="alert" style={styles.error}>{error}</p>}
 
-      {activeCount === 0 ? (
+      {activeCount === 0 && focusGroup !== "today" ? (
         <WorkCenterEmptyState
           icon="schedule"
           title={workspaceCopy.scheduleEmptyTitle}
           body={workspaceCopy.scheduleEmptyBody}
         />
-      ) : groups.map((group) => (
-        group.items.length > 0 && (
-          <section key={group.key} aria-labelledby={`schedule-${group.key}`} style={styles.group}>
+      ) : groups.map((group) => {
+        const focusedToday =
+          focusGroup === "today" &&
+          group.key === "today";
+
+        if (group.items.length === 0 && !focusedToday) {
+          return null;
+        }
+
+        return (
+          <section
+            key={group.key}
+            ref={group.key === "today" ? todayGroupRef : undefined}
+            data-schedule-group={group.key}
+            aria-labelledby={`schedule-${group.key}`}
+            style={styles.group}
+          >
             <h3 id={`schedule-${group.key}`} style={styles.groupTitle}>{group.title}</h3>
-            <div style={styles.grid}>
-              {group.items.map((item) => (
-                <ScheduleCard
-                  key={item.kind === "visit" ? item.id : `${item.purpose}:${item.jobId}`}
-                  item={item}
-                  setPage={setPage}
-                  language={language}
-                  running={running}
-                  onAction={runVisitAction}
-                  onShare={shareSchedule}
-                  onViewJob={onViewJob}
-                  conversationTarget={resolveCanonicalScheduleConversationTarget(item, workCenterJobs)}
-                  shareTruthCurrent={blockedShareSignature !== `${item.id}:${item.currentVersion}`}
-                />
-              ))}
-            </div>
+            {group.items.length > 0 ? (
+              <div style={styles.grid}>
+                {group.items.map((item) => (
+                  <ScheduleCard
+                    key={item.kind === "visit" ? item.id : `${item.purpose}:${item.jobId}`}
+                    item={item}
+                    setPage={setPage}
+                    language={language}
+                    running={running}
+                    onAction={runVisitAction}
+                    onShare={shareSchedule}
+                    onViewJob={onViewJob}
+                    conversationTarget={resolveCanonicalScheduleConversationTarget(item, workCenterJobs)}
+                    shareTruthCurrent={blockedShareSignature !== `${item.id}:${item.currentVersion}`}
+                  />
+                ))}
+              </div>
+            ) : (
+              <p style={styles.message}>{t("noVisitsToday", language)}</p>
+            )}
           </section>
-        )
-      ))}
+        );
+      })}
 
       {historyStatus !== "idle" && (
         <section aria-labelledby="schedule-history" style={styles.group}>

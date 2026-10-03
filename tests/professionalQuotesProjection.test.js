@@ -4,6 +4,8 @@ import test from "node:test";
 import {
   createProfessionalQuotesSourceState,
   fetchProfessionalQuotes,
+  getProfessionalPendingQuoteCount,
+  getProfessionalPendingQuotes,
   normalizeProfessionalQuotes,
   reduceProfessionalQuotesSourceState,
 } from "../src/utils/professionalQuotesProjection.js";
@@ -106,6 +108,53 @@ test("issued delivery-pending remains distinct from delivered waiting-on-custome
   assert.deepEqual(
     normalized.quotes.map(({ classification }) => classification),
     ["DELIVERY_PENDING", "WAITING_ON_CUSTOMER"]
+  );
+});
+
+test("Pending Quotes helpers use only canonical unresolved classifications", () => {
+  const issuedAt = "2026-08-11T12:00:00.000Z";
+  const normalized = normalizeProfessionalQuotes(payload({
+    summary: {
+      drafts: 1,
+      deliveryPending: 1,
+      waitingOnCustomer: 1,
+      approved: 0,
+      declined: 0,
+    },
+    quotes: [
+      quote(),
+      quote({
+        id: "60000000-0000-4000-8000-000000000006",
+        classification: "DELIVERY_PENDING",
+        status: "ISSUED",
+        issuedAt,
+        actions: {
+          canViewQuote: true,
+          canContinueDraft: false,
+          canViewJob: true,
+        },
+      }),
+      quote({
+        id: "70000000-0000-4000-8000-000000000007",
+        classification: "WAITING_ON_CUSTOMER",
+        status: "ISSUED",
+        issuedAt,
+        actions: {
+          canViewQuote: true,
+          canContinueDraft: false,
+          canViewJob: true,
+        },
+      }),
+    ],
+  }));
+
+  assert.ok(normalized);
+  assert.equal(getProfessionalPendingQuoteCount(normalized), 3);
+  assert.deepEqual(
+    getProfessionalPendingQuotes(normalized).map(
+      ({ classification }) => classification
+    ),
+    ["DRAFT", "DELIVERY_PENDING", "WAITING_ON_CUSTOMER"]
   );
 });
 

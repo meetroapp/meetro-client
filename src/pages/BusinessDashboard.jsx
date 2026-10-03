@@ -14,10 +14,7 @@ import {
 } from "../utils/professionalRequestMatching";
 import { canProfessionalSeeLocalLead } from "../utils/localLeadVisibility";
 import { formatDashboardScheduleItem } from "../utils/businessDashboardScheduleLabels";
-import {
-  getConversationMetrics,
-  getProfessionalWorkMetrics,
-} from "../utils/dashboardMetrics";
+import { getConversationMetrics } from "../utils/dashboardMetrics";
 import { setBusinessAvailability } from "../utils/businessAvailability";
 import {
   buildBusinessProfilePayloadFromCanonical,
@@ -34,6 +31,11 @@ import {
   requestProfessionalOpportunities,
   subscribeProfessionalOpportunities,
 } from "../utils/professionalOpportunityCoordinator";
+import {
+  fetchProfessionalQuotes,
+  getProfessionalPendingQuoteCount,
+  getProfessionalPendingQuotes,
+} from "../utils/professionalQuotesProjection.js";
 import {
   fetchProfessionalSchedule,
   getProfessionalScheduleCounts,
@@ -121,6 +123,10 @@ function BusinessDashboard({ setPage }) {
   const [leadStatus, setLeadStatus] = useState(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
   const [authoritativeLeads, setAuthoritativeLeads] = useState([]);
   const [canonicalSchedule, setCanonicalSchedule] = useState(null);
+  const [canonicalQuotesSummary, setCanonicalQuotesSummary] = useState({
+    status: "loading",
+    projection: null,
+  });
   const [canonicalWorkCenterSummary, setCanonicalWorkCenterSummary] =
     useState({
       status: "loading",
@@ -149,10 +155,7 @@ function BusinessDashboard({ setPage }) {
     category: businessCategory,
   };
 
-  const professionalMetrics = getProfessionalWorkMetrics();
-
-
-  useEffect(() => {
+   useEffect(() => {
     const syncUnreadMessages = () => {
       setLiveUnreadCount(
         getConversationMetrics({ role: "business" }).unreadConversationCount
@@ -271,6 +274,43 @@ function BusinessDashboard({ setPage }) {
         if (active) setCanonicalSchedule(null);
       });
     return () => { active = false; };
+  }, [profile?.id, setPage]);
+
+  useEffect(() => {
+    if (!profile?.id) return undefined;
+
+    let active = true;
+
+    setCanonicalQuotesSummary({
+      status: "loading",
+      projection: null,
+    });
+
+    void fetchProfessionalQuotes({
+      classification: "all",
+      limit: 50,
+      setPage,
+    })
+      .then((projection) => {
+        if (!active) return;
+
+        setCanonicalQuotesSummary({
+          status: "ready",
+          projection,
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+
+        setCanonicalQuotesSummary({
+          status: "unavailable",
+          projection: null,
+        });
+      });
+
+    return () => {
+      active = false;
+    };
   }, [profile?.id, setPage]);
 
   useEffect(() => {
@@ -595,10 +635,16 @@ function BusinessDashboard({ setPage }) {
           canonicalWorkCenterSummary.entries
         )
       : null;
-  const pendingQuotesCount = professionalMetrics.pendingQuoteCount;
-  const quoteResponseAlertCount = professionalMetrics.quoteResponseAlertCount;
+  const canonicalPendingQuotes =
+    canonicalQuotesSummary.status === "ready"
+      ? getProfessionalPendingQuotes(canonicalQuotesSummary.projection)
+      : [];
+  const pendingQuotesCount =
+    canonicalQuotesSummary.status === "ready"
+      ? getProfessionalPendingQuoteCount(canonicalQuotesSummary.projection)
+      : null;
   const activeWorkPreview = canonicalActiveWorkItems[0];
-  const pendingQuotePreview = professionalMetrics.pendingQuotes?.[0];
+  const pendingQuotePreview = canonicalPendingQuotes?.[0];
   const activeWorkPreviewLabel =
     activeWorkPreview?.projectTitle ||
     activeWorkPreview?.project_title ||
@@ -607,6 +653,8 @@ function BusinessDashboard({ setPage }) {
     activeWorkPreview?.service ||
     "";
   const pendingQuotePreviewLabel =
+    pendingQuotePreview?.job?.title ||
+    pendingQuotePreview?.customer?.displayName ||
     pendingQuotePreview?.projectTitle ||
     pendingQuotePreview?.project_title ||
     pendingQuotePreview?.jobTitle ||
@@ -631,8 +679,8 @@ function BusinessDashboard({ setPage }) {
       localStorage.removeItem("workCenterScheduleFilter");
     }
 
-    if (options.quoteStatusFilter) {
-      localStorage.setItem("quoteStatusFilter", options.quoteStatusFilter);
+    if (section === "quotes") {
+      localStorage.removeItem("quoteStatusFilter");
     }
 
     setPage("contractorDashboard");
@@ -978,11 +1026,7 @@ function BusinessDashboard({ setPage }) {
       ? {
           label: text.reviewPendingQuotes,
           note: text.awaitingResponse,
-          onClick: () =>
-            openWorkCenterSection("quotes", {
-              quoteStatusFilter:
-                quoteResponseAlertCount > 0 ? "accepted" : undefined,
-            }),
+          onClick: () => openWorkCenterSection("quotes"),
         }
       : (canonicalScheduleCounts?.changeRequested || 0) > 0
       ? {
@@ -1420,7 +1464,7 @@ function BusinessDashboard({ setPage }) {
 
               <div
                 style={
-                  quoteResponseAlertCount > 0
+                  pendingQuotesCount > 0
                     ? pendingQuoteGlowWrap
                     : {}
                 }
@@ -1428,14 +1472,22 @@ function BusinessDashboard({ setPage }) {
                 <GlanceItem
                   icon="quoteDoc"
                   title={text.pendingQuotes}
-                  value={pendingQuotesCount}
-                  note={pendingQuotesCount > 0 ? text.awaitingResponse : "No pending quotes"}
-                  detail={pendingQuotePreviewLabel}
-                  onClick={() =>
-                    openWorkCenterSection("quotes", {
-                      quoteStatusFilter: quoteResponseAlertCount > 0 ? "accepted" : undefined,
-                    })
+                  value={
+                    canonicalQuotesSummary.status === "ready"
+                      ? pendingQuotesCount
+                      : "—"
                   }
+                  note={
+                    canonicalQuotesSummary.status === "loading"
+                      ? t("loadingBusinessDashboard")
+                      : canonicalQuotesSummary.status === "unavailable"
+                        ? t("stateUnavailable")
+                        : pendingQuotesCount > 0
+                          ? text.awaitingResponse
+                          : "No pending quotes"
+                  }
+                  detail={pendingQuotePreviewLabel}
+                  onClick={() => openWorkCenterSection("quotes")}
                 />
               </div>
 

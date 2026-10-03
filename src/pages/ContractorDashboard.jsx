@@ -13800,6 +13800,7 @@ function ContractorDashboard({ setPage: navigatePage, language = "en" }) {
               language={activeLanguage}
               setPage={setPage}
               workCenterJobs={workCenterJobs}
+              focusGroup={scheduleFilter}
               onOpenConversation={(target) => openCanonicalWorkCenterConversation(target, "schedule")}
               onConfirmed={(schedule) => {
                 setProfessionalScheduleSource((state) => reduceProfessionalScheduleSourceState(state, { type: "success", schedule }));

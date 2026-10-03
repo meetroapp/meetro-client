@@ -17,6 +17,12 @@ const CLASSIFICATIONS = Object.freeze([
   "APPROVED",
   "DECLINED",
 ]);
+
+const PENDING_CLASSIFICATIONS = Object.freeze([
+  "DRAFT",
+  "DELIVERY_PENDING",
+  "WAITING_ON_CUSTOMER",
+]);
 const LINEAGE_TYPES = Object.freeze(["REVISED_QUOTE", "SUPPLEMENTAL_QUOTE"]);
 
 export class ProfessionalQuotesError extends Error {
@@ -252,6 +258,34 @@ export function normalizeProfessionalQuotes(
     quotes: Object.freeze(quotes),
     pagination,
   });
+}
+
+export function getProfessionalPendingQuoteCount(projection) {
+  if (
+    projection?.source !== "PROFESSIONAL_QUOTES" ||
+    !projection?.summary
+  ) {
+    return null;
+  }
+
+  return (
+    projection.summary.drafts +
+    projection.summary.deliveryPending +
+    projection.summary.waitingOnCustomer
+  );
+}
+
+export function getProfessionalPendingQuotes(projection) {
+  if (
+    projection?.source !== "PROFESSIONAL_QUOTES" ||
+    !Array.isArray(projection?.quotes)
+  ) {
+    return [];
+  }
+
+  return projection.quotes.filter((quote) =>
+    PENDING_CLASSIFICATIONS.includes(quote.classification)
+  );
 }
 
 export async function fetchProfessionalQuotes({

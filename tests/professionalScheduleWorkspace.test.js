@@ -97,6 +97,12 @@ test("workspace source keeps authority checks, exact identities, safe-area conta
   assert.doesNotMatch(source, /value=\{form\.timeZone\}/);
   assert.doesNotMatch(source, /professionalScheduleArrivalNote/);
   assert.match(source, /data-schedule-identity/);
+  assert.match(source, /focusGroup = ""/);
+  assert.match(source, /data-schedule-group=\{group\.key\}/);
+  assert.match(source, /group\.key === "today" \? todayGroupRef : undefined/);
+  assert.match(source, /focusGroup !== "today"/);
+  assert.match(source, /target\.scrollIntoView/);
+  assert.match(source, /noVisitsToday/);
   assert.match(source, /env\(safe-area-inset-bottom\)/);
   assert.match(source, /88dvh/);
   assert.doesNotMatch(source, /localStorage|sessionStorage|navigator\.userAgent/);
@@ -179,6 +185,10 @@ test("locked approved work cannot activate authority or reach scheduling prepara
 
 test("actual Dashboard retry callback reruns its loader effect and confirms a formerly unavailable Schedule", async () => {
   const dashboard = await readFile(new URL("../src/pages/ContractorDashboard.jsx", import.meta.url), "utf8");
+  assert.match(
+    dashboard,
+    /<ProfessionalScheduleWorkspace[\s\S]{0,700}focusGroup=\{scheduleFilter\}/
+  );
   const loaderStart = dashboard.lastIndexOf("  useEffect(() => {", dashboard.indexOf('fetchProfessionalSchedule({ view: "active"'));
   const loaderEndMarker = "}, [professionalScheduleRefreshKey, setPage]);";
   const loaderEnd = dashboard.indexOf(loaderEndMarker, loaderStart);
