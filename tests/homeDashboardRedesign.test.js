@@ -101,9 +101,36 @@ test("Professional lead priority, useful zero schedule and exact approved shortc
   const activeJobs = [...document.querySelectorAll(".business-dashboard-glance-grid button")]
     .find((button) => button.textContent.includes("Active Jobs"));
   assert.ok(activeJobs);
+
+  localStorage.setItem("meetroWorkCenterTab", "currentJobs");
+  localStorage.setItem("activeWorkCenterTab", "currentJobs");
+  localStorage.setItem("workCenterScheduleFilter", "today");
+  localStorage.setItem("conversationReturnSection", "active");
+  localStorage.setItem("quoteStatusFilter", "accepted");
+
+  let workCenterLandingResets = 0;
+  const onWorkCenterLandingReset = () => {
+    workCenterLandingResets += 1;
+  };
+  window.addEventListener(
+    "meetroWorkCenterResetToLanding",
+    onWorkCenterLandingReset
+  );
+
   await act(async () => activeJobs.click());
+
+  window.removeEventListener(
+    "meetroWorkCenterResetToLanding",
+    onWorkCenterLandingReset
+  );
+
   assert.equal(w.routes.at(-1), "contractorDashboard");
-  assert.equal(localStorage.getItem("meetroWorkCenterTab"), "currentJobs");
+  assert.equal(localStorage.getItem("meetroWorkCenterTab"), null);
+  assert.equal(localStorage.getItem("activeWorkCenterTab"), null);
+  assert.equal(localStorage.getItem("workCenterScheduleFilter"), null);
+  assert.equal(localStorage.getItem("conversationReturnSection"), null);
+  assert.equal(localStorage.getItem("quoteStatusFilter"), null);
+  assert.equal(workCenterLandingResets, 1);
 
   await act(async () => document.querySelector(".business-dashboard-hero-continue").click());
   assert.equal(w.routes.at(-1), "contractorDashboard");

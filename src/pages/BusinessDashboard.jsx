@@ -641,6 +641,16 @@ function BusinessDashboard({ setPage }) {
     openWorkCenterSection("currentJobs");
   }
 
+  function openWorkCenterLanding() {
+    localStorage.removeItem("meetroWorkCenterTab");
+    localStorage.removeItem("activeWorkCenterTab");
+    localStorage.removeItem("workCenterScheduleFilter");
+    localStorage.removeItem("conversationReturnSection");
+    localStorage.removeItem("quoteStatusFilter");
+    window.dispatchEvent(new Event("meetroWorkCenterResetToLanding"));
+    setPage("contractorDashboard");
+  }
+
   const unreadMessages = liveUnreadCount;
   const greetingName = String(localStorage.getItem("userName") || "")
     .trim()
@@ -1324,7 +1334,7 @@ function BusinessDashboard({ setPage }) {
                 value={activeProjectsCount}
                 note={activeProjectsCount > 0 ? text.inProgress : "No active jobs"}
                 detail={activeWorkPreviewLabel}
-                onClick={openCurrentJobs}
+                onClick={openWorkCenterLanding}
               />
 
               <div
