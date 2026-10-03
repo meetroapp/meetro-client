@@ -1221,7 +1221,7 @@ function BusinessDashboard({ setPage }) {
               <button
                 className="business-dashboard-hero-continue"
                 type="button"
-                onClick={dashboardNextAction.onClick}
+                onClick={() => openWorkCenterSection("schedule")}
               >
                 <span>{text.continueWork}</span>
                 <span aria-hidden="true">→</span>
