@@ -103,6 +103,19 @@ test("workspace source keeps authority checks, exact identities, safe-area conta
   assert.match(source, /focusGroup !== "today"/);
   assert.match(source, /target\.scrollIntoView/);
   assert.match(source, /noVisitsToday/);
+  assert.match(source, /const historyGroupRef = useRef\(null\)/);
+  assert.match(source, /const historyFocusRequestedRef = useRef\(false\)/);
+  assert.match(
+    source,
+    /async function loadHistory[\s\S]*view: "history"[\s\S]*setHistoryStatus\("confirmed"\)/
+  );
+  assert.match(source, /historyFocusRequestedRef\.current = true/);
+  assert.match(source, /ref=\{historyGroupRef\}/);
+  assert.match(source, /id="professional-schedule-history"/);
+  assert.match(source, /aria-controls="professional-schedule-history"/);
+  assert.match(source, /aria-expanded=\{historyStatus !== "idle"\}/);
+  assert.match(source, /aria-busy=\{historyStatus === "loading"\}/);
+  assert.match(source, /target\.focus\?\.\(\{ preventScroll: true \}\)/);
   assert.match(source, /env\(safe-area-inset-bottom\)/);
   assert.match(source, /88dvh/);
   assert.doesNotMatch(source, /localStorage|sessionStorage|navigator\.userAgent/);

@@ -274,6 +274,8 @@ export default function ProfessionalScheduleWorkspace({
   const returnFocusRef = useRef(null);
   const todayGroupRef = useRef(null);
   const focusedGroupRef = useRef("");
+  const historyGroupRef = useRef(null);
+  const historyFocusRequestedRef = useRef(false);
 
   useEffect(() => {
     if (focusGroup !== "today") {
@@ -300,6 +302,33 @@ export default function ProfessionalScheduleWorkspace({
     return () => cancelAnimationFrame(frame);
   }, [confirmed, focusGroup]);
 
+  useEffect(() => {
+    if (
+      !historyFocusRequestedRef.current ||
+      historyStatus === "idle"
+    ) {
+      return undefined;
+    }
+
+    const frame = requestAnimationFrame(() => {
+      const target = historyGroupRef.current;
+
+      if (!target) return;
+
+      target.scrollIntoView?.({
+        behavior: "smooth",
+        block: "start",
+      });
+      target.focus?.({ preventScroll: true });
+
+      if (historyStatus !== "loading") {
+        historyFocusRequestedRef.current = false;
+      }
+    });
+
+    return () => cancelAnimationFrame(frame);
+  }, [historyStatus]);
+
   async function readActive() {
     const schedule = await fetchProfessionalSchedule({ view: "active", limit: 50, setPage });
     onConfirmed(schedule);
@@ -307,6 +336,10 @@ export default function ProfessionalScheduleWorkspace({
   }
 
   async function loadHistory({ cursor = null } = {}) {
+    if (!cursor) {
+      historyFocusRequestedRef.current = true;
+    }
+
     setHistoryStatus("loading");
     setHistoryError("");
     try {
@@ -616,8 +649,17 @@ export default function ProfessionalScheduleWorkspace({
         titleId="professional-schedule-title"
         description={workspaceCopy.scheduleDescription}
         action={(
-          <button type="button" style={styles.secondaryButton} onClick={() => loadHistory()} disabled={historyStatus === "loading"}>
-            {t("professionalScheduleViewHistory", language)}
+          <button
+            type="button"
+            style={styles.secondaryButton}
+            onClick={() => loadHistory()}
+            disabled={historyStatus === "loading"}
+            aria-controls="professional-schedule-history"
+            aria-expanded={historyStatus !== "idle"}
+          >
+            {historyStatus === "loading"
+              ? t("professionalScheduleLoading", language)
+              : t("professionalScheduleViewHistory", language)}
           </button>
         )}
       />
@@ -689,7 +731,14 @@ export default function ProfessionalScheduleWorkspace({
       })}
 
       {historyStatus !== "idle" && (
-        <section aria-labelledby="schedule-history" style={styles.group}>
+        <section
+          id="professional-schedule-history"
+          ref={historyGroupRef}
+          tabIndex={-1}
+          aria-busy={historyStatus === "loading"}
+          aria-labelledby="schedule-history"
+          style={styles.group}
+        >
           <h3 id="schedule-history" style={styles.groupTitle}>{t("professionalScheduleHistory", language)}</h3>
           {historyStatus === "loading" && !history && <p role="status">{t("professionalScheduleLoading", language)}</p>}
           {historyError && <p role="alert" style={styles.error}>{historyError}</p>}
