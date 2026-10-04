@@ -25,13 +25,13 @@ test("contact import parses CSV contacts for review", () => {
 test("contact import parses vCard contacts without requiring Meetro accounts", () => {
   const [contact] = parseImportedContactsFromText(
     "BEGIN:VCARD\nVERSION:3.0\nFN:Dolfi AC Supply\nEMAIL:dolfi@example.com\nTEL:555-333-4444\nEND:VCARD",
-    "vendor"
+    "professional"
   );
 
   assert.equal(contact.name, "Dolfi AC Supply");
   assert.equal(contact.email, "dolfi@example.com");
   assert.equal(contact.phone, "555-333-4444");
-  assert.equal(contact.type, "vendor");
+  assert.equal(contact.type, "professional");
 });
 
 test("imported contact relationship is a placeholder before invite", () => {
@@ -95,11 +95,10 @@ test("contact import exposes every required assignment type", () => {
     CONTACT_IMPORT_TYPE_OPTIONS.map((option) => option.label),
     [
       "Customer",
-      "Tenant",
-      "Vendor / Pro",
+      "Professional / Vendor",
       "Employee",
-      "Business",
-      "Property contact",
+      "Tenant",
+      "Property Manager",
     ]
   );
 });
@@ -110,6 +109,21 @@ test("contact import accepts human type labels from files", () => {
     "customer"
   );
 
-  assert.equal(contacts[0].type, "vendor");
-  assert.equal(contacts[1].type, "property");
+  assert.equal(contacts[0].type, "professional");
+  assert.equal(contacts[1].type, "propertyManager");
+});
+
+test("contact import preserves private notes and organization intent for governed save", () => {
+  const [contact] = parseImportedContactsFromText(
+    "Name,Email,Type,Note\nDolfi AC Supply,dolfi@example.com,Business,Net 30 vendor",
+    "customer"
+  );
+
+  assert.equal(contact.type, "professional");
+  assert.equal(contact.note, "Net 30 vendor");
+  const organization = normalizeImportedContact({
+    organization: "Dolfi AC Supply",
+    email: "dolfi@example.com",
+  });
+  assert.equal(organization.partyType, "ORGANIZATION");
 });

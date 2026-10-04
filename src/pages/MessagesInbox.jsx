@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useReducer, useRef, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import { getCommunicationLayout } from "../utils/communicationLayout";
 import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
@@ -10,7 +11,15 @@ import { EmergencyConversationContextPanel } from "../components/EmergencyRelati
 import ConversationThread from "./ConversationThread";
 import { authFetch, clearMeetroSession } from "../utils/authFetch";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
-import { getDashboardPageForAccountMode } from "../utils/session";
+import { getAuthenticatedIdentitySnapshot, getDashboardPageForAccountMode } from "../utils/session";
+import {
+  getAlertCountSnapshot,
+  subscribeAlertCounts,
+} from "../utils/alertCountCoordinator";
+import {
+  getCommunicationAttention,
+  getConversationCustomerAttention,
+} from "../utils/communicationAttention";
 import {
   getAccountConnectionStateFromAuthResult,
   getStoredAccountConnectionState,
@@ -19,6 +28,7 @@ import {
   getRequestCommunicationEndpoint,
   normalizeRequestConversations,
 } from "../utils/requestCommunication";
+import { getRequesterResponseInbox } from "../utils/requestResponseInboxApi";
 import { getLanguage, t } from "../utils/language";
 import { formatMessageTime } from "../utils/displayTime";
 import {
@@ -69,16 +79,36 @@ import {
 } from "../utils/accountProfileScope";
 import {
   CONTACT_IMPORT_TYPE_OPTIONS,
-  buildImportedContactRelationship,
   normalizeImportedContact,
   parseImportedContactsFromText,
 } from "../utils/contactImport";
+import {
+  BUSINESS_CONTACT_ROLE_LABELS,
+  BUSINESS_CONTACT_ROLES,
+  archiveBusinessContact,
+  createBusinessContactCommandKey,
+  createBusinessContactWithRole,
+  createDeterministicBusinessContactKey,
+  getBusinessContactRoleForType,
+  importBusinessContacts,
+  listBusinessContacts,
+  loadBusinessContactProfileId,
+  projectBusinessContactRecord,
+  reconcileBusinessContactRoles,
+  updateBusinessContact,
+} from "../utils/businessContactsApi";
+import {
+  clearCustomerRelationshipContactReturn,
+  readCustomerRelationshipContactReturn,
+} from "../utils/customerRelationshipsWorkspace.js";
 import {
   CONTACTS_ACCESS_OFF_MESSAGE,
   getNativePhoneContacts,
   isNativeContactsAvailable,
 } from "../utils/nativeContacts";
 import { resolveRelationshipIdentity } from "../utils/relationshipIdentity";
+import { captureConversationOriginContext } from "../utils/conversationOrigin";
+import { getConversationVisitContextFacts } from "../utils/communicationSchedulePlacement";
 import {
   getPersonalProfilePhotoForRecord,
   getScopedProfilePhoto,
@@ -198,6 +228,26 @@ const messagesMobileLayoutStyles = `
       max-width: 100% !important;
     }
   }
+
+  [data-communication-route-thread="narrow"] > :first-child {
+    display: none !important;
+  }
+
+  [data-communication-wide-emergency="true"]
+    > [data-communication-list-pane="true"] {
+    grid-column: 1;
+  }
+
+  [data-communication-wide-emergency="true"]
+    > [data-communication-thread-pane="true"] {
+    grid-column: 3;
+  }
+
+  [data-communication-wide-emergency="true"]
+    > [data-emergency-context-panel="canonical"] {
+    grid-column: 4;
+  }
+
 `;
 
 
@@ -288,6 +338,25 @@ function applyLiveConversationAvatar(record = {}, viewerRole = "") {
     profilePhoto: avatar,
     profilePhotoUrl: avatar,
   };
+}
+
+function getIdentityAvatarImageStyle(identity = {}, viewerRole = "") {
+  const rawType = String(
+    identity?.type ||
+      identity?.relationshipType ||
+      identity?.relationship_type ||
+      identity?.typeLabel ||
+      ""
+  ).toLowerCase();
+
+  const normalizedViewerRole = String(viewerRole || "").toLowerCase();
+
+  const businessParticipant =
+    identity?.type === "business" ||
+    /business|professional|vendor|provider/.test(rawType) ||
+    normalizedViewerRole === "homeowner";
+
+  return businessParticipant ? businessLogoAvatarImage : avatarImage;
 }
 
 function saveConversationRegistryItem(item) {
@@ -460,6 +529,16 @@ function normalizeRelationshipId(value = "") {
     .replace(/^_+|_+$/g, "");
 }
 
+function describeBusinessContactDuplicateCandidates(candidates = []) {
+  const labels = (Array.isArray(candidates) ? candidates : [])
+    .map((candidate) =>
+      String(candidate?.displayName || candidate?.companyName || candidate?.id || "").trim()
+    )
+    .filter(Boolean);
+  if (labels.length === 0) return "";
+  return ` Possible duplicate${labels.length === 1 ? "" : "s"}: ${labels.join(", ")}. Nothing was merged.`;
+}
+
 const RELATIONSHIP_VIEW_OPTIONS = [
   ["all", "messagesViewAllRelationships"],
   ["customer", "messagesViewCustomers"],
@@ -479,6 +558,48 @@ const MESSAGE_SECTION_OPTIONS = [
   CONTACT_SECTION_OPTION,
   ...COMMUNICATION_SECTION_OPTIONS,
 ];
+
+function getRequesterResponseInboxCopy(language = "en") {
+  const localized = {
+    es: {
+      title: "Respuestas profesionales",
+      count: (value) => `${value} respuesta${value === 1 ? "" : "s"} nueva${value === 1 ? "" : "s"}`,
+      responded: (name) => `${name || "Un profesional"} respondió a tu solicitud`,
+      fallbackRequest: "Solicitud de servicio",
+      review: "Revisar respuesta",
+      conversationReady: "Conversación lista",
+      openConversation: "Abrir conversación",
+    },
+    fr: {
+      title: "Réponses professionnelles",
+      count: (value) => `${value} nouvelle${value === 1 ? "" : "s"} réponse${value === 1 ? "" : "s"}`,
+      responded: (name) => `${name || "Un professionnel"} a répondu à votre demande`,
+      fallbackRequest: "Demande de service",
+      review: "Examiner la réponse",
+      conversationReady: "Conversation prête",
+      openConversation: "Ouvrir la conversation",
+    },
+    "pt-BR": {
+      title: "Respostas profissionais",
+      count: (value) => `${value} nova${value === 1 ? "" : "s"} resposta${value === 1 ? "" : "s"}`,
+      responded: (name) => `${name || "Um profissional"} respondeu à sua solicitação`,
+      fallbackRequest: "Solicitação de serviço",
+      review: "Revisar resposta",
+      conversationReady: "Conversa pronta",
+      openConversation: "Abrir conversa",
+    },
+  };
+
+  return localized[language] || {
+    title: "Professional Responses",
+    count: (value) => `${value} new response${value === 1 ? "" : "s"}`,
+    responded: (name) => `${name || "A professional"} responded to your request`,
+    fallbackRequest: "Service Request",
+    review: "Review Response",
+    conversationReady: "Conversation ready",
+    openConversation: "Open Conversation",
+  };
+}
 
 function normalizeRelationshipView(value) {
   const view = String(value || "all");
@@ -552,6 +673,8 @@ function createEmptyComposer(type = "customer", label = "New Relationship") {
     email: "",
     address: "",
     note: "",
+    partyType: "PERSON",
+    commandKey: "",
   };
 }
 
@@ -569,7 +692,7 @@ function createEmptyConversationStarter(mode = "single") {
 }
 
 function getDefaultImportType(activeMode = "business") {
-  return activeMode === "business" ? "customer" : "vendor";
+  return activeMode === "business" ? "customer" : "professional";
 }
 
 function createEmptyContactImport(activeMode = "business") {
@@ -604,11 +727,27 @@ function MessagesInbox({ setPage, currentPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
   const appLayoutMetrics = useAppLayoutMetrics();
   const communicationLayout = getCommunicationLayout(appLayoutMetrics);
-  const isSplitPane = communicationLayout.mode === "desktop";
-  const isWideWorkspace = communicationLayout.columns === 3;
   const canonicalRouteContext = parseCanonicalConversationRoute(
     typeof window === "undefined" ? "" : window.location.hash
   );
+  const routeRequestsCommunicationShell =
+    canonicalRouteContext.valid === true &&
+    canonicalRouteContext.shell ===
+      CANONICAL_CONVERSATION_COMMUNICATION_SHELL;
+  const [alertCountSnapshot, setAlertCountSnapshot] = useState(getAlertCountSnapshot);
+  const attentionIdentity = String(getAuthenticatedIdentitySnapshot()?.userId || "");
+  const communicationAttention = getCommunicationAttention(
+    alertCountSnapshot,
+    attentionIdentity
+  );
+
+  useEffect(() => subscribeAlertCounts(setAlertCountSnapshot), []);
+  const isSplitPane =
+    communicationLayout.mode === "desktop" ||
+    (
+      routeRequestsCommunicationShell &&
+      appLayoutMetrics.layoutMode === "tablet"
+    );
   const routedConversationId =
     canonicalRouteContext.valid &&
     (canonicalRouteContext.returnPage === "messagesInbox" ||
@@ -617,7 +756,17 @@ function MessagesInbox({ setPage, currentPage }) {
       ? canonicalRouteContext.conversationId
       : "";
 
+  const isNarrowRoutedThread = Boolean(
+    routeRequestsCommunicationShell &&
+      appLayoutMetrics.layoutMode === "mobile" &&
+      routedConversationId
+  );
+
+  const shouldKeepEmbeddedThread =
+    isSplitPane || isNarrowRoutedThread;
+
   const [quotes, setQuotes] = useState([]);
+  const [requestResponses, setRequestResponses] = useState([]);
   const [loading, setLoading] = useState(true);
   const conversationFetchInFlightRef = useRef(false);
   const conversationFetchSequenceRef = useRef(0);
@@ -625,10 +774,14 @@ function MessagesInbox({ setPage, currentPage }) {
   const [accountConnectionState, setAccountConnectionState] = useState(() =>
     getStoredAccountConnectionState()
   );
-  const [language, updateLanguage] = useState(getLanguage());
+  const language = useLanguage();
+  const requesterResponseLabels = getRequesterResponseInboxCopy(language);
   const [activeAccountMode, setActiveAccountMode] = useState(
     localStorage.getItem("activeAccountMode") || "personal"
   );
+  const activeContactProfileScope = getActiveProfileScopeDescriptor({
+    activeAccountMode,
+  });
   const emergencyContextAccountModeRef = useRef(activeAccountMode);
   const [compactContextOpen, setCompactContextOpen] = useState(false);
   const [activeSplitConversationId, setActiveSplitConversationId] = useState(
@@ -639,6 +792,7 @@ function MessagesInbox({ setPage, currentPage }) {
     setActiveSplitCanonicalConversationId,
   ] = useState(routedConversationId || null);
   const [activeEmergencyContext, setActiveEmergencyContext] = useState(null);
+  const [canonicalWorkContext, setCanonicalWorkContext] = useState(null);
   const [communicationWorkspaceState, dispatchCommunicationWorkspace] =
     useReducer(
       communicationWorkspaceReducer,
@@ -705,15 +859,29 @@ function MessagesInbox({ setPage, currentPage }) {
   const [activeContactCardSnapshot, setActiveContactCardSnapshot] = useState(null);
   const [contactInviteOptionsId, setContactInviteOptionsId] = useState("");
   const [contactEditDraft, setContactEditDraft] = useState(null);
+  const [durableBusinessContacts, setDurableBusinessContacts] = useState([]);
+  const [activeDurableBusinessContacts, setActiveDurableBusinessContacts] = useState([]);
+  const customerRelationshipReturnContactRef = useRef(
+    readCustomerRelationshipContactReturn(
+      typeof window === "undefined" ? null : window.localStorage
+    )
+  );
+  const [contactStatusFilter, setContactStatusFilter] = useState("ACTIVE");
+  const [businessContactProfileId, setBusinessContactProfileId] = useState(null);
+  const [businessContactsLoading, setBusinessContactsLoading] = useState(false);
+  const [businessContactSaving, setBusinessContactSaving] = useState(false);
+  const businessContactLoadSequenceRef = useRef(0);
   const contactImportFileRef = useRef(null);
   const relationshipIdentityReturnScrollRef = useRef(0);
   const activeContactCard = activeContactCardSnapshot;
+  const savedHistoryVisible =
+    messageSection === "conversations" && savedHistoryOpen;
   const focusedMessagesFlowOpen = Boolean(
     conversationStarter ||
       relationshipComposer ||
       contactImport ||
       ticketComposer ||
-      savedHistoryOpen ||
+      savedHistoryVisible ||
       activeContactCardId
   );
   const focusedConversationFlowOpen = Boolean(
@@ -806,6 +974,7 @@ function MessagesInbox({ setPage, currentPage }) {
     setRelationshipComposer(null);
     setContactImport(null);
     setTicketComposer(null);
+    if (nextSection === "contacts") setContactStatusFilter("ACTIVE");
     localStorage.removeItem("meetroMessagesOpenSavedHistory");
     setSavedHistoryOpen(false);
   };
@@ -843,6 +1012,10 @@ function MessagesInbox({ setPage, currentPage }) {
 
   const handleCanonicalEmergencyContextChange = useCallback((context) => {
     setActiveEmergencyContext(context || null);
+  }, []);
+
+  const handleCanonicalWorkContextChange = useCallback((context) => {
+    setCanonicalWorkContext(context || null);
   }, []);
 
   const handleSplitThreadPageChange = useCallback(
@@ -898,9 +1071,6 @@ function MessagesInbox({ setPage, currentPage }) {
   }
 
   useEffect(() => {
-    const handleLanguageChange = () => {
-      updateLanguage(getLanguage());
-    };
     const handleAccountModeChange = () => {
       setActiveAccountMode(localStorage.getItem("activeAccountMode") || "personal");
     };
@@ -926,9 +1096,6 @@ function MessagesInbox({ setPage, currentPage }) {
       setSavedHistoryOpen(false);
     };
 
-    window.addEventListener("languageChanged", handleLanguageChange);
-    window.addEventListener("meetroLanguageChanged", handleLanguageChange);
-    window.addEventListener("meetro-language-change", handleLanguageChange);
     window.addEventListener("accountModeChanged", handleAccountModeChange);
     window.addEventListener(
       "meetroAccountConnectionIssue",
@@ -937,9 +1104,6 @@ function MessagesInbox({ setPage, currentPage }) {
     window.addEventListener("storage", handleAccountModeChange);
 
     return () => {
-      window.removeEventListener("languageChanged", handleLanguageChange);
-      window.removeEventListener("meetroLanguageChanged", handleLanguageChange);
-      window.removeEventListener("meetro-language-change", handleLanguageChange);
       window.removeEventListener("accountModeChanged", handleAccountModeChange);
       window.removeEventListener(
         "meetroAccountConnectionIssue",
@@ -951,9 +1115,19 @@ function MessagesInbox({ setPage, currentPage }) {
 
   useEffect(() => {
     fetchConversations("mount");
+    if (activeAccountMode === "personal") {
+      void getRequesterResponseInbox({ setPage }).then((result) => {
+        setRequestResponses(result.ok ? result.responses : []);
+      });
+    }
 
     const refreshMessages = (event) => {
       fetchConversations(event?.type || "event");
+      if (activeAccountMode === "personal") {
+        void getRequesterResponseInbox({ setPage }).then((result) => {
+          if (result.ok) setRequestResponses(result.responses);
+        });
+      }
     };
 
     window.addEventListener("focus", refreshMessages);
@@ -975,7 +1149,83 @@ function MessagesInbox({ setPage, currentPage }) {
     };
 
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeAccountMode, language]);
+  }, [activeAccountMode]);
+
+  useEffect(() => {
+    const timeoutId = window.setTimeout(() => {
+      if (activeAccountMode === "business") {
+        void loadDurableBusinessContacts(
+          messageSection === "contacts" ? searchQuery : "",
+          messageSection === "contacts" ? contactStatusFilter : "ACTIVE"
+        );
+      } else {
+        businessContactLoadSequenceRef.current += 1;
+        setDurableBusinessContacts([]);
+        setActiveDurableBusinessContacts([]);
+        setBusinessContactProfileId(null);
+        setBusinessContactsLoading(false);
+      }
+    }, messageSection === "contacts" && searchQuery ? 180 : 0);
+    const refreshContacts = () => {
+      if (activeAccountMode === "business") {
+        void loadDurableBusinessContacts(
+          messageSection === "contacts" ? searchQuery : "",
+          messageSection === "contacts" ? contactStatusFilter : "ACTIVE"
+        );
+      }
+    };
+    window.addEventListener("focus", refreshContacts);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+      window.removeEventListener("focus", refreshContacts);
+    };
+    // The loader owns request sequencing and the current authenticated business.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeAccountMode, contactStatusFilter, messageSection, searchQuery]);
+
+  useEffect(() => {
+    const target = customerRelationshipReturnContactRef.current;
+    if (
+      !target ||
+      activeAccountMode !== "business" ||
+      businessContactsLoading
+    ) {
+      return;
+    }
+    if (contactStatusFilter !== target.status) {
+      setContactStatusFilter(target.status);
+      return;
+    }
+    const savedContact = durableBusinessContacts.find(
+      (contact) => String(contact?.id || "") === target.businessContactId
+    );
+    if (!savedContact) return;
+
+    const contactRelationship = createRelationshipLayerModel(
+      [projectBusinessContactRecord(savedContact)],
+      {
+        viewerRole: "business",
+        activeMode: "business",
+        activeProfileScopeKey: activeContactProfileScope.profileScopeKey,
+      }
+    ).relationships[0];
+    if (!contactRelationship) return;
+
+    setActiveContactCardSnapshot(contactRelationship);
+    setActiveContactCardId(contactRelationship.id);
+    customerRelationshipReturnContactRef.current = null;
+    if (typeof window !== "undefined") {
+      clearCustomerRelationshipContactReturn(window.localStorage);
+    }
+    // The return target is a one-shot navigation hint; Contact data remains server-owned.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeAccountMode,
+    businessContactsLoading,
+    contactStatusFilter,
+    durableBusinessContacts,
+  ]);
 
   useEffect(() => {
     writeUnreadConversationCount(quotes);
@@ -1233,6 +1483,50 @@ function MessagesInbox({ setPage, currentPage }) {
         conversationFetchInFlightRef.current = false;
         hasLoadedConversationProjectionRef.current = true;
         setLoading(false);
+      }
+    }
+  }
+
+  async function resolveBusinessContactProfileId() {
+    const scopedId = Number(activeContactProfileScope.profileId);
+    if (Number.isSafeInteger(scopedId) && scopedId > 0) {
+      setBusinessContactProfileId(scopedId);
+      return scopedId;
+    }
+    if (businessContactProfileId) return businessContactProfileId;
+    const loadedId = await loadBusinessContactProfileId({ setPage });
+    setBusinessContactProfileId(loadedId);
+    return loadedId;
+  }
+
+  async function loadDurableBusinessContacts(search = "", status = "ACTIVE") {
+    if (activeAccountMode !== "business") return [];
+    const requestSequence = ++businessContactLoadSequenceRef.current;
+    setBusinessContactsLoading(true);
+
+    try {
+      const contractorProfileId = await resolveBusinessContactProfileId();
+      const contacts = await listBusinessContacts({
+        contractorProfileId,
+        search,
+        status,
+        setPage,
+      });
+      if (requestSequence !== businessContactLoadSequenceRef.current) return contacts;
+      setDurableBusinessContacts(contacts);
+      if (status === "ACTIVE") setActiveDurableBusinessContacts(contacts);
+      return contacts;
+    } catch (error) {
+      if (requestSequence !== businessContactLoadSequenceRef.current) return [];
+      if (messageSection === "contacts") {
+        setRelationshipNotice(
+          error?.message || "Saved business Contacts could not be loaded."
+        );
+      }
+      return [];
+    } finally {
+      if (requestSequence === businessContactLoadSequenceRef.current) {
+        setBusinessContactsLoading(false);
       }
     }
   }
@@ -1962,6 +2256,15 @@ function MessagesInbox({ setPage, currentPage }) {
     }
 
     if (messageSection === "contacts") {
+      if (
+        activeAccountMode === "business" &&
+        contactStatusFilter === "ARCHIVED"
+      ) {
+        return {
+          title: t("messagesNoArchivedContacts", language),
+          text: t("messagesNoArchivedContactsText", language),
+        };
+      }
       return {
         title: t("messagesNoContacts", language),
         text: t("messagesNoContactsText", language),
@@ -2034,11 +2337,21 @@ function MessagesInbox({ setPage, currentPage }) {
 
   const normalizedSearchQuery = normalizeMessageSearchText(searchQuery);
   const activeViewerRole = activeAccountMode === "business" ? "business" : "homeowner";
-  const activeContactProfileScope = getActiveProfileScopeDescriptor({
-    activeAccountMode,
-  });
+  const contactsForCurrentWorkspace =
+    messageSection === "contacts"
+      ? durableBusinessContacts
+      : activeDurableBusinessContacts;
   const liveIdentityQuotes = quotes.map((quote) =>
     applyLiveConversationAvatar(quote, activeViewerRole)
+  );
+  liveIdentityQuotes.push(
+    ...contactsForCurrentWorkspace.map(projectBusinessContactRecord)
+  );
+  const activeContactIdentityQuotes = quotes.map((quote) =>
+    applyLiveConversationAvatar(quote, activeViewerRole)
+  );
+  activeContactIdentityQuotes.push(
+    ...activeDurableBusinessContacts.map(projectBusinessContactRecord)
   );
   const savedHistoryQuotes = liveIdentityQuotes
     .filter(isSavedChatHistoryConversation)
@@ -2048,6 +2361,14 @@ function MessagesInbox({ setPage, currentPage }) {
     activeMode: activeAccountMode === "business" ? "business" : "personal",
     activeProfileScopeKey: activeContactProfileScope.profileScopeKey,
   });
+  const activeContactRelationshipLayer = createRelationshipLayerModel(
+    activeContactIdentityQuotes,
+    {
+      viewerRole: activeViewerRole,
+      activeMode: activeAccountMode === "business" ? "business" : "personal",
+      activeProfileScopeKey: activeContactProfileScope.profileScopeKey,
+    }
+  );
   const currentSectionShowsCategories = false;
   const sectionRelationships = getMessageSectionRelationships(
     messageSection,
@@ -2079,6 +2400,19 @@ function MessagesInbox({ setPage, currentPage }) {
         getConversationSearchText(quote).includes(normalizedSearchQuery)
       )
     : prioritizedVisibleQuotes;
+  const unresolvedRequesterResponses = requestResponses.filter(
+    (response) =>
+      response.unresolved === true &&
+      (!normalizedSearchQuery ||
+        normalizeMessageSearchText(
+          [
+            response.businessName,
+            response.requestTitle,
+            response.introductionText,
+            "professional response",
+          ].filter(Boolean).join(" ")
+        ).includes(normalizedSearchQuery))
+  );
   const activeMessageSectionLabel = t(
     MESSAGE_SECTION_OPTIONS.find(([key]) => key === messageSection)?.[1] ||
       "messagesSectionConversations",
@@ -2135,6 +2469,16 @@ function MessagesInbox({ setPage, currentPage }) {
       : null;
   const activeEmergencyContextMatchesConversation = Boolean(
     eligibleActiveEmergencyContext
+  );
+  // Reuse the existing right pane at iPad landscape widths for Emergency context.
+  const isWideWorkspace = getCommunicationLayout(appLayoutMetrics, {
+    emergency: activeEmergencyContextMatchesConversation,
+  }).columns === 3;
+
+  const isExtraWideEmergencyWorkspace = Boolean(
+    isWideWorkspace &&
+      activeEmergencyContextMatchesConversation &&
+      appLayoutMetrics.contentWidth >= 1280
   );
   const activeWorkspaceRelationship = activeWorkspaceConversation
     ? getRelationshipForConversation(activeWorkspaceConversation)
@@ -2375,6 +2719,20 @@ function MessagesInbox({ setPage, currentPage }) {
   function getWorkspaceContextFacts(conversation = {}, relationship = null) {
     if (!conversation) return [];
 
+    const canonicalContextMatches =
+      canonicalWorkContext?.conversationId &&
+      String(canonicalWorkContext.conversationId) === String(conversation.id);
+    const canonicalApprovalConfirmed =
+      canonicalContextMatches &&
+      canonicalWorkContext.quoteAuthorityPhase === "ready" &&
+      canonicalWorkContext.quoteAuthority?.approved === true;
+    const canonicalVisitFacts = canonicalApprovalConfirmed
+      ? getConversationVisitContextFacts(
+          canonicalWorkContext.visit,
+          language
+        )
+      : [];
+
     const relatedJob =
       activeJobSnapshot?.conversationId &&
       String(activeJobSnapshot.conversationId) === String(conversation.id)
@@ -2419,11 +2777,17 @@ function MessagesInbox({ setPage, currentPage }) {
     return [
       projectTitle && { label: t("messagesFactRelatedWork", language), value: projectTitle },
       currentWork && { label: t("messagesFactCurrentWork", language), value: currentWork },
-      (scheduleDate || scheduleTime) && {
+      !canonicalApprovalConfirmed && (scheduleDate || scheduleTime) && {
         label: t("messagesFactSchedule", language),
         value: [scheduleDate, scheduleTime].filter(Boolean).join(" · "),
       },
-      quoteStatus && { label: t("messagesFactQuoteStatus", language), value: quoteStatus },
+      (canonicalApprovalConfirmed || quoteStatus) && {
+        label: t("messagesFactQuoteStatus", language),
+        value: canonicalApprovalConfirmed
+          ? t("customerQuoteStatusApproved", language)
+          : quoteStatus,
+      },
+      ...canonicalVisitFacts,
     ].filter(Boolean);
   }
 
@@ -2475,6 +2839,12 @@ function MessagesInbox({ setPage, currentPage }) {
       return;
     }
 
+    captureConversationOriginContext({
+      sourcePage: "messagesInbox",
+      workspace: "projectDetails",
+      viewerRole: "homeowner",
+    });
+    localStorage.setItem("projectDetailsReturnPage", "conversationThread");
     setPage("projectDetails");
   }
 
@@ -2697,7 +3067,7 @@ function MessagesInbox({ setPage, currentPage }) {
     if (section === "contacts") {
       return getMessageSectionRelationships(
         section,
-        relationshipLayer.relationships,
+        activeContactRelationshipLayer.relationships,
         { applyCategory: false }
       ).length;
     }
@@ -2705,6 +3075,41 @@ function MessagesInbox({ setPage, currentPage }) {
     return liveIdentityQuotes.filter((quote) =>
       conversationMatchesMessageSection(quote, section)
     ).length;
+  }
+
+  function getMessageSectionUnreadCount(section) {
+    if (!["conversations", "hiring", "emergency"].includes(section)) {
+      return 0;
+    }
+
+    return liveIdentityQuotes
+      .filter((quote) => conversationMatchesMessageSection(quote, section))
+      .reduce((total, conversation) => {
+        const conversationId = Number(
+          conversation.conversationId || conversation.id
+        );
+        const jobId = String(
+          conversation.relationship?.jobId ||
+            conversation.jobId ||
+            conversation.job_id ||
+            ""
+        ).trim().toLowerCase();
+
+        const customerAttention = getConversationCustomerAttention(
+          communicationAttention,
+          conversationId
+        );
+
+        const teamAttention =
+          communicationAttention.byJob.find(
+            (scope) => scope.jobId === jobId
+          )?.teamUnread || 0;
+
+        const authoritativeUnread = customerAttention + teamAttention;
+        const unread = authoritativeUnread || (conversation.unread ? 1 : 0);
+
+        return total + unread;
+      }, 0);
   }
 
   function relationshipHasActiveConversation(relationship = {}) {
@@ -2783,6 +3188,12 @@ function MessagesInbox({ setPage, currentPage }) {
 
   function getContactTypeLabel(relationship = {}) {
     const record = getRelationshipContactRecord(relationship);
+    if (record.durableBusinessContact) {
+      return (record.businessContactRoles || [])
+        .map((role) => BUSINESS_CONTACT_ROLE_LABELS[role])
+        .filter(Boolean)
+        .join(" · ") || t("messagesContact", language);
+    }
     const typeOption = CONTACT_IMPORT_TYPE_OPTIONS.find(
       (option) =>
         option.id === record.contactImportType ||
@@ -2790,7 +3201,7 @@ function MessagesInbox({ setPage, currentPage }) {
     );
 
     return (
-      (typeOption ? t(`messagesContactType_${typeOption.id}`, language) : "") ||
+      typeOption?.label ||
       relationship.typeLabel ||
       t("messagesContact", language)
     );
@@ -3203,6 +3614,19 @@ function MessagesInbox({ setPage, currentPage }) {
       phone: contact.phone || record.phone || "",
       email: contact.email || record.email || "",
       address: contact.address || record.address || record.location || "",
+      privateNote: record.privateNote || "",
+      partyType: record.businessContactPartyType || "PERSON",
+      roles: record.durableBusinessContact
+        ? [...(record.businessContactRoles || [])]
+        : [],
+      contactId: record.businessContactId || "",
+      version: record.businessContactVersion || null,
+      roleAssignments: record.businessContactRoleAssignments || [],
+      durable: record.durableBusinessContact === true,
+      commandKey:
+        record.durableBusinessContact === true
+          ? createBusinessContactCommandKey()
+          : "",
     });
   }
 
@@ -3212,7 +3636,53 @@ function MessagesInbox({ setPage, currentPage }) {
     );
   }
 
-  function saveContactEdit(event) {
+  function toggleContactEditRole(role) {
+    setContactEditDraft((current) => {
+      if (!current) return current;
+      const roles = new Set(current.roles || []);
+      if (roles.has(role)) roles.delete(role);
+      else roles.add(role);
+      return { ...current, roles: [...roles] };
+    });
+  }
+
+  async function archiveDurableContact(relationship) {
+    const record = getRelationshipContactRecord(relationship);
+    if (!record.durableBusinessContact || record.archived) return;
+    if (!window.confirm(`Archive ${relationship.name}? The Contact history will be preserved.`)) {
+      return;
+    }
+
+    setBusinessContactSaving(true);
+    setRelationshipNotice("");
+    try {
+      const archived = await archiveBusinessContact({
+        contactId: record.businessContactId,
+        expectedVersion: record.businessContactVersion,
+        idempotencyKey: createDeterministicBusinessContactKey(
+          `archive:${record.businessContactId}:${record.businessContactVersion}`
+        ),
+        setPage,
+      });
+      upsertDurableBusinessContact(archived);
+      const projected = projectBusinessContactRecord(archived);
+      setActiveContactCardSnapshot((current) => current ? {
+        ...current,
+        primaryContactRecord: projected,
+        contactRecord: projected,
+        archived: true,
+        isArchivedOnly: true,
+      } : current);
+      setContactEditDraft(null);
+      setRelationshipNotice(`${relationship.name} was archived. History was preserved.`);
+    } catch (error) {
+      setRelationshipNotice(error?.message || "The Contact could not be archived.");
+    } finally {
+      setBusinessContactSaving(false);
+    }
+  }
+
+  async function saveContactEdit(event) {
     event.preventDefault();
     if (!activeContactCard || !contactEditDraft) return;
 
@@ -3220,6 +3690,84 @@ function MessagesInbox({ setPage, currentPage }) {
 
     if (!name) {
       setRelationshipNotice("Add a name before saving this contact.");
+      return;
+    }
+
+    if (contactEditDraft.durable) {
+      if (contactEditDraft.roles.length === 0) {
+        setRelationshipNotice("Keep at least one role on this Contact.");
+        return;
+      }
+      setBusinessContactSaving(true);
+      setRelationshipNotice("");
+      try {
+        const updated = await updateBusinessContact({
+          contactId: contactEditDraft.contactId,
+          expectedVersion: contactEditDraft.version,
+          patch: {
+            partyType: contactEditDraft.partyType,
+            displayName: name,
+            companyName:
+              contactEditDraft.partyType === "ORGANIZATION" ? name : null,
+            phone: contactEditDraft.phone.trim() || null,
+            email: contactEditDraft.email.trim() || null,
+            address: contactEditDraft.address.trim() || null,
+            privateNote: contactEditDraft.privateNote.trim() || null,
+          },
+          idempotencyKey: contactEditDraft.commandKey,
+          setPage,
+        });
+        const reconciled = await reconcileBusinessContactRoles({
+          contact: updated,
+          desiredRoles: contactEditDraft.roles,
+          commandSeed: contactEditDraft.commandKey,
+          setPage,
+        });
+        upsertDurableBusinessContact(reconciled);
+        const projected = projectBusinessContactRecord(reconciled);
+        setActiveContactCardSnapshot((current) => current ? {
+          ...current,
+          name: projected.displayName,
+          type: projected.relationshipType,
+          typeLabel: BUSINESS_CONTACT_ROLE_LABELS[projected.businessContactRoles[0]] || current.typeLabel,
+          primaryContactRecord: projected,
+          contactRecord: projected,
+          primaryConversation: null,
+          savedToContacts: true,
+          archived: projected.archived,
+        } : current);
+        setContactEditDraft(null);
+        setRelationshipNotice(`${name} was updated.`);
+      } catch (error) {
+        if (error?.code === "BUSINESS_CONTACT_VERSION_CONFLICT") {
+          setRelationshipNotice(
+            "This Contact changed elsewhere. The latest saved version was reloaded; review your changes and try again."
+          );
+          const contacts = await loadDurableBusinessContacts("");
+          const latest = contacts.find(
+            (contact) => String(contact.id) === String(contactEditDraft.contactId)
+          );
+          if (latest) {
+            const projected = projectBusinessContactRecord(latest);
+            setActiveContactCardSnapshot((current) => current ? {
+              ...current,
+              name: projected.displayName,
+              primaryContactRecord: projected,
+              contactRecord: projected,
+            } : current);
+            setContactEditDraft((current) => current ? {
+              ...current,
+              version: latest.version,
+              roleAssignments: latest.roles,
+              commandKey: createBusinessContactCommandKey(),
+            } : current);
+          }
+        } else {
+          setRelationshipNotice(error?.message || "The Contact could not be updated.");
+        }
+      } finally {
+        setBusinessContactSaving(false);
+      }
       return;
     }
 
@@ -3264,6 +3812,7 @@ function MessagesInbox({ setPage, currentPage }) {
     const contact = getRelationshipContact(relationship);
     const relationshipContext = {
       relationshipId: relationship.id || record.relationshipId || record.id || "",
+      businessContactId: record.businessContactId || "",
       relationshipType: relationship.type || record.relationshipType || "",
       displayName:
         relationship.name ||
@@ -3273,6 +3822,14 @@ function MessagesInbox({ setPage, currentPage }) {
         record.professionalName ||
         "",
       historyType,
+      focus:
+        historyType === "invoice"
+          ? "invoices"
+          : historyType === "documents"
+          ? "documents"
+          : historyType === "work"
+          ? "work"
+          : "overview",
       phone: contact.phone || record.phone || "",
       email: contact.email || record.email || "",
       source: "messages_relationship_identity",
@@ -3288,6 +3845,20 @@ function MessagesInbox({ setPage, currentPage }) {
     localStorage.setItem("myRequestsReturnPage", "messagesInbox");
     closeContactCard();
     setPage(activeAccountMode === "business" ? "customerRelationshipsCenter" : "myRequests");
+  }
+
+  function reviewRequesterResponse(response = {}) {
+    if (!response.requestId) return;
+
+    const requestContext = {
+      id: response.requestId,
+      requestId: response.requestId,
+      title: response.requestTitle || requesterResponseLabels.fallbackRequest,
+    };
+    localStorage.setItem("selectedHomeownerRequestId", String(response.requestId));
+    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(requestContext));
+    localStorage.setItem("myRequestsReturnPage", "messagesInbox");
+    setPage("homeownerRequestDetails");
   }
 
   function getRelationshipPreviewText(relationship = {}) {
@@ -3350,13 +3921,24 @@ function MessagesInbox({ setPage, currentPage }) {
     const conversation = normalizeConversationForOpen(quote);
     if (!conversation) return null;
 
-    const statusChip = options.statusChip || getConversationRowStatusChip(conversation);
+    const isRequesterRequestConversation = Boolean(
+      activeAccountMode === "personal" &&
+        conversation.sourceType === "request" &&
+        conversation.threadType === CONVERSATION_THREAD_TYPES.CANONICAL
+    );
+    const statusChip = options.statusChip ||
+      (isRequesterRequestConversation
+        ? requesterResponseLabels.openConversation
+        : getConversationRowStatusChip(conversation));
     const rowIdentity = resolveRelationshipIdentity({
       record: conversation,
       viewerRole: activeAccountMode === "business" ? "business" : "homeowner",
       isLinked: true,
       typeLabel:
         options.typeLabel ||
+        (isRequesterRequestConversation
+          ? requesterResponseLabels.conversationReady
+          : "") ||
         (isEmergencyConversationType(conversation)
           ? t("emergency", language)
           : isHiringConversation(conversation)
@@ -3364,6 +3946,27 @@ function MessagesInbox({ setPage, currentPage }) {
           : t("messagesRelationship", language)),
     });
     const isEmergencyRow = isEmergencyConversationType(conversation);
+    const conversationId = Number(
+      conversation.conversationId || conversation.id
+    );
+    const jobId = String(
+      conversation.relationship?.jobId ||
+      conversation.jobId ||
+      conversation.job_id ||
+      (String(canonicalWorkContext?.conversationId || "") === String(conversationId)
+        ? canonicalWorkContext?.jobId
+        : "") ||
+      ""
+    ).trim().toLowerCase();
+    const customerAttention = getConversationCustomerAttention(
+      communicationAttention,
+      conversationId
+    );
+    const teamAttention = communicationAttention.byJob.find(
+      (scope) => scope.jobId === jobId
+    )?.teamUnread || 0;
+    const authoritativeUnread = customerAttention + teamAttention;
+    const rowUnread = authoritativeUnread || (conversation.unread ? 1 : 0);
 
     return (
       <button
@@ -3378,7 +3981,7 @@ function MessagesInbox({ setPage, currentPage }) {
         }}
         style={{
           ...conversationRow,
-          ...(conversation.unread ? unreadConversationRow : {}),
+          ...(rowUnread > 0 ? unreadConversationRow : {}),
           ...(isEmergencyRow ? emergencyConversationRow : {}),
           ...(isSplitPane && isActiveSplitConversation(conversation)
             ? activeConversationRow
@@ -3390,7 +3993,7 @@ function MessagesInbox({ setPage, currentPage }) {
           style={{
             ...conversationRowAvatar,
             ...(isSplitPane ? splitAvatarCircle : {}),
-            ...(conversation.unread ? unreadAvatar : {}),
+            ...(rowUnread > 0 ? unreadAvatar : {}),
             ...(isEmergencyRow ? emergencyAvatar : {}),
           }}
         >
@@ -3398,7 +4001,7 @@ function MessagesInbox({ setPage, currentPage }) {
             <img
               src={rowIdentity.avatar}
               alt={rowIdentity.displayName}
-              style={avatarImage}
+              style={getIdentityAvatarImageStyle(rowIdentity, activeViewerRole)}
             />
           ) : (
             rowIdentity.initials
@@ -3408,8 +4011,14 @@ function MessagesInbox({ setPage, currentPage }) {
         <div style={conversationRowBody}>
           <div style={conversationRowTop}>
             <div style={conversationRowTitleBlock}>
-              <h2 style={conversationRowName}>{rowIdentity.displayName}</h2>
-              <p style={conversationRowMeta}>
+              <h2 style={{
+                        ...conversationRowName,
+                        ...(isSplitPane ? splitConversationRowText : {}),
+                      }}>{rowIdentity.displayName}</h2>
+              <p style={{
+                        ...conversationRowMeta,
+                        ...(isSplitPane ? splitConversationRowText : {}),
+                      }}>
                 {[
                   rowIdentity.typeLabel,
                   getCommunicationIntent(conversation).trim() || "",
@@ -3421,22 +4030,26 @@ function MessagesInbox({ setPage, currentPage }) {
 
             <div style={conversationRowRight}>
               <span style={timeText}>{getConversationDisplayTime(conversation)}</span>
-              {conversation.unread && (
-                <span style={conversationUnreadBadge}>1</span>
+              {rowUnread > 0 && (
+                <span style={conversationUnreadBadge}>{rowUnread > 99 ? "99+" : rowUnread}</span>
               )}
             </div>
           </div>
 
           <div style={conversationRowBottom}>
-            <p style={conversationRowPreview}>
+            <p style={{
+                        ...conversationRowPreview,
+                        ...(isSplitPane ? splitConversationRowText : {}),
+                      }}>
               {getConversationPreviewText(conversation)}
             </p>
             {statusChip && (
               <span
                 style={{
                   ...conversationStatusChip,
+                  ...(isSplitPane ? splitConversationStatusChip : {}),
                   ...(isEmergencyRow ? emergencyStatusBadge : {}),
-                  ...(conversation.unread ? unreadStatusBadge : {}),
+                  ...(rowUnread > 0 ? unreadStatusBadge : {}),
                 }}
               >
                 {statusChip}
@@ -3511,6 +4124,13 @@ function MessagesInbox({ setPage, currentPage }) {
     const memoryFacts = getRelationshipMemoryFacts(conversation, relationship);
     const hasContextFacts = contextFacts.length > 0;
     const hasMemoryFacts = memoryFacts.length > 0;
+    const approvedCanonicalWorkContext =
+      canonicalWorkContext?.conversationId &&
+      String(canonicalWorkContext.conversationId) === String(conversation.id) &&
+      canonicalWorkContext.quoteAuthorityPhase === "ready" &&
+      canonicalWorkContext.quoteAuthority?.approved === true
+        ? canonicalWorkContext
+        : null;
     const hasContactInfo = Boolean(contact.phone || contact.email || contact.address);
     const canOpenDetails = Boolean(
       conversation.project_title ||
@@ -3533,7 +4153,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 <img
                   src={contextIdentity.avatar}
                   alt={contextIdentity.displayName}
-                  style={avatarImage}
+                  style={getIdentityAvatarImageStyle(contextIdentity, activeViewerRole)}
                 />
               ) : (
                 contextIdentity.initials
@@ -3584,7 +4204,21 @@ function MessagesInbox({ setPage, currentPage }) {
           </div>
         </section>
 
-        <section style={workspaceContextSection}>
+        <section
+          style={workspaceContextSection}
+          data-canonical-current-work={
+            approvedCanonicalWorkContext ? "quote-approved" : undefined
+          }
+          data-canonical-visit-id={
+            approvedCanonicalWorkContext?.visit?.id || undefined
+          }
+          data-canonical-visit-version={
+            approvedCanonicalWorkContext?.visit?.currentVersion || undefined
+          }
+          data-canonical-visit-state={
+            approvedCanonicalWorkContext?.visit?.state || undefined
+          }
+        >
           <p style={workspaceContextEyebrow}>{t("messagesRelatedWork", language)}</p>
           {hasContextFacts ? (
             <div style={workspaceFactList}>
@@ -3708,6 +4342,10 @@ function MessagesInbox({ setPage, currentPage }) {
     setContactEntryMode(messageSection === "contacts" ? "manual" : "closed");
     setRelationshipComposer({
       ...createEmptyComposer(type, label),
+      commandKey:
+        messageSection === "contacts" && activeAccountMode === "business"
+          ? createBusinessContactCommandKey()
+          : "",
       section: messageSection,
     });
   }
@@ -3773,6 +4411,8 @@ function MessagesInbox({ setPage, currentPage }) {
         activeAccountMode === "business" ? "customer" : "professional",
         "Add Contact"
       ),
+      commandKey:
+        activeAccountMode === "business" ? createBusinessContactCommandKey() : "",
       section: "contacts",
       returnToStarter: true,
     });
@@ -4089,11 +4729,11 @@ function MessagesInbox({ setPage, currentPage }) {
 
     updateContactImport({
       step: "review",
-      notice: "Review these relationship placeholders before importing.",
+      notice: "Review these business Contacts before importing.",
     });
   }
 
-  function saveContactImport() {
+  async function saveContactImport() {
     if (!contactImport) return;
 
     const selectedIds = new Set(contactImport.selectedIds);
@@ -4106,25 +4746,79 @@ function MessagesInbox({ setPage, currentPage }) {
       return;
     }
 
-    const records = selectedContacts.map((contact, index) =>
-      buildImportedContactRelationship(contact, {
-        activeMode: activeAccountMode,
-        defaultType: contactImport.defaultType,
-        index,
-        createdAt: new Date(Date.now() + index).toISOString(),
-      })
-    );
+    if (activeAccountMode !== "business") {
+      updateContactImport({
+        notice: "Switch to your business profile to import durable business Contacts.",
+      });
+      return;
+    }
 
-    records.forEach(saveConversationRegistryItem);
-    setQuotes((current) => dedupeConversations([...records, ...current]));
-    setMessageSection("contacts");
-    setContactImport(null);
-    setRelationshipNotice(
-      `${records.length} contact${records.length === 1 ? "" : "s"} imported as relationship row${records.length === 1 ? "" : "s"}.`
+    setBusinessContactSaving(true);
+    updateContactImport({ notice: "Saving selected Contacts…", importFailures: [] });
+    try {
+      const contractorProfileId = await resolveBusinessContactProfileId();
+      const result = await importBusinessContacts({
+        contractorProfileId,
+        contacts: selectedContacts,
+        setPage,
+      });
+      result.successes.forEach(({ contact }) => upsertDurableBusinessContact(contact));
+      result.failures.forEach(({ createdContact }) => {
+        if (createdContact) upsertDurableBusinessContact(createdContact);
+      });
+      const duplicateCandidates = [
+        ...result.successes.flatMap((item) => item.duplicateCandidates),
+        ...result.failures.flatMap((item) => item.duplicateCandidates),
+      ];
+      const duplicateNotice = describeBusinessContactDuplicateCandidates(
+        duplicateCandidates
+      );
+
+      if (result.failures.length > 0) {
+        const failedIds = new Set(result.failures.map(({ source }) => source.id));
+        setContactImport((current) => current ? {
+          ...current,
+          step: "review",
+          contacts: current.contacts.filter((contact) => failedIds.has(contact.id)),
+          selectedIds: [...failedIds],
+          importFailures: result.failures,
+          notice: `${result.successes.length} completed; ${result.failures.length} incomplete. Failed Contacts remain below for review and retry.${duplicateNotice}`,
+        } : current);
+      } else {
+        setMessageSection("contacts");
+        setContactImport(null);
+        setContactEntryMode("closed");
+        setRelationshipNotice(
+          `${result.successes.length} durable business Contact${result.successes.length === 1 ? "" : "s"} imported.${duplicateNotice}`
+        );
+      }
+    } catch (error) {
+      updateContactImport({
+        notice: error?.message || "The selected Contacts could not be imported.",
+      });
+    } finally {
+      setBusinessContactSaving(false);
+    }
+  }
+
+  function upsertDurableBusinessContact(contact) {
+    if (!contact?.id) return;
+    const isActive = contact.status === "ACTIVE";
+    const matchesCurrentFilter = contact.status === contactStatusFilter;
+    const withoutContact = (current) =>
+      current.filter((item) => String(item.id) !== String(contact.id));
+
+    setActiveDurableBusinessContacts((current) =>
+      isActive ? [contact, ...withoutContact(current)] : withoutContact(current)
+    );
+    setDurableBusinessContacts((current) =>
+      matchesCurrentFilter
+        ? [contact, ...withoutContact(current)]
+        : withoutContact(current)
     );
   }
 
-  function saveRelationshipComposer(event) {
+  async function saveRelationshipComposer(event) {
     event.preventDefault();
     if (!relationshipComposer) return;
 
@@ -4238,6 +4932,75 @@ function MessagesInbox({ setPage, currentPage }) {
       !["invite", "import", "space", "hiring", "emergency"].includes(
         relationshipComposer.type
       );
+    if (createsContactPlaceholder) {
+      if (activeAccountMode !== "business") {
+        setRelationshipNotice(
+          "Switch to your business profile to save a durable business Contact."
+        );
+        return;
+      }
+      const role = getBusinessContactRoleForType(relationshipComposer.type);
+      if (!role) {
+        setRelationshipNotice("Choose a supported Contact role before saving.");
+        return;
+      }
+
+      setBusinessContactSaving(true);
+      setRelationshipNotice("");
+      try {
+        const contractorProfileId = await resolveBusinessContactProfileId();
+        const result = await createBusinessContactWithRole({
+          contact: {
+            contractorProfileId,
+            partyType: relationshipComposer.partyType,
+            displayName: name,
+            companyName:
+              relationshipComposer.partyType === "ORGANIZATION" ? name : undefined,
+            phone: relationshipComposer.phone.trim(),
+            email,
+            address: relationshipComposer.address.trim(),
+            privateNote: relationshipComposer.note.trim(),
+          },
+          role,
+          idempotencyKey: relationshipComposer.commandKey,
+          setPage,
+        });
+        upsertDurableBusinessContact(result.contact);
+        setMessageSection("contacts");
+        setRelationshipComposer(null);
+        setContactEntryMode("closed");
+        if (shouldReturnToStarter) {
+          setConversationStarter((current) => ({
+            ...(current || createEmptyConversationStarter("single")),
+            step: "select",
+            source: "contacts",
+            notice: `${name} was saved. Invite them to Meetro before starting a conversation.`,
+          }));
+        } else {
+          const projected = projectBusinessContactRecord(result.contact);
+          setActiveContactCardSnapshot(null);
+          setActiveContactCardId(normalizeRelationshipId(projected.relationshipId));
+        }
+        const duplicateNotice = describeBusinessContactDuplicateCandidates(
+          result.duplicateCandidates
+        );
+        setRelationshipNotice(
+          `${name} was saved as a business Contact.${duplicateNotice}`
+        );
+      } catch (error) {
+        if (error?.createdContact) {
+          upsertDurableBusinessContact(error.createdContact);
+          setRelationshipNotice(
+            `${name} was saved, but its role was not assigned. Retry Save Contact to complete it. ${error.message || ""}`.trim()
+          );
+        } else {
+          setRelationshipNotice(error?.message || "The business Contact could not be saved.");
+        }
+      } finally {
+        setBusinessContactSaving(false);
+      }
+      return;
+    }
     const relationshipType =
       relationshipComposer.type === "hiring"
         ? "employee"
@@ -4373,7 +5136,7 @@ function MessagesInbox({ setPage, currentPage }) {
     const record = getRelationshipContactRecord(relationship);
     const contact = getRelationshipContact(relationship);
     const isLinked = record.meetroAccountLinked === true || relationship.meetroAccountLinked === true;
-    const isProfessionalBusinessContact = ["professional", "vendor", "business"].includes(
+    const isProfessionalBusinessContact = !record.durableBusinessContact && ["professional", "vendor", "business"].includes(
       relationship.type || record.relationshipType || record.contactImportType
     );
     const contactTypeLabel = isProfessionalBusinessContact
@@ -4385,13 +5148,20 @@ function MessagesInbox({ setPage, currentPage }) {
       viewerRole: activeAccountMode === "business" ? "business" : "homeowner",
       isLinked,
       typeLabel: contactTypeLabel,
-      status: isLinked
+      status: record.archived
+        ? "Archived business Contact"
+        : isLinked
         ? t("messagesConnectedInMeetro", language)
+        : record.durableBusinessContact
+        ? "Saved business Contact · Meetro account not linked"
         : t("messagesInviteWhenReady", language),
     });
     const locationContactRow = getContactLocationFact(relationship);
     const contactRows = [
       { label: t("messagesType", language), value: contactTypeLabel },
+      ...(record.durableBusinessContact
+        ? [{ label: "Party", value: record.businessContactPartyType === "ORGANIZATION" ? "Organization" : "Person" }]
+        : []),
       { label: t("messagesPhone", language), value: contact.phone || t("messagesNotAdded", language) },
       { label: t("messagesEmail", language), value: contact.email || t("messagesNotAdded", language), span: "wide" },
       locationContactRow,
@@ -4413,11 +5183,19 @@ function MessagesInbox({ setPage, currentPage }) {
         span: "wide",
         onClick: () => openRelationshipHistory(relationship, "invoice"),
       },
-      { title: t("messagesDocumentsPhotos", language), empty: t("messagesNoDocuments", language), items: [], span: "wide" },
+      {
+        title: t("messagesDocumentsPhotos", language),
+        empty: t("messagesNoDocuments", language),
+        items: [],
+        span: "wide",
+        onClick: () => openRelationshipHistory(relationship, "documents"),
+      },
       {
         title: t("messagesNotes", language),
         empty: t("messagesNoNotes", language),
-        items: [],
+        items: record.privateNote
+          ? [{ title: record.privateNote, meta: "Private business note" }]
+          : [],
         span: "wide",
       },
       {
@@ -4428,7 +5206,13 @@ function MessagesInbox({ setPage, currentPage }) {
       },
     ];
 
-    const actions = isLinked
+    const actions = record.durableBusinessContact && record.archived
+      ? [
+          { label: t("messagesTextAction", language), onClick: () => textRelationship(relationship) },
+          { label: t("messagesCallAction", language), onClick: () => callRelationship(relationship) },
+          { label: t("messagesEmail", language), onClick: () => emailRelationship(relationship) },
+        ]
+      : isLinked
       ? [
           {
             label: t("messagesMeetroChat", language),
@@ -4453,7 +5237,16 @@ function MessagesInbox({ setPage, currentPage }) {
           { label: t("messagesCallAction", language), onClick: () => callRelationship(relationship) },
           { label: t("messagesEmail", language), onClick: () => emailRelationship(relationship) },
           { label: t("messagesEditContact", language), onClick: () => openEditContact(relationship) },
+          ...(record.durableBusinessContact && !record.archived
+            ? [{ label: "Archive Contact", onClick: () => archiveDurableContact(relationship) }]
+            : []),
         ];
+    if (record.durableBusinessContact) {
+      actions.unshift({
+        label: t("messagesCustomerRelationship", language),
+        onClick: () => openRelationshipHistory(relationship, "relationship"),
+      });
+    }
     const relationshipPanels = (
       <>
         {contactInviteOptionsId === relationship.id && (
@@ -4504,21 +5297,50 @@ function MessagesInbox({ setPage, currentPage }) {
                   style={relationshipInput}
                 />
               </label>
-              <label style={relationshipField}>
-                <span>{t("messagesType", language)}</span>
-                <select
-                  value={contactEditDraft.type}
-                  onChange={(event) => updateContactEditDraft("type", event.target.value)}
-                  style={relationshipInput}
-                >
-                  {CONTACT_IMPORT_TYPE_OPTIONS.map((option) => (
-                    <option key={option.id} value={option.id}>
-                      {t(`messagesContactType_${option.id}`, language)}
-                    </option>
-                  ))}
-                </select>
-              </label>
+              {contactEditDraft.durable ? (
+                <label style={relationshipField}>
+                  <span>Person or organization</span>
+                  <select
+                    value={contactEditDraft.partyType}
+                    onChange={(event) => updateContactEditDraft("partyType", event.target.value)}
+                    style={relationshipInput}
+                  >
+                    <option value="PERSON">Person</option>
+                    <option value="ORGANIZATION">Organization</option>
+                  </select>
+                </label>
+              ) : (
+                <label style={relationshipField}>
+                  <span>{t("messagesType", language)}</span>
+                  <select
+                    value={contactEditDraft.type}
+                    onChange={(event) => updateContactEditDraft("type", event.target.value)}
+                    style={relationshipInput}
+                  >
+                    {CONTACT_IMPORT_TYPE_OPTIONS.map((option) => (
+                      <option key={option.id} value={option.id}>{option.label}</option>
+                    ))}
+                  </select>
+                </label>
+              )}
             </div>
+            {contactEditDraft.durable && (
+              <fieldset style={relationshipRoleFieldset}>
+                <legend>Contact roles</legend>
+                <div style={relationshipRoleOptions}>
+                  {BUSINESS_CONTACT_ROLES.map((role) => (
+                    <label key={role} style={relationshipRoleOption}>
+                      <input
+                        type="checkbox"
+                        checked={contactEditDraft.roles.includes(role)}
+                        onChange={() => toggleContactEditRole(role)}
+                      />
+                      <span>{BUSINESS_CONTACT_ROLE_LABELS[role]}</span>
+                    </label>
+                  ))}
+                </div>
+              </fieldset>
+            )}
             <div style={relationshipFieldGrid}>
               <label style={relationshipField}>
                 <span>{t("messagesPhone", language)}</span>
@@ -4545,9 +5367,24 @@ function MessagesInbox({ setPage, currentPage }) {
                 style={relationshipInput}
               />
             </label>
+            {contactEditDraft.durable && (
+              <label style={relationshipField}>
+                <span>Private Note</span>
+                <textarea
+                  value={contactEditDraft.privateNote}
+                  onChange={(event) => updateContactEditDraft("privateNote", event.target.value)}
+                  style={relationshipTextarea}
+                />
+              </label>
+            )}
             <div style={contactCardActionRow}>
-              <button type="submit" style={relationshipPrimaryAction}>
-                {t("messagesSaveContact", language)}
+              <button
+                type="submit"
+                disabled={businessContactSaving}
+                aria-disabled={businessContactSaving}
+                style={relationshipPrimaryAction}
+              >
+                {businessContactSaving ? "Saving…" : t("messagesSaveContact", language)}
               </button>
               <button
                 type="button"
@@ -4780,7 +5617,7 @@ function MessagesInbox({ setPage, currentPage }) {
 
             <div style={communicationSectionTabs} aria-label={t("messagesContextsAria", language)}>
               {COMMUNICATION_SECTION_OPTIONS.map(([key, label]) => {
-              const count = getMessageSectionCount(key);
+              const unreadCount = getMessageSectionUnreadCount(key);
 
               return (
                 <button
@@ -4793,37 +5630,112 @@ function MessagesInbox({ setPage, currentPage }) {
                   onClick={() => setMessageSection(key)}
                 >
                   <span style={messageSectionTabLabel}>{t(label, language)}</span>
-                  {count > 0 && <strong style={messageSectionTabCount}>{count}</strong>}
+                  {unreadCount > 0 && (
+                    <strong
+                      style={{
+                        ...messageSectionTabCount,
+                        ...messageSectionAttentionCount,
+                      }}
+                      aria-label={`${unreadCount} unread`}
+                    >
+                      {unreadCount > 99 ? "99+" : unreadCount}
+                    </strong>
+                  )}
                 </button>
               );
               })}
             </div>
           </div>
 
-          <div style={searchWrap}>
-            <label style={searchLabel} htmlFor="messages-search">
-              <MeetroIcon name="discover" size={18} decorative />
-              <input
-                id="messages-search"
-                className="messages-contact-search-input"
-                value={searchQuery}
-                onChange={(event) => setSearchQuery(event.target.value)}
-                placeholder={getMessageSearchPlaceholder()}
-                style={searchInput}
-              />
-            </label>
+          {!(
+            messageSection === "conversations" &&
+            isSplitPane &&
+            !savedHistoryVisible
+          ) && (
+            <div style={searchWrap}>
+              <label style={searchLabel} htmlFor="messages-search">
+                <MeetroIcon name="discover" size={18} decorative />
+                <input
+                  id="messages-search"
+                  className="messages-contact-search-input"
+                  value={searchQuery}
+                  onChange={(event) => setSearchQuery(event.target.value)}
+                  placeholder={getMessageSearchPlaceholder()}
+                  style={searchInput}
+                />
+              </label>
 
-            {searchQuery && (
+              {searchQuery && (
+                <button
+                  type="button"
+                  style={searchClearButton}
+                  onClick={() => setSearchQuery("")}
+                  aria-label={t("messagesSearchClear")}
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          )}
+
+          {messageSection === "contacts" && activeAccountMode === "business" && (
+            <div
+              style={contactStatusNavigation}
+              role="group"
+              aria-label={t("messagesContactStatusAria", language)}
+            >
+              {[
+                ["ACTIVE", "messagesActiveContacts"],
+                ["ARCHIVED", "messagesArchivedContacts"],
+              ].map(([status, label]) => (
+                <button
+                  key={status}
+                  type="button"
+                  aria-pressed={contactStatusFilter === status}
+                  style={{
+                    ...contactStatusButton,
+                    ...(contactStatusFilter === status
+                      ? activeContactStatusButton
+                      : {}),
+                  }}
+                  onClick={() => setContactStatusFilter(status)}
+                >
+                  {t(label, language)}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {messageSection === "conversations" && !savedHistoryVisible && !isSplitPane && (
+            <div
+              data-conversation-history-navigation="true"
+              style={conversationHistoryNavigation}
+              aria-label={t("messagesSecondaryActionsAria", language)}
+            >
               <button
                 type="button"
-                style={searchClearButton}
-                onClick={() => setSearchQuery("")}
-                aria-label={t("messagesSearchClear")}
+                style={savedHistorySecondaryButton}
+                className="meetro-visual-surface"
+                onClick={() =>
+                  openRelationshipAction(
+                    SAVED_HISTORY_ACTION[0],
+                    t(SAVED_HISTORY_ACTION[1], language)
+                  )
+                }
               >
-                ×
+                <span style={savedHistorySecondaryTitle}>
+                  {t("messagesSavedHistoryTitle", language)}
+                </span>
+                <span style={savedHistorySecondaryMeta}>
+                  {savedHistoryQuotes.length > 0
+                    ? t("messagesSavedCount", language, {
+                        count: savedHistoryQuotes.length,
+                      })
+                    : t("messagesSavedManually", language)}
+                </span>
               </button>
-            )}
-          </div>
+            </div>
+          )}
 
           {isSplitPane &&
             !isWideWorkspace &&
@@ -4959,7 +5871,7 @@ function MessagesInbox({ setPage, currentPage }) {
                             <img
                               src={relationship.avatar}
                               alt={relationship.name}
-                              style={avatarImage}
+                              style={getIdentityAvatarImageStyle(relationship, activeViewerRole)}
                             />
                           ) : (
                             relationship.initials
@@ -5044,7 +5956,7 @@ function MessagesInbox({ setPage, currentPage }) {
         >
           <div style={relationshipPanelHeader}>
             <div style={relationshipPanelHeaderText}>
-              <p style={filterEyebrow}>{t("messagesRelationships", language)}</p>
+              <p style={filterEyebrow}>{t("messagesSectionContacts", language)}</p>
               <h2 style={relationshipPanelTitle}>{t("messagesImportContacts", language)}</h2>
               <p style={relationshipSubtitle}>
                 {t("messagesImportDescription", language)}
@@ -5094,7 +6006,7 @@ function MessagesInbox({ setPage, currentPage }) {
                 >
                   {CONTACT_IMPORT_TYPE_OPTIONS.map((option) => (
                     <option key={option.id} value={option.id}>
-                      {t(`messagesContactType_${option.id}`, language)}
+                      {option.label}
                     </option>
                   ))}
                 </select>
@@ -5193,9 +6105,20 @@ function MessagesInbox({ setPage, currentPage }) {
                         >
                           {CONTACT_IMPORT_TYPE_OPTIONS.map((option) => (
                             <option key={option.id} value={option.id}>
-                              {t(`messagesContactType_${option.id}`, language)}
+                              {option.label}
                             </option>
                           ))}
+                        </select>
+                        <select
+                          value={contact.partyType || "PERSON"}
+                          onChange={(event) =>
+                            updateImportedContact(contact.id, "partyType", event.target.value)
+                          }
+                          style={contactImportTypeSelect}
+                          aria-label={`Party type for ${contact.name || contact.email || contact.phone}`}
+                        >
+                          <option value="PERSON">Person</option>
+                          <option value="ORGANIZATION">Organization</option>
                         </select>
                       </div>
                     ))}
@@ -5224,9 +6147,10 @@ function MessagesInbox({ setPage, currentPage }) {
                   const typeOption = CONTACT_IMPORT_TYPE_OPTIONS.find(
                     (option) => option.id === contact.type
                   );
-                  const typeLabel = typeOption
-                    ? t(`messagesContactType_${typeOption.id}`, language)
-                    : t("messagesRelationship", language);
+                  const typeLabel = typeOption?.label || t("messagesRelationship", language);
+                  const failure = contactImport.importFailures?.find(
+                    (item) => item.source.id === contact.id
+                  );
 
                   return (
                     <div key={contact.id} style={contactImportReviewRow}>
@@ -5236,7 +6160,7 @@ function MessagesInbox({ setPage, currentPage }) {
                       >
                         <strong>{contact.name || contact.email || contact.phone}</strong>
                         <span>
-                          {typeLabel}
+                          {typeLabel} · {contact.partyType === "ORGANIZATION" ? "Organization" : "Person"}
                           {[contact.phone, contact.email, contact.address]
                             .filter(Boolean)
                             .length
@@ -5245,6 +6169,9 @@ function MessagesInbox({ setPage, currentPage }) {
                                 .join(" · ")}`
                             : ""}
                         </span>
+                        {failure && (
+                          <span role="alert">Not saved: {failure.message}</span>
+                        )}
                       </span>
                     </div>
                   );
@@ -5261,8 +6188,8 @@ function MessagesInbox({ setPage, currentPage }) {
                 </button>
                 <button
                   type="button"
-                  disabled={selectedImportContacts.length === 0}
-                  aria-disabled={selectedImportContacts.length === 0}
+                  disabled={selectedImportContacts.length === 0 || businessContactSaving}
+                  aria-disabled={selectedImportContacts.length === 0 || businessContactSaving}
                   style={{
                     ...relationshipPrimaryAction,
                     ...(selectedImportContacts.length === 0
@@ -5271,7 +6198,7 @@ function MessagesInbox({ setPage, currentPage }) {
                   }}
                   onClick={saveContactImport}
                 >
-                  {t("messagesImportContacts", language)}
+                  {businessContactSaving ? "Saving…" : t("messagesImportContacts", language)}
                 </button>
               </div>
             </div>
@@ -5444,6 +6371,19 @@ function MessagesInbox({ setPage, currentPage }) {
               </label>
             ) : (
               <>
+                {relationshipComposer.section === "contacts" && (
+                  <label style={relationshipField}>
+                    <span>Person or organization</span>
+                    <select
+                      value={relationshipComposer.partyType}
+                      onChange={(event) => updateRelationshipComposer("partyType", event.target.value)}
+                      style={relationshipInput}
+                    >
+                      <option value="PERSON">Person</option>
+                      <option value="ORGANIZATION">Organization</option>
+                    </select>
+                  </label>
+                )}
                 <label style={relationshipField}>
                   <span>{t("messagesName", language)}</span>
                   <input
@@ -5494,8 +6434,15 @@ function MessagesInbox({ setPage, currentPage }) {
               </>
             )}
 
-            <button type="submit" style={relationshipPrimaryAction}>
-              {relationshipComposer.type === "invite"
+            <button
+              type="submit"
+              disabled={businessContactSaving}
+              aria-disabled={businessContactSaving}
+              style={relationshipPrimaryAction}
+            >
+              {businessContactSaving
+                ? "Saving…"
+                : relationshipComposer.type === "invite"
                 ? t("messagesStartInvite", language)
                 : relationshipComposer.type === "space"
                 ? t("messagesStartConversation", language)
@@ -5596,7 +6543,7 @@ function MessagesInbox({ setPage, currentPage }) {
         </section>
       )}
 
-      {savedHistoryOpen && (
+      {savedHistoryVisible && (
         <section
           style={relationshipPanel}
           aria-label={t("messagesSavedHistoryTitle", language)}
@@ -5649,20 +6596,141 @@ function MessagesInbox({ setPage, currentPage }) {
         </section>
       )}
 
-      {!savedHistoryOpen && (
+      {!savedHistoryVisible && (
       <div
         data-communication-columns={isWideWorkspace ? "three" : isSplitPane ? "two" : "one"}
+        data-communication-route-thread={
+          isNarrowRoutedThread ? "narrow" : undefined
+        }
+        data-communication-wide-emergency={
+          isExtraWideEmergencyWorkspace ? "true" : undefined
+        }
         style={
-          isSplitPane
+          shouldKeepEmbeddedThread
             ? {
                 ...splitShell,
+                ...(isNarrowRoutedThread
+                  ? narrowRoutedThreadShell
+                  : {}),
                 ...(isWideWorkspace ? wideWorkspaceShell : {}),
+                ...(isWideWorkspace && activeEmergencyContextMatchesConversation
+                  ? emergencyWorkspaceShell : {}),
+                ...(isExtraWideEmergencyWorkspace
+                  ? extraWideEmergencyWorkspaceShell
+                  : {}),
               }
             : undefined
         }
       >
-        <div style={isSplitPane ? splitListPane : undefined}>
-          {(messageSection === "contacts" ? searchedRelationships : searchedVisibleQuotes).length === 0 && (
+        <div
+          data-communication-list-pane="true"
+          style={isSplitPane ? splitListPane : undefined}
+        >
+          {messageSection === "conversations" && isSplitPane && (
+            <div style={splitInboxTools}>
+              <div style={splitInboxSearchWrap}>
+                <label
+                  style={splitInboxSearchLabel}
+                  htmlFor="messages-search-split"
+                >
+                  <MeetroIcon
+                    name="discover"
+                    size={17}
+                    decorative
+                  />
+
+                  <input
+                    id="messages-search-split"
+                    className="messages-contact-search-input"
+                    value={searchQuery}
+                    onChange={(event) =>
+                      setSearchQuery(event.target.value)
+                    }
+                    placeholder={getMessageSearchPlaceholder()}
+                    style={searchInput}
+                  />
+                </label>
+
+                {searchQuery && (
+                  <button
+                    type="button"
+                    style={splitInboxSearchClearButton}
+                    onClick={() => setSearchQuery("")}
+                    aria-label={t("messagesSearchClear")}
+                  >
+                    ×
+                  </button>
+                )}
+              </div>
+
+              <div
+                data-conversation-history-navigation="true"
+                style={splitInboxHistoryNavigation}
+                aria-label={t(
+                  "messagesSecondaryActionsAria",
+                  language
+                )}
+              >
+                <button
+                  type="button"
+                  style={splitInboxHistoryButton}
+                  className="meetro-visual-surface"
+                  onClick={() =>
+                    openRelationshipAction(
+                      SAVED_HISTORY_ACTION[0],
+                      t(
+                        SAVED_HISTORY_ACTION[1],
+                        language
+                      )
+                    )
+                  }
+                >
+                  <span style={savedHistorySecondaryTitle}>
+                    {t(
+                      "messagesSavedHistoryTitle",
+                      language
+                    )}
+                  </span>
+
+                  <span style={savedHistorySecondaryMeta}>
+                    {savedHistoryQuotes.length > 0
+                      ? t(
+                          "messagesSavedCount",
+                          language,
+                          {
+                            count:
+                              savedHistoryQuotes.length,
+                          }
+                        )
+                      : t(
+                          "messagesSavedManually",
+                          language
+                        )}
+                  </span>
+
+                  <span
+                    aria-hidden="true"
+                    style={splitInboxHistoryArrow}
+                  >
+                    ›
+                  </span>
+                </button>
+              </div>
+            </div>
+          )}
+
+          {messageSection === "contacts" && businessContactsLoading && (
+            <div role="status" aria-live="polite" style={relationshipNoticeCard}>
+              Loading saved business Contacts…
+            </div>
+          )}
+          {(!businessContactsLoading || messageSection !== "contacts") &&
+            (messageSection === "contacts"
+              ? searchedRelationships.length
+              : searchedVisibleQuotes.length +
+                (messageSection === "conversations"
+                  ? unresolvedRequesterResponses.length
+                  : 0)) === 0 && (
             <div style={emptyCard} className="meetro-visual-empty-state meetro-visual-surface">
               <div style={emptyIcon} aria-hidden="true">MSG</div>
 
@@ -5685,6 +6753,49 @@ function MessagesInbox({ setPage, currentPage }) {
               )}
             </div>
           )}
+
+          {messageSection === "conversations" &&
+            activeAccountMode === "personal" &&
+            unresolvedRequesterResponses.length > 0 && (
+              <section
+                style={requestResponseSection}
+                aria-labelledby="request-response-inbox-title"
+              >
+                <div style={requestResponseHeader}>
+                  <h2 id="request-response-inbox-title" style={requestResponseTitle}>
+                    {requesterResponseLabels.title}
+                  </h2>
+                  <span style={requestResponseCount}>
+                    {requesterResponseLabels.count(unresolvedRequesterResponses.length)}
+                  </span>
+                </div>
+
+                {unresolvedRequesterResponses.map((response) => (
+                  <article
+                    key={response.responseId}
+                    style={requestResponseCard}
+                    className="meetro-visual-surface"
+                  >
+                    <strong style={requestResponseBusiness}>
+                      {requesterResponseLabels.responded(response.businessName)}
+                    </strong>
+                    <span style={requestResponseRequestTitle}>
+                      {response.requestTitle || requesterResponseLabels.fallbackRequest}
+                    </span>
+                    {response.introductionText && (
+                      <p style={requestResponseText}>{response.introductionText}</p>
+                    )}
+                    <button
+                      type="button"
+                      style={requestResponseAction}
+                      onClick={() => reviewRequesterResponse(response)}
+                    >
+                      {requesterResponseLabels.review}
+                    </button>
+                  </article>
+                ))}
+              </section>
+            )}
 
 	          <div style={conversationList}>
 	            {messageSection !== "contacts" ? (
@@ -5750,7 +6861,7 @@ function MessagesInbox({ setPage, currentPage }) {
                     <img
                       src={rowIdentity.avatar}
                       alt={rowIdentity.displayName}
-                      style={avatarImage}
+                      style={getIdentityAvatarImageStyle(rowIdentity, activeViewerRole)}
                     />
                   ) : (
                     rowIdentity.initials
@@ -5760,8 +6871,14 @@ function MessagesInbox({ setPage, currentPage }) {
                 <div style={conversationRowBody}>
                   <div style={conversationRowTop}>
                     <div style={conversationRowTitleBlock}>
-                      <h2 style={conversationRowName}>{rowIdentity.displayName}</h2>
-                      <p style={conversationRowMeta}>
+                      <h2 style={{
+                        ...conversationRowName,
+                        ...(isSplitPane ? splitConversationRowText : {}),
+                      }}>{rowIdentity.displayName}</h2>
+                      <p style={{
+                        ...conversationRowMeta,
+                        ...(isSplitPane ? splitConversationRowText : {}),
+                      }}>
                         {inactiveImportedContact
                           ? rowIdentity.typeLabel
                           : [
@@ -5785,13 +6902,17 @@ function MessagesInbox({ setPage, currentPage }) {
                   </div>
 
                   <div style={conversationRowBottom}>
-                    <p style={conversationRowPreview}>
+                    <p style={{
+                        ...conversationRowPreview,
+                        ...(isSplitPane ? splitConversationRowText : {}),
+                      }}>
                       {getRelationshipPreviewText(relationship)}
                     </p>
                     {statusChip && (
                       <span
                         style={{
                           ...conversationStatusChip,
+                          ...(isSplitPane ? splitConversationStatusChip : {}),
                           ...(hasEmergencyConversation ? emergencyStatusBadge : {}),
                           ...((counts.unread || 0) > 0 ? unreadStatusBadge : {}),
                         }}
@@ -5805,31 +6926,13 @@ function MessagesInbox({ setPage, currentPage }) {
 	              );
 	            })}
 	          </div>
-
-          <div style={messagesSecondaryActions} aria-label={t("messagesSecondaryActionsAria", language)}>
-	            <button
-	              type="button"
-	              style={savedHistorySecondaryButton}
-                className="meetro-visual-surface"
-	              onClick={() =>
-                    openRelationshipAction(
-                      SAVED_HISTORY_ACTION[0],
-                      t(SAVED_HISTORY_ACTION[1], language)
-                    )
-                  }
-	            >
-              <span style={savedHistorySecondaryTitle}>{t("messagesSavedHistoryTitle", language)}</span>
-	              <span style={savedHistorySecondaryMeta}>
-	                {savedHistoryQuotes.length > 0
-                  ? t("messagesSavedCount", language, { count: savedHistoryQuotes.length })
-                  : t("messagesSavedManually", language)}
-	              </span>
-	            </button>
-	          </div>
 	        </div>
 
-        {isSplitPane && (
-          <div style={splitThreadPane}>
+        {shouldKeepEmbeddedThread && (
+          <div
+            data-communication-thread-pane="true"
+            style={splitThreadPane}
+          >
             {activeSplitConversation ? (
               <ConversationThread
                 canonicalConversationId={activeSplitCanonicalConversationId}
@@ -5840,6 +6943,12 @@ function MessagesInbox({ setPage, currentPage }) {
                 emergencyContextMode={isWideWorkspace ? "panel" : "stacked"}
                 onCanonicalEmergencyContextChange={
                   handleCanonicalEmergencyContextChange
+                }
+                communicationContextMode={
+                  isWideWorkspace ? "column" : "inline"
+                }
+                onCanonicalWorkContextChange={
+                  handleCanonicalWorkContextChange
                 }
                 setPage={handleSplitThreadPageChange}
               />
@@ -5922,11 +7031,34 @@ const splitShell = {
   overflow: "hidden",
 };
 
+const narrowRoutedThreadShell = {
+  gridTemplateColumns: "minmax(0, 1fr)",
+  gap: 0,
+};
+
 const wideWorkspaceShell = {
   gridTemplateColumns:
-    "minmax(280px, 0.28fr) minmax(420px, 0.44fr) minmax(280px, 0.28fr)",
+    "minmax(230px, 0.8fr) minmax(390px, 1.35fr) minmax(270px, 1fr)",
   gap: "20px",
   height: "min(780px, calc(100dvh - 300px))",
+  maxWidth: "1240px",
+  margin: "0 auto",
+};
+
+const emergencyWorkspaceShell = {
+  gridTemplateColumns:
+    "minmax(190px, 0.75fr) minmax(350px, 1.35fr) minmax(260px, 1fr)",
+  gap: "12px",
+  maxWidth: "1180px",
+  margin: "0 auto",
+};
+
+const extraWideEmergencyWorkspaceShell = {
+  gridTemplateColumns:
+    "clamp(300px, 20vw, 360px) minmax(48px, 1fr) minmax(390px, 420px) minmax(340px, 400px)",
+  gap: "12px",
+  maxWidth: "1420px",
+  margin: "0 auto 0 0",
 };
 
 const compactContextToggle = {
@@ -6212,9 +7344,9 @@ const messagesHubHeader = {
   display: "flex",
   alignItems: "center",
   justifyContent: "space-between",
-  gap: "14px",
-  marginBottom: "12px",
-  padding: "2px 2px 0",
+  gap: "20px",
+  marginBottom: "18px",
+  padding: "4px 2px 0",
   boxSizing: "border-box",
   overflow: "visible",
   position: "relative",
@@ -6223,11 +7355,11 @@ const messagesHubHeader = {
 
 const messagesHubTitle = {
   margin: 0,
-  color: "#0f172a",
-  fontSize: "clamp(26px, 8vw, 32px)",
-  lineHeight: 1.05,
-  fontWeight: "950",
-  letterSpacing: 0,
+  color: "#123e29",
+  fontSize: "clamp(28px, 4vw, 34px)",
+  lineHeight: 1.04,
+  fontWeight: "900",
+  letterSpacing: "-0.035em",
   minWidth: 0,
   maxWidth: "100%",
   overflowWrap: "normal",
@@ -6235,16 +7367,22 @@ const messagesHubTitle = {
 };
 
 const messageSectionNavigation = {
+  ...glassNavigationSurface,
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
   display: "grid",
   gridTemplateColumns: "auto minmax(0, 1fr)",
-  gap: "9px",
+  gap: "6px",
   alignItems: "center",
-  marginBottom: "12px",
+  marginBottom: "18px",
+  padding: "6px",
+  borderRadius: "17px",
   boxSizing: "border-box",
-  overflow: "hidden",
+  overflow: "visible",
+  background: "rgba(255, 255, 255, 0.84)",
+  border: "1px solid rgba(38, 87, 57, 0.10)",
+  boxShadow: "0 8px 24px rgba(19, 63, 40, 0.045)",
 };
 
 const messageSectionTabs = {
@@ -6269,37 +7407,52 @@ const messageSectionTabs = {
 const communicationSectionTabs = {
   ...messageSectionTabs,
   marginBottom: 0,
+  padding: 0,
+  gap: "6px",
+  border: "none",
+  borderRadius: "11px",
+  background: "transparent",
+  boxShadow: "none",
+  backdropFilter: "none",
+  WebkitBackdropFilter: "none",
 };
 
 const messageSectionTab = {
   ...glassPill,
-  flex: "0 0 auto",
-  minWidth: "108px",
-  minHeight: "36px",
-  borderRadius: "999px",
-  color: "#475569",
-  padding: "8px 11px",
+  flex: "1 1 0",
+  minWidth: "0",
+  minHeight: "40px",
+  borderRadius: "11px",
+  color: "#31533f",
+  padding: "9px 14px",
   display: "grid",
   gridTemplateColumns: "minmax(0, auto) auto",
   alignContent: "center",
   justifyContent: "center",
   alignItems: "center",
-  gap: "6px",
-  fontSize: "12px",
-  fontWeight: "900",
+  gap: "7px",
+  fontSize: "13px",
+  fontWeight: "850",
   cursor: "pointer",
   boxSizing: "border-box",
   overflow: "hidden",
+  border: "1px solid transparent",
+  background: "transparent",
+  boxShadow: "none",
 };
 
 const contactsDirectoryTab = {
-  minWidth: "104px",
+  minWidth: 0,
+  width: "100%",
   marginBottom: 0,
 };
 
 const activeMessageSectionTab = {
   ...glassPillActive,
   color: "#ffffff",
+  background: "linear-gradient(135deg, #185f3a, #0c4d2d)",
+  borderColor: "transparent",
+  boxShadow: "0 7px 17px rgba(15, 82, 47, 0.17)",
 };
 
 const messageSectionTabLabel = {
@@ -6321,6 +7474,17 @@ const messageSectionTabCount = {
   padding: "0 5px",
   fontSize: "9px",
   lineHeight: 1,
+};
+
+const messageSectionAttentionCount = {
+  minWidth: "20px",
+  height: "20px",
+  padding: "0 6px",
+  background: "#dc2626",
+  color: "#ffffff",
+  fontSize: "10px",
+  fontWeight: "950",
+  boxShadow: "0 0 0 2px rgba(220,38,38,0.12)",
 };
 
 const messageSectionContext = {
@@ -6402,10 +7566,14 @@ const relationshipAddButton = {
 
 const relationshipNewChatButton = {
   ...relationshipAddButton,
-  background: "var(--meetro-surface-paper, rgba(255,253,248,0.94))",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
-  boxShadow: "var(--meetro-shadow-soft, 0 10px 24px rgba(15,23,42,0.08))",
+  minHeight: "44px",
+  maxWidth: "min(220px, calc(100vw - 170px))",
+  padding: "10px 16px",
+  borderRadius: "12px",
+  background: "linear-gradient(135deg, #185f3a, #0b4e2d)",
+  color: "#ffffff",
+  border: "1px solid rgba(12, 78, 45, 0.22)",
+  boxShadow: "0 9px 22px rgba(15, 82, 47, 0.16)",
 };
 
 const sectionActionIcon = {
@@ -6886,6 +8054,102 @@ const searchWrap = {
   minWidth: 0,
 };
 
+const splitInboxTools = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "grid",
+  gap: "8px",
+  marginBottom: "12px",
+  boxSizing: "border-box",
+};
+
+const splitInboxSearchWrap = {
+  position: "relative",
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+};
+
+const splitInboxSearchLabel = {
+  ...glassField,
+  width: "100%",
+  minHeight: "43px",
+  display: "flex",
+  alignItems: "center",
+  gap: "9px",
+  borderRadius: "13px",
+  padding: "0 40px 0 12px",
+  boxSizing: "border-box",
+  color: "#66776d",
+  background: "rgba(255,255,255,0.86)",
+  border: "1px solid rgba(38,87,57,0.12)",
+  boxShadow: "none",
+};
+
+const splitInboxSearchClearButton = {
+  position: "absolute",
+  top: "50%",
+  right: "8px",
+  transform: "translateY(-50%)",
+  width: "28px",
+  height: "28px",
+  border: "none",
+  borderRadius: "999px",
+  background: "#eef4ef",
+  color: "#31533f",
+  fontSize: "18px",
+  fontWeight: "900",
+  lineHeight: 1,
+  cursor: "pointer",
+};
+
+const splitInboxHistoryNavigation = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "grid",
+  boxSizing: "border-box",
+};
+
+const savedHistorySecondaryButton = {
+  ...glassPill,
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  border: "1px solid rgba(148,163,184,0.18)",
+  borderRadius: "18px",
+  color: "#475569",
+  padding: "12px 13px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "12px",
+  textAlign: "left",
+  cursor: "pointer",
+  boxSizing: "border-box",
+  overflow: "hidden",
+};
+
+const splitInboxHistoryButton = {
+  ...savedHistorySecondaryButton,
+  minHeight: "43px",
+  borderRadius: "13px",
+  padding: "9px 11px",
+  gap: "8px",
+  background: "rgba(255,255,255,0.78)",
+  border: "1px solid rgba(38,87,57,0.10)",
+  boxShadow: "none",
+};
+
+const splitInboxHistoryArrow = {
+  flex: "0 0 auto",
+  color: "#17623a",
+  fontSize: "22px",
+  lineHeight: 1,
+  fontWeight: "800",
+};
+
 const searchLabel = {
   ...glassField,
   width: "100%",
@@ -6925,6 +8189,54 @@ const searchClearButton = {
   fontWeight: "900",
   lineHeight: 1,
   cursor: "pointer",
+};
+
+const contactStatusNavigation = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px",
+  marginBottom: "12px",
+  padding: "4px",
+  borderRadius: "18px",
+  background: "rgba(255,255,255,0.62)",
+  border: "1px solid rgba(148,163,184,0.18)",
+  boxSizing: "border-box",
+  overflow: "hidden",
+};
+
+const contactStatusButton = {
+  ...glassPill,
+  flex: "1 1 120px",
+  minWidth: 0,
+  minHeight: "38px",
+  border: "1px solid transparent",
+  borderRadius: "14px",
+  padding: "8px 12px",
+  color: "#475569",
+  fontSize: "13px",
+  fontWeight: "900",
+  cursor: "pointer",
+  boxSizing: "border-box",
+};
+
+const activeContactStatusButton = {
+  background: "var(--meetro-color-forest, #1f4d34)",
+  borderColor: "var(--meetro-color-forest, #1f4d34)",
+  color: "#ffffff",
+  boxShadow: "0 8px 18px rgba(31,77,52,0.16)",
+};
+
+const conversationHistoryNavigation = {
+  width: "100%",
+  maxWidth: "100%",
+  minWidth: 0,
+  display: "grid",
+  marginBottom: "12px",
+  boxSizing: "border-box",
+  overflow: "hidden",
 };
 
 const filterEyebrow = {
@@ -7117,6 +8429,31 @@ const relationshipField = {
   overflowWrap: "anywhere",
 };
 
+const relationshipRoleFieldset = {
+  minWidth: 0,
+  margin: 0,
+  padding: "10px 12px 12px",
+  border: "1px solid rgba(148,163,184,0.32)",
+  borderRadius: "14px",
+  color: "#475569",
+  fontSize: "12px",
+  fontWeight: "900",
+};
+
+const relationshipRoleOptions = {
+  display: "flex",
+  flexWrap: "wrap",
+  gap: "8px 14px",
+  marginTop: "6px",
+};
+
+const relationshipRoleOption = {
+  display: "inline-flex",
+  alignItems: "center",
+  gap: "6px",
+  minWidth: 0,
+};
+
 const relationshipInput = {
   width: "100%",
   maxWidth: "100%",
@@ -7304,35 +8641,6 @@ const conversationList = {
   overflowX: "hidden",
 };
 
-const messagesSecondaryActions = {
-  width: "100%",
-  maxWidth: "100%",
-  minWidth: 0,
-  display: "grid",
-  gap: "8px",
-  marginTop: "14px",
-  paddingBottom: "4px",
-  overflowX: "hidden",
-};
-
-const savedHistorySecondaryButton = {
-  ...glassPill,
-  width: "100%",
-  maxWidth: "100%",
-  minWidth: 0,
-  border: "1px solid rgba(148,163,184,0.18)",
-  borderRadius: "18px",
-  color: "#475569",
-  padding: "12px 13px",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "space-between",
-  gap: "12px",
-  textAlign: "left",
-  cursor: "pointer",
-  boxSizing: "border-box",
-  overflow: "hidden",
-};
 
 const savedHistorySecondaryTitle = {
   minWidth: 0,
@@ -7508,11 +8816,38 @@ const conversationStatusChip = {
   flexShrink: 0,
 };
 
+const splitConversationRowText = {
+  whiteSpace: "normal",
+  overflow: "visible",
+  textOverflow: "clip",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+};
+
+const splitConversationStatusChip = {
+  whiteSpace: "normal",
+  maxWidth: "55%",
+  overflow: "visible",
+  textOverflow: "clip",
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  textAlign: "right",
+  lineHeight: 1.25,
+};
+
 const avatarImage = {
   width: "100%",
   height: "100%",
   objectFit: "cover",
   display: "block",
+};
+
+const businessLogoAvatarImage = {
+  ...avatarImage,
+  objectFit: "contain",
+  padding: "3px",
+  boxSizing: "border-box",
+  background: "#ffffff",
 };
 
 const splitAvatarCircle = {
@@ -7548,6 +8883,73 @@ const emergencyStatusBadge = {
   background: "rgba(239,68,68,0.12)",
   color: "#dc2626",
   border: "1px solid rgba(239,68,68,0.18)",
+};
+
+const requestResponseSection = {
+  display: "grid",
+  gap: "10px",
+  marginBottom: "14px",
+};
+
+const requestResponseHeader = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "space-between",
+  gap: "10px",
+};
+
+const requestResponseTitle = {
+  margin: 0,
+  color: "var(--meetro-color-charcoal, #172317)",
+  fontSize: "16px",
+};
+
+const requestResponseCount = {
+  borderRadius: "999px",
+  padding: "5px 9px",
+  background: "#eef2ff",
+  color: "#4338ca",
+  fontSize: "11px",
+  fontWeight: "900",
+};
+
+const requestResponseCard = {
+  display: "grid",
+  gap: "8px",
+  padding: "14px",
+  borderRadius: "18px",
+  border: "1px solid rgba(99, 102, 241, 0.18)",
+  background: "#ffffff",
+};
+
+const requestResponseBusiness = {
+  color: "var(--meetro-color-charcoal, #172317)",
+  fontSize: "14px",
+};
+
+const requestResponseRequestTitle = {
+  color: "var(--meetro-color-wood, #b7791f)",
+  fontSize: "13px",
+  fontWeight: "800",
+};
+
+const requestResponseText = {
+  margin: 0,
+  color: "var(--meetro-color-muted, #5f6b63)",
+  fontSize: "13px",
+  lineHeight: 1.45,
+};
+
+const requestResponseAction = {
+  justifySelf: "start",
+  minHeight: "42px",
+  padding: "9px 13px",
+  border: 0,
+  borderRadius: "12px",
+  background: "var(--meetro-color-charcoal, #172317)",
+  color: "#ffffff",
+  fontWeight: "900",
+  cursor: "pointer",
 };
 
 export default MessagesInbox;

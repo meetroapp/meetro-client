@@ -1,3 +1,10 @@
+import {
+  CANONICAL_CONVERSATION_COMMUNICATION_SHELL,
+  buildCanonicalConversationRoute,
+  normalizeCanonicalConversationId,
+  parseCanonicalConversationRoute,
+} from "./canonicalConversationMessaging.js";
+
 export const CONVERSATION_ORIGIN_CONTEXT_KEY = "meetroConversationOriginContext";
 
 function safeParse(value, fallback = null) {
@@ -11,8 +18,21 @@ function safeParse(value, fallback = null) {
 export function captureConversationOriginContext(extra = {}) {
   if (typeof localStorage === "undefined") return null;
 
-  const conversationId = localStorage.getItem("activeConversationId") || "";
+  const route = parseCanonicalConversationRoute(
+    typeof window === "undefined" ? "" : window.location?.hash || ""
+  );
+  const conversationId =
+    (route.valid && route.conversationId) ||
+    normalizeCanonicalConversationId(
+      localStorage.getItem("activeConversationId") || ""
+    );
   if (!conversationId) return null;
+
+  const conversationShell =
+    route.shell === CANONICAL_CONVERSATION_COMMUNICATION_SHELL ||
+    extra.sourcePage === "messagesInbox"
+      ? CANONICAL_CONVERSATION_COMMUNICATION_SHELL
+      : "";
 
   const context = {
     origin: "conversation",
@@ -20,8 +40,12 @@ export function captureConversationOriginContext(extra = {}) {
     activeConversationName: localStorage.getItem("activeConversationName") || "",
     conversationType: localStorage.getItem("meetroConversationType") || "standard",
     selectedConversation: safeParse(localStorage.getItem("selectedConversation"), null),
-    conversationReturnPage: localStorage.getItem("conversationReturnPage") || "",
+    conversationReturnPage:
+      route.returnPage ||
+      localStorage.getItem("conversationReturnPage") ||
+      "",
     returnPage: localStorage.getItem("returnPage") || "",
+    conversationShell,
     accountMode: localStorage.getItem("activeAccountMode") || localStorage.getItem("accountMode") || "",
     viewerRole: extra.viewerRole || "",
     scrollY:
@@ -49,7 +73,20 @@ export function restoreConversationOriginContext(setPage) {
   const context = getConversationOriginContext();
   if (!context) return false;
 
-  localStorage.setItem("activeConversationId", String(context.conversationId));
+  const conversationId = normalizeCanonicalConversationId(
+    context.conversationId
+  );
+  if (!conversationId) return false;
+
+  const returnPage =
+    context.conversationReturnPage || context.returnPage || "messagesInbox";
+  const conversationShell =
+    context.conversationShell ===
+    CANONICAL_CONVERSATION_COMMUNICATION_SHELL
+      ? CANONICAL_CONVERSATION_COMMUNICATION_SHELL
+      : undefined;
+
+  localStorage.setItem("activeConversationId", String(conversationId));
   localStorage.setItem("activeConversationName", context.activeConversationName || "");
   localStorage.setItem("meetroConversationType", context.conversationType || "standard");
 
@@ -57,12 +94,16 @@ export function restoreConversationOriginContext(setPage) {
     localStorage.setItem("selectedConversation", JSON.stringify(context.selectedConversation));
   }
 
-  localStorage.setItem("conversationReturnPage", context.conversationReturnPage || context.returnPage || "messagesInbox");
-  localStorage.setItem("returnPage", context.returnPage || context.conversationReturnPage || "messagesInbox");
+  localStorage.setItem("conversationReturnPage", returnPage);
+  localStorage.setItem("returnPage", context.returnPage || returnPage);
   localStorage.removeItem(CONVERSATION_ORIGIN_CONTEXT_KEY);
 
   if (typeof setPage === "function") {
-    setPage("conversationThread");
+    setPage(
+      buildCanonicalConversationRoute(conversationId, returnPage, {
+        shell: conversationShell,
+      })
+    );
   }
 
   return true;

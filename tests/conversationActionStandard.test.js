@@ -53,15 +53,16 @@ test("conversation actions use one presentation-only three-stage standard", () =
   );
 });
 
-test("active Emergency, Project, Quote, and Invoice actions continue the relationship", () => {
+test("active relationship actions use their approved presentation language", () => {
   assert.match(
     myRequestsSource,
     /HISTORY_EMERGENCY_SUMMARY_STATUSES\.includes\([\s\S]*CONVERSATION_ACTION_STAGE\.HISTORY[\s\S]*CONVERSATION_ACTION_STAGE\.ACTIVE/
   );
   assert.match(
     emergencyDetailSource,
-    /detail\.completed[\s\S]*CONVERSATION_ACTION_STAGE\.HISTORY[\s\S]*CONVERSATION_ACTION_STAGE\.ACTIVE/
+    /detail\.completed[\s\S]*CONVERSATION_ACTION_STAGE\.HISTORY[\s\S]*copy\.messageProfessional/
   );
+  assert.match(emergencyDetailSource, /messageProfessional: "Message Professional"/);
   assert.match(
     projectDetailsSource,
     /CONVERSATION_ACTION_STAGE\.ACTIVE/
@@ -76,15 +77,13 @@ test("active Emergency, Project, Quote, and Invoice actions continue the relatio
   assert.equal(t("openProjectConversation", "en"), "Continue Conversation");
 });
 
-test("completed Emergency, Job History, and closed Project actions review history", () => {
-  assert.match(
-    completedJobSource,
-    /CONVERSATION_ACTION_STAGE\.HISTORY/
-  );
+test("completed Emergency retains history action while unverified Job History stays unavailable", () => {
   assert.match(
     emergencyCompletionSource,
     /CONVERSATION_ACTION_STAGE\.HISTORY/
   );
+  assert.match(completedJobSource, /completedHistoryNoMutationNotice/);
+  assert.doesNotMatch(completedJobSource, /CONVERSATION_ACTION_STAGE|openProjectConversation/);
   assert.equal(
     getConversationActionLabel(CONVERSATION_ACTION_STAGE.HISTORY, "es"),
     "Revisar conversación"

@@ -409,7 +409,7 @@ test("Submit Job Request remains primary only on the Review surface", () => {
   assert.equal(t("cancelRequest", "en"), "Cancel Request");
   assert.equal(t("fullServiceAddress", "en"), "Service Address");
   assert.match(uploadSource, /id="job-request-review-card"/);
-  assert.match(uploadSource, /setActiveGuidedCard\("review"\)/);
+  assert.match(uploadSource, /setActiveGuidedCard\(firstIncompleteRequiredCard\)/);
   assert.match(uploadSource, /onSubmit=\{handleCreatePost\}/);
   assert.doesNotMatch(uploadSource, /onSubmit=\{handleReviewRequest\}/);
   assert.equal((uploadSource.match(/t\("createPost"\)/g) || []).length, 1);

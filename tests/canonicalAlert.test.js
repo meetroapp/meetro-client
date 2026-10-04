@@ -195,6 +195,22 @@ test("typed destinations accept exact canonical identities and reject navigation
     { type: "business_profile", businessProfileId: 41 },
     { type: "review", reviewId: 51 },
     { type: "notifications" },
+    { type: "job", jobId: "11111111-1111-4111-8111-111111111111" },
+    {
+      type: "visit",
+      jobId: "11111111-1111-4111-8111-111111111111",
+      visitId: "22222222-2222-4222-8222-222222222222",
+    },
+    {
+      type: "quote",
+      jobId: "11111111-1111-4111-8111-111111111111",
+      quoteId: "33333333-3333-4333-8333-333333333333",
+    },
+    {
+      type: "invoice",
+      jobId: "11111111-1111-4111-8111-111111111111",
+      invoiceId: "44444444-4444-4444-8444-444444444444",
+    },
   ];
   assert.deepEqual(destinations.map(({ type }) => type), [
     "conversation",
@@ -205,6 +221,10 @@ test("typed destinations accept exact canonical identities and reject navigation
     "business_profile",
     "review",
     "notifications",
+    "job",
+    "visit",
+    "quote",
+    "invoice",
   ]);
   for (const destination of destinations) {
     const before = structuredClone(destination);
@@ -225,6 +245,17 @@ test("typed destinations accept exact canonical identities and reject navigation
     { type: "conversation", conversationId: 91, url: "https://example.test" },
     { type: "conversation", conversationId: 91, returnPage: "home" },
     { type: "unknown", conversationId: 91 },
+    { type: "job", jobId: "bad" },
+    {
+      type: "visit",
+      jobId: "11111111-1111-4111-8111-111111111111",
+    },
+    {
+      type: "invoice",
+      jobId: "11111111-1111-4111-8111-111111111111",
+      invoiceId: "44444444-4444-4444-8444-444444444444",
+      address: "unsafe",
+    },
     {
       type: "conversation",
       conversationId: { id: 91, route: "conversationThread" },
@@ -418,12 +449,36 @@ test("counts preserve backend totals and returned categories without recalculati
       byCategory: {
         communication: { active: 2, unread: 1 },
       },
+      communication: {
+        unread: 3,
+        customerUnread: 2,
+        teamUnread: 1,
+        byJob: [{
+          businessId: 7,
+          jobId: "072c8736-5d97-4253-ba3e-dd1bce281a20",
+          customerUnread: 2,
+          teamUnread: 1,
+        }],
+        byConversation: [{ conversationId: 342, customerUnread: 2 }],
+      },
     },
   });
   assert.deepEqual(normalized.counts, {
     active: 9,
     unread: 8,
     byCategory: { communication: { active: 2, unread: 1 } },
+    communication: {
+      unread: 3,
+      customerUnread: 2,
+      teamUnread: 1,
+      byJob: [{
+        businessId: 7,
+        jobId: "072c8736-5d97-4253-ba3e-dd1bce281a20",
+        customerUnread: 2,
+        teamUnread: 1,
+      }],
+      byConversation: [{ conversationId: 342, customerUnread: 2 }],
+    },
   });
   assert.equal(Object.hasOwn(normalized.counts.byCategory, "emergency"), false);
 
@@ -479,4 +534,104 @@ test("malformed success envelopes fail closed", () => {
   assert.equal(normalizeAlertCountsResponse({ success: true, code: "WRONG", counts: {} }), null);
   assert.equal(normalizeAlertReadAllResponse({ success: true, code: "WRONG" }), null);
   assert.equal(normalizeAlertMutationResponse({ success: true, code: "WRONG" }, "ALERT_DISMISSED"), null);
+});
+
+
+test("canonical Alert counts accept exact Work Center Job and stage attention", () => {
+  const normalized = normalizeAlertCountsResponse({
+    success: true,
+    code: "ALERT_COUNTS_RETRIEVED",
+    counts: {
+      active: 4,
+      unread: 4,
+      byCategory: {
+        schedule: {
+          active: 1,
+          unread: 1,
+        },
+        payment: {
+          active: 3,
+          unread: 3,
+        },
+      },
+      communication: {
+        unread: 0,
+        customerUnread: 0,
+        teamUnread: 0,
+        byJob: [],
+        byConversation: [],
+      },
+      workCenter: {
+        unread: 4,
+        byJob: [{
+          jobId: "072c8736-5d97-4253-ba3e-dd1bce281a20",
+          requestId: 41,
+          unread: 4,
+          stages: [
+            {
+              stage: "evaluation",
+              unread: 1,
+            },
+            {
+              stage: "deposit",
+              unread: 3,
+            },
+          ],
+        }],
+      },
+    },
+  });
+
+  assert.ok(normalized);
+
+  assert.deepEqual(
+    normalized.counts.workCenter,
+    {
+      unread: 4,
+      byJob: [{
+        jobId:
+          "072c8736-5d97-4253-ba3e-dd1bce281a20",
+        requestId: 41,
+        unread: 4,
+        stages: [
+          {
+            stage: "evaluation",
+            unread: 1,
+          },
+          {
+            stage: "deposit",
+            unread: 3,
+          },
+        ],
+      }],
+    }
+  );
+});
+
+test("canonical Alert counts remain compatible before Work Center attention deployment", () => {
+  const normalized = normalizeAlertCountsResponse({
+    success: true,
+    code: "ALERT_COUNTS_RETRIEVED",
+    counts: {
+      active: 0,
+      unread: 0,
+      byCategory: {},
+      communication: {
+        unread: 0,
+        customerUnread: 0,
+        teamUnread: 0,
+        byJob: [],
+        byConversation: [],
+      },
+    },
+  });
+
+  assert.ok(normalized);
+  assert.equal(
+    Object.hasOwn(
+      normalized.counts,
+      "workCenter"
+    ),
+    false
+  );
 });

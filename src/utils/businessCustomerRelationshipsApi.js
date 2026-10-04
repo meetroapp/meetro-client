@@ -1,0 +1,474 @@
+import { authFetch } from "./authFetch.js";
+import {
+  BusinessContactApiError,
+  createBusinessContactCommandKey,
+} from "./businessContactsApi.js";
+
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function text(value) {
+  return String(value ?? "").trim();
+}
+
+function positiveInteger(value) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number > 0 ? number : null;
+}
+
+export class BusinessCustomerRelationshipApiError extends Error {
+  constructor({ status = 500, code, message } = {}) {
+    super(message || "The Customer History operation could not be completed.");
+    this.name = "BusinessCustomerRelationshipApiError";
+    this.status = status;
+    this.code = code || "BUSINESS_CUSTOMER_RELATIONSHIP_FAILED";
+  }
+}
+
+async function request(endpoint, options, { setPage, fetcher = authFetch } = {}) {
+  const result = await fetcher(endpoint, options, setPage);
+  const response = result?.response || { ok: false, status: 500 };
+  const data = result?.data || {};
+  if (!response.ok || data.success !== true) {
+    throw new BusinessCustomerRelationshipApiError({
+      status: response.status,
+      code: data.code,
+      message: data.message,
+    });
+  }
+  return data;
+}
+
+function validatedRelationship(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      !UUID_PATTERN.test(text(value.id)) ||
+      !UUID_PATTERN.test(text(value.businessContactId)) ||
+      !positiveInteger(value.contractorProfileId) ||
+      !positiveInteger(value.version)) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_RESPONSE_INVALID",
+      message: "The server returned invalid Customer History data.",
+    });
+  }
+  return Object.freeze({ ...value });
+}
+
+function validContactId(value) {
+  const id = text(value).toLowerCase();
+  if (!UUID_PATTERN.test(id)) {
+    throw new BusinessCustomerRelationshipApiError({
+      status: 400,
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_ID_INVALID",
+      message: "A valid saved Contact is required.",
+    });
+  }
+  return id;
+}
+
+function validRelationshipId(value) {
+  const id = text(value).toLowerCase();
+  if (!UUID_PATTERN.test(id)) {
+    throw new BusinessCustomerRelationshipApiError({
+      status: 400,
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_ID_INVALID",
+      message: "A valid Customer History identity is required.",
+    });
+  }
+  return id;
+}
+
+function validatedActivityItem(value, label) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_ACTIVITY_RESPONSE_INVALID",
+      message: `The server returned invalid ${label} activity.`,
+    });
+  }
+  return Object.freeze({ ...value });
+}
+
+function validatedQuoteActivityItem(value) {
+  const item = validatedActivityItem(value, "Quote");
+  const lineageType = item.lineageType || null;
+  const label = lineageType === "REVISED_QUOTE" ? "Revised" : lineageType === "SUPPLEMENTAL_QUOTE" ? "Additional" : "Original";
+  if ((lineageType && !["REVISED_QUOTE", "SUPPLEMENTAL_QUOTE"].includes(lineageType)) ||
+      (item.lineageLabel && item.lineageLabel !== label) ||
+      (item.parentQuoteId && !UUID_PATTERN.test(item.parentQuoteId))) {
+    throw new BusinessCustomerRelationshipApiError({ code: "BUSINESS_CUSTOMER_RELATIONSHIP_ACTIVITY_RESPONSE_INVALID" });
+  }
+  return Object.freeze({ ...item, parentQuoteId: item.parentQuoteId || null, lineageType, lineageLabel: label });
+}
+
+function validatedDocumentActivityItem(value) {
+  const item = validatedActivityItem(value, "document");
+  if (
+    !text(item.documentId) ||
+    !["QUOTE", "INVOICE"].includes(text(item.documentType)) ||
+    text(item.parentType) !== "JOB" ||
+    !text(item.parentId)
+  ) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_ACTIVITY_RESPONSE_INVALID",
+      message: "The server returned invalid document activity.",
+    });
+  }
+  return item;
+}
+
+function validatedMediaActivityItem(value) {
+  const item = validatedActivityItem(value, "media");
+  let secureUrl;
+  try {
+    secureUrl = new URL(text(item.secureUrl));
+  } catch {
+    secureUrl = null;
+  }
+  if (
+    !text(item.mediaId) ||
+    text(item.kind) !== "PHOTO" ||
+    text(item.mediaType) !== "IMAGE" ||
+    text(item.parentType) !== "JOB" ||
+    !text(item.parentId) ||
+    secureUrl?.protocol !== "https:" ||
+    secureUrl.hostname !== "res.cloudinary.com"
+  ) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_ACTIVITY_RESPONSE_INVALID",
+      message: "The server returned invalid media activity.",
+    });
+  }
+  return item;
+}
+
+function validatedActivity(value, relationshipId) {
+  if (!value || typeof value !== "object" || Array.isArray(value) ||
+      !value.relationship || typeof value.relationship !== "object" ||
+      text(value.relationship.id).toLowerCase() !== relationshipId ||
+      !Array.isArray(value.work) || !Array.isArray(value.quotes) ||
+      !Array.isArray(value.invoices) || !Array.isArray(value.documents) ||
+      !Array.isArray(value.media) || (value.deposits != null && !Array.isArray(value.deposits)) ||
+      (value.payments != null && !Array.isArray(value.payments)) ||
+      (value.visits != null && !Array.isArray(value.visits)) ||
+      (value.workPerformed != null && !Array.isArray(value.workPerformed))) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_ACTIVITY_RESPONSE_INVALID",
+      message: "The server returned invalid Customer History activity.",
+    });
+  }
+  return Object.freeze({
+    ...value,
+    relationship: Object.freeze({ ...value.relationship }),
+    deposits: Object.freeze((value.deposits || []).map(item => validatedActivityItem(item,"Deposit"))),
+    payments: Object.freeze((value.payments || []).map(item => validatedActivityItem(item,"Payment"))),
+    visits: Object.freeze((value.visits || []).map(item => validatedActivityItem(item, "Visit"))),
+    workPerformed: Object.freeze((value.workPerformed || []).map(item => validatedActivityItem(item, "work performed"))),
+    work: Object.freeze(value.work.map((item) => validatedActivityItem(item, "work"))),
+    quotes: Object.freeze(value.quotes.filter(item => item.status === "ISSUED" && item.issuedAt).map(validatedQuoteActivityItem)),
+    invoices: Object.freeze(value.invoices.filter(item => item.status !== "DRAFT" && item.issuedAt).map((item) => validatedActivityItem(item, "Invoice"))),
+    documents: Object.freeze(value.documents.filter(item => item.status !== "DRAFT" && item.issuedAt &&
+      (item.documentType === "QUOTE" ? value.quotes.some(q => q.quoteId === item.documentId && q.jobId === item.parentId && q.status === "ISSUED" && q.issuedAt) :
+        value.invoices.some(i => i.invoiceId === item.documentId && i.jobId === item.parentId && i.status !== "DRAFT" && i.issuedAt))).map(validatedDocumentActivityItem)),
+    media: Object.freeze(value.media.map(validatedMediaActivityItem)),
+  });
+}
+
+export function createBusinessCustomerRelationshipCommandKey(
+  cryptoProvider = globalThis.crypto
+) {
+  return createBusinessContactCommandKey(cryptoProvider);
+}
+
+export function createBusinessCustomerJobCommandKey(
+  cryptoProvider = globalThis.crypto
+) {
+  return createBusinessContactCommandKey(cryptoProvider);
+}
+
+export async function getBusinessCustomerRelationshipByContact({
+  businessContactId,
+  setPage,
+  fetcher = authFetch,
+} = {}) {
+  const contactId = validContactId(businessContactId);
+  try {
+    const data = await request(
+      `/business-customer-relationships/by-contact/${encodeURIComponent(contactId)}`,
+      { method: "GET", cache: "no-store" },
+      { setPage, fetcher }
+    );
+    return validatedRelationship(data.relationship);
+  } catch (error) {
+    if (
+      error?.status === 404 &&
+      error?.code === "BUSINESS_CUSTOMER_RELATIONSHIP_NOT_FOUND"
+    ) {
+      return null;
+    }
+    throw error;
+  }
+}
+
+export async function getBusinessCustomerRelationship({
+  relationshipId,
+  setPage,
+  fetcher = authFetch,
+} = {}) {
+  const id = validRelationshipId(relationshipId);
+  const data = await request(
+    `/business-customer-relationships/${encodeURIComponent(id)}`,
+    { method: "GET", cache: "no-store" },
+    { setPage, fetcher }
+  );
+  return validatedRelationship(data.relationship);
+}
+
+export async function getBusinessCustomerRelationshipActivity({
+  relationshipId,
+  setPage,
+  fetcher = authFetch,
+} = {}) {
+  const id = validRelationshipId(relationshipId);
+  const data = await request(
+    `/business-customer-relationships/${encodeURIComponent(id)}/activity`,
+    { method: "GET", cache: "no-store" },
+    { setPage, fetcher }
+  );
+  return validatedActivity(data.activity, id);
+}
+
+export async function listBusinessCustomerRelationships({
+  contractorProfileId,
+  limit = 100,
+  setPage,
+  fetcher = authFetch,
+} = {}) {
+  const profileId = positiveInteger(contractorProfileId);
+  const requestedLimit = positiveInteger(limit);
+  if (!profileId || !requestedLimit || requestedLimit > 200) {
+    throw new BusinessCustomerRelationshipApiError({
+      status: 400,
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_QUERY_INVALID",
+      message: "A valid business is required before loading Customer History.",
+    });
+  }
+  const params = new URLSearchParams({
+    contractorProfileId: String(profileId),
+    limit: String(requestedLimit),
+  });
+  const data = await request(
+    `/business-customer-relationships?${params.toString()}`,
+    { method: "GET", cache: "no-store" },
+    { setPage, fetcher }
+  );
+  if (!Array.isArray(data.relationships)) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_RESPONSE_INVALID",
+      message: "The server returned an invalid Customer History list.",
+    });
+  }
+  return Object.freeze(data.relationships.map(validatedRelationship));
+}
+
+export async function establishBusinessCustomerRelationship({
+  contractorProfileId,
+  businessContactId,
+  idempotencyKey,
+  setPage,
+  fetcher = authFetch,
+} = {}) {
+  const profileId = positiveInteger(contractorProfileId);
+  const contactId = validContactId(businessContactId);
+  if (!profileId || !UUID_PATTERN.test(text(idempotencyKey))) {
+    throw new BusinessCustomerRelationshipApiError({
+      status: 400,
+      code: "BUSINESS_CUSTOMER_RELATIONSHIP_INVALID",
+      message: "A valid business and retry identity are required.",
+    });
+  }
+  const data = await request(
+    "/business-customer-relationships",
+    {
+      method: "POST",
+      headers: { "Idempotency-Key": text(idempotencyKey) },
+      body: JSON.stringify({
+        contractorProfileId: profileId,
+        businessContactId: contactId,
+      }),
+    },
+    { setPage, fetcher }
+  );
+  return validatedRelationship(data.relationship);
+}
+
+
+function boundedString(value, maximum, { required = false } = {}) {
+  if (value === undefined || value === null) return required ? null : "";
+  if (typeof value !== "string") return null;
+  const normalized = value.trim();
+  if ((required && !normalized) || normalized.length > maximum) return null;
+  return normalized;
+}
+
+function normalizedCreateJobServiceLocation(value) {
+  if (value === undefined || value === null) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+
+  const allowed = new Set([
+    "mode",
+    "text",
+    "addressLine1",
+    "unitNumber",
+    "city",
+    "region",
+    "postalCode",
+    "countryCode",
+  ]);
+  if (Object.keys(value).some((key) => !allowed.has(key))) return null;
+
+  const mode = text(value.mode).toUpperCase();
+
+  if (mode === "TEXT") {
+    const locationText = boundedString(value.text, 600, { required: true });
+    const unitNumber = boundedString(value.unitNumber, 120);
+    if (
+      locationText === null ||
+      unitNumber === null ||
+      value.addressLine1 != null ||
+      value.city != null ||
+      value.region != null ||
+      value.postalCode != null ||
+      value.countryCode != null
+    ) {
+      return null;
+    }
+    return Object.freeze({
+      mode: "TEXT",
+      text: locationText,
+      ...(unitNumber ? { unitNumber } : {}),
+    });
+  }
+
+  if (mode === "STRUCTURED") {
+    const addressLine1 = boundedString(value.addressLine1, 500, { required: true });
+    const unitNumber = boundedString(value.unitNumber, 120);
+    const city = boundedString(value.city, 120, { required: true });
+    const region = boundedString(value.region, 120, { required: true });
+    const postalCode = boundedString(value.postalCode, 32, { required: true });
+    const countryCode =
+      typeof value.countryCode === "string"
+        ? value.countryCode.trim().toUpperCase()
+        : "";
+    if (
+      addressLine1 === null ||
+      unitNumber === null ||
+      city === null ||
+      region === null ||
+      postalCode === null ||
+      !/^[A-Z]{2}$/.test(countryCode) ||
+      value.text != null
+    ) {
+      return null;
+    }
+    return Object.freeze({
+      mode: "STRUCTURED",
+      addressLine1,
+      ...(unitNumber ? { unitNumber } : {}),
+      city,
+      region,
+      postalCode,
+      countryCode,
+    });
+  }
+
+  if (mode === "UNSPECIFIED" && Object.keys(value).length === 1) {
+    return Object.freeze({ mode: "UNSPECIFIED" });
+  }
+
+  return null;
+}
+
+function validatedCreatedJob(value, relationshipId) {
+  const customer = value?.customer;
+  const project = value?.project;
+  if (
+    !value ||
+    typeof value !== "object" ||
+    Array.isArray(value) ||
+    !UUID_PATTERN.test(text(value.id)) ||
+    text(value.sourceType) !== "business_customer" ||
+    !UUID_PATTERN.test(text(value.sourceId)) ||
+    !positiveInteger(value.contractorProfileId) ||
+    !customer ||
+    typeof customer !== "object" ||
+    Array.isArray(customer) ||
+    !UUID_PATTERN.test(text(customer.businessContactId)) ||
+    text(customer.customerRelationshipId).toLowerCase() !== relationshipId ||
+    !project ||
+    typeof project !== "object" ||
+    Array.isArray(project) ||
+    !text(project.title)
+  ) {
+    throw new BusinessCustomerRelationshipApiError({
+      code: "BUSINESS_CUSTOMER_JOB_RESPONSE_INVALID",
+      message: "The server returned invalid new Job data.",
+    });
+  }
+
+  return Object.freeze({
+    ...value,
+    customer: Object.freeze({ ...customer }),
+    project: Object.freeze({ ...project }),
+  });
+}
+
+export async function createBusinessCustomerJob({
+  relationshipId,
+  projectTitle,
+  projectDescription = "",
+  serviceLocation = null,
+  idempotencyKey,
+  setPage,
+  fetcher = authFetch,
+} = {}) {
+  const id = validRelationshipId(relationshipId);
+  const title = boundedString(projectTitle, 500, { required: true });
+  const description = boundedString(projectDescription, 12000);
+  const key = text(idempotencyKey).toLowerCase();
+  const location =
+    serviceLocation == null
+      ? null
+      : normalizedCreateJobServiceLocation(serviceLocation);
+
+  if (
+    title === null ||
+    description === null ||
+    !UUID_PATTERN.test(key) ||
+    (serviceLocation != null && !location)
+  ) {
+    throw new BusinessCustomerRelationshipApiError({
+      status: 400,
+      code: "BUSINESS_CUSTOMER_JOB_INVALID",
+      message: "Enter valid new Job details before creating the Job.",
+    });
+  }
+
+  const payload = {
+    projectTitle: title,
+    ...(description ? { projectDescription: description } : {}),
+    ...(location ? { serviceLocation: location } : {}),
+  };
+
+  const data = await request(
+    `/business-customer-relationships/${encodeURIComponent(id)}/jobs`,
+    {
+      method: "POST",
+      headers: { "Idempotency-Key": key },
+      body: JSON.stringify(payload),
+    },
+    { setPage, fetcher }
+  );
+
+  return validatedCreatedJob(data.job, id);
+}
+
+export { BusinessContactApiError };

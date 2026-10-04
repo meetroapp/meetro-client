@@ -1,3 +1,8 @@
+import { normalizeQuoteDeliverySnapshot } from "./quoteDeliveryApi.js";
+import { normalizeInvoiceDeliverySnapshot } from "./invoicePaymentApi.js";
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 export const CONVERSATION_THREAD_TYPES = Object.freeze({
   CANONICAL: "canonical_conversation",
   LEGACY_QUOTE_REQUEST: "legacy_quote_request",
@@ -9,6 +14,8 @@ export const CANONICAL_CONVERSATION_ROUTE_PAGE = "conversationThread";
 export const CANONICAL_CONVERSATION_ROUTE_PARAM = "conversationId";
 export const CANONICAL_CONVERSATION_RETURN_PARAM = "returnPage";
 export const CANONICAL_CONVERSATION_SHELL_PARAM = "shell";
+export const CANONICAL_CONVERSATION_INVOICE_PARAM = "invoiceId";
+export const CANONICAL_CONVERSATION_VISIT_PARAM = "visitId";
 export const CANONICAL_CONVERSATION_COMMUNICATION_SHELL =
   "communicationCenter";
 
@@ -32,6 +39,52 @@ export function normalizeCanonicalConversationId(value) {
   return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : null;
 }
 
+function normalizeCanonicalUuid(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return UUID_PATTERN.test(normalized) ? normalized : null;
+}
+
+function normalizeBoundedText(value, maxLength) {
+  return typeof value === "string"
+    ? value.trim().slice(0, maxLength)
+    : "";
+}
+
+function normalizeEmergencyRelationship(rawRelationship) {
+  const rawSource =
+    rawRelationship.source &&
+    typeof rawRelationship.source === "object" &&
+    !Array.isArray(rawRelationship.source)
+      ? rawRelationship.source
+      : {};
+
+  return {
+    id: normalizeCanonicalConversationId(rawRelationship.id),
+    emergencyRequestId: normalizeCanonicalConversationId(
+      rawRelationship.emergencyRequestId
+    ),
+    jobId: normalizeCanonicalUuid(rawRelationship.jobId),
+    title: normalizeBoundedText(rawRelationship.title, 200),
+    source:
+      rawSource.type === "emergency"
+        ? {
+            type: "emergency",
+            id: normalizeCanonicalConversationId(rawSource.id),
+            title: normalizeBoundedText(rawSource.title, 200),
+            serviceDomain: normalizeBoundedText(
+              rawSource.serviceDomain,
+              120
+            ),
+            serviceSpecialty: normalizeBoundedText(
+              rawSource.serviceSpecialty,
+              120
+            ),
+            isEmergency: rawSource.isEmergency === true,
+          }
+        : null,
+  };
+}
+
 function normalizeRouteId(value) {
   const normalized = String(value ?? "").trim();
   if (!/^[1-9]\d*$/.test(normalized)) return null;
@@ -53,12 +106,22 @@ export function parseCanonicalConversationRoute(routeValue = "") {
   const shell = String(
     params.get(CANONICAL_CONVERSATION_SHELL_PARAM) || ""
   ).trim();
+  const invoiceId = String(
+    params.get(CANONICAL_CONVERSATION_INVOICE_PARAM) || ""
+  ).trim().toLowerCase();
+  const visitId = String(
+    params.get(CANONICAL_CONVERSATION_VISIT_PARAM) || ""
+  ).trim().toLowerCase();
 
   return {
     page,
     conversationId,
     returnPage,
     shell,
+    invoiceId: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(invoiceId)
+      ? invoiceId
+      : null,
+    ...(UUID_PATTERN.test(visitId) ? { visitId } : {}),
     valid:
       page === CANONICAL_CONVERSATION_ROUTE_PAGE &&
       Boolean(conversationId),
@@ -92,6 +155,16 @@ export function buildCanonicalConversationRoute(
       CANONICAL_CONVERSATION_SHELL_PARAM,
       CANONICAL_CONVERSATION_COMMUNICATION_SHELL
     );
+  }
+
+  const invoiceId = String(options?.invoiceId || "").trim().toLowerCase();
+  if (/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(invoiceId)) {
+    params.set(CANONICAL_CONVERSATION_INVOICE_PARAM, invoiceId);
+  }
+
+  const visitId = String(options?.visitId || "").trim().toLowerCase();
+  if (UUID_PATTERN.test(visitId)) {
+    params.set(CANONICAL_CONVERSATION_VISIT_PARAM, visitId);
   }
 
   return `${CANONICAL_CONVERSATION_ROUTE_PAGE}?${params.toString()}`;
@@ -149,11 +222,23 @@ export function normalizeCanonicalConversationDetail(payload = {}, expectedId) {
     !Array.isArray(payload.permissions)
       ? payload.permissions
       : {};
-  const relationship =
+  const rawRelationship =
     payload.relationship &&
     typeof payload.relationship === "object"
       ? payload.relationship
       : {};
+  const relationship = conversationType === "request"
+    ? {
+        id: normalizeCanonicalConversationId(rawRelationship.id),
+        requestId: normalizeCanonicalConversationId(rawRelationship.requestId),
+        jobId: /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+          String(rawRelationship.jobId || "").trim()
+        )
+          ? String(rawRelationship.jobId).trim().toLowerCase()
+          : null,
+        title: String(rawRelationship.title || "").trim(),
+      }
+    : normalizeEmergencyRelationship(rawRelationship);
   const location =
     conversationType === "emergency" &&
     payload.location &&
@@ -220,34 +305,530 @@ export function normalizeCanonicalMessage(message = {}, viewerRole = "homeowner"
     return null;
   }
 
+  const contentType =
+    typeof content.type === "string" && content.type ? content.type : "text";
+  const workflowType =
+    typeof message?.workflow?.type === "string" ? message.workflow.type : "";
+  const workflowStatus =
+    typeof message?.workflow?.status === "string" ? message.workflow.status : "";
+  const isQuoteShared =
+    contentType === "quote_shared" || workflowType === "QUOTE_SHARED";
+  const isInvoiceShared =
+    contentType === "invoice_shared" || workflowType === "INVOICE_SHARED";
+  const isPaymentLifecycle = ["payment_request", "payment_received"].includes(contentType) &&
+    ["PAYMENT_REQUEST", "PAYMENT_RECEIVED"].includes(workflowType);
+  const isPaymentReminder =
+    contentType === "payment_reminder" ||
+    workflowType === "PAYMENT_REMINDER";
+  let quoteShare = null;
+  let invoiceShare = null;
+  let paymentLifecycle = null;
+  let paymentReminder = null;
+  let reference = null;
+
+  if (isQuoteShared) {
+    const quoteId = String(message?.reference?.quoteId || "").trim().toLowerCase();
+    const jobId = String(message?.reference?.jobId || "").trim().toLowerCase();
+    const referenceKeys = message?.reference && typeof message.reference === "object"
+      ? Object.keys(message.reference).sort()
+      : [];
+    quoteShare = normalizeQuoteDeliverySnapshot(message?.workflow?.payload, {
+      quoteId,
+      jobId,
+    });
+    if (
+      contentType !== "quote_shared" ||
+      workflowType !== "QUOTE_SHARED" ||
+      workflowStatus !== "SENT" ||
+      JSON.stringify(referenceKeys) !== JSON.stringify(["jobId", "quoteId", "type"]) ||
+      message.reference.type !== "quote" ||
+      !quoteShare
+    ) return null;
+    reference = Object.freeze({ type: "quote", quoteId, jobId });
+  }
+
+  if (isInvoiceShared) {
+    const invoiceId = String(message?.reference?.invoiceId || "").trim().toLowerCase();
+    const jobId = String(message?.reference?.jobId || "").trim().toLowerCase();
+    const referenceKeys = message?.reference && typeof message.reference === "object"
+      ? Object.keys(message.reference).sort()
+      : [];
+    invoiceShare = normalizeInvoiceDeliverySnapshot(message?.workflow?.payload, {
+      invoiceId,
+      jobId,
+    });
+    if (
+      contentType !== "invoice_shared" ||
+      workflowType !== "INVOICE_SHARED" ||
+      workflowStatus !== "SENT" ||
+      JSON.stringify(referenceKeys) !== JSON.stringify(["invoiceId", "jobId", "type"]) ||
+      message.reference.type !== "invoice" ||
+      !invoiceShare
+    ) return null;
+    reference = Object.freeze({ type: "invoice", invoiceId, jobId });
+  }
+
+  if (isPaymentLifecycle) {
+    const payload = message?.workflow?.payload;
+    const quoteId = String(message?.reference?.quoteId || "").trim().toLowerCase();
+    const jobId = String(message?.reference?.jobId || "").trim().toLowerCase();
+    const integer = (value) => Number.isSafeInteger(value) && value >= 0 ? value : null;
+    const requiredMinor = integer(payload?.requiredMinor);
+    const receivedMinor = integer(payload?.receivedMinor);
+    const remainingMinor = integer(payload?.remainingMinor);
+    const quoteTotalMinor = integer(payload?.quoteTotalMinor);
+    const balanceRemainingMinor = integer(payload?.balanceRemainingMinor);
+    const depositRequestBindingPresent = [
+      payload?.depositRequestDocumentId,
+      payload?.depositRequestReference,
+      payload?.paymentRequirementId,
+    ].some((value) => value != null);
+    const validDepositRequestBinding = !depositRequestBindingPresent || (
+      UUID_PATTERN.test(String(payload?.depositRequestDocumentId || "")) &&
+      UUID_PATTERN.test(String(payload?.paymentRequirementId || "")) &&
+      typeof payload?.depositRequestReference === "string" &&
+      /^WDR-[A-Z0-9]{8}$/.test(payload.depositRequestReference)
+    );
+    const referenceKeys = message?.reference && typeof message.reference === "object"
+      ? Object.keys(message.reference).sort()
+      : [];
+    const validState = contentType === "payment_request"
+      ? payload?.state === "PAYMENT_REQUIRED" && workflowType === "PAYMENT_REQUEST" && payload?.payment == null
+      : ["PARTIALLY_RECEIVED", "DEPOSIT_RECEIVED"].includes(payload?.state) &&
+        workflowType === "PAYMENT_RECEIVED" && typeof payload?.payment?.receiptId === "string";
+    if (!payload || workflowStatus !== "SENT" || message.reference?.type !== "payment" ||
+        JSON.stringify(referenceKeys) !== JSON.stringify(["jobId", "quoteId", "type"]) ||
+        payload.schemaVersion !== 1 || payload.quoteId !== quoteId || payload.jobId !== jobId ||
+        !Number.isSafeInteger(payload.issuedQuoteVersion) || payload.issuedQuoteVersion < 1 ||
+        !validState || !/^[A-Z]{3}$/.test(payload.currency || "") ||
+        !validDepositRequestBinding ||
+        [requiredMinor, receivedMinor, remainingMinor, quoteTotalMinor, balanceRemainingMinor].includes(null) ||
+        receivedMinor + remainingMinor !== requiredMinor) return null;
+    paymentLifecycle = Object.freeze({
+      ...payload,
+      quoteTotalMinor,
+      requiredMinor,
+      receivedMinor,
+      remainingMinor,
+      balanceRemainingMinor,
+    });
+    reference = Object.freeze({ type: "payment", quoteId, jobId });
+  }
+
+  if (isPaymentReminder) {
+    const payload = message?.workflow?.payload;
+
+    if (
+      !payload ||
+      typeof payload !== "object" ||
+      Array.isArray(payload)
+    ) {
+      return null;
+    }
+
+    const payloadKeys =
+      Object.keys(payload).sort();
+
+    const expectedPayloadKeys = [
+      "amountMinor",
+      "classification",
+      "classifiedOn",
+      "currency",
+      "due",
+      "invoiceId",
+      "jobId",
+      "paymentRequirementId",
+      "reminderId",
+      "schemaVersion",
+      "sourceType",
+      "sourceVersion",
+      "timeZone",
+    ].sort();
+
+    const referenceKeys =
+      message?.reference &&
+      typeof message.reference === "object" &&
+      !Array.isArray(message.reference)
+        ? Object.keys(message.reference).sort()
+        : [];
+
+    const expectedReferenceKeys = [
+      "invoiceId",
+      "jobId",
+      "paymentRequirementId",
+      "sourceType",
+      "type",
+    ].sort();
+
+    const uuid = (value) => {
+      if (
+        typeof value !== "string" ||
+        !UUID_PATTERN.test(value)
+      ) {
+        return null;
+      }
+
+      return value.toLowerCase();
+    };
+
+    const nullableUuid = (value) => {
+      if (value == null) return null;
+      return uuid(value);
+    };
+
+    const positiveInteger = (value) =>
+      Number.isSafeInteger(value) &&
+      value > 0
+        ? value
+        : null;
+
+    const dateOnly = (value) => {
+      if (
+        typeof value !== "string" ||
+        !/^\d{4}-\d{2}-\d{2}$/.test(value)
+      ) {
+        return null;
+      }
+
+      const parsed =
+        new Date(`${value}T00:00:00.000Z`);
+
+      return (
+        !Number.isNaN(parsed.getTime()) &&
+        parsed.toISOString().slice(0, 10) === value
+      )
+        ? value
+        : null;
+    };
+
+    const normalizeTimeZone = (value) => {
+      const submitted =
+        typeof value === "string"
+          ? value.trim()
+          : "";
+
+      if (
+        !submitted.includes("/") ||
+        submitted.length < 3 ||
+        submitted.length > 100
+      ) {
+        return null;
+      }
+
+      try {
+        return (
+          new Intl.DateTimeFormat(
+            "en-US",
+            {
+              timeZone: submitted,
+            }
+          )
+            .resolvedOptions()
+            .timeZone ||
+          submitted
+        );
+      } catch {
+        return null;
+      }
+    };
+
+    const reminderId =
+      uuid(payload.reminderId);
+
+    const jobId =
+      uuid(payload.jobId);
+
+    const invoiceId =
+      nullableUuid(payload.invoiceId);
+
+    const paymentRequirementId =
+      nullableUuid(
+        payload.paymentRequirementId
+      );
+
+    const sourceType =
+      ["INVOICE", "DEPOSIT"].includes(
+        payload.sourceType
+      )
+        ? payload.sourceType
+        : "";
+
+    const sourceVersion =
+      positiveInteger(
+        payload.sourceVersion
+      );
+
+    const amountMinor =
+      positiveInteger(
+        payload.amountMinor
+      );
+
+    const classifiedOn =
+      dateOnly(
+        payload.classifiedOn
+      );
+
+    const timeZone =
+      normalizeTimeZone(
+        payload.timeZone
+      );
+
+    const currency =
+      typeof payload.currency === "string" &&
+      /^[A-Z]{3}$/.test(payload.currency)
+        ? payload.currency
+        : null;
+
+    const invoiceClassifications =
+      new Set([
+        "UPCOMING_DUE",
+        "DUE_TODAY",
+        "OVERDUE",
+      ]);
+
+    const depositClassifications =
+      new Set([
+        "DEPOSIT_DUE",
+        "DEPOSIT_REMAINING",
+      ]);
+
+    let due = null;
+
+    if (sourceType === "INVOICE") {
+      const dueKeys =
+        payload.due &&
+        typeof payload.due === "object" &&
+        !Array.isArray(payload.due)
+          ? Object.keys(payload.due).sort()
+          : [];
+
+      const mode =
+        payload.due?.mode;
+
+      const dueDate =
+        payload.due?.date == null
+          ? null
+          : dateOnly(
+              payload.due.date
+            );
+
+      const effectiveDate =
+        dateOnly(
+          payload.due?.effectiveDate
+        );
+
+      if (
+        !invoiceId ||
+        payload.invoiceId == null ||
+        paymentRequirementId ||
+        payload.paymentRequirementId != null ||
+        !invoiceClassifications.has(
+          payload.classification
+        ) ||
+        JSON.stringify(dueKeys) !==
+          JSON.stringify(
+            [
+              "date",
+              "effectiveDate",
+              "mode",
+            ].sort()
+          ) ||
+        ![
+          "DUE_ON_RECEIPT",
+          "SPECIFIC_DATE",
+        ].includes(mode) ||
+        !effectiveDate ||
+        (
+          mode === "DUE_ON_RECEIPT" &&
+          payload.due.date != null
+        ) ||
+        (
+          mode === "SPECIFIC_DATE" &&
+          (
+            !dueDate ||
+            dueDate !== effectiveDate
+          )
+        )
+      ) {
+        return null;
+      }
+
+      due = Object.freeze({
+        mode,
+        date: dueDate,
+        effectiveDate,
+      });
+    } else if (sourceType === "DEPOSIT") {
+      if (
+        payload.invoiceId != null ||
+        invoiceId ||
+        payload.paymentRequirementId == null ||
+        !paymentRequirementId ||
+        !depositClassifications.has(
+          payload.classification
+        ) ||
+        payload.due != null
+      ) {
+        return null;
+      }
+    } else {
+      return null;
+    }
+
+    const referenceInvoiceId =
+      nullableUuid(
+        message?.reference?.invoiceId
+      );
+
+    const referencePaymentRequirementId =
+      nullableUuid(
+        message?.reference?.paymentRequirementId
+      );
+
+    const referenceJobId =
+      uuid(
+        message?.reference?.jobId
+      );
+
+    if (
+      contentType !== "payment_reminder" ||
+      workflowType !== "PAYMENT_REMINDER" ||
+      workflowStatus !== "SENT" ||
+      payload.schemaVersion !== 1 ||
+      JSON.stringify(payloadKeys) !==
+        JSON.stringify(expectedPayloadKeys) ||
+      JSON.stringify(referenceKeys) !==
+        JSON.stringify(expectedReferenceKeys) ||
+      message.reference.type !==
+        "payment_reminder" ||
+      message.reference.sourceType !==
+        sourceType ||
+      (
+        message.reference.invoiceId != null &&
+        !referenceInvoiceId
+      ) ||
+      (
+        message.reference.paymentRequirementId != null &&
+        !referencePaymentRequirementId
+      ) ||
+      !reminderId ||
+      !jobId ||
+      referenceJobId !== jobId ||
+      referenceInvoiceId !== invoiceId ||
+      referencePaymentRequirementId !==
+        paymentRequirementId ||
+      !sourceVersion ||
+      !amountMinor ||
+      !classifiedOn ||
+      !timeZone ||
+      payload.timeZone !== timeZone ||
+      !currency ||
+      typeof content.text !== "string" ||
+      !content.text.trim() ||
+      content.text.trim().length >
+        CANONICAL_MESSAGE_MAX_LENGTH
+    ) {
+      return null;
+    }
+
+    paymentReminder =
+      Object.freeze({
+        schemaVersion: 1,
+        reminderId,
+        sourceType,
+        invoiceId:
+          sourceType === "INVOICE"
+            ? invoiceId
+            : null,
+        paymentRequirementId:
+          sourceType === "DEPOSIT"
+            ? paymentRequirementId
+            : null,
+        jobId,
+        sourceVersion,
+        classification:
+          payload.classification,
+        classifiedOn,
+        timeZone,
+        currency,
+        amountMinor,
+        due,
+      });
+
+    reference =
+      Object.freeze({
+        type:
+          "payment_reminder",
+        sourceType,
+        invoiceId:
+          paymentReminder.invoiceId,
+        paymentRequirementId:
+          paymentReminder
+            .paymentRequirementId,
+        jobId,
+      });
+  }
+
   const isViewer = message?.sender?.isViewer === true;
   const senderRole = isViewer
     ? viewerRole
     : viewerRole === "business"
     ? "homeowner"
     : "business";
+  const delegatedDisplayName =
+    typeof message?.delegatedAuthor?.displayName === "string"
+      ? message.delegatedAuthor.displayName.trim()
+      : "";
+  const delegatedAuthor =
+    message?.delegatedAuthor?.type === "FIELD_EMPLOYEE" &&
+    message?.delegatedAuthor?.role === "FIELD_EMPLOYEE" &&
+    delegatedDisplayName
+      ? Object.freeze({
+          type: "FIELD_EMPLOYEE",
+          displayName: delegatedDisplayName,
+          role: "FIELD_EMPLOYEE",
+        })
+      : null;
 
-  return {
+  const normalized = {
     id: `canonical-message-${backendId}`,
     backendId,
-    type: typeof content.type === "string" && content.type ? content.type : "text",
+    type: contentType,
     sender: isViewer ? "me" : "them",
     senderRole,
     text: typeof content.text === "string" ? content.text : "",
     imageUrl: typeof content.imageUrl === "string" ? content.imageUrl : null,
-    workflowType:
-      typeof message?.workflow?.type === "string" ? message.workflow.type : "",
-    workflowStatus:
-      typeof message?.workflow?.status === "string" ? message.workflow.status : "",
+    workflowType,
+    workflowStatus,
     workflowPayload:
-      message?.workflow?.payload && typeof message.workflow.payload === "object"
+      quoteShare || invoiceShare || paymentLifecycle || paymentReminder || (message?.workflow?.payload && typeof message.workflow.payload === "object"
         ? message.workflow.payload
-        : {},
+        : {}),
     status: "delivered",
     createdAt: message.createdAt || null,
     time: message.createdAt || "",
     unsent: false,
   };
+  if (quoteShare) {
+    normalized.quoteShare = quoteShare;
+    normalized.reference = reference;
+  }
+  if (invoiceShare) {
+    normalized.invoiceShare = invoiceShare;
+    normalized.reference = reference;
+  }
+  if (paymentLifecycle) {
+    normalized.paymentLifecycle = paymentLifecycle;
+    normalized.reference = reference;
+  }
+  if (paymentReminder) {
+    normalized.paymentReminder = paymentReminder;
+    normalized.reference = reference;
+  }
+  if (delegatedAuthor) {
+    normalized.delegatedAuthor = delegatedAuthor;
+  }
+  return normalized;
 }
 
 export function normalizeCanonicalMessageCollection(

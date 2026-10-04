@@ -1,0 +1,437 @@
+import { buildQuickQuoteConversationPatch } from "./quickQuoteConversationDraft.js";
+import {
+  buildBusinessDocumentAgreementPatch,
+  normalizeBusinessDocumentAgreement,
+} from "./businessDocumentAgreement.js";
+
+function cleanText(value) {
+  return String(value || "").replace(/\s+/g, " ").trim();
+}
+
+function amount(value) {
+  const parsed = Number(String(value || "").replace(/[$,\s]/g, ""));
+  return Number.isFinite(parsed) && parsed >= 0 ? String(parsed) : "";
+}
+
+export function normalizeBusinessDocumentTab(value) {
+  if (["depositRequest", "DEPOSIT_REQUEST"].includes(value)) return "depositRequest";
+  return value === "invoice" ? "invoice" : "quote";
+}
+
+const EXPLICIT_DOCUMENT_EDIT_REQUEST =
+  /^(?:please\s+)?(?:add|change|set|remove|update|revise|use|charge|keep|make|note)\b|^(?:can|could|would|will)\s+you\s+(?:please\s+)?(?:add|change|set|remove|update|revise|use|charge|keep|make|note)\b/i;
+
+const QUESTION_LEAD =
+  /^(?:what|why|how|when|where|who|which|do|does|did|can|could|would|will|should|is|are|was|were|may|might|have|has|had)\b/i;
+
+const ANALYSIS_REQUEST =
+  /^(?:please\s+)?(?:(?:help\s+me\s+)?(?:analy[sz]e|assess|inspect|evaluate|diagnose|identify|review|check)\b|look\s+at\b|tell\s+me\s+what\s+you\s+(?:see|notice|find)\b|i(?:\s+will|['’]ll|\s+am\s+going\s+to)\s+(?:send|share|upload)\b.*\b(?:review|analy[sz]e|assess|inspect|evaluate|diagnose|check)\b)/i;
+
+const CONVERSATIONAL_REQUEST =
+  /^(?:please\s+)?(?:ask|help|explain|recommend|suggest|tell\s+me|walk\s+me\s+through|thanks?\b|thank\s+you\b|okay\b|ok\b|got\s+it\b)/i;
+
+const SERVER_OWNED_DOCUMENT_NUMBER_REQUEST =
+  /^(?:please\s+)?(?:set|change|update|use)?\s*(?:the\s+)?(?:quote|invoice)\s*(?:number|#)\b/i;
+
+export function isServerOwnedDocumentNumberRequest(instruction) {
+  return SERVER_OWNED_DOCUMENT_NUMBER_REQUEST.test(cleanText(instruction));
+}
+
+const STRONG_DOCUMENT_FIELD_LABEL =
+  /\b(?:customer(?:\s+name)?|client(?:\s+name)?|project|scope(?:\s+of\s+work)?|(?:final|project)\s+price|quote\s+total|price|estimated\s+duration|duration|payment\s+terms?|customer\s+note|quote\s+note)\s*:\s*\S/i;
+
+const STRONG_DOCUMENT_FIELD_PHRASE =
+  /(?:^|[\n\r.!?;]\s*)(?:(?:final\s+price|project\s+price|quote\s+total|price|total)\s+(?:is|to)\s*\$\s*[\d,.]+|(?:estimated\s+duration|duration)\s+is\s+\S|payment\s+terms?\s+(?:is|are)\s+\S|scope(?:\s+of\s+work)?\s+is\s+\S)/i;
+
+const STRONG_CUSTOMER_DECLARATION =
+  /(?:^|[\n\r.!?;]\s*)(?:[Cc]ustomer|[Cc]lient)\s+is\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+(?:\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+){1,3}(?=[.!?;,\n\r]|$|\s+(?:project|scope(?:\s+of\s+work)?|(?:final|project)\s+price|quote\s+total|price|total|estimated\s+duration|duration|payment\s+terms?|customer\s+note|quote\s+note)\s*:)/;
+
+const NATURAL_DOCUMENT_SCOPE_FACT =
+  /(?:^|[.!?]\s+)(?:please\s+)?(?:replace|repair|install|rebuild|reconstruct|construct|paint|seal|service|clean)\b/i;
+const NATURAL_DOCUMENT_EMAIL_FACT = /\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}\b/i;
+const NATURAL_DOCUMENT_PHONE_FACT = /(?:\+?1[\s.-]?)?(?:\(\d{3}\)|\d{3})[\s.-]\d{3}[\s.-]\d{4}/;
+const NATURAL_DOCUMENT_PRICE_FACT =
+  /(?:^|[.!?;]\s*)(?:final\s+(?:price|quote)|quote\s+total|project\s+price|price|total|amount)\s*(?:is|to|:)?\s*\$?\s*[\d,.]+/i;
+const NATURAL_DOCUMENT_DURATION_FACT =
+  /(?:^|[.!?;]\s*)(?:about\s+|around\s+|approximately\s+)?(?:should\s+take\s+|takes?\s+|(?:estimated\s+)?duration\s*(?:is|:)?\s*)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s+(?:hours?|hrs?|days?|weeks?)/i;
+
+function hasNaturalBusinessDocumentFactBundle(instruction) {
+  const text = String(instruction || "").trim();
+  if (
+    !text ||
+    text.includes("?") ||
+    QUESTION_LEAD.test(text) ||
+    ANALYSIS_REQUEST.test(text)
+  ) {
+    return false;
+  }
+  if (!NATURAL_DOCUMENT_SCOPE_FACT.test(text)) return false;
+  const suppliedFacts = [
+    NATURAL_DOCUMENT_EMAIL_FACT,
+    NATURAL_DOCUMENT_PHONE_FACT,
+    NATURAL_DOCUMENT_PRICE_FACT,
+    NATURAL_DOCUMENT_DURATION_FACT,
+  ].filter((pattern) => pattern.test(text)).length;
+  return suppliedFacts >= 2;
+}
+
+const DECLARATIVE_DURATION_INPUT =
+  /^(?:about\s+|around\s+|approximately\s+)?(?:should\s+take\s+|takes?\s+)?(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten|a)(?:\s*[–—-]\s*(?:\d+|one|two|three|four|five|six|seven|eight|nine|ten))?\s+(?:hours?|hrs?|days?|weeks?)\.?$/i;
+
+const IMPLICIT_DOCUMENT_INPUT =
+  /^(?:(?:customer|client)(?:\s+name)?\s+(?:is\s+)?[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+\s+[A-ZÀ-ÖØ-Þ][A-Za-zÀ-ÖØ-öø-ÿ'’-]+|(?:please\s+)?(?:replace|repair|install|rebuild|reconstruct|construct|paint|seal|service|clean)\b|(?:[A-Za-z][\w'’-]*\s+){0,5}(?:replacement|repair|installation|service|painting|rebuild|reconstruction)\b(?=\s+for\b|[,;.!?]|$)|(?:materials?|labor|labour|installation|project\s+price|price|total|amount)\s+(?:(?:costs?|is|are|to|at)\s+)?\$?\s*[\d,.]+\b|(?:[A-Za-z][\w'’ -]{0,38})\s+(?:costs?|is)\s+\$?\s*[\d,.]+(?:\s*(?:dollars?|usd))?[.!]?\s*$|(?:charge|add)\s+\$?\s*[\d,.]+\b|\d{1,3}(?:\.\d+)?\s*(?:%|percent)\s+deposit\b|(?:show|hide|include|don['’]t\s+show|do\s+not\s+show)\b.*\b(?:breakdown|materials?|line\s+items?)\b|customer\s+(?:will\s+)?provide(?:s)?\s+materials?\b|(?:note|condition)\s*:)/i;
+
+const PRIVATE_OR_PHOTO_DOCUMENT_INPUT =
+  /\b(?:keep|make)\s+(?:that|this|it)\s+private\b|\bdon['’]t\s+show\s+(?:that|this|it)\s+to\s+the\s+customer\b|\b(?:these|those|the)\s+(?:photos?|images?)\s+(?:are|as)\s+(?:before|after)\b|\buse\s+(?:these|those|the|quote)\s+(?:photos?|images?)\s+as\s+(?:before|after)\b/i;
+
+const INCOMPLETE_DOCUMENT_MUTATION =
+  /^(?:(?:can|could|would|will)\s+you\s+(?:please\s+)?|please\s+)?(?:add|change|set|remove|update|revise|use|charge|keep|make|note)\s+(?:the\s+)?(?:amount|price|total|customer|client|project|scope|labor|labour|installation|materials?|duration|payment\s+terms?|note|photos?|it|this|that)(?:\s+again)?[.!?]*$/i;
+
+export function hasStrongBusinessDocumentInput(instruction) {
+  const text = String(instruction || "").trim();
+  return Boolean(
+    text &&
+    (
+      STRONG_DOCUMENT_FIELD_LABEL.test(text) ||
+      STRONG_DOCUMENT_FIELD_PHRASE.test(text) ||
+      STRONG_CUSTOMER_DECLARATION.test(text) ||
+      hasNaturalBusinessDocumentFactBundle(text)
+    )
+  );
+}
+
+export function hasImplicitBusinessDocumentInput(instruction) {
+  const text = cleanText(instruction);
+  if (!text) return false;
+  if (DECLARATIVE_DURATION_INPUT.test(text)) return true;
+  if (/^(?:i|we)\b|\b(?:could|might|maybe|roughly)\b|\bwhen\s+i\s+(?:bought|paid)\b/i.test(text)) {
+    return false;
+  }
+  return IMPLICIT_DOCUMENT_INPUT.test(text);
+}
+
+export function classifyBusinessDocumentConversationIntent(
+  instruction
+) {
+  const text = cleanText(instruction);
+  if (!text) return "EMPTY";
+
+  if (isServerOwnedDocumentNumberRequest(text)) {
+    return "DOCUMENT_NUMBER_REQUEST";
+  }
+
+  // Document commands are candidates here. Their structured patch is
+  // validated by resolveBusinessDocumentConversationMessage before mutation.
+  if (EXPLICIT_DOCUMENT_EDIT_REQUEST.test(text)) {
+    return "DOCUMENT_EDIT";
+  }
+
+  if (hasStrongBusinessDocumentInput(instruction)) {
+    return "DOCUMENT_INPUT";
+  }
+
+  if (
+    PRIVATE_OR_PHOTO_DOCUMENT_INPUT.test(text) ||
+    Object.keys(buildBusinessDocumentAgreementPatch(text)).length > 0
+  ) {
+    return "DOCUMENT_INPUT";
+  }
+
+  if (DECLARATIVE_DURATION_INPUT.test(text)) {
+    return "DOCUMENT_INPUT";
+  }
+
+  if (
+    text.includes("?") ||
+    QUESTION_LEAD.test(text) ||
+    ANALYSIS_REQUEST.test(text) ||
+    CONVERSATIONAL_REQUEST.test(text)
+  ) {
+    return "ASK_MEETRO";
+  }
+
+  return hasImplicitBusinessDocumentInput(text)
+    ? "DOCUMENT_INPUT"
+    : "ASK_MEETRO";
+}
+
+export function buildInvoiceConversationPatch({ instruction } = {}) {
+  const text = cleanText(instruction);
+  if (!text) return Object.freeze({});
+
+  const patch = {};
+  const shared = buildQuickQuoteConversationPatch({ prompt: text });
+  const customer = text.match(/\b(?:customer|client)\s+is\s+([^.!?]+)/i);
+  const total = text.match(
+    /(?:^|[.!?;]\s*)(?:invoice\s+total|total\s+due|amount)\s*(?:is|to|:)?\s*\$?\s*([\d,.]+)/i
+  );
+  const note = text.match(/\b(?:invoice\s+)?note\s*:\s*([^.!?]+)/i);
+  const terms = text.match(/\b(?:payment\s+terms?|terms?)\s*:\s*([^.!?]+)/i);
+  const work = text.match(
+    /\b(?:work\s+completed|completed\s+work|work\s+performed)\s*:\s*([^.!?]+)/i
+  );
+
+  const photoOnly = /\b(?:photos?|images?)\b/i.test(text);
+  if (shared.customerName || customer) patch.customerName = cleanText(shared.customerName || customer[1]);
+  if (shared.projectTitle && !note && !terms && !work && !photoOnly) patch.projectTitle = shared.projectTitle;
+  if (total || shared.totalOverride) patch.totalOverride = amount(total?.[1] || shared.totalOverride);
+  const lineItems = [
+    ...(shared.materialItems || []).map((item) => ({ description: item.name, total: item.total })),
+    ...(shared.laborItems || []).map((item) => ({
+      description: item.description,
+      hours: item.hours,
+      rate: item.rate,
+      total: item.total,
+    })),
+  ];
+  if (lineItems.length) patch.lineItems = lineItems;
+  if (note) patch.notes = cleanText(note[1]);
+  if (terms) patch.paymentTerms = cleanText(terms[1]);
+  if (work) patch.workPerformed = cleanText(work[1]);
+
+  if (/\b(?:everything|all work)\s+was\s+completed\s+as\s+quoted\b/i.test(text)) {
+    patch.workPerformed = "All approved work was completed as quoted.";
+  }
+
+  if (/\b(?:keep|make)\s+(?:that|this|it)\s+private\b|\bdon['’]t\s+show\s+(?:that|this|it)\s+to\s+the\s+customer\b/i.test(text)) {
+    patch.privateReminder = text;
+  }
+
+  if (/\b(?:these|those|the)\s+(?:photos?|images?)\s+(?:are|as)\s+after\b|\buse\s+(?:these|those)\s+as\s+after\s+photos?\b/i.test(text)) {
+    patch.photoIntent = "after";
+  }
+
+  if (/\buse\s+(?:the\s+)?quote\s+photos?\s+as\s+before\s+photos?\b/i.test(text)) {
+    patch.photoIntent = "before";
+  }
+
+  return Object.freeze(patch);
+}
+
+function buildBusinessDocumentMutationPatch({
+  documentType,
+  instruction,
+  current = {},
+  revision,
+} = {}) {
+  const privateInstruction = /\b(?:keep|make)\s+(?:that|this|it)\s+private\b|\bdon['’]t\s+show\s+(?:that|this|it)\s+to\s+the\s+customer\b/i.test(
+    cleanText(instruction)
+  );
+
+  if (privateInstruction) {
+    return Object.freeze({ privateReminder: cleanText(instruction) });
+  }
+
+  if (normalizeBusinessDocumentTab(documentType) === "invoice") {
+    return buildInvoiceConversationPatch({ instruction, current });
+  }
+
+  const quotePatch = buildQuickQuoteConversationPatch({
+    prompt: instruction,
+    current,
+    revision: revision ?? Boolean(
+      cleanText(current.projectDescription) ||
+      cleanText(current.customerName) ||
+      cleanText(current.totalOverride)
+    ),
+  });
+  const agreementPatch = buildBusinessDocumentAgreementPatch(
+    instruction,
+    current.agreement
+  );
+  const customerQuotePatch = { ...quotePatch };
+  if (Object.keys(agreementPatch).length) {
+    delete customerQuotePatch.projectTitle;
+    delete customerQuotePatch.projectDescription;
+    delete customerQuotePatch.recommendedSolution;
+  }
+  return Object.freeze({
+    ...customerQuotePatch,
+    ...(Object.keys(agreementPatch).length ? {
+      agreement: { ...normalizeBusinessDocumentAgreement(current.agreement), ...agreementPatch },
+    } : {}),
+  });
+}
+
+export function resolveBusinessDocumentConversationMessage({
+  documentType,
+  instruction,
+  current = {},
+  revision,
+  hasActiveAnalysisSession = false,
+} = {}) {
+  const text = cleanText(instruction);
+  const analysisSessionActive = hasActiveAnalysisSession === true;
+  const intent = classifyBusinessDocumentConversationIntent(text);
+
+  if (intent === "EMPTY") {
+    return Object.freeze({ capability: "EMPTY", intent, patch: Object.freeze({}), analysisSessionActive });
+  }
+
+  if (intent === "DOCUMENT_NUMBER_REQUEST") {
+    return Object.freeze({
+      capability: "DOCUMENT_NUMBER_REQUEST",
+      intent,
+      patch: Object.freeze({}),
+      analysisSessionActive,
+    });
+  }
+
+  if (intent === "ASK_MEETRO") {
+    const explicitAnalysisOrQuestion =
+      text.includes("?") ||
+      QUESTION_LEAD.test(text) ||
+      ANALYSIS_REQUEST.test(text) ||
+      CONVERSATIONAL_REQUEST.test(text);
+    return Object.freeze({
+      capability:
+        analysisSessionActive || explicitAnalysisOrQuestion
+          ? "ASK_MEETRO"
+          : "CLARIFICATION_REQUIRED",
+      intent:
+        analysisSessionActive || explicitAnalysisOrQuestion
+          ? intent
+          : "CLARIFICATION_REQUIRED",
+      patch: Object.freeze({}),
+      analysisSessionActive,
+    });
+  }
+
+  const patch = buildBusinessDocumentMutationPatch({
+    documentType,
+    instruction: text,
+    current,
+    revision,
+  });
+  const validMutation =
+    Object.keys(patch).length > 0 &&
+    !INCOMPLETE_DOCUMENT_MUTATION.test(text);
+
+  return Object.freeze({
+    capability: validMutation ? "DOCUMENT_MUTATION" : "CLARIFICATION_REQUIRED",
+    intent: validMutation ? intent : "CLARIFICATION_REQUIRED",
+    patch: validMutation ? patch : Object.freeze({}),
+    analysisSessionActive,
+  });
+}
+
+export function buildBusinessDocumentConversationPatch(options = {}) {
+  return resolveBusinessDocumentConversationMessage(options).patch;
+}
+
+function hasRowValue(row = {}) {
+  return [
+    row.description,
+    row.name,
+    row.total,
+    row.amount,
+    row.quantity,
+    row.unitPrice,
+    row.cost,
+    row.hours,
+    row.rate,
+  ].some((value) => cleanText(value));
+}
+
+function rowIdentity(row = {}) {
+  return cleanText(row.description || row.name).toLowerCase();
+}
+
+function mergeRows(current = [], incoming = []) {
+  const next = (Array.isArray(current) ? current : []).filter(hasRowValue).map((row) => ({ ...row }));
+  (Array.isArray(incoming) ? incoming : []).filter(hasRowValue).forEach((row) => {
+    const identity = rowIdentity(row);
+    const existingIndex = identity
+      ? next.findIndex((candidate) => rowIdentity(candidate) === identity)
+      : -1;
+    if (existingIndex >= 0) next[existingIndex] = { ...next[existingIndex], ...row };
+    else next.push({ ...row });
+  });
+  return next;
+}
+
+export function mergeBusinessDocumentDraft(current = {}, patch = {}) {
+  const next = { ...current, ...patch };
+  if (Object.hasOwn(patch, "agreement")) {
+    next.agreement = normalizeBusinessDocumentAgreement({
+      ...normalizeBusinessDocumentAgreement(current.agreement),
+      ...patch.agreement,
+    });
+  }
+  for (const key of ["lineItems", "materialItems", "laborItems"]) {
+    if (Object.hasOwn(patch, key)) next[key] = mergeRows(current[key], patch[key]);
+  }
+  return Object.freeze(next);
+}
+
+export function reconcileBusinessDocumentInstructions({
+  documentType,
+  baseline = {},
+  instructions = [],
+  manualOverrides = {},
+} = {}) {
+  let draft = { ...baseline };
+  const privateReminders = [];
+  const photoIntents = [];
+
+  instructions.forEach((entry, index) => {
+    if (normalizeBusinessDocumentTab(documentType) === "invoice" && entry?.recognized === false) return;
+    const instruction = cleanText(typeof entry === "string" ? entry : entry?.text);
+    if (!instruction) return;
+    const patch = buildBusinessDocumentConversationPatch({
+      documentType,
+      instruction,
+      current: draft,
+    });
+    const { privateReminder, photoIntent, ...documentPatch } = patch;
+    if (privateReminder) privateReminders.push({ id: entry?.id || `instruction-${index}`, text: privateReminder });
+    if (photoIntent) photoIntents.push({ id: entry?.id || `instruction-${index}`, intent: photoIntent });
+    draft = mergeBusinessDocumentDraft(draft, documentPatch);
+  });
+
+  const { privateReminder: manualPrivateReminder, ...visibleOverrides } = manualOverrides;
+  if (manualPrivateReminder) {
+    if (!privateReminders.some((item) => item.text === cleanText(manualPrivateReminder))) privateReminders.push({ id: "reviewed-private-reminder", text: cleanText(manualPrivateReminder) });
+  }
+  draft = mergeBusinessDocumentDraft(draft, visibleOverrides);
+  for (const key of ["lineItems", "materialItems", "laborItems"]) {
+    if (Object.hasOwn(manualOverrides, key)) {
+      draft = { ...draft, [key]: (manualOverrides[key] || []).filter(hasRowValue).map((row) => ({ ...row })) };
+    }
+  }
+
+  return Object.freeze({
+    draft: Object.freeze(draft),
+    privateReminders: Object.freeze(privateReminders),
+    photoIntents: Object.freeze(photoIntents),
+  });
+}
+
+export function createInvoiceContinuityDraft({ job = {}, quote = {} } = {}) {
+  const approved = ["APPROVED", "ACCEPTED"].includes(
+    String(quote.canonicalStatus || "").toUpperCase()
+  );
+  const confirmedTotal = approved ? amount(quote.confirmedTotal) : "";
+
+  return Object.freeze({
+    customerName: cleanText(job.customerName || quote.customerName),
+    customerEmail: cleanText(job.customerEmail || quote.customerEmail),
+    serviceAddress: cleanText(job.location || quote.customerLocation),
+    projectTitle: cleanText(job.title || quote.projectTitle),
+    quoteReference: approved ? cleanText(quote.quoteNumber) : "",
+    dueDate: "",
+    workPerformed: "",
+    notes: "",
+    paymentTerms: "",
+    totalOverride: confirmedTotal,
+  });
+}
+
+export function customerVisibleWorkspaceDraft(draft = {}) {
+  const customerVisible = { ...draft };
+  delete customerVisible.privateReminder;
+  delete customerVisible.privateCosts;
+  delete customerVisible.privatePhotos;
+
+  return Object.freeze(customerVisible);
+}

@@ -1,4 +1,6 @@
+import "../styles/homeDashboard.css";
 import { useCallback, useEffect, useRef, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import MeetroDetailsButton from "../components/MeetroDetailsButton";
 import MeetroIcon from "../components/MeetroIcon";
@@ -14,6 +16,11 @@ import {
   resolveHomeownerConversationEntry,
   stageHomeownerCanonicalConversation,
 } from "../utils/homeownerConversationEntry";
+import { getRequesterResponseInbox } from "../utils/requestResponseInboxApi";
+import {
+  deriveRequestPresentationState,
+  REQUEST_PRESENTATION_STATES,
+} from "../utils/requestPresentationState";
 import {
   getCanonicalConversationActionTarget,
 } from "../utils/conversationActionRouting";
@@ -21,9 +28,6 @@ import {
   REQUEST_COLLECTION_STATUS,
   resolveHomeownerRequestCollection,
 } from "../utils/requestLifecycleState";
-import {
-  getBusinessPortfolioProjectImages,
-} from "../utils/businessPortfolioStorage";
 import { getLanguage, t } from "../utils/language";
 import { formatLocaleCurrency, formatLocaleDate } from "../utils/localeFormat";
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
@@ -35,6 +39,9 @@ import {
 } from "../utils/homeownerLifecycle";
 import { getHomeownerProjectJourney } from "../utils/homeownerProjectJourney";
 import { getHomeownerServiceHistory } from "../utils/homeownerServiceHistory";
+import CustomerCompletionHistory from "../components/CustomerCompletionHistory.jsx";
+import { getJobCompletionCopy } from "../utils/jobCompletionLanguage.js";
+import { fetchCustomerJobHistoryList } from "../utils/jobCompletionApi.js";
 import {
   getStoredProfessionalMatchProfile,
   canProfessionalReceiveRequest,
@@ -60,6 +67,8 @@ import {
   getProfessionalWorkMetrics,
 } from "../utils/dashboardMetrics";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import { getTimelineMomentsForViewer, readTimelineMoments } from "../utils/meetroTimeline";
+import { getMeetroMomentHashRoute } from "../utils/meetroMomentRoutes";
 import {
   buildSpotlightProfessionalProfile,
   getEligibleSpotlightBusinesses,
@@ -69,6 +78,11 @@ import {
   getSpotlightRequestContexts,
   isNoContextSpotlightSafeBusiness,
 } from "../utils/localSpotlightVisibility";
+import { fetchCanonicalSpotlightBusinesses } from "../utils/spotlightPortfolioDirectory";
+import {
+  getSpotlightBusinessIdentity,
+  getSpotlightPresentationIdentity,
+} from "../utils/spotlightSlideshowState";
 
 const HOMEOWNER_CONVERSATION_LOAD_STATUS = Object.freeze({
   LOADING: "loading",
@@ -98,9 +112,102 @@ const homeLayoutMediaStyles = `
   .home-brand-wrap,
   .home-message-focus-card,
   .home-message-focus-copy,
-  .home-message-open-text {
+  .home-message-open-text,
+  .home-spotlight-card,
+  .home-spotlight-content,
+  .home-spotlight-business-text {
     min-width: 0;
     box-sizing: border-box;
+  }
+
+  .home-spotlight-card,
+  .home-spotlight-card * {
+    box-sizing: border-box;
+  }
+
+  .home-spotlight-story-title {
+    text-wrap: balance;
+  }
+
+  .home-spotlight-button,
+  .spotlight-slide-control,
+  .home-help-action-card {
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .home-spotlight-button:hover {
+    filter: brightness(1.05);
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.24),
+      0 8px 18px rgba(20,66,43,0.18) !important;
+  }
+
+  .home-spotlight-button:focus-visible,
+  .spotlight-slide-control:focus-visible,
+  .home-help-action-card:focus-visible {
+    outline: 3px solid rgba(251, 191, 36, 0.88);
+    outline-offset: 3px;
+  }
+
+  .home-spotlight-button:focus:not(:focus-visible),
+  .spotlight-slide-control:focus:not(:focus-visible),
+  .home-help-action-card:focus:not(:focus-visible) {
+    outline: none;
+  }
+
+  .home-spotlight-button:active {
+    transform: translateY(1px);
+    filter: brightness(0.94);
+  }
+
+  .home-help-action-card:hover {
+    border-color: rgba(31,77,52,0.22) !important;
+    background: #fffdf8 !important;
+    transform: translateY(-1px);
+    box-shadow: 0 10px 24px rgba(31,77,52,0.10) !important;
+  }
+
+  .home-help-action-card:active {
+    transform: translateY(0);
+    box-shadow: 0 4px 12px rgba(31,77,52,0.08) !important;
+  }
+
+  .spotlight-slide-control:hover {
+    background: rgba(255,255,255,0.30) !important;
+    border-color: rgba(255,255,255,0.72) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255,255,255,0.72),
+      inset 0 -1px 0 rgba(255,255,255,0.10),
+      0 8px 20px rgba(9,24,16,0.22) !important;
+  }
+
+  .spotlight-slide-control:active {
+    transform: translateY(-50%) scale(0.96) !important;
+    background: rgba(255,255,255,0.20) !important;
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .spotlight-slide-control {
+      background: rgba(17, 34, 25, 0.84) !important;
+    }
+
+    .spotlight-photo-badge,
+    .spotlight-counter-badge,
+    .home-spotlight-story-eyebrow:not(.is-placeholder) {
+      background: rgba(17, 34, 25, 0.78) !important;
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .spotlight-slide-control,
+    .spotlight-photo-badge,
+    .spotlight-counter-badge,
+    .home-spotlight-story-eyebrow:not(.is-placeholder) {
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+      background: rgba(17, 34, 25, 0.90) !important;
+    }
   }
 
   .home-brand-main,
@@ -163,6 +270,74 @@ const homeLayoutMediaStyles = `
       padding: 0 12px !important;
       text-align: center !important;
     }
+
+    .home-spotlight-card {
+      width: min(88vw, 374px) !important;
+      border-radius: 22px !important;
+    }
+
+    .home-spotlight-hero {
+      height: clamp(238px, 64vw, 266px) !important;
+      min-height: 238px !important;
+    }
+
+    .home-spotlight-hero-copy {
+      left: 54px !important;
+      right: 54px !important;
+      bottom: 14px !important;
+      gap: 6px !important;
+    }
+
+    .home-spotlight-story-title {
+      font-size: clamp(1.5rem, 6.4vw, 1.76rem) !important;
+      line-height: 1.04 !important;
+    }
+
+    .home-spotlight-story-body {
+      font-size: 12px !important;
+      line-height: 1.36 !important;
+    }
+
+    .home-spotlight-content {
+      gap: 10px !important;
+      padding: 14px !important;
+    }
+
+    .home-spotlight-button {
+      width: 100% !important;
+      justify-self: stretch !important;
+    }
+
+    .spotlight-slide-control {
+      width: 44px !important;
+      height: 44px !important;
+      font-size: 23px !important;
+    }
+
+    .spotlight-slide-control-previous {
+      left: 7px !important;
+    }
+
+    .spotlight-slide-control-next {
+      right: 7px !important;
+    }
+
+    .spotlight-photo-badge,
+    .spotlight-counter-badge {
+      top: 8px !important;
+    }
+  }
+
+  @media (max-width: 600px) {
+    .home-help-action-grid {
+      grid-template-columns: 1fr !important;
+      gap: 10px !important;
+    }
+
+    .home-help-action-card {
+      min-height: 64px !important;
+      padding: 10px 12px !important;
+    }
   }
 
   @media (orientation: landscape) and (max-height: 520px) {
@@ -182,19 +357,30 @@ const homeLayoutMediaStyles = `
     }
   }
 
-  #root[data-app-layout="desktop"] .home-community-entry {
-    display: none !important;
-  }
 `;
 
 function Home({ setPage }) {
-  const [language, updateLanguage] = useState(getLanguage());
+  const language = useLanguage();
   const [activeMode, setActiveMode] = useState("personal");
   const [homeView, setHomeView] = useState("landing");
   const [myProjectsTab, setMyProjectsTab] = useState("active");
   const [detailsRequest, setDetailsRequest] = useState(null);
   const [historyDetailsRequest, setHistoryDetailsRequest] = useState(null);
-  const [spotlightPortfolioRefresh, setSpotlightPortfolioRefresh] = useState(0);
+  const [canonicalHistoryJobId, setCanonicalHistoryJobId] = useState("");
+  const canonicalHistoryInvokerRef = useRef(null);
+  const historyReturnJobRef = useRef("");
+  const [canonicalCustomerHistory, setCanonicalCustomerHistory] = useState(null);
+  useEffect(() => {
+    if (canonicalHistoryJobId || !historyReturnJobRef.current) return;
+    const jobId = historyReturnJobRef.current;
+    historyReturnJobRef.current = "";
+    const buttons = [...document.querySelectorAll("[data-history-open-job]")];
+    const invoker = buttons.find(button => button.dataset.historyOpenJob === jobId && button.getClientRects().length);
+    (invoker || buttons.find(button => button.dataset.historyOpenJob === jobId))?.focus();
+  }, [canonicalHistoryJobId]);
+
+  const [canonicalSpotlightBusinesses, setCanonicalSpotlightBusinesses] =
+    useState(null);
   const [backendHomeownerRequests, setBackendHomeownerRequests] = useState([]);
   const [backendRequestStatus, setBackendRequestStatus] = useState(
     REQUEST_COLLECTION_STATUS.LOADING
@@ -206,6 +392,7 @@ function Home({ setPage }) {
     HOMEOWNER_CONVERSATION_LOAD_STATUS.LOADING
   );
   const [conversationReloadKey, setConversationReloadKey] = useState(0);
+  const [canonicalRequesterResponses, setCanonicalRequesterResponses] = useState([]);
   const canonicalConversationLoadRef = useRef({
     identity: "",
     records: [],
@@ -232,6 +419,29 @@ function Home({ setPage }) {
   const isBusinessMode = activeMode === "business" && hasBusinessAccess;
 
   const legacyWorkflowStorageEnabled = canReadLegacyWorkflowStorage();
+  const momentUser = readHomeJson("user", {});
+  const momentBusinessId =
+    localStorage.getItem("activeBusinessId") ||
+    localStorage.getItem("businessId") ||
+    localStorage.getItem("contractorProfileId") ||
+    "";
+  const momentViewer = {
+    activeMode: "personal",
+    accountType: localStorage.getItem("accountType") || "",
+    businessId: momentBusinessId,
+    businessName,
+    hasBusinessProfile: Boolean(businessName || momentBusinessId),
+    employee: localStorage.getItem("accountType") === "employee",
+    relationshipId:
+      localStorage.getItem("activeRelationshipId") ||
+      localStorage.getItem("homeownerRelationshipId") ||
+      localStorage.getItem("activeConversationId") ||
+      "",
+    userId: momentUser.id || momentUser.userId || momentUser.user_id || localStorage.getItem("userId") || "",
+  };
+  const homeMoments = legacyWorkflowStorageEnabled
+    ? getTimelineMomentsForViewer(readTimelineMoments(localStorage), momentViewer).slice(0, 3)
+    : [];
   const allHomeownerRequests = (
     legacyWorkflowStorageEnabled
       ? getStoredHomeownerRequests()
@@ -242,7 +452,26 @@ function Home({ setPage }) {
     (request) => request.status === "completed"
   );
 
-  const historyRequests = getHomeownerServiceHistory();
+  const canonicalHistoryRequests = (canonicalCustomerHistory?.jobs || []).map((job) => ({
+    id: job.jobId,
+    jobId: job.jobId,
+    requestId: job.requestId,
+    relationshipId: job.relationshipId,
+    conversationId: job.conversationId,
+    sourceType: job.sourceType,
+    sourceLabel: job.sourceLabel,
+    status: "closed",
+    title: job.serviceTitle,
+    professionalName: job.professionalName,
+    completedAt: job.completedAt,
+    approvedQuote: job.approvedQuote,
+    finalAmount: job.approvedQuote ? job.approvedQuote.totalMinor / 100 : 0,
+    paymentStatus: "completed",
+    canonicalHistory: true,
+  }));
+  const historyRequests = legacyWorkflowStorageEnabled
+    ? getHomeownerServiceHistory()
+    : canonicalHistoryRequests;
   const homeownerMetrics = getHomeownerRequestMetrics({
     requests: allHomeownerRequests,
     history: historyRequests,
@@ -253,8 +482,6 @@ function Home({ setPage }) {
     : [];
 
   useEffect(() => {
-    const handleLanguageChange = () => updateLanguage(getLanguage());
-
     const handleModeChange = () => {
       setActiveMode("personal");
     };
@@ -263,14 +490,10 @@ function Home({ setPage }) {
     };
 
     setActiveAccountMode("personal");
-    window.addEventListener("languageChanged", handleLanguageChange);
-    window.addEventListener("meetro-language-change", handleLanguageChange);
     window.addEventListener("accountModeChanged", handleModeChange);
     window.addEventListener("meetroHomeResetToLanding", resetHomeLanding);
 
     return () => {
-      window.removeEventListener("languageChanged", handleLanguageChange);
-      window.removeEventListener("meetro-language-change", handleLanguageChange);
       window.removeEventListener("accountModeChanged", handleModeChange);
       window.removeEventListener("meetroHomeResetToLanding", resetHomeLanding);
     };
@@ -301,6 +524,47 @@ function Home({ setPage }) {
       active = false;
     };
   }, [legacyWorkflowStorageEnabled, requestReloadKey, setPage]);
+
+  useEffect(() => {
+    if (legacyWorkflowStorageEnabled) {
+      setCanonicalCustomerHistory(null);
+      return undefined;
+    }
+
+    let active = true;
+    void fetchCustomerJobHistoryList({ limit: 50, setPage })
+      .then((history) => {
+        if (active) setCanonicalCustomerHistory(history);
+      })
+      .catch(() => {
+        if (active) setCanonicalCustomerHistory(null);
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [legacyWorkflowStorageEnabled, requestReloadKey, setPage]);
+
+  useEffect(() => {
+    if (legacyWorkflowStorageEnabled) return undefined;
+
+    let active = true;
+    const loadRequesterResponses = () => {
+      void getRequesterResponseInbox({ setPage }).then((result) => {
+        if (!active) return;
+        if (result.ok) setCanonicalRequesterResponses(result.responses);
+      });
+    };
+    loadRequesterResponses();
+    window.addEventListener("focus", loadRequesterResponses);
+    window.addEventListener("meetro-messages-updated", loadRequesterResponses);
+
+    return () => {
+      active = false;
+      window.removeEventListener("focus", loadRequesterResponses);
+      window.removeEventListener("meetro-messages-updated", loadRequesterResponses);
+    };
+  }, [legacyWorkflowStorageEnabled, requestReloadKey, conversationReloadKey, setPage]);
 
   const loadCanonicalHomeownerConversations = useCallback(
     ({ force = false } = {}) => {
@@ -549,11 +813,24 @@ function Home({ setPage }) {
     getConversationMetrics({ registry: conversationRegistry, role: "business" })
       .unreadConversationCount
   );
+  const homeownerUnreadMessageCount = getConversationMetrics({
+    registry: conversationRegistry,
+    role: "personal",
+  }).unreadConversationCount;
 
   function getConversationEntryForRequest(request = {}) {
     return resolveHomeownerConversationEntry({
       request,
       canonicalConversations: canonicalHomeownerConversations,
+    });
+  }
+
+  function getPresentationForRequest(request = {}) {
+    return deriveRequestPresentationState({
+      request,
+      responses: canonicalRequesterResponses,
+      conversations: canonicalHomeownerConversations,
+      language,
     });
   }
 
@@ -604,13 +881,31 @@ function Home({ setPage }) {
     setDetailsRequest(request);
   }
 
-  function openHistoryDetails(request) {
+  function openHistoryDetails(request, invoker = null) {
+    if (request?.canonicalHistory && request.jobId) {
+      canonicalHistoryInvokerRef.current = invoker;
+      setHistoryDetailsRequest(null);
+      setCanonicalHistoryJobId(request.jobId);
+      return;
+    }
+    setCanonicalHistoryJobId("");
     setHistoryDetailsRequest(request);
   }
 
   function openHomeownerProject(request = {}) {
     setActiveAccountMode("personal");
+    const presentation = getPresentationForRequest(request);
     const decision = getConversationEntryForRequest(request);
+
+    if (
+      presentation.applicable &&
+      presentation.key === REQUEST_PRESENTATION_STATES.RESPONSE_RECEIVED
+    ) {
+      stageHomeownerRequestContext(request);
+      clearSelectedConversationContext();
+      setPage("homeownerRequestDetails");
+      return;
+    }
 
     if (
       decision.action === HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.CONVERSATION
@@ -656,12 +951,12 @@ function Home({ setPage }) {
     }
   }
 
-  const spotlightBusinesses = getLocalSpotlightBusinesses();
+  const spotlightBusinesses = canonicalSpotlightBusinesses || [];
   const spotlightContexts = getSpotlightRequestContexts([], []);
   const matchedSpotlightBusinesses = getEligibleSpotlightBusinesses(
     spotlightBusinesses,
     spotlightContexts
-  );
+  ).filter((business) => getSpotlightBusinessIdentity(business?.id));
   const spotlightDebugSummary = buildLocalServicesSpotlightDebugSummary(
     spotlightBusinesses,
     spotlightContexts,
@@ -672,28 +967,34 @@ function Home({ setPage }) {
   useEffect(() => {
     if (!showSpotlightDebug) return;
     console.info("[Meetro Spotlight Debug]", spotlightDebugSummary);
-  }, [showSpotlightDebug, spotlightDebugSummary.debugKey]);
+  }, [showSpotlightDebug, spotlightDebugSummary]);
 
   useEffect(() => {
-    hydrateSpotlightPortfolioProjects(matchedSpotlightBusinesses, () =>
-      setSpotlightPortfolioRefresh((currentValue) => currentValue + 1)
-    );
-  }, [
-    matchedSpotlightBusinesses
-      .map((business) => getSpotlightContractorId(business))
-      .filter(Boolean)
-      .join("|"),
-    spotlightPortfolioRefresh,
-  ]);
+    const controller = new AbortController();
+    let active = true;
+
+    fetchCanonicalSpotlightBusinesses({
+      apiUrl: API_URL,
+      signal: controller.signal,
+    }).then((result) => {
+      if (!active || !result) return;
+      setCanonicalSpotlightBusinesses(result.records || []);
+    });
+
+    return () => {
+      active = false;
+      controller.abort();
+    };
+  }, []);
 
   const activeEmergencyInfo = getHomeActiveEmergencyInfo(language);
 
   if (isBusinessMode) {
     return (
-      <div className="app-page meetro-responsive-page" style={pageWrapper}>
+      <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
         <style>{homeLayoutMediaStyles}</style>
 
-        <TopBar />
+        <TopBar setPage={setPage} unreadCount={homeownerUnreadMessageCount} />
 
         <div style={businessHero}>
           <p style={eyebrow}>{t("businessDashboard")}</p>
@@ -770,15 +1071,15 @@ function Home({ setPage }) {
 
   if (homeView === "activeRequests") {
     return (
-      <div className="app-page meetro-responsive-page" style={pageWrapper}>
+      <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
         <style>{homeLayoutMediaStyles}</style>
-        <TopBar />
+        <TopBar setPage={setPage} unreadCount={homeownerUnreadMessageCount} />
 
         <button style={backHomeButton} onClick={() => setHomeView("landing")}>
           ← {t("backToHome", language)}
         </button>
 
-        <section style={homeWorkflowSection}>
+        <section className="home-dashboard-projects" style={homeWorkflowSection}>
           <div style={sectionHeader}>
             <div>
               <p style={sectionEyebrow}>{t("homeWorkflowLabel")}</p>
@@ -796,6 +1097,7 @@ function Home({ setPage }) {
                   request={request}
                   language={language}
                   conversationEntry={getConversationEntryForRequest(request)}
+                  presentationState={getPresentationForRequest(request)}
                   onClick={() => openHomeownerProject(request)}
                 />
               ))}
@@ -817,17 +1119,35 @@ function Home({ setPage }) {
     );
   }
 
+  if (canonicalHistoryJobId) {
+    return (
+      <div className="app-page meetro-responsive-page homeowner-home-dashboard homeowner-history-page" style={pageWrapper}>
+        <TopBar setPage={setPage} unreadCount={homeownerUnreadMessageCount} />
+        <HomeownerJobHistoryWorkspace
+          jobId={canonicalHistoryJobId}
+          language={language}
+          setPage={setPage}
+          onClose={() => {
+            historyReturnJobRef.current = canonicalHistoryJobId;
+            setCanonicalHistoryJobId("");
+          }}
+        />
+        <BottomNav setPage={setPage} currentPage="home" />
+      </div>
+    );
+  }
+
   if (homeView === "serviceHistory") {
     return (
-      <div className="app-page meetro-responsive-page" style={pageWrapper}>
+      <div className="app-page meetro-responsive-page homeowner-home-dashboard" style={pageWrapper}>
         <style>{homeLayoutMediaStyles}</style>
-        <TopBar />
+        <TopBar setPage={setPage} unreadCount={homeownerUnreadMessageCount} />
 
         <button style={backHomeButton} onClick={() => setHomeView("landing")}>
           ← {t("backToHome", language)}
         </button>
 
-        <section style={homeWorkflowSection}>
+        <section className="home-dashboard-projects" style={homeWorkflowSection}>
           <div style={sectionHeader}>
             <div>
               <p style={sectionEyebrow}>{t("homeHistoryEyebrow")}</p>
@@ -867,6 +1187,7 @@ function Home({ setPage }) {
             conversationEntry={getConversationEntryForRequest(
               historyDetailsRequest
             )}
+
             onOpenRecord={() => openCompletedRecord(historyDetailsRequest, setPage)}
             onMessageProfessional={() =>
               openHomeownerProject(historyDetailsRequest)
@@ -875,15 +1196,18 @@ function Home({ setPage }) {
           />
         )}
 
+
+
         <BottomNav setPage={setPage} currentPage="home" />
       </div>
     );
   }
 
   return (
-    <div className="app-page meetro-responsive-page" style={pageWrapper}>
+    <div className={`app-page meetro-responsive-page homeowner-home-dashboard ${myProjectsTab === "history" ? "homeowner-history-list-view" : ""}`} style={pageWrapper}>
       <style>{homeLayoutMediaStyles}</style>
-      <TopBar />
+      <TopBar setPage={setPage} unreadCount={homeownerUnreadMessageCount} />
+      <header className="home-dashboard-welcome"><h1>Good morning!</h1><p>Your home, our community.</p></header>
 
       {activeEmergencyInfo && (
         <div style={activeEmergencyCard}>
@@ -916,7 +1240,7 @@ function Home({ setPage }) {
         </div>
       )}
 
-      <section style={homeWorkflowSection}>
+      <section className="home-dashboard-projects" style={homeWorkflowSection}>
         <div style={sectionHeader}>
           <div>
             <p style={sectionEyebrow}>{t("homeWorkflowLabel")}</p>
@@ -925,13 +1249,14 @@ function Home({ setPage }) {
           </div>
         </div>
 
-        <div className="home-my-projects-tabs" style={segmentedControl}>
+        <div className="home-my-projects-tabs" role="group" aria-label={t("homeMyProjects", language)} style={segmentedControl}>
           <button
             type="button"
             style={{
               ...segmentedButton,
               ...(myProjectsTab === "active" ? segmentedButtonActive : {}),
             }}
+            aria-pressed={myProjectsTab === "active"}
             onClick={() => setMyProjectsTab("active")}
           >
             {t("homeMyProjectsActive", language)}
@@ -942,6 +1267,7 @@ function Home({ setPage }) {
               ...segmentedButton,
               ...(myProjectsTab === "history" ? segmentedButtonActive : {}),
             }}
+            aria-pressed={myProjectsTab === "history"}
             onClick={() => setMyProjectsTab("history")}
           >
             {t("homeMyProjectsHistory", language)}
@@ -961,6 +1287,7 @@ function Home({ setPage }) {
                     request={request}
                     language={language}
                     conversationEntry={getConversationEntryForRequest(request)}
+                    presentationState={getPresentationForRequest(request)}
                     onClick={() => openHomeownerProject(request)}
                   />
                 ))}
@@ -973,7 +1300,7 @@ function Home({ setPage }) {
             )
           ) : historyRequests.length > 0 ? (
             <div style={projectHistoryList}>
-              {historyRequests.slice(0, 3).map((request) => (
+              {historyRequests.map((request) => (
                 <HistoryRequestCard
                   key={request.requestId || request.id}
                   request={request}
@@ -1004,6 +1331,7 @@ function Home({ setPage }) {
                     request={request}
                     language={language}
                     conversationEntry={getConversationEntryForRequest(request)}
+                    presentationState={getPresentationForRequest(request)}
                     onClick={() => openHomeownerProject(request)}
                   />
                 ))}
@@ -1020,7 +1348,7 @@ function Home({ setPage }) {
             <h3 style={landscapeProjectsTitle}>{t("homeMyProjectsHistory", language)}</h3>
             {historyRequests.length > 0 ? (
               <div style={landscapeProjectsList}>
-                {historyRequests.slice(0, 2).map((request) => (
+                {(myProjectsTab === "history" ? [] : historyRequests.slice(0, 2)).map((request) => (
                   <HistoryRequestCard
                     key={request.requestId || request.id}
                     request={request}
@@ -1040,8 +1368,8 @@ function Home({ setPage }) {
         </div>
       </section>
 
-      <section style={spotlightSection}>
-        <div style={sectionHeader}>
+      <section className="home-dashboard-spotlight" style={spotlightSection}>
+        <div className="home-spotlight-section-header" style={spotlightSectionHeader}>
           <div>
             <p style={sectionEyebrow}>
               {t("homeLocalServicesEyebrow", language)}
@@ -1059,7 +1387,7 @@ function Home({ setPage }) {
           <div style={spotlightRow} aria-label={t("homeLocalServicesSpotlight", language)}>
             {matchedSpotlightBusinesses.map((business) => (
               <SpotlightCard
-                key={business.id || business.name || business.business_name}
+                key={getSpotlightBusinessIdentity(business.id)}
                 business={business}
                 language={language}
                 onViewProfile={() => {
@@ -1073,6 +1401,10 @@ function Home({ setPage }) {
               />
             ))}
           </div>
+        ) : canonicalSpotlightBusinesses === null ? (
+          <div style={spotlightEmptyCard} role="status">
+            {t("communityDirectoryLoadingTitle", language)}
+          </div>
         ) : (
           <div style={spotlightEmptyCard}>
             {t("homeLocalServicesEmpty", language)}
@@ -1080,31 +1412,76 @@ function Home({ setPage }) {
         )}
       </section>
 
-      <section className="home-community-entry" style={communityEntrySection}>
+      <section className="home-dashboard-moments" style={homeMomentsSection}>
+        <div className="home-moments-heading">
+          <div>
+            <p style={sectionEyebrow}>{t("momentsVerifiedHistory", language)}</p>
+            <h2 style={sectionTitle}>{t("navigationMoments", language)}</h2>
+            <p style={sectionGuideText}>{t("momentsPreservationStatementText", language)}</p>
+          </div>
+          <button type="button" className="home-moments-view-all" onClick={() => setPage("meetroMoments")}>{t("viewAll", language)} →</button>
+        </div>
+        {homeMoments.length > 0 ? (
+          <div className="home-moments-preview-grid">
+            {homeMoments.map((moment) => (
+              <button
+                key={moment.id}
+                type="button"
+                className="home-moment-preview"
+                onClick={() => {
+                  localStorage.setItem("selectedMeetroMomentId", String(moment.id));
+                  setPage(getMeetroMomentHashRoute(moment.id));
+                }}
+              >
+                <span className="home-moment-preview-icon"><MeetroIcon name="verified" size={22} decorative /></span>
+                <span className="home-moment-preview-copy">
+                  <strong>{moment.projectTitle || t("momentsCompletedProject", language)}</strong>
+                  <small>{[moment.businessName, moment.projectCategory].filter(Boolean).join(" · ") || t("momentsVerifiedLabel", language)}</small>
+                </span>
+                <span aria-hidden="true">→</span>
+              </button>
+            ))}
+          </div>
+        ) : (
+          <p className="home-moments-empty">{t("momentsEmptyTitle", language)}</p>
+        )}
+      </section>
+
+      <section
+        className="home-my-professionals-entry"
+        style={communityEntrySection}
+      >
         <button
           type="button"
           style={communityEntryCard}
-          onClick={() => setPage("discover")}
+          onClick={() => setPage("myProfessionals")}
         >
           <span style={communityEntryIcon}>
-            <MeetroIcon name="discover" size={24} decorative />
+            <MeetroIcon
+              name="customerRelationships"
+              size={24}
+              decorative
+            />
           </span>
+
           <span style={communityEntryCopy}>
             <strong style={communityEntryTitle}>
-              {t("communityEntryTitle", language)}
+              {t("myProfessionals", language)}
             </strong>
+
             <span style={communityEntryText}>
-              {t("communityEntryHomeCopy", language)}
+              {t("myProfessionalsSubtitle", language)}
             </span>
           </span>
+
           <span style={communityEntryAction}>
-            {t("communityOpenAction", language)} →
+            {t("open", language)} →
           </span>
         </button>
       </section>
 
-      <section style={quickHelpSection}>
-        <div style={sectionHeader}>
+      <section className="home-dashboard-help" style={quickHelpSection}>
+        <div className="home-help-section-header" style={helpSectionHeader}>
           <div>
             <p style={sectionEyebrow}>{t("homeownerWorkflowHome")}</p>
             <h2 style={sectionTitle}>{t("homeHelpToday")}</h2>
@@ -1112,15 +1489,22 @@ function Home({ setPage }) {
           </div>
         </div>
 
-        <div style={helpActionGrid}>
-          <button style={helpActionCard} onClick={() => setPage("upload")}>
-            <span style={helpActionIcon}>
+        <div className="home-help-action-grid" style={helpActionGrid}>
+          <button
+            type="button"
+            className="home-help-action-card"
+            style={helpActionCard}
+            onClick={() => setPage("upload")}
+          >
+            <span className="home-help-action-icon" style={helpActionIcon}>
               <MeetroIcon name="request" size={24} decorative />
             </span>
             <strong>{t("requestService")}</strong>
           </button>
 
           <button
+            type="button"
+            className="home-help-action-card"
             style={helpActionCard}
             onClick={() => {
               if (activeEmergencyInfo) {
@@ -1130,7 +1514,10 @@ function Home({ setPage }) {
               setPage("emergency");
             }}
           >
-            <span style={{ ...helpActionIcon, ...helpEmergencyIcon }}>
+            <span
+              className="home-help-action-icon"
+              style={{ ...helpActionIcon, ...helpEmergencyIcon }}
+            >
               <MeetroIcon name="emergency" size={24} decorative />
             </span>
             <strong>
@@ -1140,15 +1527,6 @@ function Home({ setPage }) {
             </strong>
           </button>
 
-          <button
-            style={helpActionCard}
-            onClick={() => window.dispatchEvent(new Event("meetro:assistant:open"))}
-          >
-            <span style={helpActionIcon}>
-              <MeetroIcon name="aiHelp" size={24} decorative />
-            </span>
-            <strong>{t("assistantCompanionAskMeetro", language)}</strong>
-          </button>
         </div>
       </section>
 
@@ -1191,23 +1569,34 @@ function Home({ setPage }) {
           conversationEntry={getConversationEntryForRequest(
             historyDetailsRequest
           )}
+
           onOpenRecord={() => openCompletedRecord(historyDetailsRequest, setPage)}
           onMessageProfessional={() => openHomeownerProject(historyDetailsRequest)}
           onClose={() => setHistoryDetailsRequest(null)}
         />
       )}
 
+
+
       <BottomNav setPage={setPage} currentPage="home" />
     </div>
   );
 }
 
-function TopBar() {
+function TopBar({ setPage, unreadCount = 0 }) {
   return (
     <div className="home-top-bar" style={topBar}>
       <div className="home-brand-wrap" style={brandWrap}>
-        <span className="home-brand-main" style={brandMain}>Meetro</span>
-        <span className="home-brand-badge" style={brandBadge}>Community</span>
+        <span className="home-dashboard-brand-copy">
+          <strong className="home-brand-main" style={brandMain}>Meetro</strong>
+          <small className="home-brand-badge" style={brandBadge}>Community</small>
+        </span>
+      </div>
+      <div className="home-dashboard-topbar-actions">
+        <button className="home-dashboard-notification" type="button" aria-label="Open communications" onClick={() => setPage("messagesInbox")}>
+          <MeetroIcon name="notifications" size={20} decorative />
+          {unreadCount > 0 ? <span className="home-dashboard-notification-count">{unreadCount}</span> : null}
+        </button>
       </div>
     </div>
   );
@@ -1321,100 +1710,6 @@ function getHomeActiveEmergencyInfo(language = "en") {
       : t("viewEmergencyProgress", language),
     isCompletedReview,
   };
-}
-
-function getLocalSpotlightBusinesses() {
-  return [];
-}
-
-function getSpotlightContractorId(business = {}) {
-  return String(
-    business.contractorId ||
-      business.contractor_id ||
-      business.businessId ||
-      business.business_id ||
-      business.id ||
-      ""
-  ).trim();
-}
-
-function hasSpotlightProjectPhotos(business = {}) {
-  const projectBuckets = [
-    ...(Array.isArray(business.businessPortfolio) ? business.businessPortfolio : []),
-    ...(Array.isArray(business.business_portfolio) ? business.business_portfolio : []),
-    ...(Array.isArray(business.projects) ? business.projects : []),
-    ...(Array.isArray(business.projectGallery) ? business.projectGallery : []),
-    ...(Array.isArray(business.project_gallery) ? business.project_gallery : []),
-  ];
-
-  return projectBuckets.some(
-    (project) => getBusinessPortfolioProjectImages(project).length > 0
-  );
-}
-
-function getSpotlightPortfolioFetchCache() {
-  try {
-    const parsed = JSON.parse(
-      localStorage.getItem("meetroSpotlightPortfolioFetchCache") || "{}"
-    );
-    return parsed && typeof parsed === "object" ? parsed : {};
-  } catch {
-    return {};
-  }
-}
-
-function setSpotlightPortfolioFetchCache(cache = {}) {
-  try {
-    localStorage.setItem(
-      "meetroSpotlightPortfolioFetchCache",
-      JSON.stringify(cache)
-    );
-  } catch {}
-}
-
-async function hydrateSpotlightPortfolioProjects(
-  businesses = [],
-  onPortfolioHydrated = () => {}
-) {
-  if (!Array.isArray(businesses) || businesses.length === 0) return;
-
-  const cache = getSpotlightPortfolioFetchCache();
-  const now = Date.now();
-  const oneDayMs = 24 * 60 * 60 * 1000;
-  const businessesToFetch = businesses.filter((business) => {
-    const contractorId = getSpotlightContractorId(business);
-    if (!contractorId || hasSpotlightProjectPhotos(business)) return false;
-
-    const cachedAt = Number(cache[contractorId] || 0);
-    return !cachedAt || now - cachedAt > oneDayMs;
-  });
-
-  if (businessesToFetch.length === 0) return;
-
-  await Promise.all(
-    businessesToFetch.map(async (business) => {
-      const contractorId = getSpotlightContractorId(business);
-      cache[contractorId] = now;
-      setSpotlightPortfolioFetchCache(cache);
-
-      try {
-        const response = await fetch(
-          `${API_URL}/contractor-projects/${encodeURIComponent(contractorId)}`
-        );
-        if (!response.ok) return;
-
-        const data = await response.json();
-        const projects = Array.isArray(data?.projects) ? data.projects : [];
-        if (projects.length === 0) return;
-
-        if (projects.length > 0) onPortfolioHydrated();
-      } catch (error) {
-        if (localStorage.getItem("meetroSpotlightDebug") === "true") {
-          console.warn("[Meetro Spotlight Portfolio Fetch]", error);
-        }
-      }
-    })
-  );
 }
 
 function buildLocalServicesSpotlightDebugSummary(
@@ -1670,8 +1965,14 @@ function SpotlightCard({ business, language, onViewProfile }) {
     identity.description || t("homeSpotlightFallbackDescription", language);
   const portfolioProof = getBusinessPortfolioProofProjection(business, {
     translate: (key) => t(key, language),
+    reviews: [],
+    useStorageFallback: false,
   });
   const featuredProject = portfolioProof.featuredProject;
+  const presentationId = getSpotlightPresentationIdentity(
+    business.id,
+    featuredProject?.id
+  );
   const featuredProjectTitle =
     featuredProject?.title ||
     featuredProject?.name ||
@@ -1723,9 +2024,12 @@ function SpotlightCard({ business, language, onViewProfile }) {
       })
     : "";
   const logoUrl = identity.imageUrl || getSpotlightAvatarUrl(business);
+  const [failedLogoUrl, setFailedLogoUrl] = useState("");
+  const visibleLogoUrl = logoUrl && failedLogoUrl !== logoUrl ? logoUrl : "";
   const mediaUrls = featuredProjectMediaUrls.length
     ? featuredProjectMediaUrls
     : portfolioProof.mediaUrls;
+  const hasSpotlightMedia = mediaUrls.length > 0;
   const photoCountLabel =
     mediaUrls.length === 1
       ? t("homeOnePhoto", language)
@@ -1738,9 +2042,14 @@ function SpotlightCard({ business, language, onViewProfile }) {
         : t("homeSpotlightRelationshipHint", language);
 
   return (
-    <article style={spotlightCard}>
-      <div style={spotlightHero}>
+    <article className="home-spotlight-card" style={spotlightCard}>
+      <div
+        className={`home-spotlight-hero${hasSpotlightMedia ? "" : " is-placeholder"}`}
+        style={spotlightHero}
+      >
         <SpotlightSlideshow
+          key={presentationId}
+          presentationId={presentationId}
           images={mediaUrls}
           alt={storyTitle}
           photoCountLabel={photoCountLabel}
@@ -1748,23 +2057,60 @@ function SpotlightCard({ business, language, onViewProfile }) {
           previousLabel={t("homePreviousPhoto", language)}
           nextLabel={t("homeNextPhoto", language)}
         />
-        <div style={spotlightHeroOverlay} />
-        <div style={spotlightHeroCopy}>
-          <span style={spotlightStoryEyebrow}>{t("homeSpotlightStoryEyebrow", language)}</span>
-          <h3 style={spotlightStoryTitle}>{storyTitle}</h3>
-          <p style={spotlightStoryBody}>{storyBody}</p>
+        <div
+          style={hasSpotlightMedia ? spotlightHeroOverlay : spotlightHeroPlaceholderOverlay}
+        />
+        <div
+          className="home-spotlight-hero-copy"
+          style={{
+            ...spotlightHeroCopy,
+            ...(!hasSpotlightMedia ? spotlightHeroCopyPlaceholder : {}),
+          }}
+        >
+          <span
+            className={`home-spotlight-story-eyebrow${hasSpotlightMedia ? "" : " is-placeholder"}`}
+            style={{
+              ...spotlightStoryEyebrow,
+              ...(!hasSpotlightMedia ? spotlightStoryEyebrowPlaceholder : {}),
+            }}
+          >
+            {t("homeSpotlightStoryEyebrow", language)}
+          </span>
+          <h3
+            className="home-spotlight-story-title"
+            style={{
+              ...spotlightStoryTitle,
+              ...(!hasSpotlightMedia ? spotlightStoryTitlePlaceholder : {}),
+            }}
+          >
+            {storyTitle}
+          </h3>
+          <p
+            className="home-spotlight-story-body"
+            style={{
+              ...spotlightStoryBody,
+              ...(!hasSpotlightMedia ? spotlightStoryBodyPlaceholder : {}),
+            }}
+          >
+            {storyBody}
+          </p>
         </div>
       </div>
 
-      <div style={spotlightContent}>
+      <div className="home-spotlight-content" style={spotlightContent}>
         <span style={spotlightBusinessIntro}>
           {t("homeSpotlightBusinessIntro", language)}
         </span>
 
-        <div style={spotlightBusinessRow}>
-          <div style={spotlightLogoWrap}>
-            {logoUrl ? (
-              <img src={logoUrl} alt="" style={spotlightLogoImage} />
+        <div className="home-spotlight-business-row" style={spotlightBusinessRow}>
+          <div style={spotlightLogoWrap} aria-hidden="true">
+            {visibleLogoUrl ? (
+              <img
+                src={visibleLogoUrl}
+                alt=""
+                style={spotlightLogoImage}
+                onError={() => setFailedLogoUrl(visibleLogoUrl)}
+              />
             ) : (
               <span style={spotlightLogoFallback}>
                 {String(name || "M").charAt(0).toUpperCase()}
@@ -1772,22 +2118,33 @@ function SpotlightCard({ business, language, onViewProfile }) {
             )}
           </div>
 
-          <div style={spotlightBusinessText}>
-            <strong style={spotlightName}>{name}</strong>
-            <span style={spotlightCategory}>{category}</span>
+          <div className="home-spotlight-business-text" style={spotlightBusinessText}>
+            <strong style={spotlightName} title={name}>{name}</strong>
+            <span style={spotlightCategory} title={category}>{category}</span>
             {servingLine && (
               <span style={spotlightServingLine}>{servingLine}</span>
             )}
-            <span style={spotlightServingLine}>{relationshipLine}</span>
           </div>
+        </div>
+
+        <div className="home-spotlight-trust-line" style={spotlightTrustLine}>
+          <MeetroIcon name="reviews" size={14} decorative />
+          <span>{relationshipLine}</span>
         </div>
 
         <p style={spotlightDescription}>
           {t("homeSpotlightProofLine", language)}
         </p>
 
-        <button type="button" style={spotlightButton} onClick={onViewProfile}>
-          {t("homeViewProfile", language)}
+        <button
+          type="button"
+          className="home-spotlight-button"
+          style={spotlightButton}
+          onClick={onViewProfile}
+        >
+          <span aria-hidden="true" />
+          <span>{t("homeViewProfile", language)}</span>
+          <span style={spotlightButtonArrow} aria-hidden="true">→</span>
         </button>
       </div>
     </article>
@@ -1806,22 +2163,16 @@ function ToolCard({ icon, title, text, onClick }) {
   );
 }
 
-function ProjectCard({ request, language, conversationEntry, onClick }) {
+function ProjectCard({ request, language, conversationEntry, presentationState, onClick }) {
   const journey = getHomeownerProjectJourney(request, language);
-  const professionalName =
-    conversationEntry?.action ===
-    HOMEOWNER_CONVERSATION_ENTRY_ACTIONS.CONVERSATION
-      ? conversationEntry.conversation?.businessName ||
-        conversationEntry.conversation?.business_name ||
-        ""
-      : "";
-  const actionLabel = getHomeProjectEntryActionLabel(
-    request,
-    journey,
-    conversationEntry,
-    language
+  const canonicalPresentation = presentationState?.applicable ? presentationState : null;
+  const professionalName = canonicalPresentation?.businessName || "";
+  const actionLabel = canonicalPresentation?.ctaLabel || getHomeProjectEntryActionLabel(
+    request, journey, conversationEntry, language
   );
-  const nextStepCopy = getHomeProjectNextStepCopy(request, journey, language);
+  const nextStepCopy = canonicalPresentation?.guidance ||
+    getHomeProjectNextStepCopy(request, journey, language);
+  const statusLabel = canonicalPresentation?.statusLabel || journey.currentTitle;
 
   return (
     <div style={projectCard}>
@@ -1832,7 +2183,7 @@ function ProjectCard({ request, language, conversationEntry, onClick }) {
               request.category ||
               t("homeServiceRequest", language)}
           </h3>
-          <span style={projectBadge}>{journey.currentTitle}</span>
+          <span style={projectBadge}>{statusLabel}</span>
         </div>
       </div>
 
@@ -2314,7 +2665,50 @@ function ServiceHistoryDetailsSheet({
   );
 }
 
+function HomeownerJobHistoryWorkspace({ jobId, language, setPage, onClose }) {
+  const copy = getJobCompletionCopy(language);
+  const backRef = useRef(null);
+  useEffect(() => { backRef.current?.focus(); }, [jobId]);
+
+  return (
+    <section className="homeowner-history-detail" aria-label={copy.history}
+      data-homeowner-history-workspace={jobId}
+      onKeyDown={event => {
+        if (event.key === "Escape") { event.preventDefault(); onClose(); }
+      }}>
+      <button ref={backRef} type="button" className="homeowner-history-back" onClick={onClose}>
+        <span aria-hidden="true">←</span> {copy.homeownerBackToHistory}
+      </button>
+      <CustomerCompletionHistory jobId={jobId} language={language} setPage={setPage} />
+    </section>
+  );
+}
+
 function HistoryRequestCard({ request, language, setPage, onDetails }) {
+  if (request.canonicalHistory) {
+    const copy = getJobCompletionCopy(language);
+    const amount = request.approvedQuote
+      ? formatLocaleCurrency(request.approvedQuote.totalMinor / 100, request.approvedQuote.currency, {}, language)
+      : "";
+    return (
+      <article className="homeowner-history-card" data-homeowner-history-card={request.jobId}>
+        <span className="homeowner-history-completed">{copy.completed}</span>
+        <div className="homeowner-history-card-heading">
+          <h3>{request.title || t("homeCompletedService", language)}</h3>
+          {amount && <strong className="homeowner-history-money">{amount}</strong>}
+        </div>
+        <p>{request.professionalName || t("homeProfessionalUnavailable", language)}</p>
+        <p className="homeowner-history-date">{copy.completedOn} {request.completedAt
+          ? formatLocaleDate(request.completedAt, { month: "short", day: "numeric", year: "numeric" }, language)
+          : t("homeDatePending", language)}</p>
+        <button type="button" className="homeowner-history-view" data-history-open-job={request.jobId}
+          onClick={event => onDetails?.(request, event.currentTarget)}>
+          {copy.viewHistory} <span aria-hidden="true">→</span>
+        </button>
+      </article>
+    );
+  }
+
   const lifecycle = getHomeownerLifecycleStage(request, language);
   const isClosed = request.status === "closed" || lifecycle.key === "history";
   const completedDate = request.completedAt
@@ -2400,7 +2794,8 @@ function HistoryRequestCard({ request, language, setPage, onDetails }) {
           style={historyButton}
           onClick={(e) => {
             e.stopPropagation();
-            openCompletedRecord(request, setPage);
+            if (request.canonicalHistory) onDetails?.(request, e.currentTarget);
+            else openCompletedRecord(request, setPage);
           }}
         >
           {t("viewDetails", language)}
@@ -2420,16 +2815,18 @@ function HistoryRequestCard({ request, language, setPage, onDetails }) {
             </button>
           )}
 
-          <button
-            type="button"
-            style={historySecondaryButton}
-            onClick={(event) => {
-              event.stopPropagation();
-              onDetails?.(request);
-            }}
-          >
-            {reviewLabel}
-          </button>
+          {!request.canonicalHistory && (
+            <button
+              type="button"
+              style={historySecondaryButton}
+              onClick={(event) => {
+                event.stopPropagation();
+                onDetails?.(request);
+              }}
+            >
+              {reviewLabel}
+            </button>
+          )}
         </div>
       </div>
     </div>
@@ -2749,39 +3146,51 @@ const compactEmptyCard = {
 
 const quickHelpSection = {
   marginBottom: "20px",
-  padding: "16px",
-  borderRadius: "24px",
+  padding: "clamp(18px, 3vw, 26px)",
+  borderRadius: "28px",
   background: "var(--meetro-surface-paper)",
   border: "1px solid var(--meetro-color-line)",
-  boxShadow: "var(--meetro-shadow-soft)",
+  boxShadow: "0 12px 32px rgba(31,77,52,0.08)",
+};
+
+const helpSectionHeader = {
+  ...sectionHeader,
+  justifyContent: "center",
+  textAlign: "center",
+  marginBottom: "18px",
 };
 
 const helpActionGrid = {
   display: "grid",
-  gridTemplateColumns: "repeat(3, minmax(0, 1fr))",
-  gap: "10px",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "14px",
 };
 
 const helpActionCard = {
-  minHeight: "92px",
+  width: "100%",
+  minHeight: "82px",
   border: "1px solid var(--meetro-color-line)",
-  background: "var(--meetro-surface-paper)",
-  borderRadius: "18px",
-  padding: "13px 8px",
+  background: "var(--meetro-surface-warm)",
+  borderRadius: "20px",
+  padding: "14px 16px",
   display: "grid",
-  placeItems: "center",
-  gap: "8px",
+  gridTemplateColumns: "46px minmax(0, 1fr)",
+  alignItems: "center",
+  gap: "12px",
   color: "var(--meetro-color-ink)",
-  fontSize: "13px",
+  fontSize: "14px",
   fontWeight: "950",
   cursor: "pointer",
-  textAlign: "center",
+  textAlign: "left",
+  boxShadow: "0 6px 18px rgba(31,77,52,0.06)",
+  transition:
+    "background 160ms ease, border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease",
 };
 
 const helpActionIcon = {
-  width: "42px",
-  height: "42px",
-  borderRadius: "16px",
+  width: "46px",
+  height: "46px",
+  borderRadius: "17px",
   background: "var(--meetro-surface-sage)",
   color: "var(--meetro-color-forest)",
   display: "grid",
@@ -2813,19 +3222,25 @@ const spotlightSection = {
   overflow: "visible",
 };
 
+const spotlightSectionHeader = {
+  ...sectionHeader,
+  marginBottom: "16px",
+};
+
 const spotlightRow = {
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,
   display: "flex",
-  gap: "14px",
+  alignItems: "stretch",
+  gap: "18px",
   overflowX: "auto",
   overflowY: "hidden",
   WebkitOverflowScrolling: "touch",
   overscrollBehaviorX: "contain",
   scrollbarWidth: "none",
-  scrollSnapType: "x mandatory",
-  padding: "2px 2px 10px",
+  scrollSnapType: "x proximity",
+  padding: "4px 2px 14px",
   boxSizing: "border-box",
 };
 
@@ -2851,6 +3266,11 @@ const spotlightDebugLine = {
 };
 
 const communityEntrySection = {
+  marginBottom: "22px",
+};
+
+const homeMomentsSection = {
+  ...homeWorkflowSection,
   marginBottom: "22px",
 };
 
@@ -2912,32 +3332,36 @@ const communityEntryAction = {
 };
 
 const spotlightSubtitle = {
-  margin: "2px 0 20px",
+  margin: "2px 0 0",
   color: "var(--meetro-color-muted)",
-  fontSize: "16px",
-  lineHeight: 1.35,
-  fontWeight: "650",
+  fontSize: "15px",
+  lineHeight: 1.45,
+  fontWeight: "620",
+  maxWidth: "620px",
 };
 
 const spotlightCard = {
-  width: "88vw",
-  maxWidth: "520px",
+  width: "min(84vw, 460px)",
+  maxWidth: "460px",
   flex: "0 0 auto",
   boxSizing: "border-box",
   scrollSnapAlign: "start",
-  borderRadius: "30px",
+  borderRadius: "24px",
   border: "1px solid var(--meetro-color-line)",
   background: "var(--meetro-surface-paper)",
-  boxShadow: "var(--meetro-shadow-lifted)",
+  boxShadow: "0 12px 32px rgba(31,77,52,0.11)",
   overflow: "hidden",
   color: "var(--meetro-color-ink)",
+  display: "flex",
+  flexDirection: "column",
 };
 
 const spotlightHero = {
   position: "relative",
-  minHeight: "320px",
+  height: "clamp(250px, 56vw, 292px)",
+  minHeight: "250px",
   overflow: "hidden",
-  background: "#111827",
+  background: "var(--meetro-surface-sage)",
 };
 
 const spotlightHeroOverlay = {
@@ -2945,140 +3369,206 @@ const spotlightHeroOverlay = {
   inset: 0,
   pointerEvents: "none",
   background:
-    "linear-gradient(0deg, rgba(15,23,42,0.86), rgba(15,23,42,0.38) 58%, rgba(15,23,42,0.14)), linear-gradient(90deg, rgba(15,23,42,0.62), rgba(15,23,42,0.12))",
+    "radial-gradient(ellipse 78% 64% at 50% 67%, rgba(7,22,14,0.76) 0%, rgba(7,22,14,0.58) 39%, rgba(7,22,14,0.22) 67%, transparent 84%), linear-gradient(90deg, rgba(7,19,12,0.10) 0%, rgba(7,19,12,0.28) 31%, rgba(7,19,12,0.30) 69%, rgba(7,19,12,0.10) 100%), linear-gradient(0deg, rgba(7,19,12,0.64) 0%, rgba(7,19,12,0.20) 54%, transparent 78%)",
+};
+
+const spotlightHeroPlaceholderOverlay = {
+  position: "absolute",
+  inset: 0,
+  pointerEvents: "none",
+  background:
+    "linear-gradient(0deg, rgba(247,242,232,0.98), rgba(247,242,232,0.68) 58%, rgba(247,242,232,0.08))",
 };
 
 const spotlightHeroCopy = {
   position: "absolute",
-  left: "18px",
-  right: "18px",
+  left: "54px",
+  right: "54px",
   bottom: "18px",
   color: "#fff",
   display: "grid",
   gap: "8px",
+  justifyItems: "center",
+  textAlign: "center",
+};
+
+const spotlightHeroCopyPlaceholder = {
+  color: "var(--meetro-color-forest)",
 };
 
 const spotlightStoryEyebrow = {
   justifySelf: "start",
   borderRadius: "999px",
-  border: "1px solid rgba(255,255,255,0.20)",
-  background: "rgba(255,255,255,0.16)",
-  backdropFilter: "blur(12px)",
-  WebkitBackdropFilter: "blur(12px)",
-  color: "#fde68a",
-  padding: "7px 10px",
-  fontSize: "11px",
+  border: "1px solid rgba(255,255,255,0.50)",
+  background: "rgba(255,255,255,0.20)",
+  backdropFilter: "blur(12px) saturate(140%)",
+  WebkitBackdropFilter: "blur(12px) saturate(140%)",
+  color: "#fff4cf",
+  padding: "5px 8px",
+  fontSize: "10px",
   lineHeight: 1,
   fontWeight: "950",
-  letterSpacing: "0.07em",
+  letterSpacing: "0.06em",
   textTransform: "uppercase",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.52), 0 4px 12px rgba(7,19,12,0.14)",
+  textShadow: "0 1px 7px rgba(7,19,12,0.70)",
+};
+
+const spotlightStoryEyebrowPlaceholder = {
+  border: "1px solid rgba(31,77,52,0.16)",
+  background: "rgba(255,255,255,0.82)",
+  color: "var(--meetro-color-wood)",
+  backdropFilter: "none",
+  WebkitBackdropFilter: "none",
+  boxShadow: "none",
+  textShadow: "none",
 };
 
 const spotlightStoryTitle = {
   margin: 0,
+  width: "100%",
+  maxWidth: "370px",
   color: "#fff",
-  fontSize: "clamp(1.75rem, 6vw, 2.7rem)",
-  lineHeight: 0.98,
+  fontSize: "clamp(1.7rem, 4.5vw, 2.15rem)",
+  lineHeight: 1.03,
   letterSpacing: 0,
   fontWeight: "950",
-  textShadow: "0 16px 34px rgba(0,0,0,0.42)",
+  textShadow: "0 3px 18px rgba(0,0,0,0.62), 0 14px 34px rgba(0,0,0,0.36)",
+  overflowWrap: "anywhere",
+};
+
+const spotlightStoryTitlePlaceholder = {
+  color: "var(--meetro-color-forest)",
+  textShadow: "none",
 };
 
 const spotlightStoryBody = {
   margin: 0,
-  maxWidth: "420px",
-  color: "rgba(255,255,255,0.90)",
-  fontSize: "14px",
-  lineHeight: 1.45,
-  fontWeight: "760",
-  textShadow: "0 10px 26px rgba(0,0,0,0.38)",
+  maxWidth: "340px",
+  color: "rgba(255,255,255,0.92)",
+  fontSize: "13px",
+  lineHeight: 1.4,
+  fontWeight: "620",
+  textShadow: "0 2px 12px rgba(0,0,0,0.58)",
+};
+
+const spotlightStoryBodyPlaceholder = {
+  color: "var(--meetro-color-muted)",
+  textShadow: "none",
 };
 
 const spotlightContent = {
   display: "grid",
-  gap: "12px",
-  padding: "15px 16px 17px",
+  gap: "10px",
+  gridTemplateRows: "auto auto auto minmax(0, 1fr) auto",
+  padding: "16px 18px 18px",
   minWidth: 0,
+  flex: 1,
 };
 
 const spotlightBusinessIntro = {
+  display: "block",
+  textAlign: "center",
   color: "#b7791f",
-  fontSize: "12px",
+  fontSize: "10px",
   fontWeight: "950",
-  letterSpacing: "0.05em",
+  letterSpacing: "0.06em",
   textTransform: "uppercase",
 };
 
 const spotlightBusinessRow = {
   display: "flex",
-  alignItems: "center",
-  gap: "13px",
+  alignItems: "flex-start",
+  gap: "12px",
   minWidth: 0,
 };
 
 const spotlightLogoWrap = {
-  width: "46px",
-  height: "46px",
+  width: "48px",
+  height: "48px",
   borderRadius: "50%",
   overflow: "hidden",
-  background: "#0f172a",
+  background: "var(--meetro-color-forest)",
   display: "grid",
   placeItems: "center",
   flexShrink: 0,
-  boxShadow: "0 10px 24px rgba(15,23,42,0.18)",
+  boxShadow: "0 7px 18px rgba(31,77,52,0.16)",
 };
 
 const spotlightLogoImage = {
   width: "100%",
   height: "100%",
-  objectFit: "cover",
+  objectFit: "contain",
+  padding: "4px",
+  boxSizing: "border-box",
+  background: "#ffffff",
   display: "block",
 };
 
 const spotlightLogoFallback = {
   color: "#ffffff",
-  fontSize: "22px",
+  fontSize: "19px",
   fontWeight: "950",
 };
 
 const spotlightBusinessText = {
   display: "grid",
-  gap: "3px",
+  gap: "2px",
   minWidth: 0,
 };
 
 const spotlightName = {
-  color: "var(--meetro-color-ink)",
-  fontSize: "19px",
+  color: "var(--meetro-color-forest)",
+  fontSize: "18px",
+  lineHeight: 1.16,
   fontWeight: "950",
   overflow: "hidden",
   textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
+  overflowWrap: "anywhere",
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
 };
 
 const spotlightCategory = {
-  color: "var(--meetro-color-muted)",
-  fontSize: "14px",
-  fontWeight: "850",
+  color: "#55715e",
+  fontSize: "13px",
+  lineHeight: 1.3,
+  fontWeight: "750",
   overflow: "hidden",
   textOverflow: "ellipsis",
-  whiteSpace: "nowrap",
   overflowWrap: "anywhere",
+  display: "-webkit-box",
+  WebkitLineClamp: 2,
+  WebkitBoxOrient: "vertical",
 };
 
 const spotlightServingLine = {
   color: "var(--meetro-color-muted)",
+  fontSize: "11px",
+  lineHeight: 1.32,
+  fontWeight: "750",
+  overflowWrap: "anywhere",
+};
+
+const spotlightTrustLine = {
+  display: "flex",
+  alignItems: "center",
+  gap: "6px",
+  color: "#667268",
   fontSize: "12px",
-  fontWeight: "850",
+  lineHeight: 1.35,
+  fontWeight: "700",
   overflowWrap: "anywhere",
 };
 
 const spotlightDescription = {
   margin: 0,
   color: "var(--meetro-color-muted)",
-  fontSize: "14px",
+  fontSize: "13px",
   lineHeight: 1.38,
-  fontWeight: "650",
+  fontWeight: "620",
   overflowWrap: "anywhere",
   display: "-webkit-box",
   WebkitLineClamp: 2,
@@ -3088,15 +3578,32 @@ const spotlightDescription = {
 
 const spotlightButton = {
   width: "100%",
-  minHeight: "46px",
+  minHeight: "50px",
   border: "0",
-  borderRadius: "999px",
-  background: "var(--meetro-gradient-community-action)",
+  borderRadius: "15px",
+  background:
+    "linear-gradient(135deg, var(--meetro-color-forest) 0%, #236642 100%)",
   color: "#ffffff",
+  padding: "0 14px",
   fontSize: "15px",
-  fontWeight: "950",
+  fontWeight: "900",
   cursor: "pointer",
-  boxShadow: "0 12px 28px rgba(31,77,52,0.22)",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.20), 0 6px 16px rgba(31,77,52,0.14)",
+  display: "grid",
+  gridTemplateColumns: "24px minmax(0, 1fr) 24px",
+  alignItems: "center",
+  justifyItems: "center",
+  justifySelf: "stretch",
+  marginTop: "auto",
+  transition: "filter 160ms ease, transform 160ms ease, box-shadow 160ms ease",
+};
+
+const spotlightButtonArrow = {
+  justifySelf: "end",
+  fontSize: "19px",
+  lineHeight: 1,
+  fontWeight: "700",
 };
 
 const sectionEyebrow = {
@@ -3322,7 +3829,8 @@ const activeProjectsCarousel = {
   gap: "14px",
   overflowX: "auto",
   WebkitOverflowScrolling: "touch",
-  scrollSnapType: "x mandatory",
+  overscrollBehaviorX: "contain",
+  scrollSnapType: "x proximity",
   width: "100%",
   maxWidth: "100%",
   minWidth: 0,

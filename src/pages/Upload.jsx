@@ -1,9 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { readRequestHelpContext, canResumeRequestHelpDraft, requestHelpContextRoute, requestHelpSessionKey, subscribeRequestHelpSession } from "../utils/requestHelpContext.js";
+import { createEmergencyFollowUpJobRequest } from "../utils/emergencyApi.js";
+import { readEmergencyFollowUpRequestRoute, getEmergencyFollowUpRequestCopy } from "../utils/emergencyFollowUpRequestRoute.js";
+import { useEffect, useRef, useState, useSyncExternalStore } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import GuidedWorkspaceCard from "../components/GuidedWorkspaceCard";
 import ServiceSelectorSheet from "../components/ServiceSelectorSheet";
-import { authFetch } from "../utils/authFetch";
-import { getLanguage, t } from "../utils/language";
+import { authFetch, handleAuthExpired } from "../utils/authFetch";
+import { t } from "../utils/language";
 import {
   clearAssistantRequestDraft,
   clearAssistantRequestDraftHandoff,
@@ -68,10 +72,23 @@ import {
 } from "../utils/requestPhotoMedia";
 import {
   applyJobRequestInterpretationPatch,
+  confirmAppliedJobRequestInterpretationFields,
+  createJobRequestInterpretationReviewKeys,
   createJobRequestInterpretIntent,
   markJobRequestInterpretIntentAmbiguous,
+  recordJobRequestInterpretationReviews,
   requestJobRequestInterpretation,
 } from "../utils/jobRequestInterpret";
+import {
+  createIntelligenceKey,
+  recordWorkflowReview,
+} from "../utils/contextualIntelligence";
+import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage";
+import WorkflowMicrophoneInput from "../components/WorkflowMicrophoneInput.jsx";
+import {
+  applyExistingCustomerRequestAuthority,
+  readExistingCustomerRequestRoute,
+} from "../utils/existingCustomerRequestRoute.js";
 import {
   JOB_REQUEST_INTERPRETATION_FAILURE,
   applyHomeownerConversationText,
@@ -141,6 +158,57 @@ function buildSuggestedRequestTitle(value = "", fallback = "") {
   return title.charAt(0).toUpperCase() + title.slice(1);
 }
 
+function createHomeownerDraftFingerprint(draft = {}) {
+  return JSON.stringify({
+    job: {
+      title: draft.job?.title || "",
+      description: draft.job?.description || "",
+    },
+    service: {
+      category: draft.service?.category || "",
+      customCategory: draft.service?.customCategory || "",
+      requestCategory: draft.service?.requestCategory || "",
+      domain: draft.service?.domain || "",
+      specialty: draft.service?.specialty || "",
+      selectedServiceOptionId:
+        draft.service?.selectedServiceOptionId || "",
+      displayLabel: draft.service?.displayLabel || "",
+    },
+    location: {
+      intakeMode: draft.location?.intakeMode || "",
+      serviceAddress:
+        draft.location?.serviceAddress || "",
+      city: draft.location?.city || "",
+      region: draft.location?.region || "",
+      postalCode: draft.location?.postalCode || "",
+      countryCode: draft.location?.countryCode || "",
+      unitNumber: draft.location?.unitNumber || "",
+      accessNotes: draft.location?.accessNotes || "",
+      affectedArea: draft.location?.affectedArea || "",
+    },
+    timing: {
+      urgency: draft.timing?.urgency || "",
+      desiredTiming: draft.timing?.desiredTiming || "",
+      availability: draft.timing?.availability || "",
+    },
+    details: {
+      measurements: draft.details?.measurements || "",
+      expectations: draft.details?.expectations || "",
+      additionalNotes:
+        draft.details?.additionalNotes || "",
+    },
+    photos: Array.isArray(draft.media?.photos)
+      ? draft.media.photos.map((photo, index) => ({
+          id:
+            photo.localPhotoId ||
+            photo.previewUrl ||
+            String(index),
+          order: photo.order ?? index,
+        }))
+      : [],
+  });
+}
+
 function getRequestHelpCopy(language) {
   const copy = {
     es: {
@@ -156,10 +224,12 @@ function getRequestHelpCopy(language) {
       photos: "Fotos",
       addPhoto: "Agregar fotos a la solicitud",
       removePhoto: (position) => `Eliminar foto ${position}`,
-      locationRequired: "Agrega la ubicación donde se necesita el servicio.",
+      locationRequired: "Agrega ciudad, estado o región, código postal y país. La dirección exacta puede esperar hasta la selección.",
       matchRequired: "Elige un servicio compatible de la lista.",
       offline: "No tienes conexión. Vuelve a intentarlo cuando estés en línea.",
       failed: "La solicitud no fue creada. Revisa los detalles e inténtalo de nuevo.",
+      manualSyncAcknowledgement:
+        "Tengo los detalles más recientes de tu solicitud y los usaré de ahora en adelante.",
     },
     fr: {
       back: "Retour à l’accueil",
@@ -174,10 +244,12 @@ function getRequestHelpCopy(language) {
       photos: "Photos",
       addPhoto: "Ajouter des photos à la demande",
       removePhoto: (position) => `Supprimer la photo ${position}`,
-      locationRequired: "Ajoutez le lieu où le service est nécessaire.",
+      locationRequired: "Ajoutez la ville, l’État ou la région, le code postal et le pays. L’adresse exacte peut attendre la sélection.",
       matchRequired: "Choisissez un service pris en charge dans la liste.",
       offline: "Vous êtes hors ligne. Réessayez une fois connecté.",
       failed: "La demande n’a pas été créée. Vérifiez les détails et réessayez.",
+      manualSyncAcknowledgement:
+        "J’ai les détails les plus récents de votre demande et je les utiliserai désormais.",
     },
     pt: {
       back: "Voltar ao início",
@@ -192,10 +264,12 @@ function getRequestHelpCopy(language) {
       photos: "Fotos",
       addPhoto: "Adicionar fotos à solicitação",
       removePhoto: (position) => `Remover foto ${position}`,
-      locationRequired: "Adicione o local onde o serviço é necessário.",
+      locationRequired: "Adicione cidade, estado ou região, código postal e país. O endereço exato pode esperar até a seleção.",
       matchRequired: "Escolha um serviço compatível na lista.",
       offline: "Você está offline. Tente novamente quando estiver conectado.",
       failed: "A solicitação não foi criada. Revise os detalhes e tente novamente.",
+      manualSyncAcknowledgement:
+        "Tenho os detalhes mais recentes da sua solicitação e vou usá-los daqui para frente.",
     },
   };
 
@@ -212,27 +286,172 @@ function getRequestHelpCopy(language) {
     photos: "Photos",
     addPhoto: "Add photos to the request",
     removePhoto: (position) => `Remove photo ${position}`,
-    locationRequired: "Add the location where service is needed.",
+    locationRequired: "Add city, state or region, postal code, and country. The exact address can wait until selection.",
     matchRequired: "Choose a supported service from the list.",
     offline: "You are offline. Try again when you are connected.",
     failed: "The request was not created. Review the details and try again.",
+    manualSyncAcknowledgement:
+      "I have your latest request details and will use them going forward.",
+  };
+}
+
+function getExistingCustomerRequestCopy(language) {
+  const copy = {
+    es: {
+      title: (name) =>
+        `Nuevo trabajo con ${name || "tu profesional anterior"}`,
+      text:
+        "Esta es una solicitud completamente nueva. El alcance, las cotizaciones, aprobaciones, pagos, programación y estado del trabajo anterior no se transfieren.",
+      serviceGuidance: (name) =>
+        `Elige el servicio que mejor describa este nuevo trabajo para ${name || "tu profesional anterior"}.`,
+      categoryTitle:
+        "¿Qué tipo de trabajo es?",
+      categoryHelp: (name) =>
+        `Elige una categoría general para que Meetro organice esta nueva solicitud para ${name || "tu profesional anterior"}.`,
+      invalidTitle:
+        "No se pudo verificar esta solicitud de trabajo recurrente.",
+      invalid:
+        "Vuelve a Mis profesionales e inicia Solicitar nuevo trabajo otra vez.",
+      returnLabel:
+        "Volver a Mis profesionales",
+    },
+    fr: {
+      title: (name) =>
+        `Nouveau travail avec ${name || "votre professionnel précédent"}`,
+      text:
+        "Il s’agit d’une toute nouvelle demande. La portée, les devis, approbations, paiements, horaires et états du travail précédent ne sont pas transférés.",
+      serviceGuidance: (name) =>
+        `Choisissez le service qui décrit le mieux ce nouveau travail pour ${name || "votre professionnel précédent"}.`,
+      categoryTitle:
+        "Quel type de travail est-ce ?",
+      categoryHelp: (name) =>
+        `Choisissez une catégorie générale afin que Meetro organise cette nouvelle demande pour ${name || "votre professionnel précédent"}.`,
+      invalidTitle:
+        "Cette demande de nouveau travail n’a pas pu être vérifiée.",
+      invalid:
+        "Retournez à Mes professionnels et recommencez la demande.",
+      returnLabel:
+        "Retour à Mes professionnels",
+    },
+    "pt-BR": {
+      title: (name) =>
+        `Novo trabalho com ${name || "seu profissional anterior"}`,
+      text:
+        "Esta é uma solicitação totalmente nova. Escopo, orçamentos, aprovações, pagamentos, agenda e estado do trabalho anterior não são transferidos.",
+      serviceGuidance: (name) =>
+        `Escolha o serviço que melhor descreve este novo trabalho para ${name || "seu profissional anterior"}.`,
+      categoryTitle:
+        "Que tipo de trabalho é este?",
+      categoryHelp: (name) =>
+        `Escolha uma categoria geral para que o Meetro organize esta nova solicitação para ${name || "seu profissional anterior"}.`,
+      invalidTitle:
+        "Não foi possível verificar esta solicitação de novo trabalho.",
+      invalid:
+        "Volte para Meus profissionais e inicie Solicitar novo trabalho novamente.",
+      returnLabel:
+        "Voltar para Meus profissionais",
+    },
+  };
+
+  return copy[language] || {
+    title: (name) =>
+      `New work with ${name || "your previous professional"}`,
+    text:
+      "This is a completely new request. Previous scope, Quotes, approvals, payments, scheduling, and work state do not carry forward.",
+    serviceGuidance: (name) =>
+      `Choose the service that best describes this new work for ${name || "your previous professional"}.`,
+    categoryTitle:
+      "What type of work is this?",
+    categoryHelp: (name) =>
+      `Choose a broad category so Meetro can organize this new request for ${name || "your previous professional"}.`,
+    invalidTitle:
+      "This repeat-work request could not be verified.",
+    invalid:
+      "Return to My Professionals and start Request New Work again.",
+    returnLabel:
+      "Back to My Professionals",
   };
 }
 
 function Upload({ setPage }) {
-  const [language, updateLanguage] = useState(getLanguage());
+  const sessionKey = useSyncExternalStore(subscribeRequestHelpSession, requestHelpSessionKey, requestHelpSessionKey);
+  return <RequestHelpEntry key={sessionKey} sessionKey={sessionKey} setPage={setPage} />;
+}
+
+function RequestHelpEntry({ sessionKey, setPage }) {
+  const language = useLanguage();
+  const [context] = useState(() => readRequestHelpContext());
+  const [savedDraft] = useState(() => readJobRequestDraft(sessionStorage, { initialLocation: "" }));
+  const [resume, setResume] = useState(() => canResumeRequestHelpDraft(savedDraft, context) &&
+    !(context?.mode === "emergency_follow_up" && !savedDraft.requestContext &&
+      (readAssistantRequestDraft(sessionStorage) || readAssistantRequestDraft(localStorage))));
+  if (resume) return <RequestHelpComposer sessionKey={sessionKey} requestContext={context} setPage={setPage} />;
+  const spanish = language === "es";
+  const pending = Boolean(savedDraft.submission?.intentKey || savedDraft.submission?.snapshot);
+  return (
+    <div className="app-page request-help-page upload-page" style={pageWrapper}>
+      <section style={successPanel} role="alert">
+        <h1>{spanish ? "Revisa el contexto de la solicitud" : "Check the request context"}</h1>
+        <p>{!context ? getEmergencyFollowUpRequestCopy(language).invalid :
+          spanish ? "Tu borrador anterior se conserva. Vuelve a esa solicitud antes de continuar, o descártalo explícitamente para comenzar otra." :
+            "Your earlier draft is preserved. Return to that request, or explicitly discard the draft to start another."}</p>
+        {context && savedDraft.requestContext?.actorId === context.actorId && (
+          <button type="button" style={primaryButton} onClick={() => setPage(requestHelpContextRoute(savedDraft.requestContext))}>
+            {spanish ? "Volver a la solicitud guardada" : "Return to saved request"}
+          </button>
+        )}
+        {context && !pending && (!savedDraft.requestContext || savedDraft.requestContext.actorId === context.actorId) && (
+          <button type="button" style={cancelRequestButton} onClick={() => {
+            if (!window.confirm(t("cancelRequestWarning", language))) return;
+            clearJobRequestDraft(sessionStorage);
+            clearAssistantRequestDraft(sessionStorage);
+            clearAssistantRequestDraft(localStorage);
+            setResume(true);
+          }}>{spanish ? "Descartar borrador y comenzar otra solicitud" : "Discard draft and start another request"}</button>
+        )}
+        {pending && <p>{spanish ? "El envío anterior aún no está resuelto. Conservamos su contenido y sus fotos para reintentarlo en el contexto original." : "The earlier submission is unresolved. Its content and photos are preserved for retry in the original context."}</p>}
+        <button type="button" style={cancelRequestButton} onClick={() => setPage("myRequests")}>
+          {spanish ? "Mis solicitudes" : "My Requests"}
+        </button>
+      </section>
+      <BottomNav setPage={setPage} currentPage="upload" />
+    </div>
+  );
+}
+
+function RequestHelpComposer({ setPage, sessionKey, requestContext }) {
+  const language = useLanguage();
   const photoInputRef = useRef(null);
   const serviceSearchInputRef = useRef(null);
   const titleInputRef = useRef(null);
   const descriptionInputRef = useRef(null);
   const locationInputRef = useRef(null);
   const submissionAttemptRef = useRef(false);
+  const mounted = useRef(true);
+  useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  const ownsSubmission = () => mounted.current && requestHelpSessionKey() === sessionKey;
   const requestPhotoUploadEnabled = isRequestPhotoUploadEnabled();
   const mediaUploadDeferred =
     isFriendsAndFamilyMediaDeferred() && !requestPhotoUploadEnabled;
   const mediaDeferredCopy = getMediaDeferredCopy(language);
+  const existingCustomerRequestRoute =
+    readExistingCustomerRequestRoute(
+      typeof window !== "undefined"
+        ? window.location.hash
+        : ""
+    );
+  const emergencyFollowUpRoute = readEmergencyFollowUpRequestRoute(
+    typeof window !== "undefined" ? window.location.hash : ""
+  );
+  const emergencyFollowUpCopy = getEmergencyFollowUpRequestCopy(language);
+  const invalidFollowUpContext = emergencyFollowUpRoute.active &&
+    (!emergencyFollowUpRoute.valid || existingCustomerRequestRoute.active);
+  const existingCustomerRequestCopy =
+    getExistingCustomerRequestCopy(language);
 
   const [initialAssistantDraft] = useState(() => {
+    const saved = readJobRequestDraft(sessionStorage, { initialLocation: "" });
+    if (saved.submission.intentKey || saved.submission.snapshot) return null;
     const transientDraft = readAssistantRequestDraft(sessionStorage);
     const persistentDraft = transientDraft
       ? null
@@ -253,6 +472,7 @@ function Upload({ setPage }) {
       });
       return {
         ...normalizedDraft,
+        requestContext,
         service: {
           ...normalizedDraft.service,
           category: validCategory
@@ -264,7 +484,7 @@ function Upload({ setPage }) {
         },
       };
     }
-    return readJobRequestDraft(sessionStorage, { initialLocation: "" });
+    return { ...readJobRequestDraft(sessionStorage, { initialLocation: "" }), requestContext };
   });
   const [serviceSearch, setServiceSearch] = useState(
     initialAssistantDraft?.suggestedServiceLabel ||
@@ -304,6 +524,7 @@ function Upload({ setPage }) {
   const descriptionEdited = draft.fieldMeta?.job?.description?.confirmed === true;
   const conversationLogRef = useRef(null);
   const manualDetailsRef = useRef(null);
+  const homeownerEditBaselineRef = useRef("");
   const [creationMessages, setCreationMessages] = useState(() =>
     createInitialCreationAssistanceMessages(language)
   );
@@ -312,29 +533,24 @@ function Upload({ setPage }) {
   const [pendingInterpretText, setPendingInterpretText] = useState("");
   const [interpretationPending, setInterpretationPending] = useState(false);
   const [interpretationFailure, setInterpretationFailure] = useState(null);
+  const [pendingInterpretation, setPendingInterpretation] = useState(null);
+  const [editingInterpretation, setEditingInterpretation] = useState(false);
+  const [interpretationReviewPending, setInterpretationReviewPending] = useState(false);
   const [requestMode, setRequestMode] = useState("conversation");
   const [activeGuidedCard, setActiveGuidedCard] = useState("work");
   const [photoFirstPromptShown, setPhotoFirstPromptShown] = useState(false);
-
-  useEffect(() => {
-    const handleLanguageChange = () => {
-      updateLanguage(getLanguage());
-    };
-
-    window.addEventListener("languageChanged", handleLanguageChange);
-
-    return () => {
-      window.removeEventListener("languageChanged", handleLanguageChange);
-    };
-  }, []);
+  const [
+    photoAttachmentNotice,
+    setPhotoAttachmentNotice,
+  ] = useState("");
 
   useEffect(() => {
     selectedRequestPhotosRef.current = selectedRequestPhotos;
   }, [selectedRequestPhotos]);
 
   useEffect(() => {
-    saveJobRequestDraft(sessionStorage, draft);
-  }, [draft]);
+    if (mounted.current && requestHelpSessionKey() === sessionKey) saveJobRequestDraft(sessionStorage, draft);
+  }, [draft, requestContext, sessionKey]);
 
   useEffect(() => {
     conversationLogRef.current?.scrollTo({
@@ -571,6 +787,7 @@ function Upload({ setPage }) {
       ...current,
       media: { ...current.media, photos: [] },
     }));
+    setPhotoAttachmentNotice("");
   }
 
   function getSubmissionIntentKey() {
@@ -586,12 +803,12 @@ function Upload({ setPage }) {
     setDraft((current) => clearDraftSubmission(current));
   }
 
-  async function cleanupUploadedRequestPhotos(mediaItems = []) {
+  async function cleanupUploadedRequestPhotos(mediaItems = [], transport = authFetch) {
     await Promise.all(
       mediaItems.map((media) =>
         cleanupRequestPhoto({
           media,
-          authFetchImpl: authFetch,
+          authFetchImpl: transport,
           setPage,
         })
       )
@@ -601,7 +818,10 @@ function Upload({ setPage }) {
   function removeSelectedRequestPhoto(indexToRemove) {
     const removed = selectedRequestPhotos[indexToRemove];
     removed?.revoke?.();
-    setDraft((current) => removeDraftPhoto(current, indexToRemove));
+    setDraft((current) =>
+      removeDraftPhoto(current, indexToRemove)
+    );
+    setPhotoAttachmentNotice("");
   }
 
   function moveSelectedRequestPhoto(index, direction) {
@@ -663,6 +883,24 @@ function Upload({ setPage }) {
         }))
       )
     );
+
+    const photoAcknowledgement = t(
+      "jobRequestConversationPhotosIncluded",
+      language
+    );
+
+    setPhotoAttachmentNotice(
+      photoAcknowledgement
+    );
+
+    appendCreationMessages(
+      createCreationAssistanceMessage({
+        role: "assistant",
+        kind: "photo_ack",
+        text: photoAcknowledgement,
+      })
+    );
+
     if (
       !photoFirstPromptShown &&
       !hasMeaningfulCreationText(draft.job?.description) &&
@@ -694,6 +932,11 @@ function Upload({ setPage }) {
   }
 
   function focusManualDetails(target = "description") {
+    if (requestMode !== "manual") {
+      homeownerEditBaselineRef.current =
+        createHomeownerDraftFingerprint(draft);
+    }
+
     setRequestMode("manual");
     const targetCard =
       target === "location" || target === "access"
@@ -772,9 +1015,75 @@ function Upload({ setPage }) {
   }
 
   function handleBackToConversation() {
+    const currentFingerprint =
+      createHomeownerDraftFingerprint(draft);
+
+    const homeownerEditsChanged =
+      Boolean(homeownerEditBaselineRef.current) &&
+      homeownerEditBaselineRef.current !==
+        currentFingerprint;
+
+    if (homeownerEditsChanged) {
+      setPendingInterpretation(null);
+      setEditingInterpretation(false);
+      setInterpretationFailure(null);
+      setPendingInterpretText("");
+
+      const currentArea = [
+        draft.location?.city,
+        draft.location?.region,
+        draft.location?.postalCode,
+      ]
+        .filter(Boolean)
+        .join(", ");
+
+      const currentPhotoCount =
+        selectedRequestPhotos.length > 0
+          ? t(
+              "jobRequestPhotoCount",
+              language
+            ).replace(
+              "{count}",
+              String(selectedRequestPhotos.length)
+            )
+          : "";
+
+      const currentSummary = [
+        draft.job?.title,
+        draft.service?.displayLabel ||
+          draft.service?.specialty,
+        currentArea,
+        currentPhotoCount,
+      ]
+        .filter(Boolean)
+        .join(" · ");
+
+      const acknowledgement =
+        getRequestHelpCopy(
+          language
+        ).manualSyncAcknowledgement;
+
+      appendCreationMessages(
+        createCreationAssistanceMessage({
+          role: "assistant",
+          kind: "manual_draft_sync",
+          text: currentSummary
+            ? `${acknowledgement}\n${currentSummary}`
+            : acknowledgement,
+        })
+      );
+    }
+
+    homeownerEditBaselineRef.current =
+      currentFingerprint;
+
     setRequestMode("conversation");
+
     window.setTimeout(() => {
-      conversationLogRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
+      conversationLogRef.current?.scrollIntoView({
+        block: "start",
+        behavior: "smooth",
+      });
     }, 0);
   }
 
@@ -785,8 +1094,14 @@ function Upload({ setPage }) {
 
   function handleReviewRequest(event) {
     event?.preventDefault();
+
+    if (requestMode !== "manual") {
+      homeownerEditBaselineRef.current =
+        createHomeownerDraftFingerprint(draft);
+    }
+
     setRequestMode("manual");
-    setActiveGuidedCard("review");
+    setActiveGuidedCard(firstIncompleteRequiredCard);
     window.setTimeout(() => {
       manualDetailsRef.current?.scrollIntoView({ block: "start", behavior: "smooth" });
     }, 0);
@@ -829,17 +1144,15 @@ function Upload({ setPage }) {
         authFetchImpl: authFetch,
       });
 
-      setDraft((current) => {
-        const patched = applyJobRequestInterpretationPatch(current, result.interpretation);
-        return alignAssistantServiceSelection(patched.draft);
+      setPendingInterpretation({
+        operationId: result.operationId,
+        interpretation: result.interpretation,
+        reviewKeys: createJobRequestInterpretationReviewKeys(
+          result.interpretation.draftPatch.fields,
+          { createKey: createIntelligenceKey }
+        ),
       });
-      appendCreationMessages(
-        createInterpretationSuccessMessages({
-          interpretation: result.interpretation,
-          language,
-          photosAttached: selectedRequestPhotos.length > 0,
-        })
-      );
+      setEditingInterpretation(false);
       setInterpretIntent({
         ...nextIntent,
         status: "completed",
@@ -863,6 +1176,71 @@ function Upload({ setPage }) {
     }
   }
 
+  function updatePendingInterpretationField(path, value) {
+    setPendingInterpretation((current) => current ? {
+      ...current,
+      interpretation: {
+        ...current.interpretation,
+        draftPatch: {
+          ...current.interpretation.draftPatch,
+          fields: current.interpretation.draftPatch.fields.map((field) =>
+            field.path === path ? { ...field, value } : field
+          ),
+        },
+      },
+    } : current);
+  }
+
+  async function reviewPendingInterpretation(action) {
+    if (!pendingInterpretation?.operationId || interpretationReviewPending) return;
+    setInterpretationReviewPending(true);
+    setInterpretationFailure(null);
+    try {
+      const fields = pendingInterpretation.interpretation.draftPatch.fields;
+      await recordJobRequestInterpretationReviews({
+        operationId: pendingInterpretation.operationId,
+        fields,
+        action,
+        reviewKeys: pendingInterpretation.reviewKeys,
+        recordReview: recordWorkflowReview,
+        setPage,
+        authFetchImpl: authFetch,
+      });
+      if (action !== "REJECTED") {
+        setDraft((current) => {
+          const patched = applyJobRequestInterpretationPatch(
+            current,
+            pendingInterpretation.interpretation
+          );
+          const aligned = alignAssistantServiceSelection(patched.draft);
+          return confirmAppliedJobRequestInterpretationFields(
+            aligned,
+            patched.appliedFields
+          );
+        });
+        appendCreationMessages(
+          createInterpretationSuccessMessages({
+            interpretation: pendingInterpretation.interpretation,
+            language,
+            photosAttached: selectedRequestPhotos.length > 0,
+          })
+        );
+      }
+      setPendingInterpretation(null);
+      setEditingInterpretation(false);
+    } catch (error) {
+      setInterpretationFailure({
+        classification: JOB_REQUEST_INTERPRETATION_FAILURE.DEFINITIVE,
+        message: error?.message || getInterpretationFailureMessage(
+          JOB_REQUEST_INTERPRETATION_FAILURE.DEFINITIVE,
+          language
+        ),
+      });
+    } finally {
+      setInterpretationReviewPending(false);
+    }
+  }
+
   function handleConversationSubmit(event) {
     event.preventDefault();
     runInterpretation(conversationText);
@@ -874,10 +1252,34 @@ function Upload({ setPage }) {
 
   async function handleCreatePost(event) {
     event?.preventDefault();
+
     if (submissionAttemptRef.current) return;
+
+    if (invalidFollowUpContext || !ownsSubmission() || !readRequestHelpContext()) {
+      setSubmissionError(emergencyFollowUpCopy.invalid);
+      return;
+    }
+
+    if (
+      existingCustomerRequestRoute.active &&
+      !existingCustomerRequestRoute.valid
+    ) {
+      setSubmissionError(
+        existingCustomerRequestCopy.invalid
+      );
+      return;
+    }
+
     submissionAttemptRef.current = true;
     setCreating(true);
 
+    const submissionFetch = async (endpoint, options = {}) => {
+      if (!ownsSubmission()) throw new Error("Request context changed.");
+      const result = await authFetch(endpoint, { ...options, skipAuthExpirationHandling: true }, setPage);
+      if (!ownsSubmission()) throw new Error("Request context changed.");
+      if (result?.response?.status === 401) handleAuthExpired(setPage);
+      return result;
+    };
     let uploadedMediaForCleanup = [];
     let shouldCleanupUploadedMedia = false;
     try {
@@ -907,6 +1309,7 @@ function Upload({ setPage }) {
 
       if (!requestValidation.ok) {
         setFieldErrors(requestValidation.errors);
+        continueToCard(requestValidation.errors.location ? "location" : "work");
         if (!draft.submission.snapshot) {
           clearSubmissionIntent();
         }
@@ -935,11 +1338,13 @@ function Upload({ setPage }) {
         const uploadedRequestPhotos = selectedRequestPhotos.length > 0
           ? await uploadRequestPhotos({
               files: selectedRequestPhotos.map((photo) => photo.file),
-              authFetchImpl: authFetch,
+              authFetchImpl: submissionFetch,
               setPage,
             })
           : { ok: true, photos: [] };
 
+        // A route/account switch cannot advance this command or delete its media.
+        if (!ownsSubmission()) return;
         setUploading(false);
 
         if (!uploadedRequestPhotos.ok) {
@@ -969,20 +1374,36 @@ function Upload({ setPage }) {
       uploadedMediaForCleanup = submittedPayloadSnapshot.uploadedMedia;
       shouldCleanupUploadedMedia = true;
 
-      const result = await authFetch(
+      const requestBody =
+        applyExistingCustomerRequestAuthority(
+          submittedPayloadSnapshot.body,
+          existingCustomerRequestRoute
+        );
+
+      const result = emergencyFollowUpRoute.active
+        ? await createEmergencyFollowUpJobRequest(emergencyFollowUpRoute.emergencyRequestId, requestBody, {
+            idempotencyKey: submissionIntentKey, authFetchImpl: submissionFetch, setPage,
+          })
+        : await authFetch(
         "/posts",
         {
           method: "POST",
           headers: {
             "Idempotency-Key": submissionIntentKey,
           },
-          body: JSON.stringify(submittedPayloadSnapshot.body),
+          body: JSON.stringify(requestBody),
+          skipAuthExpirationHandling: true,
         },
         setPage
       );
 
-      const data = result.data || {};
-      const canonicalPost = getCanonicalJobRequestPost(result);
+      if (!ownsSubmission()) return;
+      if (!emergencyFollowUpRoute.active && result?.response?.status === 401) handleAuthExpired(setPage);
+      if (!ownsSubmission()) return;
+      const data = emergencyFollowUpRoute.active ? result : result.data || {};
+      const canonicalPost = emergencyFollowUpRoute.active
+        ? (result.ok ? result.post : null)
+        : getCanonicalJobRequestPost(result);
 
       if (canonicalPost) {
         uploadedMediaForCleanup = [];
@@ -999,9 +1420,7 @@ function Upload({ setPage }) {
         localStorage.removeItem("requestProfessionalContext");
 
         clearSelectedRequestPhotos();
-        setDraft(resetJobRequestDraft({
-          initialLocation: "",
-        }));
+        setDraft({ ...resetJobRequestDraft({ initialLocation: "", }), requestContext });
         clearJobRequestDraft(sessionStorage);
         setCreationMessages(createInitialCreationAssistanceMessages(language));
         setConversationText("");
@@ -1013,8 +1432,14 @@ function Upload({ setPage }) {
         setFieldErrors({});
         setSubmissionError("");
         setSubmittedRequest(canonicalPost);
+        if (emergencyFollowUpRoute.active) {
+          clearAssistantRequestDraft(sessionStorage);
+          setPage("homeownerRequestDetails");
+        }
       } else {
-        const failureType = classifyJobRequestCreateFailure(result);
+        const failureType = emergencyFollowUpRoute.active
+          ? result.failureType || "definitive"
+          : classifyJobRequestCreateFailure(result);
         if (failureType === "ambiguous" || failureType === "conflict") {
           shouldCleanupUploadedMedia = false;
         }
@@ -1030,19 +1455,22 @@ function Upload({ setPage }) {
           );
         }
         if (shouldCleanupUploadedMedia) {
-          await cleanupUploadedRequestPhotos(uploadedMediaForCleanup);
-          clearSubmissionIntent();
+          await cleanupUploadedRequestPhotos(uploadedMediaForCleanup, submissionFetch);
+          if (ownsSubmission()) clearSubmissionIntent();
         }
       }
     } catch (error) {
+      if (!ownsSubmission()) return;
       if (classifyJobRequestCreateFailure(error) !== "ambiguous" && shouldCleanupUploadedMedia) {
-        await cleanupUploadedRequestPhotos(uploadedMediaForCleanup);
+        await cleanupUploadedRequestPhotos(uploadedMediaForCleanup, submissionFetch);
         clearSubmissionIntent();
       }
       setSubmissionError(getRequestHelpCopy(language).failed);
     } finally {
-      setUploading(false);
-      setCreating(false);
+      if (ownsSubmission()) {
+        setUploading(false);
+        setCreating(false);
+      }
       submissionAttemptRef.current = false;
     }
   }
@@ -1070,15 +1498,17 @@ function Upload({ setPage }) {
     }
 
     clearSelectedRequestPhotos();
-    setDraft(resetJobRequestDraft({
-      initialLocation: "",
-    }));
+    setDraft({ ...resetJobRequestDraft({ initialLocation: "", }), requestContext });
     clearJobRequestDraft(sessionStorage);
     setFieldErrors({});
     setSubmissionError("");
     clearAssistantRequestDraft(sessionStorage);
 
-    setPage("home");
+    setPage(
+      existingCustomerRequestRoute.active
+        ? "myProfessionals"
+        : "home"
+    );
   }
 
   function handleReviewEdit(target) {
@@ -1190,9 +1620,13 @@ function Upload({ setPage }) {
       label: t("jobRequestDraftReviewPhotos", language),
       values: projectPhotos.length
         ? [
-            language === "es"
-              ? `${projectPhotos.length} ${projectPhotos.length === 1 ? "foto" : "fotos"}`
-              : `${projectPhotos.length} ${projectPhotos.length === 1 ? "photo" : "photos"}`,
+            t(
+              "jobRequestPhotoCount",
+              language
+            ).replace(
+              "{count}",
+              String(projectPhotos.length)
+            ),
           ]
         : [],
     },
@@ -1315,9 +1749,17 @@ function Upload({ setPage }) {
             <button
               type="button"
               style={cancelRequestButton}
-              onClick={() => setPage("home")}
+              onClick={() =>
+                setPage(
+                  existingCustomerRequestRoute.active
+                    ? "myProfessionals"
+                    : "home"
+                )
+              }
             >
-              {t("jobRequestReturnHome", language)}
+              {existingCustomerRequestRoute.active
+                ? existingCustomerRequestCopy.returnLabel
+                : t("jobRequestReturnHome", language)}
             </button>
           </div>
         </section>
@@ -1348,6 +1790,49 @@ function Upload({ setPage }) {
           <p style={requestPageSubtitle}>{t("newProjectSubtitle")}</p>
         </header>
 
+        {emergencyFollowUpRoute.active && (
+          <div style={{ ...existingCustomerRequestBanner, ...(invalidFollowUpContext ? existingCustomerRequestBannerInvalid : {}) }}
+            role={invalidFollowUpContext ? "alert" : "status"} data-emergency-follow-up-context>
+            <strong>{emergencyFollowUpCopy.title}</strong>
+            <p>{invalidFollowUpContext ? emergencyFollowUpCopy.invalid : emergencyFollowUpCopy.text}</p>
+          </div>
+        )}
+
+        {existingCustomerRequestRoute.active && !emergencyFollowUpRoute.active && (
+          <div
+            style={{
+              ...existingCustomerRequestBanner,
+              ...(existingCustomerRequestRoute.valid
+                ? {}
+                : existingCustomerRequestBannerInvalid),
+            }}
+            role={
+              existingCustomerRequestRoute.valid
+                ? "status"
+                : "alert"
+            }
+            data-existing-customer-request={
+              existingCustomerRequestRoute.valid
+                ? "verified"
+                : "invalid"
+            }
+          >
+            <strong>
+              {existingCustomerRequestRoute.valid
+                ? existingCustomerRequestCopy.title(
+                    existingCustomerRequestRoute.professionalName
+                  )
+                : existingCustomerRequestCopy.invalidTitle}
+            </strong>
+
+            <p>
+              {existingCustomerRequestRoute.valid
+                ? existingCustomerRequestCopy.text
+                : existingCustomerRequestCopy.invalid}
+            </p>
+          </div>
+        )}
+
         {assistantDraftMetadata && (
           <div style={preparedRequestBanner}>
             <span style={preparedRequestOrb} aria-hidden="true">
@@ -1374,7 +1859,13 @@ function Upload({ setPage }) {
                 : t("jobRequestDraftGuidanceTitle")}
             </strong>
             <p style={draftGuidanceText}>
-              {guidance?.messageKey
+              {existingCustomerRequestRoute.active &&
+              guidance?.messageKey ===
+                "jobRequestDraftGuidanceService"
+                ? existingCustomerRequestCopy.serviceGuidance(
+                    existingCustomerRequestRoute.professionalName
+                  )
+                : guidance?.messageKey
                 ? t(guidance.messageKey)
                 : t("jobRequestDraftGuidanceReady")}
             </p>
@@ -1395,6 +1886,7 @@ function Upload({ setPage }) {
             <section
               style={conversationPanel}
               aria-labelledby="job-request-conversation-title"
+              data-ask-meetro-context="job-request"
             >
             <section style={broadCategorySection} aria-labelledby="job-request-category-title">
               <label
@@ -1402,10 +1894,16 @@ function Upload({ setPage }) {
                 htmlFor="job-request-category"
                 style={broadCategoryTitle}
               >
-                {t("jobRequestWhoCanHelp", language)}
+                {existingCustomerRequestRoute.active
+                  ? existingCustomerRequestCopy.categoryTitle
+                  : t("jobRequestWhoCanHelp", language)}
               </label>
               <p style={broadCategoryHelp}>
-                {t("jobRequestWhoCanHelpHelp", language)}
+                {existingCustomerRequestRoute.active
+                  ? existingCustomerRequestCopy.categoryHelp(
+                      existingCustomerRequestRoute.professionalName
+                    )
+                  : t("jobRequestWhoCanHelpHelp", language)}
               </p>
               <select
                 id="job-request-category"
@@ -1464,6 +1962,94 @@ function Upload({ setPage }) {
                   {t("jobRequestConversationProcessing", language)}
                 </div>
               )}
+              {pendingInterpretation && (
+                <section style={assistantFallbackCard} aria-label={getAskMeetroWorkflowCopy(language).title}>
+                  <strong>{pendingInterpretation.interpretation.summary}</strong>
+                  <div style={liveDraftSectionList}>
+                    {pendingInterpretation.interpretation.draftPatch.fields.map((field) => {
+                      const isServiceRecommendation = field.path === "service.specialty";
+                      const serviceOption = isServiceRecommendation
+                        ? serviceSelectorOptions.find(
+                            (option) => option.serviceSpecialty === field.value
+                          )
+                        : null;
+                      return (
+                        <label key={field.path} style={liveDraftSection}>
+                          <span style={liveDraftSectionTitle}>
+                            {isServiceRecommendation
+                              ? t("jobRequestTechnicalServiceType", language)
+                              : field.path.split(".").join(" / ")}
+                          </span>
+                          {editingInterpretation ? (
+                            isServiceRecommendation ? (
+                              <select
+                                style={compactInputStyle}
+                                value={field.value}
+                                onChange={(event) =>
+                                  updatePendingInterpretationField(
+                                    field.path,
+                                    event.target.value
+                                  )
+                                }
+                              >
+                                {serviceSelectorOptions.map((option) => (
+                                  <option
+                                    key={option.value}
+                                    value={option.serviceSpecialty}
+                                  >
+                                    {option.label}
+                                  </option>
+                                ))}
+                              </select>
+                            ) : (
+                              <textarea
+                                style={composerInput}
+                                value={field.value}
+                                maxLength={4000}
+                                onChange={(event) =>
+                                  updatePendingInterpretationField(
+                                    field.path,
+                                    event.target.value
+                                  )
+                                }
+                              />
+                            )
+                          ) : (
+                            <span>{serviceOption?.label || field.value}</span>
+                          )}
+                        </label>
+                      );
+                    })}
+                  </div>
+                  <p style={emptyDraftText}>{getAskMeetroWorkflowCopy(language).noSilentChanges}</p>
+                  <div style={fallbackActions}>
+                    <button
+                      type="button"
+                      style={secondaryActionButton}
+                      disabled={interpretationReviewPending}
+                      onClick={() => void reviewPendingInterpretation(editingInterpretation ? "EDITED" : "ACCEPTED")}
+                    >
+                      {getAskMeetroWorkflowCopy(language).add}
+                    </button>
+                    <button
+                      type="button"
+                      style={secondaryActionButton}
+                      disabled={interpretationReviewPending}
+                      onClick={() => setEditingInterpretation(true)}
+                    >
+                      {getAskMeetroWorkflowCopy(language).edit}
+                    </button>
+                    <button
+                      type="button"
+                      style={secondaryActionButton}
+                      disabled={interpretationReviewPending}
+                      onClick={() => void reviewPendingInterpretation("REJECTED")}
+                    >
+                      {getAskMeetroWorkflowCopy(language).dismiss}
+                    </button>
+                  </div>
+                </section>
+              )}
             </div>
 
             {interpretationFailure && (
@@ -1506,6 +2092,13 @@ function Upload({ setPage }) {
                 disabled={interpretationPending}
               />
               <div style={composerActions}>
+                <WorkflowMicrophoneInput
+                  language={language}
+                  contextLabel="job_request"
+                  disabled={interpretationPending}
+                  setPage={setPage}
+                  onTranscript={setConversationText}
+                />
                 <button
                   type="button"
                   style={secondaryActionButton}
@@ -1685,10 +2278,16 @@ function Upload({ setPage }) {
                   htmlFor="job-request-category"
                   style={broadCategoryTitle}
                 >
-                  {t("jobRequestWhoCanHelp", language)}
+                  {existingCustomerRequestRoute.active
+                  ? existingCustomerRequestCopy.categoryTitle
+                  : t("jobRequestWhoCanHelp", language)}
                 </label>
                 <p style={broadCategoryHelp}>
-                  {t("jobRequestWhoCanHelpHelp", language)}
+                  {existingCustomerRequestRoute.active
+                  ? existingCustomerRequestCopy.categoryHelp(
+                      existingCustomerRequestRoute.professionalName
+                    )
+                  : t("jobRequestWhoCanHelpHelp", language)}
                 </p>
                 <select
                   id="job-request-category"
@@ -2185,8 +2784,29 @@ function Upload({ setPage }) {
                   style={{ display: "none" }}
                 />
 
-                {uploading && <p role="status" aria-live="polite" style={uploadingText}>{t("uploadingImage")}</p>}
-                {photoError && <p role="alert" style={uploadingText}>{photoError}</p>}
+                {uploading && (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    style={uploadingText}
+                  >
+                    {t("uploadingImage")}
+                  </p>
+                )}
+                {photoAttachmentNotice && (
+                  <p
+                    role="status"
+                    aria-live="polite"
+                    style={uploadingText}
+                  >
+                    {photoAttachmentNotice}
+                  </p>
+                )}
+                {photoError && (
+                  <p role="alert" style={uploadingText}>
+                    {photoError}
+                  </p>
+                )}
               </div>
 
               {projectPhotos.length > 0 && (
@@ -2434,16 +3054,26 @@ function Upload({ setPage }) {
                 )}
 
                 <div style={requestActionBar}>
+                  {!draftReadiness.isReady && (
+                    <p id="job-request-submit-guidance" style={draftGuidanceText}>
+                      {guidance?.messageKey
+                        ? t(guidance.messageKey)
+                        : t("jobRequestDraftGuidanceLocation")}
+                    </p>
+                  )}
                   <button
                     type="submit"
-                    disabled={creating || uploading}
+                    disabled={!draftReadiness.isReady || creating || uploading}
+                    aria-describedby={!draftReadiness.isReady ? "job-request-submit-guidance" : undefined}
                     className="meetro-visual-primary-button"
                     style={{
                       ...primaryButton,
-                      background: creating || uploading
+                      background: !draftReadiness.isReady || creating || uploading
                         ? "rgba(100, 116, 139, 0.72)"
                         : "var(--meetro-gradient-community-action)",
-                      cursor: creating || uploading ? "not-allowed" : "pointer",
+                      cursor: !draftReadiness.isReady || creating || uploading
+                        ? "not-allowed"
+                        : "pointer",
                     }}
                   >
                     {creating ? t("creating") : t("createPost")}
@@ -2739,6 +3369,28 @@ const backButton = {
   marginBottom: "12px",
   boxShadow: "var(--meetro-shadow-soft)",
   cursor: "pointer",
+};
+
+const existingCustomerRequestBanner = {
+  display: "grid",
+  gap: "6px",
+  marginBottom: "16px",
+  padding: "14px 16px",
+  border:
+    "1px solid var(--meetro-color-line)",
+  borderRadius: "18px",
+  background:
+    "var(--meetro-surface-sage)",
+  color:
+    "var(--meetro-color-ink)",
+  fontSize: "13px",
+  lineHeight: 1.45,
+};
+
+const existingCustomerRequestBannerInvalid = {
+  border: "1px solid #fecaca",
+  background: "#fff7f7",
+  color: "#991b1b",
 };
 
 const preparedRequestBanner = {

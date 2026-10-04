@@ -1,5 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
+import CustomerQuoteReviewPanel from "../components/CustomerQuoteReviewPanel.jsx";
+import CustomerProjectAssessment from "../components/CustomerProjectAssessment.jsx";
+import CustomerWorkPlan from "../components/CustomerWorkPlan.jsx";
+import CustomerCompletionHistory from "../components/CustomerCompletionHistory.jsx";
+import CustomerInvoicePanel from "../components/CustomerInvoicePanel.jsx";
 import API_URL from "../api";
 import { getLanguage, t } from "../utils/language";
 import { formatMessageTime } from "../utils/displayTime";
@@ -32,6 +38,14 @@ import {
   getCanonicalConversationActionId,
   getCanonicalConversationActionTarget,
 } from "../utils/conversationActionRouting";
+import { fetchHomeownerRequestModification } from "../utils/homeownerRequestModificationApi.js";
+import {
+  HOMEOWNER_REQUEST_MODIFICATION_ENTRY,
+  getHomeownerRequestModificationEntry,
+} from "../utils/homeownerRequestModificationPolicy.js";
+import { fetchCustomerJobQuotes } from "../utils/customerJobQuotesApi.js";
+import { fetchCustomerQuoteDetail } from "../utils/customerQuoteDetailApi.js";
+import { decideCustomerQuote } from "../utils/customerQuoteDecisionApi.js";
 
 const UNSUPPORTED_COMPLETION_CLOSURE_STATUSES = new Set([
   "completed",
@@ -139,7 +153,7 @@ function getCompletionClosureUnavailableCopy(language = "en") {
   };
 }
 
-function ProjectDetails({ setPage, currentPage }) {
+function ProjectDetails({ setPage }) {
   const activeJobSnapshot = useMemo(() => getActiveJobSnapshot(), []);
 
   const [post, setPost] = useState(null);
@@ -151,8 +165,31 @@ function ProjectDetails({ setPage, currentPage }) {
   const [expandedPhotoIndex, setExpandedPhotoIndex] = useState(0);
   const [touchStartX, setTouchStartX] = useState(null);
   const [showGalleryGrid, setShowGalleryGrid] = useState(false);
-  const [language, setLanguage] = useState(getLanguage());
+  const language = useLanguage();
   const [workflowUnavailableNotice, setWorkflowUnavailableNotice] = useState(false);
+  const [customerQuoteDiscovery, setCustomerQuoteDiscovery] = useState({
+    status: "idle",
+    requestId: null,
+    jobId: null,
+    quotes: null,
+    errorCode: "",
+  });
+  const [customerQuoteDetail, setCustomerQuoteDetail] = useState({
+    status: "idle",
+    quoteId: null,
+    detail: null,
+    errorCode: "",
+  });
+  const [selectedCustomerQuoteId, setSelectedCustomerQuoteId] = useState("");
+  const [requestModificationState, setRequestModificationState] = useState({
+    status: "idle",
+    requestId: null,
+    jobId: "",
+    requestRelationshipId: "",
+    authority: null,
+    errorCode: "",
+  });
+  const customerQuoteAutoOpenRef = useRef(false);
 
   const activeProjectData = getSelectedActiveProject();
   const openedFromConversation = Boolean(getConversationOriginContext());
@@ -182,6 +219,9 @@ function ProjectDetails({ setPage, currentPage }) {
     () => getCompletionClosureUnavailableCopy(language),
     [language]
   );
+  const requestModificationEntry = getHomeownerRequestModificationEntry(
+    requestModificationState.authority
+  );
 
   const memoryStats = {
     updates: truthfulJobRecords.filter((item) => item.type === "update").length,
@@ -195,18 +235,6 @@ function ProjectDetails({ setPage, currentPage }) {
   };
 
   const latestActivity = truthfulJobRecords[0] || null;
-
-  useEffect(() => {
-    const handleLanguageChange = () => setLanguage(getLanguage());
-
-    window.addEventListener("languageChanged", handleLanguageChange);
-    window.addEventListener("meetro-language-change", handleLanguageChange);
-
-    return () => {
-      window.removeEventListener("languageChanged", handleLanguageChange);
-      window.removeEventListener("meetro-language-change", handleLanguageChange);
-    };
-  }, []);
 
   function openProjectConversation() {
     if (restoreConversationOriginContext(setPage)) return;
@@ -278,28 +306,27 @@ function ProjectDetails({ setPage, currentPage }) {
     setPage("myRequests");
   }
 
-  function openRequestEdit() {
-    if (!post) return;
-
-    const requestId = post.requestId || post.id || "";
-    localStorage.setItem("selectedHomeownerRequestId", String(requestId));
-    localStorage.setItem("selectedHomeownerRequest", JSON.stringify(post));
-    localStorage.setItem("meetroOpenHomeownerRequestEdit", "true");
-    setPage("myRequests");
-  }
-
-  function hasApprovedQuote(request = {}) {
-    const status = String(request.status || "").toLowerCase();
-    const quote = request.acceptedQuote ||
-      (Array.isArray(request.quotesReceived) ? request.quotesReceived[0] : null) ||
-      {};
-    const quoteStatus = String(quote.status || quote.quoteStatus || "").toLowerCase();
-
-    return Boolean(
-      request.acceptedQuote ||
-        ["accepted", "approved", "active", "completed", "closed"].includes(status) ||
-        ["accepted", "approved"].includes(quoteStatus)
+  function openRequestModification() {
+    const requestId = Number(post?.requestId || post?.id);
+    const authorityJobId = String(
+      requestModificationState.authority?.jobId || ""
     );
+
+    if (
+      !Number.isSafeInteger(requestId) ||
+      requestId < 1 ||
+      requestModificationState.status !== "confirmed" ||
+      requestModificationState.requestId !== requestId ||
+      !requestModificationEntry.actionable ||
+      requestModificationEntry.route !== "homeownerRequestDetails" ||
+      (authorityJobId && authorityJobId !== requestModificationState.jobId)
+    ) {
+      return;
+    }
+
+    localStorage.setItem("selectedHomeownerRequestId", String(requestId));
+    localStorage.setItem("myRequestsReturnPage", "projectDetails");
+    setPage(requestModificationEntry.route);
   }
 
   useEffect(() => {
@@ -422,8 +449,290 @@ if (data.post) {
     };
   }, [loading, projectForPresentation, language, isBusinessLeadReviewPage, isProfessionalProject]);
 
+  useEffect(() => {
+    if (loading || !post || hasProfessionalAuthority) return undefined;
+
+    const requestId = Number(post.requestId || post.id);
+    if (!Number.isSafeInteger(requestId) || requestId < 1) {
+      queueMicrotask(() => {
+        setRequestModificationState({
+          status: "unavailable",
+          requestId: null,
+          jobId: "",
+          requestRelationshipId: "",
+          authority: null,
+          errorCode: "CUSTOMER_REQUEST_ID_UNAVAILABLE",
+        });
+        setCustomerQuoteDiscovery({
+          status: "unavailable",
+          requestId: null,
+          jobId: null,
+          quotes: null,
+          errorCode: "CUSTOMER_REQUEST_ID_UNAVAILABLE",
+        });
+      });
+      return undefined;
+    }
+
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setRequestModificationState({
+        status: "loading",
+        requestId,
+        jobId: "",
+        requestRelationshipId: "",
+        authority: null,
+        errorCode: "",
+      });
+      setCustomerQuoteDiscovery({
+        status: "loading",
+        requestId,
+        jobId: null,
+        quotes: null,
+        errorCode: "",
+      });
+    });
+
+    void fetchHomeownerRequestModification({ requestId, setPage })
+      .then((result) => {
+        if (!active) return null;
+        const lifecycleRequestId = Number(result?.lifecycle?.requestId);
+        const jobId = String(result?.lifecycle?.job?.id || "").trim();
+        const authorityJobId = String(result?.authority?.jobId || "").trim();
+        if (
+          !result?.ok ||
+          lifecycleRequestId !== requestId ||
+          (authorityJobId && authorityJobId !== jobId)
+        ) {
+          const error = new Error("Request modification authority is unavailable.");
+          error.code = result?.code || "REQUEST_MODIFICATION_IDENTITY_MISMATCH";
+          throw error;
+        }
+
+        setRequestModificationState({
+          status: "confirmed",
+          requestId,
+          jobId,
+          requestRelationshipId: String(
+            result.lifecycle.job?.requestRelationshipId || ""
+          ).trim(),
+          authority: result.authority,
+          errorCode: "",
+        });
+
+        if (!jobId) {
+          const error = new Error("Customer Job identity is unavailable.");
+          error.code = "CUSTOMER_JOB_ID_UNAVAILABLE";
+          setCustomerQuoteDiscovery({
+            status: "unavailable",
+            requestId,
+            jobId: null,
+            quotes: null,
+            errorCode: error.code,
+          });
+          return null;
+        }
+
+        return fetchCustomerJobQuotes({ jobId, setPage })
+          .then((quotes) => ({ jobId, quotes }))
+          .catch((error) => {
+            if (!active) return null;
+            setCustomerQuoteDiscovery({
+              status: "unavailable",
+              requestId,
+              jobId,
+              quotes: null,
+              errorCode: String(error?.code || "CUSTOMER_JOB_QUOTES_FAILED"),
+            });
+            return null;
+          });
+      })
+      .then((result) => {
+        if (!active || !result) return;
+        setCustomerQuoteDiscovery({
+          status: "confirmed",
+          requestId,
+          jobId: result.jobId,
+          quotes: result.quotes,
+          errorCode: "",
+        });
+      })
+      .catch((error) => {
+        if (!active) return;
+        setRequestModificationState({
+          status: "unavailable",
+          requestId,
+          jobId: "",
+          requestRelationshipId: "",
+          authority: null,
+          errorCode: String(
+            error?.code || "REQUEST_MODIFICATION_AUTHORITY_UNAVAILABLE"
+          ),
+        });
+        setCustomerQuoteDiscovery({
+          status: "unavailable",
+          requestId,
+          jobId: null,
+          quotes: null,
+          errorCode: String(error?.code || "CUSTOMER_JOB_QUOTES_FAILED"),
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [hasProfessionalAuthority, loading, post, setPage]);
+
+  useEffect(() => {
+    if (customerQuoteDiscovery.status !== "confirmed") return undefined;
+    const viewableQuotes = customerQuoteDiscovery.quotes.quotes.filter(
+      ({ actions }) => actions.canViewQuote === true
+    );
+    if (
+      viewableQuotes.length === 1 &&
+      !selectedCustomerQuoteId &&
+      !customerQuoteAutoOpenRef.current
+    ) {
+      customerQuoteAutoOpenRef.current = true;
+      queueMicrotask(() => setSelectedCustomerQuoteId(viewableQuotes[0].quoteId));
+      return undefined;
+    }
+
+    if (!selectedCustomerQuoteId) return undefined;
+    if (!viewableQuotes.some(({ quoteId }) => quoteId === selectedCustomerQuoteId)) {
+      queueMicrotask(() => setSelectedCustomerQuoteId(""));
+      return undefined;
+    }
+
+    const quoteId = selectedCustomerQuoteId;
+    let active = true;
+    queueMicrotask(() => {
+      if (!active) return;
+      setCustomerQuoteDetail({
+        status: "loading",
+        quoteId,
+        detail: null,
+        errorCode: "",
+      });
+    });
+    void fetchCustomerQuoteDetail({
+      quoteId,
+      jobId: customerQuoteDiscovery.jobId,
+      setPage,
+    })
+      .then((detail) => {
+        if (!active) return;
+        setCustomerQuoteDetail({
+          status: "confirmed",
+          quoteId,
+          detail,
+          errorCode: "",
+        });
+      })
+      .catch((error) => {
+        if (!active) return;
+        setCustomerQuoteDetail({
+          status: "unavailable",
+          quoteId,
+          detail: null,
+          errorCode: String(error?.code || "CUSTOMER_QUOTE_DETAIL_FAILED"),
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [customerQuoteDiscovery, selectedCustomerQuoteId, setPage]);
+
+  const reloadCustomerQuoteTruth = useCallback(
+    async (quoteId = selectedCustomerQuoteId) => {
+      const jobId = String(customerQuoteDiscovery.jobId || "").trim();
+      if (!jobId || !quoteId) return null;
+      const [quotes, detail] = await Promise.all([
+        fetchCustomerJobQuotes({ jobId, setPage }),
+        fetchCustomerQuoteDetail({ quoteId, jobId, setPage }),
+      ]);
+      setCustomerQuoteDiscovery((current) => ({
+        ...current,
+        status: "confirmed",
+        jobId,
+        quotes,
+        errorCode: "",
+      }));
+      setCustomerQuoteDetail({
+        status: "confirmed",
+        quoteId,
+        detail,
+        errorCode: "",
+      });
+      return { quotes, detail };
+    }, [customerQuoteDiscovery.jobId, selectedCustomerQuoteId, setPage]
+  );
+
+  const handleCustomerQuoteDecision = useCallback(
+    async ({ quoteId, action, expectedIssuedVersion, idempotencyKey }) => {
+      const result = await decideCustomerQuote({
+        quoteId,
+        action,
+        expectedIssuedVersion,
+        idempotencyKey,
+        setPage,
+      });
+      await reloadCustomerQuoteTruth(quoteId);
+      return result;
+    },
+    [reloadCustomerQuoteTruth, setPage]
+  );
+
   return (
-    <div className="app-page meetro-readable-page" style={pageWrapper}>
+    <div
+      className="app-page meetro-readable-page"
+      data-customer-job-quotes-status={customerQuoteDiscovery.status}
+      data-customer-job-id={customerQuoteDiscovery.jobId || ""}
+      data-customer-quotes-count={
+        customerQuoteDiscovery.status === "confirmed"
+          ? customerQuoteDiscovery.quotes.quotes.length
+          : ""
+      }
+      data-customer-quotes-summary={
+        customerQuoteDiscovery.status === "confirmed"
+          ? JSON.stringify(
+              customerQuoteDiscovery.quotes.quotes.map(
+                ({
+                  quoteId,
+                  businessStatus,
+                  lineageLabel,
+                  customerDecision,
+                  actions,
+                }) => ({
+                  quoteId,
+                  businessStatus,
+                  lineageLabel,
+                  customerDecision,
+                  actions,
+                })
+              )
+            )
+          : ""
+      }
+      data-customer-quotes-error={customerQuoteDiscovery.errorCode}
+      data-customer-quote-detail-status={customerQuoteDetail.status}
+      data-customer-quote-detail-id={customerQuoteDetail.quoteId || ""}
+      data-customer-quote-detail-error={customerQuoteDetail.errorCode}
+      data-request-modification-status={requestModificationState.status}
+      data-request-modification-mode={
+        requestModificationState.authority?.mode || ""
+      }
+      data-request-modification-request-id={
+        requestModificationState.requestId || ""
+      }
+      data-request-modification-job-id={requestModificationState.jobId}
+      data-request-modification-relationship-id={
+        requestModificationState.requestRelationshipId
+      }
+      style={pageWrapper}
+    >
       <div style={contentWrapper}>
         <button
   onClick={() => {
@@ -558,6 +867,60 @@ if (data.post) {
               </div>
             ) : null}
 
+            {!isProfessionalProject && !isBusinessLeadReviewPage && (
+              <CustomerProjectAssessment
+                jobId={requestModificationState.jobId}
+                language={language}
+                setPage={setPage}
+              />
+            )}
+
+            {!isProfessionalProject && !isBusinessLeadReviewPage && (
+              <CustomerWorkPlan
+                jobId={requestModificationState.jobId}
+                language={language}
+                setPage={setPage}
+              />
+            )}
+
+            {!isProfessionalProject && !isBusinessLeadReviewPage && (
+              <CustomerCompletionHistory
+                jobId={requestModificationState.jobId}
+                language={language}
+                setPage={setPage}
+                onMessageProfessional={openProjectConversation}
+              />
+            )}
+
+            {!isProfessionalProject && !isBusinessLeadReviewPage && (
+              <CustomerInvoicePanel
+                jobId={requestModificationState.jobId}
+                language={language}
+                setPage={setPage}
+              />
+            )}
+
+            {!isProfessionalProject && !isBusinessLeadReviewPage && (
+              <CustomerQuoteReviewPanel
+                language={language}
+                discovery={customerQuoteDiscovery}
+                detail={customerQuoteDetail}
+                selectedQuoteId={selectedCustomerQuoteId}
+                onSelectQuote={(quoteId) => {
+                  setSelectedCustomerQuoteId(quoteId);
+                  setCustomerQuoteDetail({
+                    status: "idle",
+                    quoteId,
+                    detail: null,
+                    errorCode: "",
+                  });
+                }}
+                onCloseReview={() => setSelectedCustomerQuoteId("")}
+                onDecision={handleCustomerQuoteDecision}
+                onReload={reloadCustomerQuoteTruth}
+              />
+            )}
+
             {(() => {
               const projectPhotos = Array.isArray(post.photos)
                 ? post.photos
@@ -674,23 +1037,45 @@ if (data.post) {
                     </div>
                   </div>
 
-                  {!isProfessionalProject && !isBusinessLeadReviewPage && (
+                  {!isProfessionalProject &&
+                    !isBusinessLeadReviewPage &&
+                    (requestModificationState.status === "loading" ||
+                      requestModificationState.status === "unavailable" ||
+                      requestModificationEntry.actionable ||
+                      requestModificationEntry.kind ===
+                        HOMEOWNER_REQUEST_MODIFICATION_ENTRY.CONTRACT_CHANGE_UNAVAILABLE) && (
                     <div style={requestDetailsActionWrap}>
-                      <button
-                        type="button"
-                        style={{
-                          ...requestDetailsActionButton,
-                          ...(hasApprovedQuote(post)
-                            ? requestDetailsActionButtonDisabled
-                            : {}),
-                        }}
-                        disabled={hasApprovedQuote(post)}
-                        onClick={openRequestEdit}
-                      >
-                        {hasApprovedQuote(post)
-                          ? t("requestChange", language)
-                          : t("editRequest", language)}
-                      </button>
+                      {requestModificationState.status === "loading" && (
+                        <p role="status" style={requestDetailsAuthorityNotice}>
+                          {t("projectRequestActionsChecking", language)}
+                        </p>
+                      )}
+                      {requestModificationState.status === "unavailable" && (
+                        <p role="status" style={requestDetailsAuthorityNotice}>
+                          {t("projectRequestActionsUnavailable", language)}
+                        </p>
+                      )}
+                      {requestModificationEntry.actionable && (
+                        <button
+                          type="button"
+                          style={requestDetailsActionButton}
+                          data-request-modification-kind={
+                            requestModificationEntry.kind
+                          }
+                          onClick={openRequestModification}
+                        >
+                          {requestModificationEntry.kind ===
+                          HOMEOWNER_REQUEST_MODIFICATION_ENTRY.EDIT_REQUEST
+                            ? t("editRequest", language)
+                            : t("requestChange", language)}
+                        </button>
+                      )}
+                      {requestModificationEntry.kind ===
+                        HOMEOWNER_REQUEST_MODIFICATION_ENTRY.CONTRACT_CHANGE_UNAVAILABLE && (
+                        <p role="status" style={requestDetailsAuthorityNotice}>
+                          {t("projectContractChangeUnavailable", language)}
+                        </p>
+                      )}
                     </div>
                   )}
                 </div>
@@ -1073,18 +1458,7 @@ if (data.post) {
           </div>
         )}
 
-        <BottomNav
-          setPage={setPage}
-          currentPage={
-            projectDetailsReturnPageValue === "businessLeads"
-              ? "businessLeads"
-              : projectDetailsReturnPageValue === "businessDashboard"
-              ? "businessDashboard"
-              : projectDetailsReturnPageValue === "contractorDashboard"
-              ? "contractorDashboard"
-              : currentPage || "discover"
-          }
-        />
+        <BottomNav setPage={setPage} currentPage="projectDetails" />
       </div>
     </div>
   );
@@ -2007,6 +2381,7 @@ const requestDetailsActionWrap = {
 
 const requestDetailsActionButton = {
   width: "100%",
+  minHeight: "44px",
   border: "1px solid #ddd6fe",
   borderRadius: "15px",
   padding: "12px 14px",
@@ -2017,11 +2392,12 @@ const requestDetailsActionButton = {
   cursor: "pointer",
 };
 
-const requestDetailsActionButtonDisabled = {
-  background: "#f8fafc",
-  borderColor: "#e2e8f0",
+const requestDetailsAuthorityNotice = {
+  margin: 0,
   color: "#64748b",
-  cursor: "not-allowed",
+  fontSize: "13px",
+  fontWeight: "750",
+  lineHeight: 1.5,
 };
 
 const projectInformationRow = {

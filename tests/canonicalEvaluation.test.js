@@ -4,8 +4,10 @@ import test from "node:test";
 import {
   buildCanonicalEvaluationRoute,
   buildCanonicalEvaluationContent,
+  buildOrdinaryCanonicalEvaluationContent,
   canonicalEvaluationContentToForm,
   getCanonicalEvaluationSourceContext,
+  ordinaryCanonicalEvaluationContentToForm,
   parseCanonicalEvaluationRoute,
   validateCanonicalEvaluationProjection,
 } from "../src/utils/canonicalEvaluation.js";
@@ -78,12 +80,58 @@ export function canonicalEvaluationFixture(overrides = {}) {
   };
 }
 
+export function ordinaryCanonicalEvaluationFixture(overrides = {}) {
+  return canonicalEvaluationFixture({
+    ...overrides,
+    aggregate: {
+      sourceContext: {
+        type: "ordinary_job",
+        jobId: "66666666-6666-4666-8666-666666666666",
+        requestId: 41,
+        relationshipId: 72,
+        evaluationVisitId: "99999999-9999-4999-8999-999999999999",
+      },
+      ...(overrides.aggregate || {}),
+    },
+    evaluation: {
+      ...(overrides.evaluation || {}),
+      content: {
+        evaluationContext: "ordinary_job",
+        observations: "Visible water damage is present around the cabinet base.",
+        findings: [],
+        diagnosisSummary: "Material damage extent requires further evaluation.",
+        scopeRecommendations: [],
+        ...overrides.evaluation?.content,
+      },
+    },
+  });
+}
+
 test("strict Evaluation projection accepts only backend-confirmed Authorization Engine truth", () => {
   const canonical = validateCanonicalEvaluationProjection(canonicalEvaluationFixture());
   assert.equal(canonical.aggregate.type, "evaluation");
   assert.equal(canonical.aggregate.version, 2);
   assert.equal(canonical.evaluation.content.internalNotes, "Confirm fitting stock.");
   assert.equal(canonical.evaluation.capabilities.quoteReady, false);
+
+  const completed = validateCanonicalEvaluationProjection(
+    canonicalEvaluationFixture({
+      aggregate: { version: 3 },
+      evaluation: {
+        status: "completed",
+        completedAt: "2026-09-04T20:00:00.000Z",
+        capabilities: {
+          canEditDraft: false,
+          canComplete: false,
+          canRevise: true,
+        },
+      },
+    })
+  );
+
+  assert.equal(completed.evaluation.status, "completed");
+  assert.equal(completed.evaluation.capabilities.canEditDraft, false);
+  assert.equal(completed.evaluation.capabilities.canRevise, true);
 });
 
 test("malformed identity, timestamps, content, status, and capabilities fail closed", () => {
@@ -103,7 +151,7 @@ test("malformed identity, timestamps, content, status, and capabilities fail clo
   }
 });
 
-test("source selection accepts only canonical Emergency identity and an optional server-validated relationship", () => {
+test("source selection preserves Emergency and accepts only confirmed ordinary Job identity", () => {
   assert.deepEqual(
     getCanonicalEvaluationSourceContext({ emergencyRequestId: 91, relationshipId: 72 }),
     { type: "emergency_request", emergencyRequestId: 91, relationshipId: 72 }
@@ -112,8 +160,105 @@ test("source selection accepts only canonical Emergency identity and an optional
     getCanonicalEvaluationSourceContext({ emergencyRequestId: 91 }),
     { type: "emergency_request", emergencyRequestId: 91, relationshipId: null }
   );
+  assert.deepEqual(
+    getCanonicalEvaluationSourceContext({
+      source: "CANONICAL_BACKEND_READ",
+      readOnly: true,
+      lifecycleVerified: true,
+      lifecycleContractVersion: 2,
+      jobId: "66666666-6666-4666-8666-666666666666",
+      postId: 41,
+      relationshipId: 72,
+    }),
+    {
+      type: "ordinary_job",
+      jobId: "66666666-6666-4666-8666-666666666666",
+      requestId: 41,
+      relationshipId: 72,
+    }
+  );
   assert.equal(getCanonicalEvaluationSourceContext({ requestId: 91, relationshipId: 72 }), null);
+  assert.equal(
+    getCanonicalEvaluationSourceContext({
+      source: "CANONICAL_BACKEND_READ",
+      readOnly: true,
+      lifecycleVerified: true,
+      lifecycleContractVersion: 2,
+      postId: 41,
+    }),
+    null
+  );
   assert.equal(getCanonicalEvaluationSourceContext({ projectId: "project-browser" }), null);
+});
+
+test("ordinary Evaluation content cannot overwrite Customer Concern or activate downstream domains", () => {
+  const content = buildOrdinaryCanonicalEvaluationContent({
+    observations: "Professional observations.",
+    diagnosisSummary: "Professional assessment.",
+    limitations: "Cabinet wall remained closed.",
+    internalNotes: "Synthetic QA only.",
+    customerConcern: "Browser attempt to replace customer truth.",
+    findings: [{ summary: "Not authorized." }],
+    scopeRecommendations: ["Not authorized."],
+  });
+  assert.equal(content.observations, "Professional observations.");
+  assert.equal(Object.hasOwn(content, "customerConcern"), false);
+  assert.deepEqual(content.findings, []);
+  assert.deepEqual(content.scopeRecommendations, []);
+
+  const canonical = validateCanonicalEvaluationProjection(
+    ordinaryCanonicalEvaluationFixture()
+  );
+  assert.equal(canonical.aggregate.sourceContext.type, "ordinary_job");
+  assert.equal(canonical.aggregate.sourceContext.requestId, 41);
+  assert.equal(
+    canonical.aggregate.sourceContext.evaluationVisitId,
+    "99999999-9999-4999-8999-999999999999"
+  );
+  assert.equal(
+    ordinaryCanonicalEvaluationContentToForm(canonical).observations,
+    "Visible water damage is present around the cabinet base."
+  );
+});
+
+test("ordinary Evaluation Visit provenance is strict, nullable, and required", () => {
+  const physical = ordinaryCanonicalEvaluationFixture();
+  assert.ok(validateCanonicalEvaluationProjection(physical));
+
+  const preVisit = ordinaryCanonicalEvaluationFixture({
+    aggregate: {
+      sourceContext: {
+        ...physical.aggregate.sourceContext,
+        evaluationVisitId: null,
+      },
+    },
+  });
+  assert.equal(
+    validateCanonicalEvaluationProjection(preVisit).aggregate.sourceContext.evaluationVisitId,
+    null
+  );
+
+  const missing = ordinaryCanonicalEvaluationFixture({
+    aggregate: {
+      sourceContext: {
+        type: "ordinary_job",
+        jobId: physical.aggregate.sourceContext.jobId,
+        requestId: 41,
+        relationshipId: 72,
+      },
+    },
+  });
+  assert.equal(validateCanonicalEvaluationProjection(missing), null);
+
+  const malformed = ordinaryCanonicalEvaluationFixture({
+    aggregate: {
+      sourceContext: {
+        ...physical.aggregate.sourceContext,
+        evaluationVisitId: "browser-visit",
+      },
+    },
+  });
+  assert.equal(validateCanonicalEvaluationProjection(malformed), null);
 });
 
 test("canonical Evaluation routes are refresh-safe and reject malformed source identity", () => {
@@ -149,7 +294,8 @@ test("existing presentation fields map into bounded canonical content without br
     }],
   });
   assert.equal(content.observations, "Observed active supply leak.");
-  assert.equal(content.findings.length, 1);
+  assert.equal(content.findings.length, 0);
+  assert.equal(content.diagnosisSummary, "Failed connection.");
   assert.equal(content.measurements.length, 1);
   assert.deepEqual(content.supportingMediaReferences, []);
   assert.equal(Object.hasOwn(content, "price"), false);

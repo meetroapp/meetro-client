@@ -8,10 +8,15 @@ function read(path) {
 
 test("Spotlight does not hydrate public media from browser-local portfolio state", () => {
   const home = read("src/pages/Home.jsx");
+  const canonicalDirectory = read("src/utils/spotlightPortfolioDirectory.js");
 
-  assert.match(home, /function getLocalSpotlightBusinesses\(\) \{\s*return \[\];\s*\}/);
+  assert.match(home, /fetchCanonicalSpotlightBusinesses/);
+  assert.match(canonicalDirectory, /fetchDiscoverDirectory/);
+  assert.match(canonicalDirectory, /\/contractor-projects\/\$\{encodeURIComponent\(/);
   assert.doesNotMatch(home, /readAllBusinessPortfolioItems/);
   assert.doesNotMatch(home, /persistBusinessPortfolioProjects/);
+  assert.doesNotMatch(home, /meetroSpotlightPortfolioFetchCache/);
+  assert.doesNotMatch(canonicalDirectory, /localStorage|sessionStorage|my-contractor-projects/);
 });
 
 test("Project Gallery does not publish or cache projects through localStorage", () => {
@@ -20,8 +25,10 @@ test("Project Gallery does not publish or cache projects through localStorage", 
   assert.doesNotMatch(gallery, /persistBusinessPortfolioProjects/);
   assert.doesNotMatch(gallery, /persistPortfolioForSpotlight/);
   assert.doesNotMatch(gallery, /persistBusinessProfileShareRecord/);
-  assert.match(gallery, /function toggleProjectSpotlight\(\) \{\s*setPhotoError/);
-  assert.match(gallery, /function viewPublicPortfolio\(\) \{\s*setPhotoError/);
+  assert.doesNotMatch(gallery, /toggleProjectSpotlight|viewPublicPortfolio/);
+  assert.match(gallery, /isPortfolioActionAllowed/);
+  assert.match(gallery, /\/my-contractor-projects/);
+  assert.doesNotMatch(gallery, /readBusinessPortfolioStorage|readAllBusinessPortfolioItems/);
 });
 
 test("Business Profile proof does not read browser-local portfolio records", () => {

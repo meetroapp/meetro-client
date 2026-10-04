@@ -638,7 +638,7 @@ const eyebrow = {
 const title = {
   margin: "0 0 4px",
   color: "#0f172a",
-  fontSize: "clamp(28px, 9vw, 42px)",
+  fontSize: "clamp(28px, 5vw, 34px)",
   lineHeight: 1.04,
 };
 

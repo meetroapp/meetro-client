@@ -17,10 +17,19 @@ import {
   revokeLocalRequestEditPhotoPreviews,
 } from "../src/utils/requestEditPhotoState.js";
 
-const myRequestsSource = readFileSync(
+const myRequestsPageSource = readFileSync(
   new URL("../src/pages/MyRequests.jsx", import.meta.url),
   "utf8"
 );
+const modificationPanelSource = readFileSync(
+  new URL("../src/components/HomeownerRequestModificationPanel.jsx", import.meta.url),
+  "utf8"
+);
+const editFormSource = readFileSync(
+  new URL("../src/components/HomeownerRequestEditForm.jsx", import.meta.url),
+  "utf8"
+);
+const myRequestsSource = `${myRequestsPageSource}\n${modificationPanelSource}\n${editFormSource}`;
 
 function media(index = 1, overrides = {}) {
   return {
@@ -246,45 +255,49 @@ test("My Requests edit uses the governed request-photo gate and disables deferre
     myRequestsSource,
     /isFriendsAndFamilyMediaDeferred\(\) && !requestPhotoUploadEnabled/
   );
-  assert.match(myRequestsSource, /disabled=\{addDisabled\}/);
+  assert.match(myRequestsSource, /disabled=\{addPhotosDisabled\}/);
   assert.match(myRequestsSource, /accept="image\/jpeg,image\/png,image\/webp"/);
   assert.doesNotMatch(myRequestsSource, /Photos coming soon/);
 });
 
 test("My Requests edit omits request_photos unless photos were intentionally changed", () => {
-  const changeGuard = myRequestsSource.indexOf("if (editForm.photosChanged) {");
-  const replacementAssignment = myRequestsSource.indexOf(
-    "body.request_photos = replacement.request_photos;",
+  const changeGuard = modificationPanelSource.indexOf("if (photosChanged) {");
+  const replacementAssignment = modificationPanelSource.indexOf(
+    "requestPhotos = replacement.request_photos;",
     changeGuard
   );
-  const putBody = myRequestsSource.indexOf("body: JSON.stringify(body)", replacementAssignment);
+  const payloadBuild = modificationPanelSource.indexOf(
+    "buildHomeownerRequestEditPayload({",
+    replacementAssignment
+  );
 
   assert.notEqual(changeGuard, -1);
   assert.notEqual(replacementAssignment, -1);
-  assert.notEqual(putBody, -1);
+  assert.notEqual(payloadBuild, -1);
   assert.ok(changeGuard < replacementAssignment);
-  assert.ok(replacementAssignment < putBody);
+  assert.ok(replacementAssignment < payloadBuild);
 });
 
 test("My Requests edit uploads local photos before save and cleans only new uploads on rejection", () => {
-  assert.match(myRequestsSource, /await uploadRequestPhotos\(\{/);
-  assert.match(myRequestsSource, /uploadedMediaForCleanup = uploadedRequestPhotos\.photos;/);
+  assert.match(modificationPanelSource, /await uploadRequestPhotos\(\{/);
+  assert.match(modificationPanelSource, /uploaded = upload\.photos;/);
   assert.match(
-    myRequestsSource,
-    /await cleanupUploadedEditRequestPhotos\(\s*uploadedMediaForCleanup\s*\)/
+    modificationPanelSource,
+    /await cleanupMedia\(uploaded\)/
   );
   assert.doesNotMatch(
-    myRequestsSource,
-    /cleanupUploadedEditRequestPhotos\(\s*editForm\.photos/
+    modificationPanelSource,
+    /cleanupMedia\(\s*photos/
   );
-  assert.match(myRequestsSource, /replaceCanonicalRequest\(records, result\.data\.post\)/);
+  assert.match(modificationPanelSource, /onRequestChanged\?\.\(result\.post\)/);
+  assert.match(myRequestsPageSource, /replaceCanonicalRequest\(records, post\)/);
 });
 
 test("My Requests edit resolves legacy display-only photos before any upload", () => {
-  const legacyCheck = myRequestsSource.indexOf(
-    "editForm.photos.some((photo) => photo?.displayOnly)"
+  const legacyCheck = modificationPanelSource.indexOf(
+    "photos.some((photo) => photo?.displayOnly)"
   );
-  const uploadCall = myRequestsSource.indexOf("await uploadRequestPhotos({");
+  const uploadCall = modificationPanelSource.indexOf("await uploadRequestPhotos({");
 
   assert.notEqual(legacyCheck, -1);
   assert.notEqual(uploadCall, -1);
@@ -293,14 +306,14 @@ test("My Requests edit resolves legacy display-only photos before any upload", (
     myRequestsSource,
     /REQUEST_EDIT_LEGACY_PHOTO_RESOLUTION_REQUIRED/
   );
-  assert.match(myRequestsSource, /Older photo/);
-  assert.match(myRequestsSource, /cannot be preserved through governed photo editing/);
+  assert.match(editFormSource, /older photo/);
+  assert.match(editFormSource, /before saving photo changes/);
 });
 
 test("My Requests edit does not create browser-local request-photo authority", () => {
-  const editSection = myRequestsSource.slice(
-    myRequestsSource.indexOf("async function saveEdit"),
-    myRequestsSource.indexOf("function requestCancelProject")
+  const editSection = modificationPanelSource.slice(
+    modificationPanelSource.indexOf("async function saveEdit"),
+    modificationPanelSource.indexOf("async function saveUpdate")
   );
 
   assert.doesNotMatch(editSection, /localStorage\.setItem/);

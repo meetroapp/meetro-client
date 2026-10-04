@@ -68,18 +68,23 @@ test("navigation Alert count identity comes from authenticated session identity"
   );
 });
 
-test("Alert Center mutation integration only requests canonical invalidation", () => {
+test("Alert Center observes shared refreshes without owning identity or count truth", () => {
   assert.match(notificationsSource, /refreshAlertCounts/);
-  assert.doesNotMatch(notificationsSource, /setAlertCountIdentity|subscribeAlertCounts|resetAlertCounts/);
+  assert.match(notificationsSource, /subscribeAlertCounts/);
+  assert.doesNotMatch(notificationsSource, /setAlertCountIdentity|resetAlertCounts/);
   assert.doesNotMatch(notificationsSource, /counts?\.(?:unread|active)\s*=/);
 });
 
-test("navigation does not substitute message or legacy notification counts for Alerts", () => {
+test("navigation projects canonical category counts without a local unread authority", () => {
   const unreadBranch = bottomNavSource.slice(
     bottomNavSource.indexOf("const getItemUnreadCount"),
     bottomNavSource.indexOf("const getItemAccessibleLabel")
   );
-  assert.match(unreadBranch, /item\.page === "notifications"\s*\? canonicalAlertUnreadCount/);
-  assert.doesNotMatch(unreadBranch, /notifications[^\n]*getUnreadMessageCount/);
-  assert.doesNotMatch(unreadBranch, /notifications[^\n]*getUnreadNotificationCount/);
+  assert.match(bottomNavSource, /counts\?\.byCategory\?\./);
+  assert.match(bottomNavSource, /canonicalCategoryUnreadCount\("communication"\)/);
+  assert.match(bottomNavSource, /canonicalCategoryUnreadCount\("request"\)/);
+  assert.match(unreadBranch, /item\.shortcut === "businessLeads"/);
+  assert.match(unreadBranch, /item\.page === "contractorDashboard"/);
+  assert.doesNotMatch(bottomNavSource, /getUnreadNotificationCount/);
+  assert.doesNotMatch(bottomNavSource, /canonicalAlertUnreadCount/);
 });

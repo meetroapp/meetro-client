@@ -1,7 +1,11 @@
-import { APP_DESKTOP_LAYOUT_MIN_WIDTH } from "./appLayout.js";
+import {
+  APP_DESKTOP_LAYOUT_MIN_WIDTH,
+  APP_TABLET_LAYOUT_MIN_WIDTH,
+} from "./appLayout.js";
 
-export const COMPANION_TABLET_MIN_WIDTH = APP_DESKTOP_LAYOUT_MIN_WIDTH;
+export const COMPANION_TABLET_MIN_WIDTH = APP_TABLET_LAYOUT_MIN_WIDTH;
 export const COMPANION_PREFERRED_WIDTH = 388;
+export const COMPANION_TABLET_WIDTH = 520;
 export const COMPANION_TABLET_DESKTOP_WIDTH = 720;
 export const COMPANION_PREFERRED_GUIDANCE_HEIGHT = 520;
 export const COMPANION_PREFERRED_CONVERSATION_HEIGHT = 720;
@@ -16,16 +20,21 @@ function clamp(value, min, max) {
 }
 
 export function getCompanionLayoutMode(usableViewportWidth = 0) {
-  return finite(usableViewportWidth) >= COMPANION_TABLET_MIN_WIDTH
-    ? "desktop"
-    : "mobile";
+  const width = finite(usableViewportWidth);
+  if (width >= APP_DESKTOP_LAYOUT_MIN_WIDTH) return "desktop";
+  if (width >= COMPANION_TABLET_MIN_WIDTH) return "tablet";
+  return "mobile";
 }
 
 export function getCompanionPreferredPanelWidth(usableViewportWidth = 0) {
   const width = finite(usableViewportWidth);
-  return width >= COMPANION_TABLET_MIN_WIDTH && width < 1180
-    ? COMPANION_TABLET_DESKTOP_WIDTH
-    : COMPANION_PREFERRED_WIDTH;
+  if (width >= APP_DESKTOP_LAYOUT_MIN_WIDTH && width < 1180) {
+    return COMPANION_TABLET_DESKTOP_WIDTH;
+  }
+  if (width >= COMPANION_TABLET_MIN_WIDTH && width < APP_DESKTOP_LAYOUT_MIN_WIDTH) {
+    return COMPANION_TABLET_WIDTH;
+  }
+  return COMPANION_PREFERRED_WIDTH;
 }
 
 export function calculateExpandedPanelPlacement({

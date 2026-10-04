@@ -1,5 +1,9 @@
+import { NativeSpeechRecognition } from "../utils/assistantSpeechRecognition.js";
+import { parseQuoteInvoiceCommand, lookupQuoteInvoiceCommand, quoteInvoiceResolutionMessage, stageQuoteInvoiceInstruction } from "../utils/quoteToInvoice.js";
+import { assistantQuoteContextFromRoute, isAssistantQuoteAction, isExplicitStandaloneNewQuoteIntent, resolveAssistantQuoteNavigation } from "../utils/assistantQuoteNavigation.js";
+import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Capacitor, registerPlugin } from "@capacitor/core";
+import { Capacitor } from "@capacitor/core";
 import { t } from "../utils/language";
 import useLanguage from "../hooks/useLanguage";
 import { getHomeownerLifecycleStage } from "../utils/homeownerLifecycle";
@@ -59,7 +63,7 @@ import {
   isLegacyWorkflowStorageKey,
 } from "../utils/clientWorkflowStoragePolicy";
 
-const NativeSpeechRecognition = registerPlugin("SpeechRecognition");
+
 const ASSISTANT_LAUNCHER_EDGE_MARGIN = 18;
 const ASSISTANT_LAUNCHER_MOBILE_EDGE_MARGIN = 20;
 const ASSISTANT_EXPANDED_CARD_VIEWPORT_MARGIN = 14;
@@ -561,19 +565,21 @@ const actionTargets = {
   businessTools: "businessCommandCenter",
   profile: "profile",
   legal: "legal",
-  quoteBuilder: "quoteBuilder",
+  quoteBuilder: "quoteBuilder?new=1",
   invoiceBuilder: "invoiceBuilder",
   home: "home",
 };
 
 function getSelectedContext() {
   const requestDetailContext = readRequestCompanionContext();
+  const quoteContext = assistantQuoteContextFromRoute(window.location.hash);
+  const exactIdentity = { canonicalJobId: quoteContext.jobId || "", workingDraftId: quoteContext.draftId || "" };
 
   if (!canReadLegacyWorkflowStorage()) {
     return {
       selectedRequestId: "",
       selectedProjectId: "",
-      selectedJobId: "",
+      ...exactIdentity,
       conversationId: "",
       appointmentId: "",
       quoteId: "",
@@ -587,11 +593,7 @@ function getSelectedContext() {
       localStorage.getItem("selectedHomeownerRequestId") ||
       "",
     selectedProjectId: requestDetailContext?.projectId || "",
-    selectedJobId:
-      requestDetailContext?.projectId ||
-      localStorage.getItem("activeJobId") ||
-      localStorage.getItem("activeWorkRequestId") ||
-      "",
+    ...exactIdentity,
     conversationId:
       requestDetailContext?.conversationId ||
       localStorage.getItem("activeConversationId") ||
@@ -1132,6 +1134,7 @@ function makeAssistantAction(actionKey, language) {
   const action = {
     label: copy.actions[actionKey] || actionKey,
     target: actionTargets[actionKey],
+    ...(actionKey === "quoteBuilder" ? { quoteIntent: "GENERIC_NEW" } : {}),
   };
 
   const workCenterSections = {
@@ -1195,6 +1198,8 @@ function makeRequestAssistantAction(actionKey, language, context = {}) {
     createQuote: {
       label: t("assistantRequestCreateQuote"),
       target: "quoteBuilder",
+      quoteIntent: "CONTINUE",
+      quoteContext: context,
     },
     reviewDetails: {
       label: t("assistantRequestReviewDetails"),
@@ -1634,8 +1639,15 @@ function getScheduleCreationResponse(question, roleMode, language) {
   ]);
 }
 
-function detectAssistantActionIntent(question, roleMode, language) {
+function detectAssistantActionIntent(question, roleMode, language, context = {}) {
+  const invoiceCommand = roleMode === "business" ? parseQuoteInvoiceCommand(question) : null;
+  if (invoiceCommand) return makeResponse(
+    "prepare_quote_invoice",
+    language === "es" ? "Verificaré la cotización exacta para preparar una factura sin guardar." : "I’ll verify the exact Quote and prepare an unsaved Invoice for review.",
+    [{ label: language === "es" ? "Preparar factura" : "Prepare Invoice", action: "prepare_quote_invoice", invoiceCommand }]
+  );
   const text = String(question || "").toLowerCase();
+  const explicitNew = isExplicitStandaloneNewQuoteIntent(question);
   const copy = assistantCopy[language] || assistantCopy.en;
   const isBusinessMode = roleMode === "business";
   const sharedActionKeys = ["messages", "profile", "legal"];
@@ -1657,7 +1669,7 @@ function detectAssistantActionIntent(question, roleMode, language) {
       key: "quoteBuilder",
       intent: "open_quote_builder",
       pattern:
-        /(create|build|draft|make|start|help me create|help me build).*(quote|proposal)|(?:crear|hacer|preparar|empezar).*(cotiz|propuesta)/,
+        /\bnew (?:standalone )?quote\b|nueva cotizaci[oó]n|(create|build|draft|make|start|help me create|help me build).*(quote|proposal)|(?:crear|hacer|preparar|empezar).*(cotiz|propuesta)/,
     },
     {
       key: "invoiceBuilder",
@@ -1733,7 +1745,7 @@ function detectAssistantActionIntent(question, roleMode, language) {
     },
   ];
 
-  const match = routeMatches.find((route) => route.pattern.test(text));
+  const match = routeMatches.find((route) => (route.key === "quoteBuilder" && explicitNew) || route.pattern.test(text));
   if (!match) return null;
 
   if (!isBusinessMode && professionalActionKeys.includes(match.key)) {
@@ -1747,9 +1759,16 @@ function detectAssistantActionIntent(question, roleMode, language) {
   const isAllowedSharedAction = sharedActionKeys.includes(match.key);
   if (!isBusinessMode && !isAllowedSharedAction) return null;
 
-  return makeResponse(match.intent, copy.actionRoutingReady, [
-    makeAssistantAction(match.key, language),
-  ]);
+  const action = makeAssistantAction(match.key, language);
+  if (match.key === "quoteBuilder") {
+    const contextualLanguage = /\b(this|that|existing|current|same|continue|resume|revise|revision|request|job|project|conversation|schedule|evaluation|visit)\b|\b(esta|este|actual|continuar|solicitud|trabajo|proyecto|visita)\b/.test(text);
+    if (contextualLanguage || (context.hasQuoteWorkflowContext && !explicitNew)) {
+      action.target = "quoteBuilder";
+      action.quoteIntent = "CONTINUE";
+      action.quoteContext = context.quoteNavigationContext || {};
+    }
+  }
+  return makeResponse(match.intent, copy.actionRoutingReady, [action]);
 }
 
 function detectVoiceIntent(question, roleMode) {
@@ -1837,6 +1856,7 @@ function getEvaluationToQuoteResponse(question, roleMode, language) {
       {
         label: language === "es" ? "Crear cotización" : "Create Quote",
         target: "quoteBuilder",
+        quoteIntent: "CONTINUE",
       },
       makeAssistantAction("schedule", language),
     ]
@@ -1844,6 +1864,12 @@ function getEvaluationToQuoteResponse(question, roleMode, language) {
 }
 
 function getVoiceResponse(question, roleMode, language, guide, currentPage = "") {
+  if (roleMode === "business" && parseQuoteInvoiceCommand(question)) return detectAssistantActionIntent(question, roleMode, language);
+  // Only strict standalone-new commands precede request/evaluation guidance.
+  if (isExplicitStandaloneNewQuoteIntent(question)) {
+    return detectAssistantActionIntent(question, roleMode, language);
+  }
+
   const scheduleCreation = getScheduleCreationResponse(question, roleMode, language);
   if (scheduleCreation) return scheduleCreation;
 
@@ -1862,10 +1888,18 @@ function getVoiceResponse(question, roleMode, language, guide, currentPage = "")
     question,
     currentPage,
     language,
+    quoteNavigationContext: currentPage === "quoteBuilder"
+      ? assistantQuoteContextFromRoute(window.location.hash)
+      : {},
   });
   if (fieldProductivity) return fieldProductivity;
 
-  const actionResponse = detectAssistantActionIntent(question, roleMode, language);
+  const actionResponse = detectAssistantActionIntent(question, roleMode, language, {
+    hasQuoteWorkflowContext: ["quoteBuilder", "workCenter", "contractorDashboard", "projectDetails", "myRequests", "conversationThread", "evaluationNotes", "proposalSummary", "projectJourney"].includes(currentPage),
+    quoteNavigationContext: currentPage === "quoteBuilder"
+      ? assistantQuoteContextFromRoute(window.location.hash)
+      : {},
+  });
   if (actionResponse) return actionResponse;
 
   const intent = detectVoiceIntent(question, roleMode);
@@ -2439,12 +2473,13 @@ function getAssistantFirstName() {
   return String(storedName || "").trim().split(/\s+/)[0] || "";
 }
 
-function MeetroAssistant({ currentPage = "", setPage }) {
+function MeetroAssistant({ currentPage = "", setPage, onOpenWorkspace, showLauncher = true }) {
   const appLayoutMetrics = useAppLayoutMetrics();
   const [open, setOpen] = useState(false);
   const [wakeOpen, setWakeOpen] = useState(false);
   const [launcherPosition, setLauncherPosition] = useState(null);
   const [, setViewportRevision] = useState(0);
+  const [externalKeyboardOpen, setExternalKeyboardOpen] = useState(false);
   const [activeAccountMode, setActiveAccountMode] = useState(
     () => localStorage.getItem("activeAccountMode") || "personal"
   );
@@ -2781,6 +2816,62 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   }, [launcherBottomClearance]);
 
   useEffect(() => {
+    let frame = 0;
+
+    const isEditableTarget = (target) => {
+      const tagName = String(target?.tagName || "").toLowerCase();
+      return (
+        tagName === "input" ||
+        tagName === "textarea" ||
+        Boolean(target?.isContentEditable)
+      );
+    };
+
+    const syncExternalKeyboardState = () => {
+      const activeElement = document.activeElement;
+      const assistantOwnsFocus = Boolean(
+        activeElement?.closest?.(".meetro-assistant-presence")
+      );
+      setExternalKeyboardOpen(
+        isEditableTarget(activeElement) && !assistantOwnsFocus
+      );
+    };
+
+    const scheduleExternalKeyboardState = () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      frame = window.requestAnimationFrame(() => {
+        frame = 0;
+        syncExternalKeyboardState();
+      });
+    };
+
+    document.addEventListener("focusin", scheduleExternalKeyboardState, true);
+    document.addEventListener("focusout", scheduleExternalKeyboardState, true);
+    window.visualViewport?.addEventListener(
+      "resize",
+      scheduleExternalKeyboardState
+    );
+
+    return () => {
+      if (frame) window.cancelAnimationFrame(frame);
+      document.removeEventListener(
+        "focusin",
+        scheduleExternalKeyboardState,
+        true
+      );
+      document.removeEventListener(
+        "focusout",
+        scheduleExternalKeyboardState,
+        true
+      );
+      window.visualViewport?.removeEventListener(
+        "resize",
+        scheduleExternalKeyboardState
+      );
+    };
+  }, []);
+
+  useEffect(() => {
     if (!open) return undefined;
 
     function handleAssistantKeyDown(event) {
@@ -2863,6 +2954,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
   useEffect(() => {
     function handleAssistantOpen(event) {
       const detail = event?.detail || {};
+      if (onOpenWorkspace) { onOpenWorkspace(detail); return; }
       const initialQuestion = String(detail.initialQuestion || detail.question || "").trim();
 
       if (initialQuestion) {
@@ -2878,7 +2970,7 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     return () => {
       window.removeEventListener("meetro:assistant:open", handleAssistantOpen);
     };
-  }, [currentPage, assistantContextPage]);
+  }, [currentPage, assistantContextPage, onOpenWorkspace]);
 
   useEffect(() => {
     function handleCompanionIdentityChange() {
@@ -2959,7 +3051,8 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       note: feedbackNote.trim(),
       requestId: context.selectedRequestId,
       selectedRequestId: context.selectedRequestId,
-      selectedJobId: context.selectedJobId,
+      canonicalJobId: context.canonicalJobId,
+      workingDraftId: context.workingDraftId,
       conversationId: context.conversationId,
       appointmentId: context.appointmentId,
       quoteId: context.quoteId,
@@ -3385,9 +3478,39 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     }
   }
 
+  function navigateAssistantQuote(action) {
+    if (!setPage) return;
+    const navigation = resolveAssistantQuoteNavigation({
+      intent: action.quoteIntent || "CONTINUE",
+      action,
+      context: action.quoteContext || {},
+    });
+    if (navigation.kind === "BLOCKED_AMBIGUOUS") {
+      stopAssistantVoiceResponse();
+      setVoiceAnswer(language === "es"
+        ? "Abre primero el trabajo o la cotización guardada exactos en el Centro de Trabajo o en Archivos guardados. Tu trabajo actual sigue abierto."
+        : "Open the exact Job or saved Quote first in Work Center or Saved Files. Your current work is still open.");
+      setVoiceActions([]);
+      setVoiceStatusChip(null);
+      return;
+    }
+    if (navigation.kind === "GENERIC_NEW") {
+      clearGenericNewQuoteContext();
+      localStorage.setItem("quoteBuilderSource", "meetro_assistant_new_quote");
+    }
+    localStorage.setItem("quoteBuilderReturnPage", currentPage || "businessDashboard");
+    stopAssistantVoiceResponse();
+    setOpen(false);
+    setPage(navigation.route);
+  }
+
   function handleQuickAction(action) {
     const target = actionTargets[action];
     if (!target || !setPage) return;
+    if (action === "quoteBuilder") {
+      navigateAssistantQuote(makeAssistantAction(action, language));
+      return;
+    }
 
     const workCenterSections = {
       schedule: "schedule",
@@ -3407,8 +3530,25 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     setPage(target);
   }
 
-  function handleVoiceAction(action) {
+  async function handleVoiceAction(action) {
     if (!action) return;
+    if (action.action === "prepare_quote_invoice") {
+      const result = await lookupQuoteInvoiceCommand(action.invoiceCommand, { setPage });
+      if (result.state !== "EXACT_QUOTE_TO_INVOICE") {
+        setVoiceAnswer(quoteInvoiceResolutionMessage(result.state, language));
+        return;
+      }
+      stageQuoteInvoiceInstruction(result.route, action.invoiceCommand.instruction);
+      stopAssistantVoiceResponse();
+      setOpen(false);
+      setPage(result.route);
+      return;
+    }
+    // Resolve Quote intent before any legacy request/schedule storage writes.
+    if (isAssistantQuoteAction(action)) {
+      navigateAssistantQuote(action);
+      return;
+    }
 
     if (action.action === "dismiss") {
       stopAssistantVoiceResponse();
@@ -3648,6 +3788,8 @@ function MeetroAssistant({ currentPage = "", setPage }) {
       return;
     }
 
+    if (onOpenWorkspace) { onOpenWorkspace(); return; }
+
     if (launcherAction === "open") {
       openAssistantFromLauncher();
       return;
@@ -3710,7 +3852,16 @@ function MeetroAssistant({ currentPage = "", setPage }) {
     enterCompanionConversation();
   }
 
-  const launcherPositionStyle = launcherPosition
+  const compactWorkCenterSafeDock =
+    currentPage === "contractorDashboard";
+  const launcherPositionStyle = compactWorkCenterSafeDock
+    ? {
+        right: `max(${launcherEdgeMargin}px, env(safe-area-inset-right, 0px))`,
+        bottom: "calc(var(--work-center-dock-bottom, 74px) + var(--work-center-dock-gap, 6px))",
+        left: "auto",
+        top: "auto",
+      }
+    : launcherPosition
     ? {
         left: `${launcherPosition.x}px`,
         top: `${launcherPosition.y}px`,
@@ -3734,12 +3885,16 @@ function MeetroAssistant({ currentPage = "", setPage }) {
 
   return (
     <>
+      {showLauncher && !externalKeyboardOpen && (
       <button
         className="meetro-assistant-launcher"
-        data-position-mode="draggable"
+        data-position-mode={compactWorkCenterSafeDock ? "docked" : "draggable"}
+        data-containment-mode={
+          compactWorkCenterSafeDock ? "compact-work-center-safe-rail" : "free"
+        }
         type="button"
         aria-label={t("companionLauncherLabel", language)}
-        onPointerDown={handleLauncherPointerDown}
+        onPointerDown={compactWorkCenterSafeDock ? undefined : handleLauncherPointerDown}
         onPointerMove={handleLauncherPointerMove}
         onPointerUp={handleLauncherPointerUp}
         onPointerCancel={handleLauncherPointerUp}
@@ -3756,8 +3911,9 @@ function MeetroAssistant({ currentPage = "", setPage }) {
         <span style={assistantButtonText}>{t("assistantCompanionAskMeetro", language)}</span>
         <span style={assistantPresenceDot} aria-hidden="true" />
       </button>
+      )}
 
-      {wakeOpen && !open && (
+      {showLauncher && wakeOpen && !open && !externalKeyboardOpen && (
         <section
           style={getAssistantWakeBubbleStyle({
             launcherPosition,

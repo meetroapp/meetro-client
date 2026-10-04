@@ -58,10 +58,12 @@ test("Work Center warning dialog can summarize multiple closure dependencies", (
   assert.match(contractorDashboardSource, /item\.expectedAction/);
 });
 
-test("Work Center advances are warning-mediated and not hard blocked by the alert", () => {
+test("Work Center advances are warning-mediated while unsupported completion is contained", () => {
   assert.match(contractorDashboardSource, /requestWorkflowDependencyAdvance\(universalActiveWork, "on_the_way"/);
   assert.match(contractorDashboardSource, /requestWorkflowDependencyAdvance\(universalActiveWork, "start_work"/);
-  assert.match(contractorDashboardSource, /requestWorkflowDependencyAdvance\(universalActiveWork, "complete_work"/);
+  assert.doesNotMatch(contractorDashboardSource, /requestWorkflowDependencyAdvance\(universalActiveWork, "complete_work"/);
+  assert.match(contractorDashboardSource, /setPage\("completionSheet"\)/);
+  assert.match(contractorDashboardSource, /lifecycleDashboardActionUnavailable/);
   assert.match(contractorDashboardSource, /requestWorkflowDependencyAdvance\(\s*job,\s*activeWorkAttemptedAction,\s*activeWorkWorkflow\.onAction/s);
   assert.match(contractorDashboardSource, /continueAction\?\.\(\)/);
 });

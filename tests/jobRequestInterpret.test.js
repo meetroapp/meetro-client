@@ -23,10 +23,18 @@ import {
   JobRequestInterpretError,
   applyJobRequestInterpretationPatch,
   buildJobRequestInterpretRequest,
+  confirmAppliedJobRequestInterpretationFields,
+  createJobRequestInterpretationReviewKeys,
   createJobRequestInterpretIntent,
   markJobRequestInterpretIntentAmbiguous,
+  recordJobRequestInterpretationReviews,
   requestJobRequestInterpretation,
 } from "../src/utils/jobRequestInterpret.js";
+import {
+  JOB_REQUEST_INTERPRETATION_FAILURE,
+  applyHomeownerConversationText,
+  classifyInterpretationFailure,
+} from "../src/utils/jobRequestConversation.js";
 
 const KEY_ONE = "11111111-1111-4111-8111-111111111111";
 const KEY_TWO = "22222222-2222-4222-8222-222222222222";
@@ -71,6 +79,9 @@ test("request builder sends only bounded text and minimized non-canonical draft 
   let draft = createJobRequestDraft({
     draftId: "draft-private-id",
     initialLocation: "101 Private Street, Cape Coral, FL",
+    initialCity: "Cape Coral",
+    initialRegion: "FL",
+    initialPostalCode: "33904",
   });
   draft = applyHomeownerInput(draft, {
     "job.description": "The cabinet is swollen after a leak.",
@@ -99,8 +110,14 @@ test("request builder sends only bounded text and minimized non-canonical draft 
   assert.equal(request.capability, "job_request.interpret");
   assert.equal(request.input.text, "The cabinet under my sink is swollen.");
   assert.equal(request.context.draft.location.affectedArea, "kitchen");
+  assert.deepEqual(request.context.draft.location, {
+    affectedArea: "kitchen",
+    city: "Cape Coral",
+    region: "FL",
+    postalCode: "33904",
+  });
   assert.equal(request.context.draft.photosAttached, true);
-  assert.equal(request.context.draft.fieldState.length, 13);
+  assert.equal(request.context.draft.fieldState.length, 16);
   for (const privateValue of [
     "draft-private-id",
     "101 Private Street",
@@ -113,6 +130,204 @@ test("request builder sends only bounded text and minimized non-canonical draft 
   ]) {
     assert.equal(serialized.includes(privateValue), false, privateValue);
   }
+});
+
+test("one homeowner message produces a reviewable multi-field request proposal without submission authority", () => {
+  const homeownerText =
+    "I need someone to repair a cracked section of the wall by my front entry in Cape Coral. It is separating and temporarily braced. I would like someone to inspect it and repair or rebuild the damaged area. I am available this week and I can add photos.";
+  const homeownerDraft = applyHomeownerConversationText(
+    createJobRequestDraft(),
+    homeownerText
+  );
+  const fields = [
+    proposal({ path: "job.title", value: "Repair cracked wall by front entry" }),
+    proposal({
+      path: "service.specialty",
+      value: "structural_repairs",
+      taxonomy: { validated: true, vocabulary: "request_service" },
+    }),
+    proposal({ path: "location.affectedArea", value: "front entry wall" }),
+    proposal({ path: "location.city", value: "Cape Coral" }),
+    proposal({ path: "timing.availability", value: "Available this week" }),
+    proposal({
+      path: "details.additionalNotes",
+      value: "The section is separating and temporarily braced. The homeowner can add photos.",
+    }),
+  ];
+
+  const result = applyJobRequestInterpretationPatch(
+    homeownerDraft,
+    interpretation(fields)
+  );
+
+  assert.equal(result.draft.job.description, homeownerText);
+  assert.equal(result.draft.job.title, "Repair cracked wall by front entry");
+  assert.equal(result.draft.service.specialty, "structural_repairs");
+  assert.equal(result.draft.fieldMeta.service.specialty.confirmed, false);
+  assert.equal(result.draft.location.city, "Cape Coral");
+  assert.equal(result.draft.timing.availability, "Available this week");
+  assert.equal(result.draft.media.photos.length, 0);
+  assert.equal(result.draft.submission.status, "idle");
+  assert.equal(result.draft.submission.snapshot, null);
+  assert.equal(
+    fields.some(({ path }) => /price|diagnosis|materials|repairMethod/i.test(path)),
+    false
+  );
+
+  const corrected = applyHomeownerInput(result.draft, {
+    "location.city": "Fort Myers",
+  });
+  const replay = applyJobRequestInterpretationPatch(
+    corrected,
+    interpretation([proposal({ path: "location.city", value: "Cape Coral" })])
+  );
+  assert.equal(replay.draft.location.city, "Fort Myers");
+  assert.equal(replay.rejectedFields[0].reason, "homeowner_value_protected");
+});
+
+test("accepted Cape Coral proposal updates the same draft and clears its governed review gate", () => {
+  const homeownerText =
+    "I need someone to repair a cracked section of the wall by my front entry in Cape Coral. It is separating and temporarily braced. I would like someone to inspect it and repair or rebuild the damaged area. I am available this week and I can add photos.";
+  let draft = createJobRequestDraft({
+    initialLocation: "123 Palm Ave",
+    initialCity: "Cape Coral",
+    initialRegion: "FL",
+    initialPostalCode: "33904",
+  });
+  draft = applyHomeownerConversationText(draft, homeownerText);
+  const reviewedInterpretation = interpretation([
+    proposal({ path: "job.title", value: "Repair cracked wall by front entry" }),
+    proposal({
+      path: "job.description",
+      value: "Inspect and repair or rebuild the cracked, separating front entry wall.",
+    }),
+    proposal({
+      path: "service.specialty",
+      value: "structural_repairs",
+      taxonomy: { validated: true, vocabulary: "request_service" },
+    }),
+    proposal({ path: "location.affectedArea", value: "front entry wall" }),
+    proposal({ path: "location.city", value: "Cape Coral" }),
+    proposal({ path: "timing.availability", value: "Available this week" }),
+    proposal({
+      path: "details.expectations",
+      value: "Inspect the damaged area and repair or rebuild it as needed.",
+    }),
+    proposal({
+      path: "details.additionalNotes",
+      value: "The section is separating and temporarily braced. Photos can be added.",
+    }),
+  ]);
+  const patched = applyJobRequestInterpretationPatch(
+    draft,
+    reviewedInterpretation
+  );
+  const aligned = setServiceClassification(
+    patched.draft,
+    {
+      category: "structural_repairs",
+      requestCategory: "structural_repairs",
+      domain: "home_services",
+      specialty: "structural_repairs",
+      selectedServiceOptionId: "service:structural_repairs",
+      displayLabel: "Structural Repairs",
+    },
+    { source: JOB_REQUEST_DRAFT_SOURCE.ASSISTANT_INFERRED, confirmed: false }
+  );
+  const accepted = confirmAppliedJobRequestInterpretationFields(
+    aligned,
+    patched.appliedFields
+  );
+
+  assert.equal(accepted.draftId, draft.draftId);
+  assert.equal(accepted.job.title, "Repair cracked wall by front entry");
+  assert.equal(accepted.job.description, homeownerText);
+  assert.equal(accepted.service.specialty, "structural_repairs");
+  assert.equal(accepted.service.displayLabel, "Structural Repairs");
+  assert.equal(accepted.location.city, "Cape Coral");
+  assert.equal(accepted.timing.availability, "Available this week");
+  assert.equal(accepted.fieldMeta.service.specialty.confirmed, true);
+  assert.equal(accepted.readiness.isReady, true);
+  assert.equal(accepted.submission.status, "idle");
+  assert.equal(accepted.submission.snapshot, null);
+});
+
+test("exact Cape Coral review keys make partial concurrent ACCEPTED retries safe", async () => {
+  const operationId = "33333333-3333-4333-8333-333333333333";
+  const fields = interpretation([
+    proposal({ path: "job.title", value: "Front Entry Wall Repair or Rebuild" }),
+    proposal({ path: "job.description", value: "Inspect and repair the damaged wall." }),
+    proposal({ path: "location.city", value: "Cape Coral" }),
+    proposal({ path: "timing.availability", value: "Available this week" }),
+    proposal({
+      path: "service.specialty",
+      value: "structural_repairs",
+      taxonomy: { validated: true, vocabulary: "request_service" },
+    }),
+    proposal({ path: "location.affectedArea", value: "Front entry wall" }),
+    proposal({ path: "details.expectations", value: "Inspect and repair or rebuild." }),
+    proposal({ path: "details.additionalNotes", value: "Photos can be added." }),
+  ]).draftPatch.fields;
+  let sequence = 0;
+  const reviewKeys = createJobRequestInterpretationReviewKeys(fields, {
+    createKey: () =>
+      `00000000-0000-4000-8000-${String(++sequence).padStart(12, "0")}`,
+  });
+  const ledger = new Map();
+  let rejectCamelCase = true;
+  let patchApplications = 0;
+  const recordReview = async (command) => {
+    if (
+      rejectCamelCase &&
+      ["location.affectedArea", "details.additionalNotes"].includes(command.elementId)
+    ) {
+      throw new Error("simulated lowercase ledger constraint");
+    }
+    const identity = `${command.elementId}:${command.idempotencyKey}`;
+    if (ledger.has(identity)) return { ...command, replayed: true };
+    ledger.set(identity, command);
+    return { ...command, replayed: false };
+  };
+  const add = async () => {
+    const reviews = await recordJobRequestInterpretationReviews({
+      operationId,
+      fields,
+      action: "ACCEPTED",
+      reviewKeys,
+      recordReview,
+    });
+    patchApplications += 1;
+    return reviews;
+  };
+
+  await assert.rejects(add, /lowercase ledger constraint/);
+  assert.equal(ledger.size, 6);
+  assert.equal(patchApplications, 0);
+
+  rejectCamelCase = false;
+  const retried = await add();
+  assert.equal(ledger.size, 8);
+  assert.equal(retried.filter((review) => review.replayed).length, 6);
+  assert.equal(retried.filter((review) => !review.replayed).length, 2);
+  assert.equal(patchApplications, 1);
+  assert.deepEqual(
+    retried.map((review) => review.elementId),
+    fields.map((field) => field.path)
+  );
+  assert.equal(
+    new Set(retried.map((review) => review.idempotencyKey)).size,
+    fields.length
+  );
+});
+
+test("Job Request review orchestration rejects forged proposal paths", async () => {
+  assert.throws(
+    () => createJobRequestInterpretationReviewKeys(
+      [{ path: "details.privateNotes", value: "unsafe" }],
+      { createKey: () => "44444444-4444-4444-8444-444444444444" }
+    ),
+    /fields are invalid/
+  );
 });
 
 test("request builder rejects unsupported versions and non-text draft values", () => {
@@ -230,6 +445,88 @@ test("request helper calls only the canonical Gateway and validates its operatio
   assert.equal(calls[0][1].body.includes("/posts"), false);
   assert.equal(result.interpretation.summary, interpretation().summary);
   assert.equal(result.replayed, false);
+});
+
+test("Cape Coral intake survives the governed request path while failures and retry remain explicit", async () => {
+  const homeownerText =
+    "I need someone to repair a cracked section of the wall by my front entry in Cape Coral. It is separating and temporarily braced. I would like someone to inspect it and repair or rebuild the damaged area. I am available this week and I can add photos.";
+  const draft = applyHomeownerConversationText(createJobRequestDraft(), homeownerText);
+  const intent = createJobRequestInterpretIntent({
+    text: homeownerText,
+    draft,
+    cryptoImpl: { randomUUID: () => KEY_ONE },
+  });
+  const fields = [
+    proposal({ path: "job.title", value: "Repair cracked wall by front entry" }),
+    proposal({ path: "location.affectedArea", value: "front entry wall" }),
+    proposal({ path: "location.city", value: "Cape Coral" }),
+    proposal({ path: "timing.availability", value: "Available this week" }),
+  ];
+  const calls = [];
+
+  const result = await requestJobRequestInterpretation({
+    intent,
+    authFetchImpl: async (route, options) => {
+      calls.push({ route, options });
+      const body = JSON.parse(options.body);
+      assert.equal(body.input.text, homeownerText);
+      assert.deepEqual(Object.keys(body.context.draft.location).sort(), [
+        "affectedArea",
+        "city",
+        "postalCode",
+        "region",
+      ]);
+      assert.equal(JSON.stringify(body).includes("serviceAddress"), false);
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          code: "INTELLIGENCE_OPERATION_COMPLETED",
+          operation: "job_request.interpret",
+          operationId: "operation-cape-coral",
+          correlationId: "correlation-cape-coral",
+          result: interpretation(fields),
+        },
+      };
+    },
+  });
+  const reviewed = applyJobRequestInterpretationPatch(draft, result.interpretation);
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].route, JOB_REQUEST_INTERPRET_ROUTE);
+  assert.equal(reviewed.draft.location.city, "Cape Coral");
+  assert.equal(reviewed.draft.timing.availability, "Available this week");
+  assert.equal(reviewed.draft.submission.status, "idle");
+  assert.equal(reviewed.draft.submission.snapshot, null);
+
+  let failure;
+  try {
+    await requestJobRequestInterpretation({
+      intent,
+      authFetchImpl: async () => ({
+        response: { ok: false, status: 403 },
+        data: {
+          success: false,
+          code: "INTELLIGENCE_CAPABILITY_FORBIDDEN",
+        },
+      }),
+    });
+  } catch (error) {
+    failure = error;
+  }
+  assert.equal(
+    classifyInterpretationFailure(failure),
+    JOB_REQUEST_INTERPRETATION_FAILURE.DEFINITIVE
+  );
+
+  const retry = createJobRequestInterpretIntent({
+    text: homeownerText,
+    draft,
+    previousIntent: markJobRequestInterpretIntentAmbiguous(intent),
+    cryptoImpl: { randomUUID: () => KEY_TWO },
+  });
+  assert.equal(retry.idempotencyKey, KEY_ONE);
+  assert.deepEqual(retry.request, intent.request);
 });
 
 test("network ambiguity and Gateway conflict return governed failures without a draft patch", async () => {

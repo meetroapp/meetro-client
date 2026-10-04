@@ -1,5 +1,6 @@
 import { buildCanonicalJobRequestPayload as buildSubmissionPayload } from "./jobRequestSubmissionIntent.js";
 import { buildRequestMatchingFields } from "./requestMatchingFields.js";
+import { isCanonicalRequestServiceLocationComplete } from "./requestHelpSubmission.js";
 
 export const JOB_REQUEST_DRAFT_KEY = "meetroJobRequestDraft";
 export const JOB_REQUEST_DRAFT_VERSION = 2;
@@ -520,20 +521,15 @@ export function getJobRequestDraftReadiness(draft = {}) {
   const intakeMode = cleanText(draft.location?.intakeMode);
   const exactAddressRequired =
     intakeMode === JOB_REQUEST_LOCATION_INTAKE_MODE.EXACT_ON_FILE;
-  const localityComplete = Boolean(
-    cleanText(draft.location?.city) &&
-    cleanText(draft.location?.region) &&
-    cleanText(draft.location?.postalCode) &&
-    cleanText(draft.location?.countryCode)
-  );
-  const locationComplete = Boolean(
-    localityComplete &&
-    (exactAddressRequired
-      ? cleanText(draft.location?.serviceAddress)
-      : intakeMode === JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION &&
-        !cleanText(draft.location?.serviceAddress) &&
-        !cleanText(draft.location?.unitNumber))
-  );
+  const locationComplete = isCanonicalRequestServiceLocationComplete({
+    intakeMode,
+    addressLine1: draft.location?.serviceAddress,
+    city: draft.location?.city,
+    region: draft.location?.region,
+    postalCode: draft.location?.postalCode,
+    countryCode: draft.location?.countryCode,
+    unitNumber: draft.location?.unitNumber,
+  });
   if (!locationComplete) missing.push("location");
   const uncertainRequiredFields = [];
   if (isRequiredFieldUncertain(draft, "job.title")) uncertainRequiredFields.push("title");
@@ -569,7 +565,11 @@ export function getJobRequestDraftReadiness(draft = {}) {
       messageKey: "jobRequestDraftWarningDescriptionMissing",
     });
   }
-  if (!cleanText(draft.timing?.desiredTiming) && !cleanText(draft.timing?.urgency)) {
+  if (
+    !cleanText(draft.timing?.desiredTiming) &&
+    !cleanText(draft.timing?.urgency) &&
+    !cleanText(draft.timing?.availability)
+  ) {
     warnings.push({
       code: "timing_missing",
       field: "timing",

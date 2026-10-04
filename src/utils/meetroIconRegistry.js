@@ -1,4 +1,14 @@
 export const MEETRO_ICONS = {
+  microphone: {
+    sfSymbol: "mic.fill",
+    fallback: "Mic",
+    description: "Record voice input.",
+  },
+  stopRecording: {
+    sfSymbol: "stop.fill",
+    fallback: "Stop",
+    description: "Stop voice recording.",
+  },
   home: {
     sfSymbol: "house.circle.fill",
     fallback: "⌂",
@@ -132,7 +142,7 @@ export const MEETRO_ICONS = {
   customerRelationships: {
     sfSymbol: "person.2.fill",
     fallback: "◎",
-    description: "Customer relationships.",
+    description: "Customer History.",
   },
   portfolio: {
     sfSymbol: "photo.on.rectangle.angled",

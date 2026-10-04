@@ -1,6 +1,8 @@
-import { Component, memo, useEffect, useMemo, useCallback, useRef, useState } from "react";
+import { Component, memo, useEffect, useId, useMemo, useCallback, useRef, useState } from "react";
 import useAppLayoutMetrics from "../hooks/useAppLayoutMetrics";
 import useLanguage from "../hooks/useLanguage";
+import { EmergencyConversationContextPanel } from "../components/EmergencyRelationshipDetail";
+import MeetroIcon from "../components/MeetroIcon";
 import { getLanguage, t } from "../utils/language";
 import {
   formatDateTimeDisplay,
@@ -24,14 +26,13 @@ import {
   validateCanonicalMessageText,
 } from "../utils/canonicalConversationMessaging";
 import { markCanonicalConversationRead } from "../utils/conversationReadApi";
-import { refreshAlertCounts } from "../utils/alertCountCoordinator";
-import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
-import { isProfessionalSession } from "../utils/session";
-import { transitionEmergencyStatus } from "../utils/emergencyLifecycle";
 import {
-  EMERGENCY_DISPATCH_ACTIONS,
-  transitionEmergencyDispatch,
-} from "../utils/emergencyApi";
+  getAlertCountSnapshot,
+  refreshAlertCounts,
+  subscribeAlertCounts,
+} from "../utils/alertCountCoordinator";
+import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import { getAuthenticatedIdentitySnapshot, isProfessionalSession } from "../utils/session";
 import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoordinator";
 import WorkflowRenderer from "../components/workflows/WorkflowRenderer";
 import HiringUnavailableState from "../components/HiringUnavailableState";
@@ -40,6 +41,40 @@ import InvoiceWorkflowPresentation from "../components/workflows/presentations/I
 import MaterialsWorkflowPresentation from "../components/workflows/presentations/MaterialsWorkflowPresentation";
 import RevisedQuoteWorkflowPresentation from "../components/workflows/presentations/RevisedQuoteWorkflowPresentation";
 import UniversalDocumentCard from "../components/documents/UniversalDocumentCard";
+import ConversationQuoteCard from "../components/ConversationQuoteCard";
+import ConversationQuoteDecisionEvent from "../components/ConversationQuoteDecisionEvent";
+import ConversationInvoiceCard from "../components/ConversationInvoiceCard";
+import ConversationPaymentLifecycleCard from "../components/ConversationPaymentLifecycleCard";
+import ConversationPaymentReminderCard from "../components/ConversationPaymentReminderCard";
+import CanonicalConversationVisitCard from "../components/CanonicalConversationVisitCard";
+import { buildCustomerQuoteReviewRoute } from "../utils/customerQuoteReviewRoute";
+import { buildProfessionalWorkCenterRoute } from "../utils/professionalWorkCenterRoute";
+import { projectCanonicalQuoteDecisionEvents } from "../utils/quoteDecisionPresentation.js";
+import { buildCustomerInvoiceReviewRoute } from "../utils/customerInvoiceReviewRoute";
+import {
+  createInvoiceCommandKey,
+  fetchProfessionalInvoice,
+  issueCanonicalInvoice,
+} from "../utils/invoicePaymentApi.js";
+import { fetchCustomerJobQuotes } from "../utils/customerJobQuotesApi";
+import { fetchProfessionalQuotes } from "../utils/professionalQuotesProjection";
+import {
+  getConversationQuoteAuthority,
+  getConversationVisitTimelineIndex,
+  shouldRenderCurrentVisitInline,
+} from "../utils/communicationSchedulePlacement";
+import {
+  acknowledgeFieldMessageAttention,
+  fetchManagedFieldCommunications,
+  sendFieldMessage,
+} from "../utils/fieldOperationsApi";
+import {
+  formatAttentionCount,
+  getCommunicationAttention,
+  getConversationCustomerAttention,
+  getJobCommunicationAttention,
+} from "../utils/communicationAttention";
+import { COMPACT_MESSAGE_COMPOSER } from "../utils/messageComposerLayout";
 import {
   getWorkflowMessageProps,
   isWorkflowMessageType,
@@ -633,6 +668,187 @@ const MessageItem = memo(({ message }) => {
   );
 });
 
+function teamMessageCommandKey() {
+  if (globalThis.crypto?.randomUUID) {
+    return `business-team-message-${globalThis.crypto.randomUUID()}`;
+  }
+  return `business-team-message-${Date.now()}-${Math.random()
+    .toString(16)
+    .slice(2)}`;
+}
+
+function BusinessTeamCommunicationPane({
+  language,
+  communications,
+  selectedAssignmentId,
+  onSelectAssignment,
+  draft,
+  onDraftChange,
+  onSubmit,
+  sending,
+  error,
+}) {
+  const fieldEmployeeRole = ["FIELD", "EMPLOYEE"].join("_");
+  const [teamContextExpanded, setTeamContextExpanded] = useState(false);
+  const teamContextDetailsId = useId();
+  const selected = communications.find(
+    (item) => item.assignmentId === selectedAssignmentId
+  ) || communications[0] || null;
+  const messages = selected?.messages || [];
+  const selectedEmployeeName = selected?.employee?.name || t("conversationTeamNoAssignment", language);
+  const disclosureLabel = t(
+    teamContextExpanded
+      ? "conversationTeamDetailsHide"
+      : "conversationTeamDetailsShow",
+    language
+  );
+
+  return (
+    <section
+      className="business-team-communication"
+      style={businessTeamPane}
+      aria-label={t("conversationTeamPrivate", language)}
+    >
+      <header style={businessTeamContext}>
+        <button
+          type="button"
+          className="business-team-communication__context-disclosure"
+          style={businessTeamDisclosure}
+          aria-expanded={teamContextExpanded}
+          aria-controls={teamContextDetailsId}
+          aria-label={disclosureLabel}
+          onClick={() => setTeamContextExpanded((current) => !current)}
+        >
+          <span style={businessTeamDisclosureIcon} aria-hidden="true">
+            <MeetroIcon name="lock" size={16} decorative />
+          </span>
+          <span style={businessTeamDisclosureText}>
+            <strong>{t("conversationTeamContextCompact", language)}</strong>
+            <span aria-hidden="true"> · </span>
+            <span>{selectedEmployeeName}</span>
+          </span>
+          <span style={businessTeamDisclosureChevron} aria-hidden="true">
+            {teamContextExpanded ? "▴" : "▾"}
+          </span>
+        </button>
+
+        {teamContextExpanded ? (
+          <div id={teamContextDetailsId} style={businessTeamDetails}>
+            <span style={businessTeamEyebrow}>
+              {t("conversationTeamPrivate", language)}
+            </span>
+            <strong>
+              {selected?.employee?.name
+                ? `${selected.employee.name} · ${t("conversationDelegatedFieldEmployeeRole", language)}`
+                : t("conversationTeamNoAssignment", language)}
+            </strong>
+            <p>{t("conversationTeamPrivateNotice", language)}</p>
+            {communications.length > 1 ? (
+              <label style={businessTeamSelector}>
+                <span>{t("conversationTeamAssignedEmployee", language)}</span>
+                <select
+                  value={selectedAssignmentId}
+                  onChange={(event) => onSelectAssignment(event.target.value)}
+                >
+                  {communications.map((item) => (
+                    <option key={item.assignmentId} value={item.assignmentId}>
+                      {item.employee?.name || t("conversationTeamMember", language)}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+          </div>
+        ) : null}
+      </header>
+
+      <div
+        className="business-team-communication__messages"
+        style={businessTeamMessages}
+        data-team-storage="business_job_field_messages"
+      >
+        {!selected ? (
+          <div style={businessTeamEmpty} role="status">
+            {t("conversationTeamNoAssignment", language)}
+          </div>
+        ) : messages.length ? (
+          messages.map((message) => (
+            <article key={message.id} style={businessTeamMessage}>
+              <div style={businessTeamMessageMeta}>
+                <strong>
+                  {message.senderName || t("conversationTeamMember", language)}
+                  {message.senderRole === fieldEmployeeRole
+                    ? ` · ${t("conversationDelegatedFieldEmployeeRole", language)}`
+                    : ""}
+                </strong>
+                <span>{formatMessageTime(message.createdAt)}</span>
+              </div>
+              <p>{message.message}</p>
+            </article>
+          ))
+        ) : (
+          <div style={businessTeamEmpty} role="status">
+            {t("conversationTeamNoMessages", language)}
+          </div>
+        )}
+      </div>
+
+      <form style={businessTeamComposer} onSubmit={onSubmit}>
+        <textarea
+          className="business-team-communication__composer-input"
+          value={draft}
+          maxLength={5000}
+          rows={2}
+          disabled={!selected || sending}
+          onChange={(event) => onDraftChange(event.target.value)}
+          placeholder={t("conversationTeamMessagePlaceholder", language)}
+        />
+        <button
+          className="business-team-communication__composer-send"
+          type="submit"
+          aria-label={t("conversationTeamSend", language)}
+          disabled={!selected || sending || !draft.trim()}
+        >
+          {sending
+            ? t("fieldSending", language)
+            : t("send", language)}
+        </button>
+      </form>
+      <style>{`
+        .business-team-communication__composer-input {
+          box-sizing: border-box; width: 100%; min-width: 0; min-height: 46px;
+          max-height: 132px; resize: vertical; border: 1px solid #a9c3b0;
+          border-radius: 10px; background: #ffffff; color: #153d29;
+          padding: 11px 14px; font-family: inherit; font-size: 16px;
+          font-weight: 500; line-height: 1.4;
+        }
+        .business-team-communication__composer-input:focus-visible {
+          outline: 3px solid rgba(39, 112, 67, 0.22); outline-offset: 1px;
+          border-color: #277043;
+        }
+        .business-team-communication__composer-send {
+          box-sizing: border-box; width: ${COMPACT_MESSAGE_COMPOSER.sendWidthPx}px;
+          min-width: ${COMPACT_MESSAGE_COMPOSER.sendMinWidthPx}px;
+          max-width: ${COMPACT_MESSAGE_COMPOSER.sendMaxWidthPx}px;
+          min-height: ${COMPACT_MESSAGE_COMPOSER.minTouchHeightPx}px;
+          height: 46px; align-self: end; flex: 0 0 auto;
+          border: 1px solid #174c2f; border-radius: 10px; background: #174c2f;
+          color: #ffffff; padding: 0 12px; font: inherit; font-weight: 850;
+          cursor: pointer;
+        }
+        .business-team-communication__composer-send:focus-visible {
+          outline: 3px solid rgba(39, 112, 67, 0.28); outline-offset: 2px;
+        }
+        .business-team-communication__composer-input:disabled,
+        .business-team-communication__composer-send:disabled {
+          cursor: not-allowed; opacity: 0.56;
+        }
+      `}</style>
+      {error ? <div style={businessTeamError} role="alert">{error}</div> : null}
+    </section>
+  );
+}
+
 function resolveSupportedLegacyConversationRecord({
   conversationId,
   isCanonicalThread,
@@ -660,12 +876,14 @@ function ConversationThreadInner({
   embedded = false,
   emergencyContextMode = "stacked",
   onCanonicalEmergencyContextChange,
+  communicationContextMode = "mobile",
+  onCanonicalWorkContextChange,
   canonicalConversationId: canonicalConversationIdOverride,
   allowLegacyQuoteMessageFetch = true,
 }) {
   const appLayoutMetrics = useAppLayoutMetrics();
   const isLandscape = appLayoutMetrics.layoutWidth > appLayoutMetrics.layoutHeight;
-  const [language, setLanguageState] = useState(getLanguage());
+  const language = useLanguage();
   const mediaUploadDeferred = isFriendsAndFamilyMediaDeferred();
   const [messageText, setMessageText] = useState("");
   const [messages, setMessages] = useState([]);
@@ -718,17 +936,40 @@ function ConversationThreadInner({
   const [canonicalMessagesPhase, setCanonicalMessagesPhase] = useState("idle");
   const [canonicalLoadErrorKey, setCanonicalLoadErrorKey] = useState("");
   const [canonicalSendErrorKey, setCanonicalSendErrorKey] = useState("");
+  const [canonicalVisitContext, setCanonicalVisitContext] = useState({
+    phase: "idle",
+    jobId: "",
+    visit: null,
+  });
+  const [canonicalQuoteAuthority, setCanonicalQuoteAuthority] = useState({
+    phase: "idle",
+    authority: null,
+  });
   const [canonicalSendPending, setCanonicalSendPending] = useState(false);
+  const [communicationAudience, setCommunicationAudience] = useState("customer");
+  const [managedTeamState, setManagedTeamState] = useState({
+    phase: "idle",
+    communications: [],
+    error: "",
+  });
+  const [selectedTeamAssignmentId, setSelectedTeamAssignmentId] = useState("");
+  const [teamDrafts, setTeamDrafts] = useState({});
+  const [teamCommandKeys, setTeamCommandKeys] = useState({});
+  const [teamSendPending, setTeamSendPending] = useState(false);
+  const [alertCountSnapshot, setAlertCountSnapshot] = useState(getAlertCountSnapshot);
+  const managedTeamRequestRef = useRef(0);
   const [canonicalReloadKey, setCanonicalReloadKey] = useState(0);
   const [canonicalReadSnapshot, setCanonicalReadSnapshot] = useState(null);
-  const [canonicalDispatchPending, setCanonicalDispatchPending] =
-    useState(false);
-  const [canonicalDispatchErrorKey, setCanonicalDispatchErrorKey] =
-    useState("");
+  const [canonicalVisitEditorToken, setCanonicalVisitEditorToken] = useState(0);
+  const [invoiceSendReview, setInvoiceSendReview] = useState({
+    phase: "idle", invoice: null, message: "", error: "", delivery: null,
+  });
 
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const bottomRef = useRef(null);
+  const messagesScrollRef = useRef(null);
+  const pendingCanonicalSendScrollRef = useRef(false);
   const threadSearchInputRef = useRef(null);
   const hasInitialScrolledRef = useRef(false);
   const longPressTimerRef = useRef(null);
@@ -743,6 +984,9 @@ function ConversationThreadInner({
   const canonicalReadRouteGenerationRef = useRef(0);
   const canonicalReadHydrationGenerationRef = useRef(0);
   const canonicalReadCoordinatorRef = useRef(null);
+  const refreshManagedTeamCommunicationsRef = useRef(null);
+
+  useEffect(() => subscribeAlertCounts(setAlertCountSnapshot), []);
 
   useEffect(() => {
     canonicalReadMountedRef.current = true;
@@ -917,15 +1161,24 @@ function ConversationThreadInner({
   const isCanonicalEmergencyThread =
     isCanonicalThread &&
     canonicalConversationDetail?.type === "emergency";
+  const standaloneEmergencySidePanel =
+    isCanonicalEmergencyThread && !embedded && isLandscape &&
+    appLayoutMetrics.layoutMode !== "mobile" && appLayoutMetrics.contentWidth >= 700;
   const emergencyContextInSidePanel =
     isCanonicalEmergencyThread &&
-    emergencyContextMode === "panel";
+    (emergencyContextMode === "panel" || standaloneEmergencySidePanel);
   const isLegacyEmergencyThread =
     legacyWorkflowStorageEnabled &&
     !isCanonicalThread &&
     conversationType === "emergency";
   const isEmergencyThread =
     isCanonicalEmergencyThread || isLegacyEmergencyThread;
+  const isPhoneConversationLayout =
+    !embedded &&
+    appLayoutMetrics.layoutMode === "mobile" &&
+    appLayoutMetrics.contentWidth <= 520;
+  const isPhoneComposerFocused =
+    isPhoneConversationLayout && isComposerFocused;
   const isHiringThread = isHiringConversationType(conversationType);
   const isRequestOpportunityReadOnly =
     conversationType === CONVERSATION_THREAD_TYPES.REQUEST_OPPORTUNITY;
@@ -1008,12 +1261,6 @@ function ConversationThreadInner({
     isCanonicalEmergencyThread
       ? canonicalConversationDetail.workflow
       : null;
-  const canonicalEmergencyAllowedActions =
-    canonicalConversationDetail?.permissions
-      ?.canManageWorkflow === true
-      ? canonicalEmergencyWorkflow?.allowedActions || []
-      : [];
-
   const emergencyDispatchStatus =
     canonicalEmergencyWorkflow?.status ||
     (isLegacyEmergencyThread
@@ -1056,58 +1303,6 @@ useEffect(() => {
       );
     };
   }, []);
-
-  const advanceEmergencyFromChat = async (nextStatusOrAction) => {
-    if (isCanonicalEmergencyThread) {
-      const emergencyRequestId =
-        canonicalConversationDetail.emergencyRequestId;
-
-      if (
-        !emergencyRequestId ||
-        canonicalDispatchPending ||
-        !canonicalEmergencyAllowedActions.includes(
-          nextStatusOrAction
-        )
-      ) {
-        return;
-      }
-
-      setCanonicalDispatchPending(true);
-      setCanonicalDispatchErrorKey("");
-
-      const result = await transitionEmergencyDispatch(
-        emergencyRequestId,
-        nextStatusOrAction,
-        {
-          setPage,
-        }
-      );
-
-      setCanonicalDispatchPending(false);
-
-      if (!result.ok) {
-        setCanonicalDispatchErrorKey(
-          "emergencyDispatchUpdateFailed"
-        );
-        return;
-      }
-
-      setCanonicalReloadKey((value) => value + 1);
-      return;
-    }
-
-    if (!isLegacyEmergencyThread) return;
-
-    const nextStatus = nextStatusOrAction;
-    transitionEmergencyStatus(nextStatus, {
-      service: activeJobService || activeName || "Emergency Service",
-      businessName: activeBusinessName || "",
-      customerName: activeCustomerName || "",
-      location: activeLocation || activeEmergencyRecord.location || "",
-    });
-    setEmergencyWorkflowTick((tick) => tick + 1);
-  };
-
 
   const emergencyStatusSubtitle = {
     pending:
@@ -1170,6 +1365,463 @@ useEffect(() => {
     : activeAccountMode === "business"
     ? "business"
     : "homeowner";
+  const canonicalEmergencyWorkCenterRoute =
+    isCanonicalEmergencyThread &&
+    currentViewerRole === "business" &&
+    !embedded
+      ? buildProfessionalWorkCenterRoute({
+          jobId: canonicalConversationDetail?.relationship?.jobId,
+          returnPage: "messagesInbox",
+        })
+      : null;
+
+  useEffect(() => {
+    const invoiceId = canonicalRouteContext.invoiceId;
+    if (!invoiceId || !canonicalConversationId || currentViewerRole !== "business") {
+      setInvoiceSendReview((current) => current.phase === "idle"
+        ? current
+        : { phase: "idle", invoice: null, message: "", error: "", delivery: null });
+      return undefined;
+    }
+    let active = true;
+    setInvoiceSendReview({ phase: "loading", invoice: null, message: "", error: "", delivery: null });
+    void fetchProfessionalInvoice({ invoiceId, setPage }).then((invoice) => {
+      if (!active) return;
+      if (invoice.conversationId !== canonicalConversationId || invoice.status !== "DRAFT" || !invoice.actions.canIssue) {
+        setInvoiceSendReview({
+          phase: "error", invoice: null, message: "", error: "This Invoice is not available for delivery in this customer conversation.", delivery: null,
+        });
+        return;
+      }
+      const balance = new Intl.NumberFormat(language || "en", {
+        style: "currency", currency: invoice.currency,
+      }).format(invoice.balanceMinor / 100);
+      setInvoiceSendReview({
+        phase: "ready",
+        invoice,
+        message: `Hi ${invoice.customer.displayName}, here is the final invoice for the completed work. Your remaining balance is ${balance}. Please review the invoice and let me know if you have any questions.`,
+        error: "",
+        delivery: null,
+      });
+    }).catch((error) => {
+      if (active) setInvoiceSendReview({
+        phase: "error", invoice: null, message: "", error: error?.message || "The Invoice could not be loaded for delivery.", delivery: null,
+      });
+    });
+    return () => { active = false; };
+  }, [canonicalConversationId, canonicalRouteContext.invoiceId, currentViewerRole, language, setPage]);
+
+  const canonicalJobId = String(
+    canonicalConversationDetail?.relationship?.jobId || ""
+  ).trim();
+  const canonicalBusinessId = Number(
+    canonicalConversationDetail?.participants?.business?.id
+  );
+  const managedTeamEligible = Boolean(
+    isCanonicalThread &&
+    !isCanonicalEmergencyThread &&
+    currentViewerRole === "business" &&
+    canonicalJobId &&
+    Number.isSafeInteger(canonicalBusinessId) &&
+    canonicalBusinessId > 0
+  );
+
+  const refreshManagedTeamCommunications = useCallback(
+    async ({ loading = true } = {}) => {
+      if (!managedTeamEligible) return;
+      const requestId = managedTeamRequestRef.current + 1;
+      managedTeamRequestRef.current = requestId;
+      if (loading) {
+        setManagedTeamState((current) => ({
+          ...current,
+          phase: current.communications.length ? "refreshing" : "loading",
+          error: "",
+        }));
+      }
+      try {
+        const result = await fetchManagedFieldCommunications(
+          canonicalJobId,
+          canonicalBusinessId,
+          setPage
+        );
+        if (managedTeamRequestRef.current !== requestId) return;
+        if (
+          Number(result.businessId) !== canonicalBusinessId ||
+          result.jobId !== canonicalJobId ||
+          !Array.isArray(result.communications)
+        ) {
+          throw new Error("Managed Team communication identity is invalid.");
+        }
+        const communications = result.communications.filter(
+          (item) =>
+            item?.jobId === canonicalJobId &&
+            typeof item.assignmentId === "string" &&
+            item.assignmentId &&
+            Array.isArray(item.messages)
+        );
+        setManagedTeamState({
+          phase: "ready",
+          communications,
+          error: "",
+        });
+        setSelectedTeamAssignmentId((current) =>
+          communications.some((item) => item.assignmentId === current)
+            ? current
+            : communications[0]?.assignmentId || ""
+        );
+        return communications;
+      } catch {
+        if (managedTeamRequestRef.current !== requestId) return;
+        setManagedTeamState({
+          phase: "unavailable",
+          communications: [],
+          error: t("conversationTeamUnavailable", language),
+        });
+        setSelectedTeamAssignmentId("");
+        setCommunicationAudience("customer");
+        return null;
+      }
+    },
+    [
+      canonicalBusinessId,
+      canonicalJobId,
+      language,
+      managedTeamEligible,
+      setPage,
+    ]
+  );
+
+  refreshManagedTeamCommunicationsRef.current =
+    refreshManagedTeamCommunications;
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => {
+      if (!active) return;
+      setCommunicationAudience("customer");
+      setSelectedTeamAssignmentId("");
+      if (managedTeamEligible) {
+        void refreshManagedTeamCommunicationsRef.current?.();
+      } else {
+        setManagedTeamState({
+          phase: "idle",
+          communications: [],
+          error: "",
+        });
+      }
+    });
+    return () => {
+      active = false;
+      managedTeamRequestRef.current += 1;
+    };
+  }, [
+    canonicalBusinessId,
+    canonicalConversationId,
+    canonicalJobId,
+    managedTeamEligible,
+  ]);
+
+  useEffect(() => {
+    if (communicationAudience !== "team" || !managedTeamEligible) {
+      return undefined;
+    }
+    const refreshVisibleTeam = () => {
+      void refreshManagedTeamCommunications({ loading: false });
+    };
+    const refreshTeamWhenVisible = () => {
+      if (document.visibilityState === "visible") refreshVisibleTeam();
+    };
+    window.addEventListener("focus", refreshVisibleTeam);
+    document.addEventListener("visibilitychange", refreshTeamWhenVisible);
+    return () => {
+      window.removeEventListener("focus", refreshVisibleTeam);
+      document.removeEventListener("visibilitychange", refreshTeamWhenVisible);
+    };
+  }, [
+    communicationAudience,
+    managedTeamEligible,
+    refreshManagedTeamCommunications,
+  ]);
+
+  const selectedTeamCommunication =
+    managedTeamState.communications.find(
+      (item) => item.assignmentId === selectedTeamAssignmentId
+    ) || managedTeamState.communications[0] || null;
+  const teamDraftKey = selectedTeamCommunication
+    ? `${canonicalJobId}:team:${selectedTeamCommunication.assignmentId}`
+    : "";
+  const teamDraft = teamDrafts[teamDraftKey] || "";
+  const attentionIdentity = String(getAuthenticatedIdentitySnapshot()?.userId || "");
+  const communicationAttention = getCommunicationAttention(
+    alertCountSnapshot,
+    attentionIdentity
+  );
+  const businessJobAttention = getJobCommunicationAttention(
+    communicationAttention,
+    canonicalBusinessId,
+    canonicalJobId
+  );
+  const customerAudienceUnread = getConversationCustomerAttention(
+    communicationAttention,
+    canonicalConversationId
+  );
+
+  useEffect(() => {
+    if (
+      communicationAudience !== "team" ||
+      !selectedTeamAssignmentId ||
+      businessJobAttention.teamUnread < 1
+    ) return;
+    let active = true;
+    const acknowledgeLoadedTeam = async () => {
+      const communications = await refreshManagedTeamCommunications({ loading: false });
+      if (!active || !communications?.some(
+        (item) => item.assignmentId === selectedTeamAssignmentId
+      )) return;
+      try {
+        await acknowledgeFieldMessageAttention(
+          canonicalJobId,
+          {
+            businessId: canonicalBusinessId,
+            assignmentId: selectedTeamAssignmentId,
+            managed: true,
+            setPage,
+          }
+        );
+        if (active) await refreshAlertCounts();
+      } catch {
+        // Current assignment authority is required; stale scopes keep their attention.
+      }
+    };
+    void acknowledgeLoadedTeam();
+    return () => { active = false; };
+  }, [
+    businessJobAttention.teamUnread,
+    canonicalBusinessId,
+    canonicalJobId,
+    communicationAudience,
+    refreshManagedTeamCommunications,
+    selectedTeamAssignmentId,
+    setPage,
+  ]);
+
+  const updateManagedTeamDraft = (value) => {
+    if (!teamDraftKey) return;
+    setTeamDrafts((current) => ({ ...current, [teamDraftKey]: value }));
+    setTeamCommandKeys((current) => ({ ...current, [teamDraftKey]: "" }));
+    setManagedTeamState((current) => ({ ...current, error: "" }));
+  };
+
+  const sendManagedTeamMessage = async (event) => {
+    event.preventDefault();
+    const message = teamDraft.trim();
+    if (!selectedTeamCommunication || !teamDraftKey || !message || teamSendPending) {
+      return;
+    }
+    const idempotencyKey =
+      teamCommandKeys[teamDraftKey] || teamMessageCommandKey();
+    setTeamCommandKeys((current) => ({
+      ...current,
+      [teamDraftKey]: idempotencyKey,
+    }));
+    setTeamSendPending(true);
+    setManagedTeamState((current) => ({ ...current, error: "" }));
+    try {
+      await sendFieldMessage(
+        canonicalJobId,
+        {
+          businessId: canonicalBusinessId,
+          assignmentId: selectedTeamCommunication.assignmentId,
+          message,
+          idempotencyKey,
+        },
+        { managed: true, setPage }
+      );
+      setTeamDrafts((current) =>
+        current[teamDraftKey] === teamDraft
+          ? { ...current, [teamDraftKey]: "" }
+          : current
+      );
+      setTeamCommandKeys((current) => ({ ...current, [teamDraftKey]: "" }));
+      await refreshManagedTeamCommunications({ loading: false });
+      await refreshAlertCounts();
+    } catch {
+      setManagedTeamState((current) => ({
+        ...current,
+        error: t("conversationTeamSendFailed", language),
+      }));
+    } finally {
+      setTeamSendPending(false);
+    }
+  };
+
+  const selectCommunicationAudience = (audience) => {
+    if (!["customer", "team"].includes(audience)) return;
+    if (audience === "team" && managedTeamState.phase !== "ready") return;
+    setShowCallMenu(false);
+    setShowThreadMenu(false);
+    setShowAttachMenu(false);
+    setShowScheduleModal(false);
+    setCommunicationAudience(audience);
+    if (audience === "team") {
+      void refreshManagedTeamCommunications({ loading: false });
+    }
+  };
+  const canonicalDeliveredQuoteIds = useMemo(
+    () =>
+      messages
+        .filter(
+          (message) =>
+            message?.type === "quote_shared" &&
+            message?.quoteShare?.jobId === canonicalJobId
+        )
+        .map((message) => message?.quoteShare?.quoteId)
+        .filter(Boolean),
+    [canonicalJobId, messages]
+  );
+  const canonicalDeliveredQuoteIdsKey = canonicalDeliveredQuoteIds.join(",");
+
+  useEffect(() => {
+    let active = true;
+    const quoteIds = canonicalDeliveredQuoteIdsKey
+      ? canonicalDeliveredQuoteIdsKey.split(",")
+      : [];
+    if (
+      !isCanonicalThread ||
+      !canonicalJobId ||
+      quoteIds.length === 0
+    ) {
+      queueMicrotask(() => {
+        if (active) {
+          setCanonicalQuoteAuthority({ phase: "idle", authority: null });
+        }
+      });
+      return () => {
+        active = false;
+      };
+    }
+
+    queueMicrotask(() => {
+      if (active) {
+        setCanonicalQuoteAuthority((current) => ({
+          phase: current.authority ? "refreshing" : "loading",
+          authority: current.authority,
+        }));
+      }
+    });
+
+    const read =
+      currentViewerRole === "business"
+        ? fetchProfessionalQuotes({
+            classification: "all",
+            limit: 50,
+            setPage,
+          }).then((result) => result.quotes)
+        : fetchCustomerJobQuotes({
+            jobId: canonicalJobId,
+            limit: 25,
+            setPage,
+          }).then((result) => result.quotes);
+
+    void read
+      .then((quotes) => {
+        if (!active) return;
+        const authority = getConversationQuoteAuthority({
+          jobId: canonicalJobId,
+          quoteIds,
+          quotes,
+        });
+        setCanonicalQuoteAuthority({
+          phase: authority ? "ready" : "unavailable",
+          authority,
+        });
+      })
+      .catch(() => {
+        if (active) {
+          setCanonicalQuoteAuthority({ phase: "unavailable", authority: null });
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [
+    canonicalDeliveredQuoteIdsKey,
+    canonicalJobId,
+    currentViewerRole,
+    isCanonicalThread,
+    setPage,
+  ]);
+
+  const handleCanonicalVisitStateChange = useCallback((nextContext) => {
+    setCanonicalVisitContext(nextContext);
+  }, []);
+
+  useEffect(() => {
+    if (typeof onCanonicalWorkContextChange !== "function") return;
+    if (!isCanonicalThread || !canonicalJobId) {
+      onCanonicalWorkContextChange(null);
+      return;
+    }
+    onCanonicalWorkContextChange({
+      conversationId: canonicalConversationId,
+      jobId: canonicalJobId,
+      quoteAuthorityPhase: canonicalQuoteAuthority.phase,
+      quoteAuthority: canonicalQuoteAuthority.authority,
+      visitPhase: canonicalVisitContext.phase,
+      visit:
+        canonicalVisitContext.jobId === canonicalJobId
+          ? canonicalVisitContext.visit
+          : null,
+    });
+  }, [
+    canonicalConversationId,
+    canonicalJobId,
+    canonicalQuoteAuthority.authority,
+    canonicalQuoteAuthority.phase,
+    canonicalVisitContext.jobId,
+    canonicalVisitContext.phase,
+    canonicalVisitContext.visit,
+    isCanonicalThread,
+    onCanonicalWorkContextChange,
+  ]);
+
+  const renderCanonicalVisitInline = shouldRenderCurrentVisitInline({
+    contextMode: communicationContextMode,
+    quoteAuthorityPhase: canonicalQuoteAuthority.phase,
+    quoteAuthority: canonicalQuoteAuthority.authority,
+  });
+  const activeCanonicalVisit =
+    canonicalVisitContext.jobId === canonicalJobId
+      ? canonicalVisitContext.visit
+      : null;
+  const conversationTimelineItems = useMemo(() => {
+    const projectedMessages = projectCanonicalQuoteDecisionEvents(threadMessages);
+    if (
+      !isCanonicalThread ||
+      isCanonicalEmergencyThread ||
+      !canonicalJobId ||
+      !renderCanonicalVisitInline
+    ) {
+      return projectedMessages;
+    }
+    const insertionIndex = getConversationVisitTimelineIndex({
+      visit: activeCanonicalVisit,
+      messages: projectedMessages,
+    });
+    return [
+      ...projectedMessages.slice(0, insertionIndex),
+      { id: "canonical-current-visit", type: "canonical_current_visit" },
+      ...projectedMessages.slice(insertionIndex),
+    ];
+  }, [
+    canonicalJobId,
+    activeCanonicalVisit,
+    isCanonicalEmergencyThread,
+    isCanonicalThread,
+    renderCanonicalVisitInline,
+    threadMessages,
+  ]);
 
   useEffect(() => {
     setSavedThreadContactSnapshot(null);
@@ -1542,6 +2194,110 @@ useEffect(() => {
     ? activeCustomerName
     : activeBusinessName;
 
+  const emergencyFirstContactCopy = (() => {
+    const participantName =
+      String(activeHeaderName || "").trim();
+
+    const translations = {
+      en: currentViewerRole === "business"
+        ? {
+            eyebrow: "Emergency connection ready",
+            fallback: "the homeowner",
+            title: "You’re connected with {name}",
+            body:
+              "Use this conversation to coordinate the Emergency service.",
+            stepLabel: "Start here",
+            step:
+              "Introduce yourself and confirm the next step. Share an ETA only when you actually know it.",
+          }
+        : {
+            eyebrow: "Emergency connection ready",
+            fallback: "your professional",
+            title: "You’re connected with {name}",
+            body:
+              "Use this conversation to coordinate your Emergency service.",
+            stepLabel: "Start here",
+            step:
+              "Send a quick message with anything the professional should know, such as access instructions or a change in the situation.",
+          },
+      es: currentViewerRole === "business"
+        ? {
+            eyebrow: "Conexión de Emergencia lista",
+            fallback: "el propietario",
+            title: "Estás conectado con {name}",
+            body:
+              "Usa esta conversación para coordinar el servicio de Emergencia.",
+            stepLabel: "Comienza aquí",
+            step:
+              "Preséntate y confirma el siguiente paso. Comparte una hora estimada de llegada solo cuando realmente la conozcas.",
+          }
+        : {
+            eyebrow: "Conexión de Emergencia lista",
+            fallback: "tu profesional",
+            title: "Estás conectado con {name}",
+            body:
+              "Usa esta conversación para coordinar tu servicio de Emergencia.",
+            stepLabel: "Comienza aquí",
+            step:
+              "Envía un mensaje breve con cualquier dato que el profesional deba saber, como instrucciones de acceso o un cambio en la situación.",
+          },
+      fr: currentViewerRole === "business"
+        ? {
+            eyebrow: "Connexion d’urgence prête",
+            fallback: "le propriétaire",
+            title: "Vous êtes connecté avec {name}",
+            body:
+              "Utilisez cette conversation pour coordonner le service d’urgence.",
+            stepLabel: "Commencez ici",
+            step:
+              "Présentez-vous et confirmez la prochaine étape. Ne partagez une heure d’arrivée estimée que lorsque vous la connaissez réellement.",
+          }
+        : {
+            eyebrow: "Connexion d’urgence prête",
+            fallback: "votre professionnel",
+            title: "Vous êtes connecté avec {name}",
+            body:
+              "Utilisez cette conversation pour coordonner votre service d’urgence.",
+            stepLabel: "Commencez ici",
+            step:
+              "Envoyez un court message avec toute information utile, comme les instructions d’accès ou un changement de situation.",
+          },
+      "pt-BR": currentViewerRole === "business"
+        ? {
+            eyebrow: "Conexão de Emergência pronta",
+            fallback: "o proprietário",
+            title: "Você está conectado com {name}",
+            body:
+              "Use esta conversa para coordenar o atendimento de Emergência.",
+            stepLabel: "Comece aqui",
+            step:
+              "Apresente-se e confirme o próximo passo. Informe uma previsão de chegada somente quando realmente souber.",
+          }
+        : {
+            eyebrow: "Conexão de Emergência pronta",
+            fallback: "seu profissional",
+            title: "Você está conectado com {name}",
+            body:
+              "Use esta conversa para coordenar seu atendimento de Emergência.",
+            stepLabel: "Comece aqui",
+            step:
+              "Envie uma mensagem rápida com qualquer informação que o profissional deva saber, como instruções de acesso ou uma mudança na situação.",
+          },
+    };
+
+    const copy =
+      translations[language] ||
+      translations.en;
+
+    return {
+      ...copy,
+      title: copy.title.replace(
+        "{name}",
+        participantName || copy.fallback
+      ),
+    };
+  })();
+
   const activeHeaderProject =
     isCanonicalThread && canonicalConversationDetail?.relationship?.title
       ? canonicalConversationDetail.relationship.title
@@ -1825,6 +2581,8 @@ useEffect(() => {
     status: t("relationshipMeetroLinked", language),
   });
   const activeLogo = threadRelationshipIdentity.avatar;
+  const activeIdentityUsesBusinessLogo =
+    currentViewerRole !== "business";
 
   const relationshipContactEmail = firstIdentityValue(
     relationshipDetailSource.customerEmail,
@@ -2481,23 +3239,6 @@ useEffect(() => {
     };
   }, []);
 
-  useEffect(() => {
-    const refreshLanguage = () => setLanguageState(getLanguage());
-
-    refreshLanguage();
-    window.addEventListener("storage", refreshLanguage);
-    window.addEventListener("focus", refreshLanguage);
-    window.addEventListener("meetroLanguageChanged", refreshLanguage);
-    window.addEventListener("meetro-language-change", refreshLanguage);
-
-    return () => {
-      window.removeEventListener("storage", refreshLanguage);
-      window.removeEventListener("focus", refreshLanguage);
-      window.removeEventListener("meetroLanguageChanged", refreshLanguage);
-      window.removeEventListener("meetro-language-change", refreshLanguage);
-    };
-  }, []);
-
   const quickReplies = useMemo(() => {
     const selectedConversationType =
       localStorage.getItem("meetroConversationType") || "standard";
@@ -2884,7 +3625,6 @@ useEffect(() => {
           if (!cancelled) {
             canonicalConfirmedDetailRef.current = true;
             setCanonicalConversationDetail(detail);
-            setCanonicalDispatchErrorKey("");
             setCanonicalConversationState({
               phase: "ready",
               status: detail.status,
@@ -3370,9 +4110,33 @@ useEffect(() => {
     if (!hasInitialScrolledRef.current && messages.length > 0) {
       hasInitialScrolledRef.current = true;
       requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "auto" });
+        const viewport = messagesScrollRef.current;
+        if (viewport) viewport.scrollTop = viewport.scrollHeight;
       });
     }
+  }, [messages.length]);
+
+  useEffect(() => {
+    if (!pendingCanonicalSendScrollRef.current) return;
+
+    pendingCanonicalSendScrollRef.current = false;
+    let settledFrame = null;
+
+    const commitFrame = requestAnimationFrame(() => {
+      settledFrame = requestAnimationFrame(() => {
+        const viewport = messagesScrollRef.current;
+        if (viewport) {
+          viewport.scrollTop = viewport.scrollHeight;
+        }
+      });
+    });
+
+    return () => {
+      cancelAnimationFrame(commitFrame);
+      if (settledFrame !== null) {
+        cancelAnimationFrame(settledFrame);
+      }
+    };
   }, [messages.length]);
 
   const stopAiSpeech = () => {
@@ -3484,7 +4248,8 @@ useEffect(() => {
     }
 
     requestAnimationFrame(() => {
-      bottomRef.current?.scrollIntoView({ behavior: "auto" });
+      const viewport = messagesScrollRef.current;
+      if (viewport) viewport.scrollTop = viewport.scrollHeight;
     });
 
     const selectedQuoteRequestId =
@@ -3708,6 +4473,7 @@ useEffect(() => {
         time: formatMessageTime(confirmedMessage.createdAt),
       };
 
+      pendingCanonicalSendScrollRef.current = true;
       setMessages((current) =>
         mergeConversationMessages(current, [visibleMessage])
       );
@@ -3715,15 +4481,45 @@ useEffect(() => {
       setReplyingTo(null);
       setActiveMessageId(null);
       resetTextareaHeight();
-      requestAnimationFrame(() => {
-        bottomRef.current?.scrollIntoView({ behavior: "auto" });
-      });
       window.dispatchEvent(new Event("meetro-messages-updated"));
     } catch (error) {
       console.error("Failed to send canonical conversation message", error);
       setCanonicalSendErrorKey("conversationCanonicalSendFailed");
     } finally {
       setCanonicalSendPending(false);
+    }
+  };
+
+  const sendReviewedInvoice = async () => {
+    const invoice = invoiceSendReview.invoice;
+    const message = invoiceSendReview.message.trim();
+    if (invoiceSendReview.phase !== "ready" || !invoice || !message) return;
+    setInvoiceSendReview((current) => ({ ...current, phase: "sending", error: "" }));
+    try {
+      const result = await issueCanonicalInvoice({
+        invoiceId: invoice.invoiceId,
+        expectedVersion: invoice.currentVersion,
+        messageText: message,
+        idempotencyKey: createInvoiceCommandKey("invoice-send"),
+        setPage,
+      });
+      if (result.delivery.conversationId !== canonicalConversationId) {
+        throw new Error("Invoice delivery was not recorded in this customer conversation.");
+      }
+      setInvoiceSendReview((current) => ({
+        ...current,
+        phase: "sent",
+        invoice: result.invoice,
+        delivery: result.delivery,
+        error: "",
+      }));
+      setCanonicalReloadKey((current) => current + 1);
+    } catch (error) {
+      setInvoiceSendReview((current) => ({
+        ...current,
+        phase: "ready",
+        error: error?.message || "The Invoice was not sent. No delivery has been claimed.",
+      }));
     }
   };
 
@@ -4724,6 +5520,16 @@ const handleImageUpload = (event) => {
     setActiveMessageId(null);
     setShowMobileSheet(false);
 
+    if (
+      isCanonicalThread &&
+      !isCanonicalEmergencyThread &&
+      currentViewerRole === "business" &&
+      canonicalConversationDetail?.relationship?.jobId
+    ) {
+      setCanonicalVisitEditorToken((value) => value + 1);
+      return;
+    }
+
     if (currentViewerRole !== "business") {
       setSaveNotice(
         t("conversationSchedulingIsManagedByTheProfessionalYouCanMessageThemAboutThe", language)
@@ -5102,11 +5908,12 @@ const handleImageUpload = (event) => {
   return (
     <div
       className="conversation-thread-page chat-thread-page meetro-visual-page"
-      style={embedded ? embeddedPage : page}
+      data-composer-focused={isPhoneComposerFocused ? "true" : "false"}
+      style={embedded ? embeddedPage : { ...page, ...(standaloneEmergencySidePanel ? { flexDirection: "row" } : {}) }}
     >
       <style>{animations}</style>
 
-      <div style={embedded ? embeddedPhone : phone}>
+      <div style={embedded ? embeddedPhone : { ...phone, ...(standaloneEmergencySidePanel ? { flex: "1 1 0", minWidth: 0 } : {}) }}>
         <div className="chat-header" style={header}>
           <button
             style={headerBtn}
@@ -5169,7 +5976,15 @@ const handleImageUpload = (event) => {
           >
             <div style={avatar}>
               {activeLogo ? (
-                <img src={activeLogo} alt={activeHeaderName} style={avatarImage} />
+                <img
+                  src={activeLogo}
+                  alt={activeHeaderName}
+                  style={
+                    activeIdentityUsesBusinessLogo
+                      ? businessLogoAvatarImage
+                      : avatarImage
+                  }
+                />
               ) : (
                 activeHeaderName
                   .split(" ")
@@ -5196,7 +6011,7 @@ const handleImageUpload = (event) => {
           >
             <div style={name}>{activeHeaderName}</div>
 
-            <div style={chatProjectLabel}>
+            <div className="chat-header-project" style={chatProjectLabel}>
               <span style={chatProjectTitleText}>
                  {isHiringThread
                    ? `${t("messagesSectionHiring", language)} · ${activeHeaderProject}`
@@ -5218,7 +6033,7 @@ const handleImageUpload = (event) => {
               </div>
             )}
 
-            <div style={statusRow}>
+            <div className="chat-header-status" style={statusRow}>
               {(!isCanonicalThread ||
                 canonicalConversationState.status === "active") && (
                 <span style={greenDot}></span>
@@ -5283,6 +6098,53 @@ const handleImageUpload = (event) => {
             <IconMore />
           </button>
         </div>
+
+        {managedTeamState.phase === "ready" ? (
+          <div
+            className="business-communication-audience"
+            style={businessCommunicationAudience}
+            role="group"
+            aria-label={t("conversationCommunicationAudience", language)}
+          >
+            <button
+              type="button"
+              style={{
+                ...businessCommunicationAudienceButton,
+                ...(communicationAudience === "customer"
+                  ? businessCommunicationAudienceButtonActive
+                  : {}),
+              }}
+              aria-pressed={communicationAudience === "customer"}
+              onClick={() => selectCommunicationAudience("customer")}
+            >
+              {t("conversationAudienceCustomer", language)}
+              {customerAudienceUnread > 0 ? (
+                <span style={businessCommunicationAudienceCount}>
+                  {formatAttentionCount(customerAudienceUnread)}
+                </span>
+              ) : null}
+            </button>
+            <button
+              type="button"
+              style={{
+                ...businessCommunicationAudienceButton,
+                ...(communicationAudience === "team"
+                  ? businessCommunicationAudienceButtonActive
+                  : {}),
+              }}
+              aria-pressed={communicationAudience === "team"}
+              onClick={() => selectCommunicationAudience("team")}
+            >
+              <span aria-hidden="true">&#128274;</span>
+              {t("conversationAudienceTeamPrivate", language)}
+              {businessJobAttention.teamUnread > 0 ? (
+                <span style={businessCommunicationAudienceCount}>
+                  {formatAttentionCount(businessJobAttention.teamUnread)}
+                </span>
+              ) : null}
+            </button>
+          </div>
+        ) : null}
 
         {appointmentReminderNotice && (
           <div style={appointmentReminderNoticeCard}>
@@ -5624,6 +6486,18 @@ const handleImageUpload = (event) => {
               </div>
             )}
 
+            {isCanonicalThread &&
+              !isCanonicalEmergencyThread &&
+              currentViewerRole === "business" &&
+              canonicalConversationDetail?.relationship?.jobId && (
+                <div style={menuSection}>
+                  <div style={menuSectionTitle}>Evaluation Visit</div>
+                  <button style={threadMenuBtn} onClick={openChatScheduleModal}>
+                    Schedule Evaluation Visit
+                  </button>
+                </div>
+              )}
+
             <div style={menuSection}>
               <div style={menuSectionTitle}>
                 {t("conversationConversationKicker", language)}
@@ -5686,19 +6560,25 @@ const handleImageUpload = (event) => {
 
         <div style={chatArea} onClick={closeMenus}>
 
-          {hasActiveEmergencyJob && (
+          {hasActiveEmergencyJob && !emergencyContextInSidePanel && (
             <div
+              className="emergency-thread-context"
               data-emergency-thread-context={
                 emergencyContextInSidePanel ? "side-panel" : "stacked"
               }
               style={{
                 ...emergencyBanner,
+                maxHeight: emergencyPanelExpanded
+                  ? isCanonicalEmergencyThread && embedded
+                    ? "62%"
+                    : "40%"
+                  : undefined,
                 ...(emergencyDispatchStatus === "completed"
                   ? completedEmergencyBanner
                   : {}),
               }}
             >
-              <div style={emergencyBannerTop}>
+              <div className="emergency-thread-context__summary" style={emergencyBannerTop}>
 
                 {!emergencyContextInSidePanel && (
                   <button
@@ -5722,180 +6602,76 @@ const handleImageUpload = (event) => {
                   }}
                 ></div>
 
-                <div>
-                  <div style={emergencyBannerTitle}>
+                <div className="emergency-thread-context__identity">
+                  <div className="emergency-thread-context__title" style={emergencyBannerTitle}>
                     {emergencyDispatchStatus === "completed"
                       ? t("conversationServiceCompleted", language)
+                      : isCanonicalEmergencyThread
+                      ? emergencyStatusSubtitle ||
+                        t("messagesEmergencyService", language)
                       : emergencyServiceName}
                   </div>
 
-                  <div style={emergencyBannerSubtitle}>
+                  <div className="emergency-thread-context__subtitle" style={emergencyBannerSubtitle}>
                     {currentViewerRole === "business" &&
                     emergencyDispatchStatus !== "completed"
                       ? `${t("messagesContactType_customer", language)}: ${emergencyCustomerName}`
+                      : isCanonicalEmergencyThread &&
+                        emergencyDispatchStatus !== "completed"
+                      ? emergencyBusinessName
                       : `${emergencyBusinessName} • ${emergencyStatusSubtitle || ""}`}
                   </div>
+                  {isPhoneComposerFocused &&
+                    emergencyStatusSubtitle &&
+                    !isCanonicalEmergencyThread && (
+                    <div
+                      className="emergency-thread-context__focus-status"
+                      style={emergencyComposerStatus}
+                    >
+                      {emergencyStatusSubtitle}
+                    </div>
+                  )}
                 </div>
               </div>
 
-              {currentViewerRole === "business" && (
-                <div style={emergencyChatActions}>
-                  {isCanonicalEmergencyThread &&
-                    canonicalEmergencyAllowedActions.includes(
-                      EMERGENCY_DISPATCH_ACTIONS.MARK_EN_ROUTE
-                    ) && (
-                      <button
-                        style={emergencyPrimaryAction}
-                        disabled={canonicalDispatchPending}
-                        onClick={() =>
-                          advanceEmergencyFromChat(
-                            EMERGENCY_DISPATCH_ACTIONS.MARK_EN_ROUTE
-                          )
-                        }
-                      >
-                        {t("onTheWay", language)}
-                      </button>
-                    )}
-
-                  {isCanonicalEmergencyThread &&
-                    canonicalEmergencyAllowedActions.includes(
-                      EMERGENCY_DISPATCH_ACTIONS.MARK_ARRIVED
-                    ) && (
-                      <button
-                        style={emergencyPrimaryAction}
-                        disabled={canonicalDispatchPending}
-                        onClick={() =>
-                          advanceEmergencyFromChat(
-                            EMERGENCY_DISPATCH_ACTIONS.MARK_ARRIVED
-                          )
-                        }
-                      >
-                        {t("arrived", language)}
-                      </button>
-                    )}
-
-                  {isCanonicalEmergencyThread &&
-                    canonicalEmergencyAllowedActions.includes(
-                      EMERGENCY_DISPATCH_ACTIONS.START_WORK
-                    ) && (
-                      <button
-                        style={emergencyPrimaryAction}
-                        disabled={canonicalDispatchPending}
-                        onClick={() =>
-                          advanceEmergencyFromChat(
-                            EMERGENCY_DISPATCH_ACTIONS.START_WORK
-                          )
-                        }
-                      >
-                        {t("startWork", language)}
-                      </button>
-                    )}
-
-                  {isCanonicalEmergencyThread &&
-                    canonicalEmergencyAllowedActions.includes(
-                      EMERGENCY_DISPATCH_ACTIONS.COMPLETE_WORK
-                    ) && (
-                      <button
-                        style={completeFromChatBtn}
-                        disabled={canonicalDispatchPending}
-                        onClick={() =>
-                          advanceEmergencyFromChat(
-                            EMERGENCY_DISPATCH_ACTIONS.COMPLETE_WORK
-                          )
-                        }
-                      >
-                        {t("completeEmergency", language)}
-                      </button>
-                    )}
-
-                  {canonicalDispatchPending && (
-                    <div style={canonicalDispatchNotice} role="status">
-                      {t("emergencyDispatchUpdating", language)}
-                    </div>
-                  )}
-
-                  {canonicalDispatchErrorKey && (
-                    <div style={canonicalDispatchError} role="alert">
-                      {t(canonicalDispatchErrorKey, language)}
-                    </div>
-                  )}
-
-                  {!isCanonicalEmergencyThread &&
-                    (!emergencyDispatchStatus ||
-                    emergencyDispatchStatus === "pending") && (
+              {emergencyPanelExpanded &&
+                currentViewerRole === "business" &&
+                canonicalEmergencyWorkCenterRoute && (
+                  <div className="emergency-thread-context__work-center" style={emergencyChatActions}>
                     <button
+                      type="button"
                       style={emergencyPrimaryAction}
-                      onClick={() => advanceEmergencyFromChat("accepted")}
+                      onClick={() =>
+                        setPage(canonicalEmergencyWorkCenterRoute)
+                      }
                     >
-                      {t("acceptDispatch")}
+                      {t("wc52openInWorkCenter", language)}
                     </button>
-                  )}
-
-                  {!isCanonicalEmergencyThread &&
-                    emergencyDispatchStatus === "accepted" && (
-                    <button
-                      style={emergencyPrimaryAction}
-                      onClick={() => advanceEmergencyFromChat("enroute")}
-                    >
-                      {t("onTheWay")}
-                    </button>
-                  )}
-
-                  {!isCanonicalEmergencyThread &&
-                    emergencyDispatchStatus === "enroute" && (
-                    <button
-                      style={emergencyPrimaryAction}
-                      onClick={() => advanceEmergencyFromChat("arrived")}
-                    >
-                      {t("arrived")}
-                    </button>
-                  )}
-
-                  {!isCanonicalEmergencyThread &&
-                    emergencyDispatchStatus === "arrived" && (
-                    <button
-                      style={emergencyPrimaryAction}
-                      onClick={() => advanceEmergencyFromChat("started")}
-                    >
-                      {t("startWork")}
-                    </button>
-                  )}
-
-                  {!isCanonicalEmergencyThread &&
-                    emergencyDispatchStatus === "started" && (
-                    <button
-                      style={completeFromChatBtn}
-                      onClick={() => advanceEmergencyFromChat("completed")}
-                    >
-                      {t("completeEmergency")}
-                    </button>
-                  )}
-
-                  {!isCanonicalEmergencyThread &&
-                    emergencyDispatchStatus === "completed" && (
-                    <button
-                      style={completeFromChatBtn}
-                      onClick={() => {
-                        localStorage.setItem(
-                          "completionService",
-                          emergencyServiceName || "Emergency Service"
-                        );
-                        localStorage.setItem(
-                          "completionLocation",
-                          activeLocation || activeEmergencyRecord.location || ""
-                        );
-                        localStorage.setItem("completionSource", "emergency");
-                        setPage("completionSheet");
-                      }}
-                    >
-                      {t("openCompletionSheet")}
-                    </button>
-                  )}
-                </div>
-              )}
+                  </div>
+                )}
 
               {emergencyPanelExpanded && !emergencyContextInSidePanel && (
                 <>
+                  {isCanonicalEmergencyThread &&
+                    embedded &&
+                    canonicalConversationDetail && (
+                      <EmergencyConversationContextPanel
+                        detail={canonicalConversationDetail}
+                        language={language}
+                      />
+                    )}
+
+                  {(!isCanonicalEmergencyThread || !embedded) && (
+                    <>
+                  {isCanonicalEmergencyThread && emergencyServiceName && (
+                    <div
+                      data-emergency-job-detail="canonical"
+                      style={canonicalEmergencyJobCard}
+                    >
+                      <strong>{emergencyServiceName}</strong>
+                    </div>
+                  )}
+
                   <div style={emergencyPillRow}>
                     {emergencyDispatchStatus === "completed" ? (
                       isCanonicalEmergencyThread ? (
@@ -6086,6 +6862,8 @@ const handleImageUpload = (event) => {
                     </div>
                     </div>
                   )}
+                    </>
+                  )}
 
                 </>
               )}
@@ -6211,7 +6989,24 @@ const handleImageUpload = (event) => {
             </div>
           )}
 
-          <div className="chat-messages conversation-messages" style={messagesScroll}>
+          {communicationAudience === "team" && managedTeamState.phase === "ready" ? (
+            <BusinessTeamCommunicationPane
+              language={language}
+              communications={managedTeamState.communications}
+              selectedAssignmentId={selectedTeamCommunication?.assignmentId || ""}
+              onSelectAssignment={(assignmentId) => {
+                setSelectedTeamAssignmentId(assignmentId);
+                setManagedTeamState((current) => ({ ...current, error: "" }));
+              }}
+              draft={teamDraft}
+              onDraftChange={updateManagedTeamDraft}
+              onSubmit={sendManagedTeamMessage}
+              sending={teamSendPending}
+              error={managedTeamState.error}
+            />
+          ) : (
+          <>
+          <div ref={messagesScrollRef} className="chat-messages conversation-messages" style={messagesScroll}>
             <div style={threadSearchRow}>
               <div style={threadSearchInputWrap}>
                 <span style={threadSearchIcon} aria-hidden="true">
@@ -6248,6 +7043,34 @@ const handleImageUpload = (event) => {
               <span style={dateLine}></span>
             </div>
 
+            {isCanonicalThread &&
+              !isCanonicalEmergencyThread &&
+              canonicalJobId &&
+              !renderCanonicalVisitInline && (
+                <div
+                  className="conversation-timeline-visit-row"
+                  data-conversation-timeline-item="canonical-visit"
+                  data-current-visit-placement="context-panel"
+                  style={hiddenTimelineVisitRow}
+                >
+                  <CanonicalConversationVisitCard
+                    key={canonicalJobId}
+                    jobId={canonicalJobId}
+                    viewerRole={
+                      currentViewerRole === "business"
+                        ? "professional"
+                        : "customer"
+                    }
+                    language={language}
+                    setPage={setPage}
+                    displayMode="project-panel"
+                    openEditorToken={canonicalVisitEditorToken}
+                    focusVisitId={canonicalRouteContext.visitId}
+                    onVisitStateChange={handleCanonicalVisitStateChange}
+                  />
+                </div>
+              )}
+
             {threadMessages.length === 0 && hasThreadSearch ? (
               <div style={{ ...timelineTopEmpty, textAlign: "center" }}>
                 {t("conversationNoSearchMessages", language)}
@@ -6273,16 +7096,218 @@ const handleImageUpload = (event) => {
             {threadMessages.length === 0 &&
             !hasThreadSearch &&
             (!isCanonicalThread || canonicalMessagesPhase === "ready") ? (
-              <div style={{ ...timelineTopEmpty, textAlign: "center" }}>
-                {t("conversationNoMessages", language)}
-              </div>
+              isCanonicalEmergencyThread ? (
+                <section
+                  style={emergencyFirstContactCard}
+                  aria-label={emergencyFirstContactCopy.eyebrow}
+                  data-emergency-first-contact="canonical"
+                >
+                  <p style={emergencyFirstContactEyebrow}>
+                    {emergencyFirstContactCopy.eyebrow}
+                  </p>
+
+                  <h2 style={emergencyFirstContactTitle}>
+                    {emergencyFirstContactCopy.title}
+                  </h2>
+
+                  <p style={emergencyFirstContactBody}>
+                    {emergencyFirstContactCopy.body}
+                  </p>
+
+                  <div style={emergencyFirstContactStep}>
+                    <span
+                      style={emergencyFirstContactStepBadge}
+                      aria-hidden="true"
+                    >
+                      1
+                    </span>
+
+                    <div style={emergencyFirstContactStepText}>
+                      <strong>
+                        {emergencyFirstContactCopy.stepLabel}
+                      </strong>
+                      <span>
+                        {emergencyFirstContactCopy.step}
+                      </span>
+                    </div>
+                  </div>
+                </section>
+              ) : (
+                <div style={{ ...timelineTopEmpty, textAlign: "center" }}>
+                  {t("conversationNoMessages", language)}
+                </div>
+              )
             ) : null}
 
-          {threadMessages.map((msg) => {
+          {conversationTimelineItems.map((msg) => {
+            if (msg.type === "canonical_current_visit") {
+              return (
+                <div
+                  key={msg.id}
+                  className="conversation-timeline-visit-row"
+                  data-conversation-timeline-item="canonical-visit"
+                  data-current-visit-placement="timeline"
+                  style={timelineVisitRow}
+                >
+                  <CanonicalConversationVisitCard
+                    key={canonicalJobId}
+                    jobId={canonicalJobId}
+                    viewerRole={
+                      currentViewerRole === "business"
+                        ? "professional"
+                        : "customer"
+                    }
+                    language={language}
+                    setPage={setPage}
+                    displayMode="inline"
+                    openEditorToken={canonicalVisitEditorToken}
+                    focusVisitId={canonicalRouteContext.visitId}
+                    onVisitStateChange={handleCanonicalVisitStateChange}
+                  />
+                </div>
+              );
+            }
             const mine = msg.senderRole === currentViewerRole;
             const localizedTitle = getLocalizedMessageField(msg, "title");
             const localizedSubtitle = getLocalizedMessageField(msg, "subtitle");
             const localizedText = getLocalizedMessageField(msg, "text");
+
+            if (msg.type === "quote_shared" && msg.quoteShare) {
+              return (
+                <div
+                  key={msg.id}
+                  className="meetro-message-enter canonical-quote-message-row"
+                  style={{
+                    ...operationalRow,
+                    justifyContent: mine ? "flex-end" : "flex-start",
+                    alignItems: mine ? "flex-end" : "flex-start",
+                    flexDirection: "column",
+                    overscrollBehavior: "contain",
+                  }}
+                >
+                  <ConversationQuoteCard
+                    quote={msg.quoteShare}
+                    language={language}
+                    canReview={
+                      currentViewerRole === "homeowner" &&
+                      msg.quoteShare.businessStatus === "WAITING_ON_CUSTOMER"
+                    }
+                    onReview={() => {
+                      const route = buildCustomerQuoteReviewRoute({
+                        quoteId: msg.reference?.quoteId,
+                        jobId: msg.reference?.jobId,
+                        conversationId: canonicalConversationId,
+                      });
+                      if (route) setPage(route);
+                    }}
+                  />
+                </div>
+              );
+            }
+
+            if (msg.type === "quote_decision" && msg.quoteShare) {
+              return (
+                <div
+                  key={msg.id}
+                  className="meetro-message-enter canonical-quote-decision-row"
+                  style={{ ...operationalRow, justifyContent: "center" }}
+                >
+                  <ConversationQuoteDecisionEvent
+                    quote={msg.quoteShare}
+                    customerLabel={
+                      canonicalConversationDetail?.participants?.homeowner?.displayName ||
+                      "Customer"
+                    }
+                    language={language}
+                    canViewQuote={currentViewerRole === "homeowner"}
+                    canOpenWorkCenter={currentViewerRole === "business"}
+                    onViewQuote={() => {
+                      const route = buildCustomerQuoteReviewRoute({
+                        quoteId: msg.reference?.quoteId,
+                        jobId: msg.reference?.jobId,
+                        conversationId: canonicalConversationId,
+                      });
+                      if (route) setPage(route);
+                    }}
+                    onOpenWorkCenter={() => {
+                      const route = buildProfessionalWorkCenterRoute({
+                        quoteId: msg.reference?.quoteId,
+                        jobId: msg.reference?.jobId,
+                      });
+                      if (route) setPage(route);
+                    }}
+                  />
+                </div>
+              );
+            }
+
+            if (msg.type === "invoice_shared" && msg.invoiceShare) {
+              return (
+                <div
+                  key={msg.id}
+                  className="meetro-message-enter canonical-invoice-message-row"
+                  style={{
+                    ...operationalRow,
+                    justifyContent: mine ? "flex-end" : "flex-start",
+                    overscrollBehavior: "contain",
+                  }}
+                >
+                  <ConversationInvoiceCard
+                    invoice={msg.invoiceShare}
+                    language={language}
+                    canReview={currentViewerRole === "homeowner"}
+                    audience={
+                      currentViewerRole === "homeowner"
+                        ? "customer"
+                        : "professional"
+                    }
+                    businessContextId={canonicalConversationDetail?.participants?.business?.userId || ""}
+                    conversationContextId={canonicalConversationId || ""}
+                    setPage={setPage}
+                    onReview={() => {
+                      const route = buildCustomerInvoiceReviewRoute({
+                        invoiceId: msg.reference?.invoiceId,
+                        jobId: msg.reference?.jobId,
+                        conversationId: canonicalConversationId,
+                      });
+                      if (route) setPage(route);
+                    }}
+                  />
+                </div>
+              );
+            }
+
+            if (["payment_request", "payment_received"].includes(msg.type) && msg.paymentLifecycle) {
+              return (
+                <div
+                  key={msg.id}
+                  className="meetro-message-enter canonical-payment-message-row"
+                  style={{ ...operationalRow, justifyContent: mine ? "flex-end" : "flex-start" }}
+                >
+                  <ConversationPaymentLifecycleCard payment={msg.paymentLifecycle} language={language} />
+                </div>
+              );
+            }
+
+            if (msg.type === "payment_reminder" && msg.paymentReminder) {
+              return (
+                <div
+                  key={msg.id}
+                  className="meetro-message-enter canonical-payment-reminder-message-row"
+                  data-conversation-timeline-item="payment-reminder"
+                  style={{
+                    ...operationalRow,
+                    justifyContent: mine ? "flex-end" : "flex-start",
+                  }}
+                >
+                  <ConversationPaymentReminderCard
+                    reminder={msg.paymentReminder}
+                    messageText={msg.text}
+                    language={language}
+                  />
+                </div>
+              );
+            }
 
             const isWorkflow = isWorkflowType(msg.type);
             const workflowMessageProps = isWorkflow
@@ -6895,6 +7920,17 @@ const handleImageUpload = (event) => {
                     setActiveMessageId(activeMessageId === msg.id ? null : msg.id);
                   }}
                 >
+                  {msg.type === "text" && msg.delegatedAuthor ? (
+                    <div style={delegatedAuthorLine}>
+                      <span>
+                        {msg.delegatedAuthor.displayName} · {t("conversationDelegatedFieldEmployeeRole", language)}
+                      </span>
+                      <span style={delegatedAuthorPill}>
+                        {t("conversationEmployeeTag", language)}
+                      </span>
+                    </div>
+                  ) : null}
+
                   {msg.replyTo && (
                     <div style={mine ? replyPreviewMine : replyPreviewTheirs}>
                       <strong>
@@ -7024,8 +8060,11 @@ const handleImageUpload = (event) => {
           </div>
         )}
 
+          </>
+          )}
         </div>
 
+        {communicationAudience !== "team" ? (
         <div className="chat-bottom-stack" style={bottomStack}>
           {canUseMessageComposer &&
           !showAttachMenu &&
@@ -7035,6 +8074,7 @@ const handleImageUpload = (event) => {
               {quickReplies.slice(0, 4).map((reply) => (
                 <button
                   key={reply}
+                  className="conversation-quick-reply"
                   style={{
                     ...quickBtn,
                     ...(isEmergencyThread ? emergencyQuickBtn : {}),
@@ -7318,6 +8358,47 @@ const handleImageUpload = (event) => {
             </div>
           ) : (
           <>
+          {invoiceSendReview.phase !== "idle" ? (
+            <section className="canonical-invoice-send-review" style={invoiceSendReviewStyles.card} aria-label="Final Invoice delivery review">
+              <strong>Send final Invoice</strong>
+              {invoiceSendReview.invoice ? (
+                <div style={invoiceSendReviewStyles.summary}>
+                  <span>{invoiceSendReview.invoice.invoiceNumber}</span>
+                  <span>Invoice Total {new Intl.NumberFormat(language || "en", { style: "currency", currency: invoiceSendReview.invoice.currency }).format(invoiceSendReview.invoice.totalMinor / 100)}</span>
+                  <b>Balance Due {new Intl.NumberFormat(language || "en", { style: "currency", currency: invoiceSendReview.invoice.currency }).format(invoiceSendReview.invoice.balanceMinor / 100)}</b>
+                </div>
+              ) : null}
+              {["ready", "sending"].includes(invoiceSendReview.phase) ? (
+                <>
+                  <label htmlFor="canonical-invoice-customer-message">Customer message</label>
+                  <textarea
+                    id="canonical-invoice-customer-message"
+                    value={invoiceSendReview.message}
+                    maxLength={CANONICAL_MESSAGE_MAX_LENGTH}
+                    rows={4}
+                    disabled={invoiceSendReview.phase === "sending"}
+                    onChange={(event) => setInvoiceSendReview((current) => ({ ...current, message: event.target.value, error: "" }))}
+                  />
+                  <button
+                    type="button"
+                    style={invoiceSendReviewStyles.send}
+                    disabled={invoiceSendReview.phase === "sending" || !invoiceSendReview.message.trim()}
+                    onClick={() => void sendReviewedInvoice()}
+                  >
+                    {invoiceSendReview.phase === "sending" ? "Sending…" : "Send"}
+                  </button>
+                </>
+              ) : null}
+              {invoiceSendReview.phase === "loading" ? <span>Loading the exact Invoice version…</span> : null}
+              {invoiceSendReview.phase === "sent" ? (
+                <span role="status">
+                  Sent to {invoiceSendReview.invoice?.customer?.displayName || "customer"} via Meetro Message
+                  {invoiceSendReview.delivery?.sentAt ? ` · ${formatDateTimeDisplay(invoiceSendReview.delivery.sentAt, "", { language })}` : ""}.
+                </span>
+              ) : null}
+              {invoiceSendReview.error ? <span role="alert">{invoiceSendReview.error}</span> : null}
+            </section>
+          ) : null}
           <div className="chat-composer message-composer" style={composer}>
             {!isCanonicalThread ? (
             <button
@@ -7345,7 +8426,16 @@ const handleImageUpload = (event) => {
                   isCanonicalThread ? CANONICAL_MESSAGE_MAX_LENGTH : undefined
                 }
                 disabled={canonicalSendPending}
-                onFocus={() => setIsComposerFocused(true)}
+                onFocus={() => {
+                  setIsComposerFocused(true);
+                  if (isPhoneConversationLayout) {
+                    setEmergencyPanelExpanded(false);
+                    requestAnimationFrame(() => {
+                      const viewport = messagesScrollRef.current;
+                      if (viewport) viewport.scrollTop = viewport.scrollHeight;
+                    });
+                  }
+                }}
                 onBlur={() => setIsComposerFocused(false)}
                 onChange={(e) => {
                   setMessageText(e.target.value);
@@ -7393,6 +8483,11 @@ const handleImageUpload = (event) => {
                 canonicalSendPending ||
                 (isCanonicalThread && !messageText.trim())
               }
+              onPointerDown={(event) => {
+                if (isPhoneConversationLayout) {
+                  event.preventDefault();
+                }
+              }}
               onClick={() => sendMessage()}
             >
               <IconSend />
@@ -7433,6 +8528,7 @@ const handleImageUpload = (event) => {
           </>
           )}
         </div>
+        ) : null}
 
         {showClearConfirm && (
           <div style={confirmOverlay}>
@@ -7862,6 +8958,11 @@ const handleImageUpload = (event) => {
           </div>
         )}
       </div>
+      {standaloneEmergencySidePanel && (
+        <aside style={standaloneEmergencyContextPane} data-emergency-context-panel="canonical" aria-label={t("messagesContextAria", language)}>
+          <EmergencyConversationContextPanel detail={canonicalConversationDetail} language={language} />
+        </aside>
+      )}
     </div>
   );
 }
@@ -7909,9 +9010,103 @@ const animations = `
 .typing-dot:nth-child(2) { animation-delay: 0.15s; }
 .typing-dot:nth-child(3) { animation-delay: 0.3s; }
 
+.conversation-quick-reply:focus-visible {
+  outline: 3px solid var(--meetro-color-forest, #1f4d34);
+  outline-offset: 2px;
+}
+
 @media (max-width: 520px) {
   .meetro-message-enter {
     animation-duration: 160ms;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"] {
+    block-size:
+      calc(
+        var(--meetro-visual-viewport-height, 100dvh) +
+        var(--meetro-visual-viewport-offset-top, 0px)
+      ) !important;
+    min-block-size: 0 !important;
+    min-height: 0 !important;
+    max-block-size:
+      calc(
+        var(--meetro-visual-viewport-height, 100dvh) +
+        var(--meetro-visual-viewport-offset-top, 0px)
+      ) !important;
+    overflow: hidden !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"] .chat-header {
+    padding-top: max(4px, env(safe-area-inset-top, 0px)) !important;
+    padding-bottom: 4px !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    :is(.chat-header-project, .chat-header-status) {
+    display: none !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context {
+    max-block-size: 82px !important;
+    margin-bottom: 4px !important;
+    padding: 6px 8px !important;
+    border-radius: 16px !important;
+    overflow: hidden !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__summary {
+    gap: 6px !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__summary > button {
+    min-width: 88px !important;
+    min-height: 30px !important;
+    height: 30px !important;
+    padding-inline: 8px !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__identity {
+    min-width: 0;
+    overflow: hidden;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__title {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__subtitle {
+    display: none !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__work-center {
+    margin-top: 4px !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .emergency-thread-context__work-center button {
+    min-height: 30px !important;
+    margin: 0 !important;
+    padding: 6px 10px !important;
+    font-size: 11px !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .chat-bottom-stack {
+    padding-bottom: 0 !important;
+  }
+
+  .conversation-thread-page[data-composer-focused="true"]
+    .chat-composer {
+    padding-bottom: 8px !important;
   }
 }
 
@@ -7961,9 +9156,9 @@ const animations = `
 `;
 
 const page = {
-  height: "100dvh",
-  minHeight: "100dvh",
-  maxHeight: "100dvh",
+  height: "var(--meetro-safe-vh, 100dvh)",
+  minHeight: "var(--meetro-safe-vh, 100dvh)",
+  maxHeight: "var(--meetro-safe-vh, 100dvh)",
   width: "100%",
   maxWidth: "100vw",
   minWidth: 0,
@@ -8022,6 +9217,41 @@ const embeddedPhone = {
 const messageTextBlock = {
   whiteSpace: "pre-wrap",
   lineHeight: 1.5,
+};
+
+const delegatedAuthorLine = {
+  display: "flex",
+  alignItems: "center",
+  flexWrap: "wrap",
+  gap: "6px",
+  marginBottom: "7px",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "11px",
+  fontWeight: "800",
+  lineHeight: 1.35,
+};
+
+const delegatedAuthorPill = {
+  padding: "2px 6px",
+  border: "1px solid rgba(31, 77, 52, 0.22)",
+  borderRadius: "999px",
+  background: "var(--meetro-color-sage, #dfeee2)",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "9px",
+  fontWeight: "900",
+  letterSpacing: "0.05em",
+};
+
+const standaloneEmergencyContextPane = {
+  flex: "0 0 240px",
+  height: "100%",
+  minHeight: 0,
+  padding: "16px",
+  boxSizing: "border-box",
+  overflowY: "auto",
+  overscrollBehavior: "contain",
+  borderLeft: "1px solid #fca5a5",
+  background: "var(--meetro-surface-paper, #ffffff)",
 };
 
 const messagesScroll = {
@@ -8384,6 +9614,14 @@ const avatarImage = {
   borderRadius: "50%",
 };
 
+const businessLogoAvatarImage = {
+  ...avatarImage,
+  objectFit: "contain",
+  padding: "3px",
+  boxSizing: "border-box",
+  background: "#ffffff",
+};
+
 const name = {
   fontSize: "18px",
   fontWeight: "900",
@@ -8554,8 +9792,9 @@ const menuSectionTitle = {
 
 
 const emergencyBanner = {
-  position: "sticky",
-  top: "8px",
+  flex: "0 0 auto",
+  overflowY: "auto",
+  overscrollBehavior: "contain",
   zIndex: 20,
   marginBottom: "12px",
   padding: "14px",
@@ -8625,6 +9864,17 @@ const emergencyBannerSubtitle = {
   marginTop: "2px",
 };
 
+const emergencyComposerStatus = {
+  marginTop: "2px",
+  color: "#991b1b",
+  fontSize: "10px",
+  fontWeight: "900",
+  lineHeight: 1.2,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+};
+
 const emergencyPillRow = {
   display: "flex",
   gap: "8px",
@@ -8692,20 +9942,21 @@ const emergencyChatActions = {
   marginTop: "12px",
 };
 
-const canonicalDispatchNotice = {
-  marginTop: "10px",
-  color: "#7f1d1d",
-  fontSize: "12px",
-  fontWeight: "800",
-  textAlign: "center",
-};
-
-const canonicalDispatchError = {
-  ...canonicalDispatchNotice,
-  padding: "10px 12px",
-  borderRadius: "12px",
+const canonicalEmergencyJobCard = {
+  display: "grid",
+  gap: "4px",
+  minWidth: 0,
+  marginTop: "12px",
+  padding: "12px 14px",
+  border: "1px solid rgba(239,68,68,0.14)",
+  borderRadius: "16px",
   background: "#ffffff",
-  color: "#b91c1c",
+  color: "#991b1b",
+  fontSize: "12px",
+  lineHeight: 1.45,
+  overflowWrap: "anywhere",
+  wordBreak: "break-word",
+  boxSizing: "border-box",
 };
 
 const canonicalEmergencyLocationCard = {
@@ -9147,6 +10398,77 @@ const dateLine = {
   background: "#e5e7eb",
 };
 
+const emergencyFirstContactCard = {
+  width: "min(92%, 560px)",
+  margin: "6px auto 18px",
+  padding: "20px",
+  boxSizing: "border-box",
+  border:
+    "1px solid rgba(31, 77, 52, 0.16)",
+  borderRadius: "20px",
+  background:
+    "linear-gradient(180deg, #f4fbf6 0%, #ffffff 100%)",
+  boxShadow:
+    "0 12px 30px rgba(31, 77, 52, 0.08)",
+};
+
+const emergencyFirstContactEyebrow = {
+  margin: "0 0 6px",
+  color:
+    "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "11px",
+  fontWeight: "900",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+};
+
+const emergencyFirstContactTitle = {
+  margin: "0 0 8px",
+  color: "#17231c",
+  fontSize: "20px",
+  lineHeight: 1.25,
+};
+
+const emergencyFirstContactBody = {
+  margin: 0,
+  color: "#55635b",
+  fontSize: "14px",
+  lineHeight: 1.55,
+};
+
+const emergencyFirstContactStep = {
+  display: "flex",
+  alignItems: "flex-start",
+  gap: "12px",
+  marginTop: "16px",
+  padding: "14px",
+  borderRadius: "16px",
+  background: "#eef8f1",
+};
+
+const emergencyFirstContactStepBadge = {
+  width: "28px",
+  height: "28px",
+  flex: "0 0 28px",
+  display: "grid",
+  placeItems: "center",
+  borderRadius: "999px",
+  background:
+    "var(--meetro-color-forest, #1f4d34)",
+  color: "#ffffff",
+  fontSize: "13px",
+  fontWeight: "900",
+};
+
+const emergencyFirstContactStepText = {
+  display: "grid",
+  gap: "3px",
+  minWidth: 0,
+  color: "#314039",
+  fontSize: "13px",
+  lineHeight: 1.45,
+};
+
 const timelineTopEmpty = {
   width: "min(86%, 860px)",
   color: "#667085",
@@ -9171,6 +10493,20 @@ const operationalRow = {
   justifyContent: "center",
   marginBottom: "18px",
   width: "100%",
+};
+
+const timelineVisitRow = {
+  position: "static",
+  zIndex: "auto",
+  flex: "0 0 auto",
+  width: "100%",
+  minWidth: 0,
+  boxSizing: "border-box",
+};
+
+const hiddenTimelineVisitRow = {
+  ...timelineVisitRow,
+  display: "none",
 };
 
 const operationalCard = {
@@ -9682,6 +11018,12 @@ const invoicePaidNotice = {
   borderRadius: "16px",
   padding: "12px",
   fontWeight: "900",
+};
+
+const invoiceSendReviewStyles = {
+  card: { display: "grid", gap: 10, padding: 14, margin: "0 12px 10px", border: "1px solid #bbd7c2", borderRadius: 12, background: "#f8fbf9", color: "#172317" },
+  summary: { display: "grid", gap: 4, fontSize: 13 },
+  send: { minHeight: 44, border: 0, borderRadius: 9, background: "#0f6337", color: "#fff", fontWeight: 900, cursor: "pointer" },
 };
 
 const invoiceQuestionNotice = {
@@ -10217,20 +11559,22 @@ const emergencyQuickBtn = {
 
 const quickBtn = {
   flexShrink: 0,
-  minHeight: "24px",
+  minHeight: "44px",
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "center",
   lineHeight: "1.18",
   border: "1px solid #e7eaf2",
   background: "#ffffff",
   color: "#111827",
   borderRadius: "999px",
-  padding: "6px 9px",
+  padding: "7px 10px",
   fontSize: "10px",
   fontWeight: "800",
   cursor: "pointer",
-  whiteSpace: "nowrap",
+  whiteSpace: "normal",
+  overflowWrap: "anywhere",
   textAlign: "center",
-  overflow: "hidden",
-  textOverflow: "ellipsis",
 };
 
 const replyComposer = {
@@ -10404,6 +11748,200 @@ const composer = {
   minWidth: 0,
   boxSizing: "border-box",
   overflowX: "hidden",
+};
+
+const businessCommunicationAudience = {
+  display: "grid",
+  gridTemplateColumns: "repeat(2, minmax(0, 1fr))",
+  gap: "6px",
+  padding: "8px 12px",
+  borderBottom: "1px solid #e5e7eb",
+  background: "#ffffff",
+  minWidth: 0,
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+const businessCommunicationAudienceButton = {
+  minWidth: 0,
+  minHeight: "38px",
+  border: "1px solid #d8dee8",
+  borderRadius: "12px",
+  background: "#f0f5f1",
+  color: "#315b43",
+  fontWeight: 800,
+  cursor: "pointer",
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  display: "inline-flex",
+  alignItems: "center",
+  justifyContent: "center",
+  gap: "6px",
+};
+
+const businessCommunicationAudienceButtonActive = {
+  background: "var(--meetro-color-forest, #1f4d34)",
+  borderColor: "var(--meetro-color-forest, #1f4d34)",
+  color: "#ffffff",
+};
+
+const businessCommunicationAudienceCount = {
+  minWidth: "19px",
+  height: "19px",
+  padding: "0 5px",
+  borderRadius: "999px",
+  display: "inline-grid",
+  placeItems: "center",
+  background: "#c92f3e",
+  color: "#ffffff",
+  fontSize: "10px",
+  lineHeight: 1,
+  fontWeight: 900,
+};
+
+const businessTeamPane = {
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+  maxWidth: "100%",
+  overflow: "hidden",
+  display: "grid",
+  gridTemplateRows: "auto minmax(0, 1fr) auto auto",
+  background: "#f7faf8",
+};
+
+const businessTeamContext = {
+  minWidth: 0,
+  padding: "4px 10px",
+  borderBottom: "1px solid #dfe8e1",
+  background: "#f7faf8",
+};
+
+const businessTeamDisclosure = {
+  width: "100%",
+  maxWidth: "100%",
+  minHeight: "48px",
+  boxSizing: "border-box",
+  border: "1px solid #d4e2d8",
+  borderRadius: "12px",
+  padding: "8px 10px",
+  display: "grid",
+  gridTemplateColumns: "20px minmax(0, 1fr) 18px",
+  alignItems: "center",
+  gap: "8px",
+  background: "#ffffff",
+  color: "#1f4d34",
+  font: "inherit",
+  textAlign: "left",
+  cursor: "pointer",
+};
+
+const businessTeamDisclosureIcon = {
+  width: "20px",
+  minWidth: "20px",
+  display: "inline-grid",
+  placeItems: "center",
+  fontSize: "15px",
+};
+
+const businessTeamDisclosureText = {
+  minWidth: 0,
+  overflow: "hidden",
+  textOverflow: "ellipsis",
+  whiteSpace: "nowrap",
+  fontSize: "13px",
+  lineHeight: 1.25,
+};
+
+const businessTeamDisclosureChevron = {
+  width: "18px",
+  minWidth: "18px",
+  textAlign: "center",
+  fontSize: "14px",
+  fontWeight: 900,
+};
+
+const businessTeamDetails = {
+  display: "grid",
+  gap: "4px",
+  minWidth: 0,
+  padding: "8px 10px 6px",
+  color: "#243a2d",
+  fontSize: "13px",
+  lineHeight: 1.35,
+};
+
+const businessTeamEyebrow = {
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "12px",
+  fontWeight: 900,
+  textTransform: "uppercase",
+  letterSpacing: "0.06em",
+};
+
+const businessTeamSelector = {
+  display: "grid",
+  gap: "4px",
+  minWidth: 0,
+  flex: "1 1 180px",
+  fontSize: "12px",
+  fontWeight: 800,
+};
+
+const businessTeamMessages = {
+  minHeight: 0,
+  minWidth: 0,
+  overflowY: "auto",
+  overflowX: "hidden",
+  padding: "14px",
+  display: "grid",
+  alignContent: "start",
+  gap: "10px",
+};
+
+const businessTeamMessage = {
+  minWidth: 0,
+  padding: "12px",
+  borderRadius: "14px",
+  background: "#ffffff",
+  border: "1px solid #e2e8e4",
+  overflowWrap: "anywhere",
+};
+
+const businessTeamMessageMeta = {
+  display: "flex",
+  alignItems: "baseline",
+  justifyContent: "space-between",
+  gap: "10px",
+  fontSize: "12px",
+};
+
+const businessTeamEmpty = {
+  padding: "22px 14px",
+  color: "#667085",
+  textAlign: "center",
+};
+
+const businessTeamComposer = {
+  width: "100%",
+  display: "grid",
+  gridTemplateColumns: `minmax(0, 1fr) ${COMPACT_MESSAGE_COMPOSER.sendWidthPx}px`,
+  gap: `${COMPACT_MESSAGE_COMPOSER.gapPx}px`,
+  padding: "12px",
+  borderTop: "1px solid #dfe8e1",
+  background: "#ffffff",
+  minWidth: 0,
+  maxWidth: "100%",
+  boxSizing: "border-box",
+};
+
+const businessTeamError = {
+  padding: "0 12px 12px",
+  background: "#ffffff",
+  color: "#b42318",
+  fontSize: "13px",
+  fontWeight: 700,
 };
 
 const circleBtn = {
@@ -11021,6 +12559,8 @@ function ConversationThread({
   embedded = false,
   emergencyContextMode = "stacked",
   onCanonicalEmergencyContextChange,
+  communicationContextMode = "mobile",
+  onCanonicalWorkContextChange,
   canonicalConversationId,
   allowLegacyQuoteMessageFetch = true,
 }) {
@@ -11034,6 +12574,8 @@ function ConversationThread({
         onCanonicalEmergencyContextChange={
           onCanonicalEmergencyContextChange
         }
+        communicationContextMode={communicationContextMode}
+        onCanonicalWorkContextChange={onCanonicalWorkContextChange}
         canonicalConversationId={canonicalConversationId}
         allowLegacyQuoteMessageFetch={allowLegacyQuoteMessageFetch}
       />

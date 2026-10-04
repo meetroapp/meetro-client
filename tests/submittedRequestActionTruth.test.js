@@ -137,7 +137,7 @@ test("submitted-only request handling does not substitute conversation routing",
   assert.match(workflowHubBlock, /const submittedOnly = workflow\.key === "request"/);
   assert.match(
     workflowHubBlock,
-    /const showPrimaryAction =\s*!submittedOnly &&/
+    /const showPrimaryAction = canonicalPresentation[\s\S]*responseReceived \|\| professionalSelected[\s\S]*!submittedOnly &&/
   );
   assert.match(
     workflowHubBlock,

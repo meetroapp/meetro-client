@@ -49,7 +49,7 @@ const rows = [
   ["homeMessagesNeedAttentionText", "Ouvrez le Centre de communication pour répondre ou voir la dernière mise à jour.", "Abra a Central de Comunicação para responder ou ver a atualização mais recente."],
   ["homeNoActiveRequestsText", "Demandez un service pour commencer avec un professionnel.", "Solicite um serviço para iniciar com um profissional."],
   ["homeNoActiveRequestsTitle", "Aucune demande active", "Nenhuma solicitação ativa"],
-  ["homeWorkflowLabel", "Parcours du propriétaire", "Fluxo do proprietário"],
+  ["homeWorkflowLabel", "Votre parcours", "Seu fluxo"],
   ["homeownerWorkflowHome", "Accueil", "Início"],
   ["inProgress", "En cours", "Em andamento"],
   ["live", "En direct", "Ao vivo"],

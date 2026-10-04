@@ -142,13 +142,96 @@ export function normalizeCanonicalAlertDestination(value) {
   if (!isPlainObject(value) || typeof value.type !== "string") return null;
 
   const numericDestinations = {
-    conversation: "conversationId",
     emergency_request: "emergencyRequestId",
     request: "requestId",
     project: "requestId",
     business_profile: "businessProfileId",
     review: "reviewId",
   };
+
+  if (value.type === "conversation") {
+    const basic = hasExactKeys(value, ["type", "conversationId"]);
+    const workContext = hasExactKeys(value, [
+      "type",
+      "conversationId",
+      "jobId",
+      "quoteId",
+    ]);
+    if (!basic && !workContext) return null;
+    const conversationId = normalizePositiveNumericIdentity(value.conversationId);
+    if (!conversationId) return null;
+    if (basic) return { type: value.type, conversationId };
+    if (
+      typeof value.jobId !== "string" ||
+      typeof value.quoteId !== "string" ||
+      !UUID_PATTERN.test(value.jobId) ||
+      !UUID_PATTERN.test(value.quoteId)
+    ) return null;
+    return {
+      type: value.type,
+      conversationId,
+      jobId: value.jobId.toLowerCase(),
+      quoteId: value.quoteId.toLowerCase(),
+    };
+  }
+
+  if (value.type === "job") {
+    if (!hasExactKeys(value, ["type", "jobId"])) return null;
+    if (typeof value.jobId !== "string" || !UUID_PATTERN.test(value.jobId)) {
+      return null;
+    }
+    return { type: value.type, jobId: value.jobId.toLowerCase() };
+  }
+
+  const jobResourceDestinations = {
+    quote: "quoteId",
+    invoice: "invoiceId",
+  };
+  if (value.type === "visit") {
+    const basic = hasExactKeys(value, ["type", "jobId", "visitId"]);
+    const conversationContext = hasExactKeys(value, [
+      "type",
+      "conversationId",
+      "jobId",
+      "requestId",
+      "visitId",
+    ]);
+    if (!basic && !conversationContext) return null;
+    if (
+      typeof value.jobId !== "string" ||
+      typeof value.visitId !== "string" ||
+      !UUID_PATTERN.test(value.jobId) ||
+      !UUID_PATTERN.test(value.visitId)
+    ) return null;
+    const normalized = {
+      type: value.type,
+      jobId: value.jobId.toLowerCase(),
+      visitId: value.visitId.toLowerCase(),
+    };
+    if (basic) return normalized;
+    const conversationId = normalizePositiveNumericIdentity(value.conversationId);
+    const requestId = normalizePositiveNumericIdentity(value.requestId);
+    return conversationId && requestId
+      ? { ...normalized, conversationId, requestId }
+      : null;
+  }
+  const resourceField = jobResourceDestinations[value.type];
+  if (resourceField) {
+    if (!hasExactKeys(value, ["type", "jobId", resourceField])) return null;
+    if (
+      typeof value.jobId !== "string" ||
+      typeof value[resourceField] !== "string" ||
+      !UUID_PATTERN.test(value.jobId) ||
+      !UUID_PATTERN.test(value[resourceField])
+    ) {
+      return null;
+    }
+    return {
+      type: value.type,
+      jobId: value.jobId.toLowerCase(),
+      [resourceField]: value[resourceField].toLowerCase(),
+    };
+  }
   const numericField = numericDestinations[value.type];
   if (numericField) {
     if (!hasExactKeys(value, ["type", numericField])) return null;
@@ -286,6 +369,146 @@ function normalizeCount(value) {
   return Number.isSafeInteger(value) && value >= 0 ? value : null;
 }
 
+const WORK_CENTER_ALERT_STAGE_SET = new Set([
+  "evaluation",
+  "quote",
+  "deposit",
+  "schedule",
+  "work",
+  "invoice",
+  "completion",
+  "review",
+]);
+
+function normalizeWorkCenterAttention(value) {
+  if (
+    !hasExactKeys(value, ["unread", "byJob"]) ||
+    !Array.isArray(value.byJob)
+  ) {
+    return null;
+  }
+
+  const unread = normalizeCount(value.unread);
+  if (unread === null) return null;
+
+  const byJob = value.byJob.map((job) => {
+    if (
+      !hasExactKeys(
+        job,
+        ["jobId", "requestId", "unread", "stages"]
+      ) ||
+      typeof job.jobId !== "string" ||
+      !UUID_PATTERN.test(job.jobId) ||
+      !Array.isArray(job.stages)
+    ) {
+      return null;
+    }
+
+    const jobUnread = normalizeCount(job.unread);
+    const requestId =
+      job.requestId === null
+        ? null
+        : normalizePositiveNumericIdentity(
+            job.requestId
+          );
+
+    if (
+      jobUnread === null ||
+      (job.requestId !== null && !requestId)
+    ) {
+      return null;
+    }
+
+    const stages = job.stages.map((stage) => {
+      if (
+        !hasExactKeys(stage, ["stage", "unread"]) ||
+        !WORK_CENTER_ALERT_STAGE_SET.has(stage.stage)
+      ) {
+        return null;
+      }
+
+      const stageUnread = normalizeCount(stage.unread);
+      return stageUnread === null
+        ? null
+        : {
+            stage: stage.stage,
+            unread: stageUnread,
+          };
+    });
+
+    if (stages.some((stage) => !stage)) return null;
+
+    const stageTotal = stages.reduce(
+      (total, stage) => total + stage.unread,
+      0
+    );
+
+    if (stageTotal !== jobUnread) return null;
+
+    return {
+      jobId: job.jobId.toLowerCase(),
+      requestId,
+      unread: jobUnread,
+      stages,
+    };
+  });
+
+  if (byJob.some((job) => !job)) return null;
+
+  const jobTotal = byJob.reduce(
+    (total, job) => total + job.unread,
+    0
+  );
+
+  if (jobTotal !== unread) return null;
+
+  return { unread, byJob };
+}
+
+function normalizeCommunicationAttention(value) {
+  if (
+    !hasExactKeys(value, [
+      "unread",
+      "customerUnread",
+      "teamUnread",
+      "byJob",
+      "byConversation",
+    ]) ||
+    !Array.isArray(value.byJob) ||
+    !Array.isArray(value.byConversation)
+  ) return null;
+  const unread = normalizeCount(value.unread);
+  const customerUnread = normalizeCount(value.customerUnread);
+  const teamUnread = normalizeCount(value.teamUnread);
+  if (
+    unread === null ||
+    customerUnread === null ||
+    teamUnread === null ||
+    unread !== customerUnread + teamUnread
+  ) return null;
+  const byJob = value.byJob.map((scope) => {
+    if (!hasExactKeys(scope, ["businessId", "jobId", "customerUnread", "teamUnread"])) return null;
+    const businessId = Number(scope.businessId);
+    const jobId = typeof scope.jobId === "string" ? scope.jobId.toLowerCase() : "";
+    const customer = normalizeCount(scope.customerUnread);
+    const team = normalizeCount(scope.teamUnread);
+    return Number.isSafeInteger(businessId) && businessId > 0 &&
+      UUID_PATTERN.test(jobId) && customer !== null && team !== null
+      ? { businessId, jobId, customerUnread: customer, teamUnread: team }
+      : null;
+  });
+  const byConversation = value.byConversation.map((scope) => {
+    if (!hasExactKeys(scope, ["conversationId", "customerUnread"])) return null;
+    const conversationId = Number(scope.conversationId);
+    const customer = normalizeCount(scope.customerUnread);
+    return Number.isSafeInteger(conversationId) && conversationId > 0 && customer !== null
+      ? { conversationId, customerUnread: customer }
+      : null;
+  });
+  if (byJob.some((scope) => !scope) || byConversation.some((scope) => !scope)) return null;
+  return { unread, customerUnread, teamUnread, byJob, byConversation };
+}
+
 export function normalizeAlertListResponse(value) {
   if (
     !normalizeSuccessEnvelope(value, "ALERTS_RETRIEVED") ||
@@ -332,7 +555,25 @@ export function normalizeAlertCountsResponse(value) {
 
   const active = normalizeCount(value.counts.active);
   const unread = normalizeCount(value.counts.unread);
-  if (active === null || unread === null) return null;
+  const communication = normalizeCommunicationAttention(
+    value.counts.communication
+  );
+  const workCenter =
+    value.counts.workCenter === undefined
+      ? undefined
+      : normalizeWorkCenterAttention(
+          value.counts.workCenter
+        );
+
+  if (
+    active === null ||
+    unread === null ||
+    !communication ||
+    (value.counts.workCenter !== undefined &&
+      !workCenter)
+  ) {
+    return null;
+  }
 
   const byCategory = {};
   for (const [category, counts] of Object.entries(value.counts.byCategory)) {
@@ -349,7 +590,15 @@ export function normalizeAlertCountsResponse(value) {
   return {
     success: true,
     code: value.code,
-    counts: { active, unread, byCategory },
+    counts: {
+      active,
+      unread,
+      byCategory,
+      communication,
+      ...(workCenter === undefined
+        ? {}
+        : { workCenter }),
+    },
   };
 }
 

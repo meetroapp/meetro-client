@@ -182,7 +182,12 @@ test("Emergency row selection retains the left list and activates the embedded t
   );
   assert.match(
     inboxSource,
-    /<div style=\{isSplitPane \? splitListPane : undefined\}>[\s\S]*<ConversationThread[\s\S]*embedded/
+    /data-communication-list-pane="true"[\s\S]*style=\{isSplitPane \? splitListPane : undefined\}/
+  );
+
+  assert.match(
+    inboxSource,
+    /data-communication-thread-pane="true"[\s\S]*<ConversationThread[\s\S]*embedded/
   );
 });
 
@@ -296,6 +301,38 @@ test("narrow Emergency thread keeps Review Details and Hide behavior", () => {
   assert.match(
     threadSource,
     /data-emergency-thread-context=\{[\s\S]*"side-panel" : "stacked"/
+  );
+});
+
+test("canonical Emergency detail uses the same renderer before and after the responsive split", () => {
+  assert.match(
+    inboxSource,
+    /data-emergency-context-panel="canonical"[\s\S]*EmergencyConversationContextPanel/
+  );
+
+  assert.match(
+    threadSource,
+    /emergencyPanelExpanded && !emergencyContextInSidePanel[\s\S]*isCanonicalEmergencyThread[\s\S]*embedded[\s\S]*canonicalConversationDetail[\s\S]*<EmergencyConversationContextPanel[\s\S]*detail=\{canonicalConversationDetail\}[\s\S]*language=\{language\}/
+  );
+
+  assert.match(
+    threadSource,
+    /\(!isCanonicalEmergencyThread \|\| !embedded\) && \([\s\S]*<>/
+  );
+
+  assert.match(
+    threadSource,
+    /isCanonicalEmergencyThread && embedded[\s\S]*\? "62%"[\s\S]*: "40%"/
+  );
+
+  assert.match(
+    threadSource,
+    /const canonicalEmergencyWorkCenterRoute =[\s\S]*isCanonicalEmergencyThread &&[\s\S]*currentViewerRole === "business" &&[\s\S]*!embedded/
+  );
+
+  assert.match(
+    threadSource,
+    /emergencyPanelExpanded &&[\s\S]*currentViewerRole === "business" &&[\s\S]*canonicalEmergencyWorkCenterRoute/
   );
 });
 

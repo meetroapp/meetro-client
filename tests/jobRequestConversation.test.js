@@ -162,6 +162,25 @@ test("Upload is the single ordinary Job Request creation workspace", () => {
   assert.doesNotMatch(uploadSource, /createRelationship|Professional Response|conversationParticipants/);
 });
 
+test("Add records exact reviews, applies one patch, confirms it, and never submits", () => {
+  const start = uploadSource.indexOf("async function reviewPendingInterpretation(action)");
+  const end = uploadSource.indexOf("function handleConversationSubmit", start);
+  const boundary = uploadSource.slice(start, end);
+
+  assert.match(boundary, /recordJobRequestInterpretationReviews\(\{/);
+  assert.match(boundary, /reviewKeys: pendingInterpretation\.reviewKeys/);
+  assert.match(boundary, /recordReview: recordWorkflowReview/);
+  assert.match(boundary, /await recordJobRequestInterpretationReviews[\s\S]*applyJobRequestInterpretationPatch/);
+  assert.match(boundary, /applyJobRequestInterpretationPatch\(/);
+  assert.match(boundary, /alignAssistantServiceSelection\(patched\.draft\)/);
+  assert.match(
+    boundary,
+    /confirmAppliedJobRequestInterpretationFields\([\s\S]*aligned,[\s\S]*patched\.appliedFields/
+  );
+  assert.match(boundary, /setPendingInterpretation\(null\)/);
+  assert.doesNotMatch(boundary, /handleCreatePost|\/posts|setSubmittedRequest/);
+});
+
 test("new conversational labels exist in supported languages", () => {
   const keys = [
     "jobRequestConversationQuestion",
@@ -301,6 +320,12 @@ test("customer-first intake keeps technical Service Type selection behind sugges
   assert.match(uploadSource, /jobRequestAcceptSuggestion/);
   assert.match(uploadSource, /jobRequestChangeSuggestion/);
   assert.match(uploadSource, /setServiceSelectorOpen\(true\)/);
+  assert.match(uploadSource, /field\.path === "service\.specialty"/);
+  assert.match(uploadSource, /serviceOption\?\.label \|\| field\.value/);
+  assert.match(uploadSource, /value=\{option\.serviceSpecialty\}/);
+  assert.match(uploadSource, /updatePendingInterpretationField\([\s\S]*field\.path,[\s\S]*event\.target\.value/);
+  assert.match(uploadSource, /if \(action !== "REJECTED"\)/);
+  assert.match(uploadSource, /alignAssistantServiceSelection\(patched\.draft\)/);
   const manualSelectionSource = uploadSource.slice(
     uploadSource.indexOf("function selectServiceOption"),
     uploadSource.indexOf("function acceptAssistantServiceSuggestion")
@@ -313,10 +338,26 @@ test("manual mode is reversible and preserves one shared draft boundary", () => 
   assert.match(uploadSource, /function handleBackToConversation\(\)/);
   assert.match(uploadSource, /setRequestMode\("conversation"\)/);
   assert.match(uploadSource, /function handleReviewRequest\(event\)/);
-  assert.match(uploadSource, /setActiveGuidedCard\("review"\)/);
+  assert.match(uploadSource, /setActiveGuidedCard\(firstIncompleteRequiredCard\)/);
   assert.match(uploadSource, /className="meetro-visual-surface guided-request-builder request-help-manual-form"/);
   assert.match(uploadSource, /onSubmit=\{handleCreatePost\}/);
   assert.doesNotMatch(uploadSource, /setManualDraft|manualDraft|draftCopy/);
+});
+
+test("incomplete canonical location cannot present an actionable submission", () => {
+  assert.match(
+    uploadSource,
+    /disabled=\{!draftReadiness\.isReady \|\| creating \|\| uploading\}/
+  );
+  assert.match(uploadSource, /id="job-request-submit-guidance"/);
+  assert.match(
+    uploadSource,
+    /continueToCard\(requestValidation\.errors\.location \? "location" : "work"\)/
+  );
+  assert.match(
+    uploadSource,
+    /aria-describedby=\{!draftReadiness\.isReady \? "job-request-submit-guidance" : undefined\}/
+  );
 });
 
 test("new Request Help drafts do not inherit prior workflow address state", () => {

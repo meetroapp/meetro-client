@@ -5,6 +5,7 @@ import { test } from "node:test";
 const publicSitePath = "src/public/PublicSite.jsx";
 const appPath = "src/App.jsx";
 const mainPath = "src/main.jsx";
+const appEntryRoutingPath = "src/utils/appEntryRouting.js";
 
 function assertAppearsInOrder(source, phrases) {
   let lastIndex = -1;
@@ -25,6 +26,7 @@ test("public website routes are separated from the authenticated app shell", () 
   const publicSite = readFileSync(publicSitePath, "utf8");
   const app = readFileSync(appPath, "utf8");
   const main = readFileSync(mainPath, "utf8");
+  const appEntryRouting = readFileSync(appEntryRoutingPath, "utf8");
 
   assert.match(publicSite, /Meetro/);
   assert.match(publicSite, /Community/);
@@ -114,12 +116,15 @@ test("public website routes are separated from the authenticated app shell", () 
   assert.doesNotMatch(app, /publicLanding/);
 
   assert.match(main, /PublicSite/);
-  assert.match(main, /isPublicWebsitePath/);
+  assert.match(main, /shouldRenderPublicSite/);
+  assert.match(appEntryRouting, /isPublicWebsitePath/);
+  assert.match(appEntryRouting, /isRecognizedApplicationHash/);
   assert.match(main, /isNativeRuntime/);
   assert.match(main, /window\.location\.pathname === "\/login"/);
   assert.match(main, /const App = lazy\(\(\) => import\('\.\/App\.jsx'\)\)/);
   assert.doesNotMatch(main, /import App from ['"]\.\/App\.jsx['"]/);
-  assert.match(main, /if \(isNativeRuntime\(\)\) return false/);
+  assert.match(main, /native: isNativeRuntime\(\)/);
+  assert.match(appEntryRouting, /if \(native\) return false/);
   assert.match(main, /shouldUsePublicSite \? \(/);
   assert.match(main, /Do not merge these experiences without explicit architectural approval/);
 });

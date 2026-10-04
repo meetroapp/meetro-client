@@ -23,6 +23,7 @@ function copy(language) {
       cancel: "Seguir Revisando",
       selecting: "Seleccionando…",
       selected: "Profesional Seleccionado",
+      connected: (name) => `Ahora estás conectado con ${name || "este profesional"}.`,
       notSelected: "No seleccionado",
       submitted: "Respuesta recibida",
       continueConversation: "Continuar Conversación",
@@ -42,6 +43,7 @@ function copy(language) {
     cancel: "Keep Reviewing",
     selecting: "Selecting…",
     selected: "Selected Professional",
+    connected: (name) => `You’re now connected with ${name || "this professional"}.`,
     notSelected: "Not selected",
     submitted: "Response received",
     continueConversation: "Continue Conversation",
@@ -58,6 +60,8 @@ export default function HomeownerProfessionalResponseReview({
   requestId,
   language = "en",
   setPage,
+  onSelectionStateChange,
+  onSelectionConfirmed,
 }) {
   const labels = copy(language);
   const [status, setStatus] = useState("loading");
@@ -123,8 +127,10 @@ export default function HomeownerProfessionalResponseReview({
 
     setConfirmedSelection(result);
     setConfirmResponseId(null);
+    onSelectionStateChange?.(null);
     setSelectingResponseId(null);
     await loadResponses();
+    onSelectionConfirmed?.(result);
   }
 
   function openConversation(conversationId) {
@@ -206,6 +212,12 @@ export default function HomeownerProfessionalResponseReview({
                   <p style={introduction}>{response.introductionText}</p>
                 )}
 
+                {response.selected && (
+                  <p style={connectedText}>
+                    {labels.connected(response.businessProfile.businessName)}
+                  </p>
+                )}
+
                 {error && (isConfirming || isSelecting) && (
                   <p style={inlineError} role="alert">{error}</p>
                 )}
@@ -227,7 +239,10 @@ export default function HomeownerProfessionalResponseReview({
                         type="button"
                         style={secondaryButton}
                         disabled={isSelecting}
-                        onClick={() => setConfirmResponseId(null)}
+                        onClick={() => {
+                          setConfirmResponseId(null);
+                          onSelectionStateChange?.(null);
+                        }}
                       >
                         {labels.cancel}
                       </button>
@@ -240,6 +255,7 @@ export default function HomeownerProfessionalResponseReview({
                     onClick={() => {
                       setError("");
                       setConfirmResponseId(response.id);
+                      onSelectionStateChange?.(String(response.id));
                     }}
                   >
                     {labels.select}
@@ -337,6 +353,12 @@ const introduction = {
   fontSize: 14,
   lineHeight: 1.5,
   overflowWrap: "anywhere",
+};
+const connectedText = {
+  margin: 0,
+  color: "#166534",
+  fontSize: 13,
+  fontWeight: 700,
 };
 const confirmationCard = {
   display: "grid",

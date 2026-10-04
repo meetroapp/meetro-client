@@ -52,8 +52,8 @@ test("desktop sidebar adopts the warm Visual Constitution treatment", () => {
 
   assertIncludesTokens(sidebarBlock, [
     "var(--meetro-surface-paper)",
-    "var(--meetro-surface-warm)",
-    "var(--meetro-surface-sage)",
+    "#F7F6F2",
+    "#E8F5EE",
     "var(--meetro-color-line)",
     "var(--meetro-color-forest)",
     "var(--meetro-color-ink)",
@@ -61,10 +61,10 @@ test("desktop sidebar adopts the warm Visual Constitution treatment", () => {
     "var(--meetro-color-coffee)",
     "var(--meetro-color-wood)",
     "var(--meetro-gradient-community-action)",
-    "var(--meetro-shadow-lifted)",
+    "borderRight",
   ]);
   assert.match(sidebarBlock, /const sidebarNavButtonActive = \{/);
-  assert.match(sidebarBlock, /background: "var\(--meetro-surface-sage\)"/);
+  assert.match(sidebarBlock, /background: "#E8F5EE"/);
   assert.doesNotMatch(sidebarBlock, /#5b3df5|#ede9fe|#eee7ff|#f5f3ff/);
 });
 

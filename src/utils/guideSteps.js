@@ -94,7 +94,7 @@ export const guideSteps = {
       targetSelector: "[data-guide-target='evaluation-notes']",
     },
     {
-      route: "quoteBuilder",
+      route: "quoteBuilder?new=1",
       titleKey: "guideQuoteBuilderTitle",
       descriptionKey: "guideQuoteBuilderDescription",
       targetSelector: "[data-guide-target='quote-builder']",

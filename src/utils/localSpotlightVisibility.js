@@ -447,7 +447,7 @@ export function buildSpotlightProfessionalProfile(business = {}) {
     "";
   const serviceCategories = services.categories.map(normalizeServiceCategory).filter(Boolean);
   const serviceSpecialties = services.serviceIds;
-  const serviceDomain =
+  const explicitServiceDomain =
     normalizeServiceDomain(
       services.domains[0] ||
         business.serviceDomain ||
@@ -455,8 +455,18 @@ export function buildSpotlightProfessionalProfile(business = {}) {
         business.businessServiceDomain ||
         business.business_service_domain ||
         business.domain
-    ) ||
-    inferServiceDomain(serviceSpecialties[0] || serviceCategories[0] || category);
+    );
+  const inferredServiceDomain =
+    [
+      category,
+      ...serviceCategories,
+      ...serviceSpecialties,
+    ]
+      .map(inferServiceDomain)
+      .find(Boolean) || "";
+  const serviceDomain =
+    explicitServiceDomain ||
+    inferredServiceDomain;
 
   return {
     ...business,

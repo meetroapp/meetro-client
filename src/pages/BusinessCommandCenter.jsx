@@ -1,3 +1,4 @@
+import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { useState } from "react";
 import BottomNav from "../components/BottomNav";
 import { setActiveAccountMode } from "../utils/session";
@@ -101,10 +102,10 @@ function BusinessCommandCenter({ setPage }) {
     customers: {
       id: "customers",
       icon: "customerRelationships",
-      title: isSpanish ? "Relaciones con clientes" : "Customer Relationships",
+      title: isSpanish ? "Historial del cliente" : "Customer History",
       desc: isSpanish
-        ? "Consulta personas, comunicacion e historial de relacion."
-        : "View people, communication, and relationship history.",
+        ? "Consulta clientes, comunicación y su historial de trabajo."
+        : "View customers, communication, and their work history.",
       badge: statusLabel("customers"),
     },
     serviceEvaluations: {
@@ -163,8 +164,8 @@ function BusinessCommandCenter({ setPage }) {
       id: "teamMembers",
       icon: "hiringCenter",
       title: t("teamMembers"),
-      desc: t("teamMembersUnavailableText"),
-      badge: statusLabel("teamMembers", BUSINESS_TOOL_STATUS.READ_ONLY),
+      desc: "Manage Team memberships, preset roles, invitations, and professional seats.",
+      badge: statusLabel("teamMembers", BUSINESS_TOOL_STATUS.READY),
     },
     reportsCenter: {
       id: "reportsCenter",
@@ -198,9 +199,9 @@ function BusinessCommandCenter({ setPage }) {
       icon: "subscription",
       title: isSpanish ? "Plan y suscripcion" : "Plan & Subscription",
       desc: isSpanish
-        ? "Revisa opciones futuras de Meetro Pro y soporte del negocio."
-        : "Review future Meetro Pro options and business support.",
-      badge: statusLabel("subscription", BUSINESS_TOOL_STATUS.COMING_SOON),
+        ? "Revisa tu plan profesional, usuarios incluidos y estado de suscripcion."
+        : "Review your professional plan, included users, and subscription status.",
+      badge: statusLabel("subscription", BUSINESS_TOOL_STATUS.READY),
     },
     complianceCenter: {
       id: "complianceCenter",
@@ -424,6 +425,11 @@ function BusinessCommandCenter({ setPage }) {
       return;
     }
 
+    if (toolId === "subscription") {
+      setPage("professionalSubscription");
+      return;
+    }
+
     if (toolId === "assetCenter") {
       setPage("assetCenter");
       return;
@@ -450,11 +456,12 @@ function BusinessCommandCenter({ setPage }) {
     }
 
     if (toolId === "quickQuote") {
+      clearGenericNewQuoteContext();
       localStorage.removeItem("selectedQuoteRequest");
       localStorage.removeItem("selectedQuoteForEdit");
       localStorage.setItem("quoteBuilderSource", "business_tools_quick_quote");
       localStorage.setItem("quoteBuilderReturnPage", "businessCommandCenter");
-      setPage("quoteBuilder");
+      setPage("quoteBuilder?new=1");
       return;
     }
 
@@ -513,7 +520,7 @@ function BusinessCommandCenter({ setPage }) {
     }
 
     if (
-      ["reviews", "subscription", "findingsLibrary", "knowledgeBase"].includes(
+      ["reviews", "findingsLibrary", "knowledgeBase"].includes(
         toolId
       )
     ) {

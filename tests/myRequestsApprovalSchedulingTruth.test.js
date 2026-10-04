@@ -63,7 +63,8 @@ test("My Requests preserves request viewing, quote review, conversation, and rou
   assert.match(myRequestsSource, /getQuoteTotal/);
   assert.match(myRequestsSource, /getQuoteScopeText/);
   assert.match(myRequestsSource, /getQuotePdfUrl/);
-  assert.match(myRequestsSource, /className=\{`meetro-visual-surface/);
+  assert.match(myRequestsSource, /className="meetro-visual-surface"/);
+  assert.match(myRequestsSource, /setPage\("homeownerRequestDetails"\)/);
   assert.match(myRequestsSource, /<BottomNav/);
   assert.match(appSource, /"myRequests"/);
 });

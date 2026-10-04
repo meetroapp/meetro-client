@@ -480,7 +480,7 @@ export function getFieldAssistantSuggestions(context = {}, language = "en") {
   }
 
   if (stage === "quote") {
-    actions.push({ label: t("assistantFieldActionContinueProposal", language), target: "quoteBuilder" });
+    actions.push({ label: t("assistantFieldActionContinueProposal", language), target: "quoteBuilder", quoteIntent: "CONTINUE", quoteContext: context.quoteNavigationContext || {} });
   }
 
   if (stage === "activeWork") {
@@ -629,6 +629,7 @@ export function getFieldProductivityResponse({
   question = "",
   currentPage = "",
   language = "en",
+  quoteNavigationContext = {},
   storage = globalThis?.localStorage,
 } = {}) {
   const context = buildFieldProductivityContext({ currentPage, storage });
@@ -675,7 +676,7 @@ export function getFieldProductivityResponse({
     : QUESTION_TYPES.prepare.test(text) && context.project && isDocumentationContext(context)
     ? buildDocumentationDraft(context, language)
     : buildFieldAnswer(context, language);
-  const actions = getFieldAssistantSuggestions(context, language);
+  const actions = getFieldAssistantSuggestions({ ...context, quoteNavigationContext }, language);
   const workflowEvaluation = evaluateFieldWorkflow(context, language);
 
   return {

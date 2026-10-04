@@ -26,9 +26,54 @@ export const EMERGENCY_SUMMARY_STATUSES = Object.freeze([
   ...HISTORY_EMERGENCY_SUMMARY_STATUSES,
 ]);
 
+const SIMPLIFIED_EMERGENCY_CONNECTED_STATUSES = new Set([
+  "assigned",
+  "professional_en_route",
+  "professional_arrived",
+  "in_service",
+  "work_in_progress",
+  "completed",
+  "resolved",
+]);
+
+const SIMPLIFIED_EMERGENCY_FIND_STATUSES = new Set([
+  "ready_for_distribution",
+  "active",
+  "selection_pending",
+]);
+
+const SIMPLIFIED_EMERGENCY_TERMINAL_OUTCOMES = new Set([
+  "cancelled",
+  "expired",
+  "unable_to_match",
+]);
+
+export function getSimplifiedEmergencyProgressStage(
+  status = "draft",
+  { phase = "details", recoveryState = "idle" } = {}
+) {
+  if (["loading", "failed"].includes(recoveryState)) return null;
+
+  const canonicalStatus = String(status || "draft").trim().toLowerCase();
+
+  if (SIMPLIFIED_EMERGENCY_TERMINAL_OUTCOMES.has(canonicalStatus)) {
+    return null;
+  }
+  if (canonicalStatus === "safety_blocked") return "safety";
+  if (SIMPLIFIED_EMERGENCY_CONNECTED_STATUSES.has(canonicalStatus)) {
+    return "connected";
+  }
+  if (SIMPLIFIED_EMERGENCY_FIND_STATUSES.has(canonicalStatus)) {
+    return "find";
+  }
+  if (canonicalStatus !== "draft") return null;
+
+  return phase === "safety" ? "safety" : "details";
+}
+
 const EMERGENCY_WORK_CENTER_LABELS = Object.freeze({
   en: Object.freeze({
-    draft: "Continue Emergency Draft",
+    draft: "Continue Emergency Request",
     safety_blocked: "Safety Action Required",
     ready_for_distribution:
       "Waiting for Professional Responses",
@@ -46,7 +91,7 @@ const EMERGENCY_WORK_CENTER_LABELS = Object.freeze({
     unable_to_match: "No Compatible Professional Found",
   }),
   es: Object.freeze({
-    draft: "Continuar Borrador de Emergencia",
+    draft: "Continuar Solicitud de Emergencia",
     safety_blocked: "Acción de Seguridad Requerida",
     ready_for_distribution:
       "Esperando Respuestas de Profesionales",
@@ -70,7 +115,7 @@ const EMERGENCY_WORK_CENTER_LABELS = Object.freeze({
 const EMERGENCY_RELATIONSHIP_NEXT_STEPS = Object.freeze({
   en: Object.freeze({
     draft:
-      "Continue the private draft and complete the required safety review.",
+      "Continue the Emergency request and complete the required Safety Check.",
     safety_blocked:
       "Follow the safety guidance shown for this request and contact emergency services when needed.",
     ready_for_distribution:
@@ -102,7 +147,7 @@ const EMERGENCY_RELATIONSHIP_NEXT_STEPS = Object.freeze({
   }),
   es: Object.freeze({
     draft:
-      "Continúa el borrador privado y completa la revisión de seguridad requerida.",
+      "Continúa la solicitud de Emergencia y completa la verificación de seguridad requerida.",
     safety_blocked:
       "Sigue la orientación de seguridad de esta solicitud y contacta a los servicios de emergencia cuando sea necesario.",
     ready_for_distribution:

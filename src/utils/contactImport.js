@@ -6,14 +6,8 @@ export const CONTACT_IMPORT_TYPE_OPTIONS = Object.freeze([
     identityField: "customerName",
   },
   {
-    id: "tenant",
-    label: "Tenant",
-    relationshipType: "tenant",
-    identityField: "tenantName",
-  },
-  {
-    id: "vendor",
-    label: "Vendor / Pro",
+    id: "professional",
+    label: "Professional / Vendor",
     relationshipType: "vendor",
     identityField: "vendorName",
   },
@@ -24,14 +18,14 @@ export const CONTACT_IMPORT_TYPE_OPTIONS = Object.freeze([
     identityField: "employeeName",
   },
   {
-    id: "business",
-    label: "Business",
-    relationshipType: "business",
-    identityField: "businessName",
+    id: "tenant",
+    label: "Tenant",
+    relationshipType: "tenant",
+    identityField: "tenantName",
   },
   {
-    id: "property",
-    label: "Property contact",
+    id: "propertyManager",
+    label: "Property Manager",
     relationshipType: "propertyManager",
     identityField: "propertyManagerName",
   },
@@ -57,11 +51,11 @@ function getImportType(type = "") {
   const normalized = normalizeKey(type);
 
   if (/property/.test(normalized)) {
-    return CONTACT_IMPORT_TYPE_OPTIONS.find((option) => option.id === "property");
+    return CONTACT_IMPORT_TYPE_OPTIONS.find((option) => option.id === "propertyManager");
   }
 
-  if (/vendor|pro|professional|contractor|supplier/.test(normalized)) {
-    return CONTACT_IMPORT_TYPE_OPTIONS.find((option) => option.id === "vendor");
+  if (/vendor|pro|professional|contractor|supplier|business|organization/.test(normalized)) {
+    return CONTACT_IMPORT_TYPE_OPTIONS.find((option) => option.id === "professional");
   }
 
   return (
@@ -112,6 +106,11 @@ export function normalizeImportedContact(contact = {}, index = 0, defaultType = 
     Array.isArray(contact.addresses) ? contact.addresses[0] : ""
   );
   const type = getImportType(contact.type || contact.relationshipType || defaultType).id;
+  const organizationName = firstValue(contact.company, contact.organization);
+  const partyType =
+    contact.partyType === "ORGANIZATION" || organizationName
+      ? "ORGANIZATION"
+      : "PERSON";
 
   return {
     id: contact.id || createImportedContactId({ name, email, phone }, index),
@@ -120,6 +119,8 @@ export function normalizeImportedContact(contact = {}, index = 0, defaultType = 
     phone,
     address,
     type,
+    partyType,
+    note: firstValue(contact.note, contact.notes),
     selected: contact.selected ?? true,
     source: contact.source || "manual",
   };
@@ -183,6 +184,7 @@ function mapContactField(header = "") {
   }
   if (["address", "location", "serviceaddress"].includes(normalized)) return "address";
   if (["type", "context", "relationshiptype", "role"].includes(normalized)) return "type";
+  if (["note", "notes", "privatenote"].includes(normalized)) return "note";
 
   return "";
 }
@@ -246,9 +248,10 @@ function parseVcardContacts(text = "", defaultType = "customer") {
       const email = parseVcardValue(getLine("EMAIL") || "");
       const phone = parseVcardValue(getLine("TEL") || "");
       const address = parseVcardValue(getLine("ADR") || "");
+      const note = parseVcardValue(getLine("NOTE") || "");
 
       return normalizeImportedContact(
-        { name, email, phone, address, source: "file" },
+        { name, email, phone, address, note, source: "file" },
         index,
         defaultType
       );

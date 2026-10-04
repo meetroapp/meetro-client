@@ -1,11 +1,13 @@
-import { lazy, Suspense, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { Capacitor } from "@capacitor/core";
 import {
   getAccountModeForPage,
   getDashboardPageForAccountMode,
   getExplicitBusinessProfileOwnership,
+  getAuthenticatedIdentitySnapshot,
   isProfessionalSession,
   restoreAuthenticatedSessionFromStorage,
+  subscribeAuthenticatedIdentity,
   syncAccountModeForPage,
 } from "./utils/session";
 import { readBusinessServiceProfile } from "./utils/businessServiceProfile";
@@ -24,7 +26,7 @@ import {
   dismissAppUpdateNotice,
   getCurrentAppBuildId,
 } from "./utils/appStartup";
-import MeetroAssistant from "./components/MeetroAssistant";
+import AskMeetroHost from "./components/AskMeetroHost";
 import GuideOverlay from "./components/GuideOverlay";
 import GlobalInsightLayer from "./components/GlobalInsightLayer";
 import RouteErrorBoundary from "./components/RouteErrorBoundary";
@@ -36,6 +38,22 @@ import useAppLayoutMetrics from "./hooks/useAppLayoutMetrics";
 import { shouldUseCommunicationCenterConversationRoute } from "./utils/communicationLayout";
 import { parseCanonicalConversationRoute } from "./utils/canonicalConversationMessaging";
 import { resolveLegacyEmergencyRoute } from "./utils/emergencyRoutes";
+import { fetchProfessionalSubscription } from "./utils/subscriptionApi";
+import {
+  hasCanonicalBusinessAccess,
+  shouldBlockProfessionalAccess,
+} from "./utils/subscriptionAccess";
+import { fetchMyTeamAuthority } from "./utils/teamApi";
+import {
+  getRoleAwareRoute,
+  resolvePrimaryTeamExperience,
+  TEAM_EXPERIENCE_MODES,
+} from "./utils/teamRoleExperience";
+import {
+  readTeamExperienceMode,
+  supportsPersonalWorkSwitch,
+  TEAM_EXPERIENCE_MODE_CHANGED_EVENT,
+} from "./utils/teamExperienceMode";
 
 const Home = lazy(() => import("./pages/Home"));
 import MyRequests from "./pages/MyRequests";
@@ -43,12 +61,15 @@ import Assistant from "./pages/Assistant";
 const Discover = lazy(() => import("./pages/Discover"));
 const Upload = lazy(() => import("./pages/Upload"));
 const Profile = lazy(() => import("./pages/Profile"));
+const MyProfessionals = lazy(() => import("./pages/MyProfessionals"));
 const MeetroMoments = lazy(() => import("./pages/MeetroMoments"));
 const MeetroMomentDetails = lazy(() => import("./pages/MeetroMomentDetails"));
 import ContractorProfile from "./pages/ContractorProfile";
 import Chat from "./pages/Chat";
 import Conversation from "./pages/Conversation";
 import ProjectDetails from "./pages/ProjectDetails";
+import CustomerQuoteReviewRoute from "./pages/CustomerQuoteReviewRoute";
+import CustomerInvoiceReviewRoute from "./pages/CustomerInvoiceReviewRoute";
 import Login from "./pages/Login";
 import ContractorDetails from "./pages/ContractorDetails";
 import QuoteRequests from "./pages/QuoteRequests";
@@ -72,11 +93,17 @@ import QuoteBuilder from "./pages/QuoteBuilder";
 import ChangeOrderRequest from "./pages/ChangeOrderRequest";
 import BusinessAnalytics from "./pages/BusinessAnalytics";
 import BusinessCommandCenter from "./pages/BusinessCommandCenter";
+import ProfessionalSubscription from "./pages/ProfessionalSubscription";
 const ProfessionalOnboarding = lazy(() => import("./pages/ProfessionalOnboarding"));
 import BusinessAvailability from "./pages/BusinessAvailability";
 import CustomerRelationshipsCenter from "./pages/CustomerRelationshipsCenter";
 import HiringCenter from "./pages/HiringCenter";
 import TeamMembers from "./pages/TeamMembers";
+import EmployeeJobs from "./pages/EmployeeJobs";
+import TeamOperations from "./pages/TeamOperations";
+import EmployeePortal from "./pages/EmployeePortal";
+import BookkeeperProfile from "./pages/BookkeeperProfile";
+import EmployeeShell from "./components/EmployeeShell";
 import AssetCenter from "./pages/AssetCenter";
 import ServiceTypesEvaluations from "./pages/ServiceTypesEvaluations";
 import MaterialsLibrary from "./pages/MaterialsLibrary";
@@ -200,7 +227,10 @@ const assistantEnabledPages = new Set([
   "jobsHiring",
   "upload",
   "myRequests",
+  "homeownerRequestDetails",
   "projectDetails",
+  "customerQuoteReview",
+  "customerInvoiceReview",
   "conversationThread",
   "messagesInbox",
   "notifications",
@@ -214,11 +244,39 @@ const assistantEnabledPages = new Set([
   "businessLeads",
   "quoteRequests",
   "quoteBuilder",
+  "invoiceBuilder",
+  "customerRelationshipsCenter",
+  "depositRequestBuilder",
   "projectGallery",
   "completedJobDetails",
   "emergency",
   "completionSheet",
   "profile",
+
+  // Universal Ask Meetro — authenticated access rollout.
+  // Auth/setup/subscription and Field Employee surfaces stay
+  // outside this first access-only pass.
+  "contractors",
+  "contractorDetails",
+  "businessAnalytics",
+  "changeOrderRequest",
+  "businessCommandCenter",
+  "businessAvailability",
+  "hiringCenter",
+  "teamMembers",
+  "assetCenter",
+  "serviceTypesEvaluations",
+  "materialsLibrary",
+  "pricingLibrary",
+  "contractTemplates",
+  "reportsCenter",
+  "permitCenter",
+  "complianceCenter",
+  "businessIntelligence",
+  "jobUpdate",
+  "favorites",
+  "emergencyRequest",
+  "contractorJobAccepted",
 ]);
 
 const publicLegalDocumentRoutes = {
@@ -241,14 +299,11 @@ const SESSION_HYDRATION = Object.freeze({
 
 function withAssistantLayer(component, currentPage, setPage) {
   return withRouteBoundary(
-    <>
+    <AskMeetroHost currentPage={currentPage} setPage={setPage} enabled={assistantEnabledPages.has(currentPage)}>
       {component}
-      {assistantEnabledPages.has(currentPage) && (
-        <MeetroAssistant currentPage={currentPage} setPage={setPage} />
-      )}
       <GlobalInsightLayer currentPage={currentPage} setPage={setPage} />
       <GuideOverlay currentPage={currentPage} setPage={setPage} />
-    </>,
+    </AskMeetroHost>,
     currentPage,
     setPage
   );
@@ -266,9 +321,80 @@ function withGuideLayer(component, currentPage, setPage) {
   );
 }
 
+function withAssistantAccessOnly(component, currentPage, setPage) {
+  return withRouteBoundary(
+    <AskMeetroHost
+      currentPage={currentPage}
+      setPage={setPage}
+      enabled={assistantEnabledPages.has(currentPage)}
+    >
+      {component}
+    </AskMeetroHost>,
+    currentPage,
+    setPage
+  );
+}
+
+function ResponsiveConversationThreadRoute({
+  setPage,
+  currentPage,
+}) {
+  const appLayoutMetrics = useAppLayoutMetrics();
+  const canonicalConversationRoute =
+    parseCanonicalConversationRoute(
+      typeof window === "undefined"
+        ? ""
+        : window.location.hash
+    );
+
+  const routeKey = [
+    canonicalConversationRoute.valid
+      ? canonicalConversationRoute.conversationId
+      : "",
+    canonicalConversationRoute.returnPage || "",
+    canonicalConversationRoute.shell || "",
+  ].join(":");
+
+  const shellOwnershipRef = useRef({
+    routeKey: "",
+    claimed: false,
+  });
+
+  if (
+    shellOwnershipRef.current.routeKey !==
+    routeKey
+  ) {
+    shellOwnershipRef.current = {
+      routeKey,
+      claimed: false,
+    };
+  }
+
+  const canUseCommunicationCenterShellNow =
+    shouldUseCommunicationCenterConversationRoute(
+      canonicalConversationRoute,
+      appLayoutMetrics
+    );
+
+  if (canUseCommunicationCenterShellNow) {
+    shellOwnershipRef.current.claimed = true;
+  }
+
+  const useCommunicationCenterShell =
+    shellOwnershipRef.current.claimed;
+
+  return useCommunicationCenterShell ? (
+    <MessagesInbox
+      setPage={setPage}
+      currentPage={currentPage}
+    />
+  ) : (
+    <ConversationThread setPage={setPage} />
+  );
+}
+
 function App() {
   const language = useLanguage();
-  const appLayoutMetrics = useAppLayoutMetrics();
 
   useEffect(() => {
     const root = document.getElementById("root");
@@ -296,7 +422,6 @@ function App() {
   "customerRelationshipsCenter",
   "invoiceBuilder",
   "hiringCenter",
-  "teamMembers",
   "jobUpdate",
   "materialsLibrary",
   "permitCenter",
@@ -304,10 +429,12 @@ function App() {
   "professionalOnboarding",
   "projectGallery",
   "quoteBuilder",
+  "depositRequestBuilder",
   "quoteRequests",
   "reportsCenter",
   "serviceTypesEvaluations",
   "workCenter",
+  "professionalSubscription",
 ];
 
   const isProfessionalOnlyPage = (targetPage = "") =>
@@ -552,9 +679,185 @@ function App() {
       ? "sessionRestoring"
       : getInitialPage()
   );
+  const [quoteRouteIdentity, setQuoteRouteIdentity] = useState(() =>
+    getHashRoute()
+  );
+  const [subscriptionGate, setSubscriptionGate] = useState({
+    status: "idle",
+    businessAccessActive: false,
+  });
+  const [authenticatedIdentity, setAuthenticatedIdentity] = useState(
+    getAuthenticatedIdentitySnapshot
+  );
+  const [teamExperienceGate, setTeamExperienceGate] = useState({
+    status: "idle",
+    experience: resolvePrimaryTeamExperience(),
+    mode: TEAM_EXPERIENCE_MODES.WORK,
+  });
+  const updateSubscriptionGate = useCallback((result = {}) => {
+    setSubscriptionGate({
+      status: "ready",
+      businessAccessActive: hasCanonicalBusinessAccess(result),
+      purchaseAvailable: result?.purchaseAvailable === true,
+    });
+  }, []);
   const isStartupReady =
     startupReadiness.status === STARTUP_READINESS.ready &&
     sessionHydration.status !== SESSION_HYDRATION.restoring;
+
+  useEffect(
+    () => subscribeAuthenticatedIdentity(setAuthenticatedIdentity),
+    []
+  );
+
+  useEffect(() => {
+    let active = true;
+    if (authenticatedIdentity.status !== "authenticated") {
+      Promise.resolve().then(() => {
+        if (active) {
+          setTeamExperienceGate({
+            status: "not_applicable",
+            experience: resolvePrimaryTeamExperience(),
+            mode: TEAM_EXPERIENCE_MODES.WORK,
+          });
+        }
+      });
+      return () => { active = false; };
+    }
+
+    const refresh = () => {
+      setTeamExperienceGate((current) => ({ ...current, status: "loading" }));
+      fetchMyTeamAuthority(setPageState)
+        .then((authority) => {
+          if (active) {
+            const experience =
+              resolvePrimaryTeamExperience(authority);
+
+            setTeamExperienceGate({
+              status: "ready",
+              experience,
+              mode: readTeamExperienceMode(
+                authenticatedIdentity.userId,
+                experience
+              ),
+            });
+          }
+        })
+        .catch(() => {
+          if (active) {
+            setTeamExperienceGate({
+              status: "unavailable",
+              experience: resolvePrimaryTeamExperience(),
+              mode: TEAM_EXPERIENCE_MODES.WORK,
+            });
+          }
+        });
+    };
+
+    refresh();
+    window.addEventListener("meetroTeamAuthorityChanged", refresh);
+    return () => {
+      active = false;
+      window.removeEventListener("meetroTeamAuthorityChanged", refresh);
+    };
+  }, [authenticatedIdentity.sessionGeneration, authenticatedIdentity.status]);
+
+  useEffect(() => {
+    if (teamExperienceGate.status !== "ready") return;
+    const currentRoute = getHashRoute() || page;
+    const roleRoute = getRoleAwareRoute(
+      currentRoute,
+      teamExperienceGate.experience,
+      teamExperienceGate.mode
+    );
+    if (!roleRoute || roleRoute === currentRoute) return;
+    window.location.hash = roleRoute;
+  }, [page, teamExperienceGate]);
+
+  useEffect(() => {
+    if (teamExperienceGate.status !== "ready") {
+      return undefined;
+    }
+
+    const handleTeamExperienceModeChange = (event) => {
+      const experience = teamExperienceGate.experience;
+
+      if (!supportsPersonalWorkSwitch(experience)) {
+        return;
+      }
+
+      const mode =
+        event?.detail?.mode ===
+        TEAM_EXPERIENCE_MODES.PERSONAL
+          ? TEAM_EXPERIENCE_MODES.PERSONAL
+          : TEAM_EXPERIENCE_MODES.WORK;
+
+      setTeamExperienceGate((current) => ({
+        ...current,
+        mode,
+      }));
+
+      const route =
+        mode === TEAM_EXPERIENCE_MODES.PERSONAL
+          ? "home"
+          : experience.landingRoute;
+
+      if (!route) return;
+
+      syncAccountModeForPage(getRoutePage(route));
+      window.location.hash = route;
+      setPageState(getRoutePage(route));
+    };
+
+    window.addEventListener(
+      TEAM_EXPERIENCE_MODE_CHANGED_EVENT,
+      handleTeamExperienceModeChange
+    );
+
+    return () => {
+      window.removeEventListener(
+        TEAM_EXPERIENCE_MODE_CHANGED_EVENT,
+        handleTeamExperienceModeChange
+      );
+    };
+  }, [
+    teamExperienceGate.experience,
+    teamExperienceGate.status,
+  ]);
+
+  useEffect(() => {
+    let active = true;
+    Promise.resolve().then(() => {
+      if (
+        authenticatedIdentity.status !== "authenticated" ||
+        !isProfessionalSession()
+      ) {
+        if (active) setSubscriptionGate({ status: "not_applicable", businessAccessActive: true });
+        return;
+      }
+      if (active) setSubscriptionGate({ status: "loading", businessAccessActive: false });
+      fetchProfessionalSubscription(setPageState)
+        .then((result) => {
+          if (active) updateSubscriptionGate(result);
+        })
+        .catch(() => {
+          if (active) setSubscriptionGate({ status: "unavailable", businessAccessActive: false });
+        });
+      });
+    return () => { active = false; };
+  }, [authenticatedIdentity.sessionGeneration, authenticatedIdentity.status, updateSubscriptionGate]);
+
+  useEffect(() => {
+    if (
+      subscriptionGate.status !== "ready" ||
+      subscriptionGate.businessAccessActive === true ||
+      page === "professionalSubscription" ||
+      !isProfessionalSession() ||
+      !isProfessionalOnlyPage(page)
+    ) return;
+    window.location.hash = "professionalSubscription";
+    setPageState("professionalSubscription");
+  }, [page, subscriptionGate.businessAccessActive, subscriptionGate.status]);
 
   useEffect(() => {
     if (sessionHydration.status !== SESSION_HYDRATION.restoring) return undefined;
@@ -674,6 +977,9 @@ function App() {
     const handleHashChange = () => {
       if (sessionHydration.status === SESSION_HYDRATION.restoring) return;
       const hashRoute = getHashRoute();
+      if (["quoteBuilder", "invoiceBuilder"].includes(getRoutePage(hashRoute))) {
+        setQuoteRouteIdentity(hashRoute);
+      }
       persistRouteContext(hashRoute);
       const hashPage = getRoutePage(hashRoute);
       const legacyRouteRedirected =
@@ -931,18 +1237,96 @@ function App() {
       return;
     }
 
-	    const finalPage = shouldRouteToProfessionalOnboarding(newPage)
+	    const intendedPage = shouldRouteToProfessionalOnboarding(newPage)
 	      ? "professionalOnboarding"
 	      : newPage;
-	
+	    const finalPage = getRoleAwareRoute(
+	      intendedPage,
+	      teamExperienceGate.experience,
+      teamExperienceGate.mode
+	    );
 	    const finalRoutePage = getRoutePage(finalPage);
 	    syncAccountModeForPage(finalRoutePage);
 	    window.location.hash = finalPage;
+	    if (["quoteBuilder", "invoiceBuilder"].includes(finalRoutePage)) setQuoteRouteIdentity(finalPage);
 	    setPageState(finalRoutePage);
 	  };
 
+const fieldMembership = teamExperienceGate.experience?.kind === "FIELD_EMPLOYEE"
+  ? teamExperienceGate.experience.membership
+  : null;
+const bookkeeperMembership = teamExperienceGate.experience?.kind === "BOOKKEEPER_FINANCE"
+  ? teamExperienceGate.experience.membership
+  : null;
+const currentRoleRoute = getRoleAwareRoute(
+  getHashRoute() || page,
+  teamExperienceGate.experience,
+  teamExperienceGate.mode
+);
+
+if (
+  authenticatedIdentity.status === "authenticated" &&
+  teamExperienceGate.status === "loading" &&
+  page !== "login"
+) {
+  return withRouteBoundary(
+    <LoadingScreen text="Preparing your Team workspace…" />,
+    page,
+    setPage
+  );
+}
+
+if (
+  authenticatedIdentity.status === "authenticated" &&
+  teamExperienceGate.status === "unavailable" &&
+  page !== "login"
+) {
+  return withRouteBoundary(
+    <LoadingScreen text="Team access could not be verified. Refresh to try again." />,
+    page,
+    setPage
+  );
+}
+
+if (
+  teamExperienceGate.status === "ready" &&
+  currentRoleRoute &&
+  getRoutePage(currentRoleRoute) !== page
+) {
+  return withRouteBoundary(
+    <LoadingScreen text="Opening your role-aware workspace…" />,
+    page,
+    setPage
+  );
+}
+
 if (sessionHydration.status === SESSION_HYDRATION.restoring || page === "sessionRestoring") {
   return withRouteBoundary(<SessionRestoringScreen />, "sessionRestoring", setPage);
+}
+
+if (
+  page !== "professionalSubscription" &&
+  isProfessionalOnlyPage(page) &&
+  isProfessionalSession() &&
+  subscriptionGate.status === "loading"
+) {
+  return withRouteBoundary(<LoadingScreen text="Checking professional access…" />, page, setPage);
+}
+
+if (
+  page !== "professionalSubscription" &&
+  isProfessionalOnlyPage(page) &&
+  isProfessionalSession() &&
+  subscriptionGate.status !== "idle" &&
+  shouldBlockProfessionalAccess(subscriptionGate)
+) {
+  return withStartupChrome(
+    <ProfessionalSubscription
+      setPage={setPage}
+      onSubscriptionState={updateSubscriptionGate}
+    />,
+    updateNotice
+  );
 }
 
 if (page === "login") {
@@ -981,6 +1365,17 @@ if (page === "myRequests") {
   return withStartupChrome(withAssistantLayer(<MyRequests setPage={setPage} />, page, setPage), updateNotice);
 }
 
+if (page === "homeownerRequestDetails") {
+  return withStartupChrome(
+    withAssistantLayer(
+      <MyRequests setPage={setPage} view="detail" />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
+}
+
 if (page === "assistant") {
   return withStartupChrome(withGuideLayer(<Assistant setPage={setPage} />, page, setPage), updateNotice);
 }
@@ -996,6 +1391,17 @@ if (page === "upload") {
 
 if (page === "profile") {
   return withStartupChrome(withAssistantLayer(withSuspense(<Profile setPage={setPage} />), page, setPage), updateNotice);
+}
+
+if (page === "myProfessionals") {
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      withSuspense(<MyProfessionals setPage={setPage} />),
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "meetroMoments") {
@@ -1015,7 +1421,10 @@ if (page === "meetroStory") {
 }
 
 if (page === "contractorProfile") {
-  return withStartupChrome(withRouteBoundary(<ContractorProfile setPage={setPage} />, page, setPage), updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<ContractorProfile setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "chat") {
@@ -1030,13 +1439,39 @@ if (page === "projectDetails") {
   return withStartupChrome(withAssistantLayer(<ProjectDetails setPage={setPage} />, page, setPage), updateNotice);
 }
 
+if (page === "customerQuoteReview") {
+  return withStartupChrome(withAssistantLayer(
+    <CustomerQuoteReviewRoute setPage={setPage} />,
+    page,
+    setPage
+  ), updateNotice);
+}
+
+if (page === "customerInvoiceReview") {
+  return withStartupChrome(withAssistantLayer(
+    <CustomerInvoiceReviewRoute setPage={setPage} />,
+    page,
+    setPage
+  ), updateNotice);
+}
+
 if (page === "contractors") {
   safeSetStorageItem("activeDiscoverMode", "businessDirectory");
-  return withStartupChrome(withSuspense(<Discover setPage={setPage} />), updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      withSuspense(<Discover setPage={setPage} />),
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "contractorDetails") {
-  return withStartupChrome(<ContractorDetails setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<ContractorDetails setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "quoteRequests") {
@@ -1044,22 +1479,13 @@ if (page === "quoteRequests") {
 }
 
 if (page === "conversationThread") {
-  const canonicalConversationRoute = parseCanonicalConversationRoute(
-    typeof window === "undefined" ? "" : window.location.hash
-  );
-  const useCommunicationCenterShell =
-    shouldUseCommunicationCenterConversationRoute(
-      canonicalConversationRoute,
-      appLayoutMetrics
-    );
-  const conversationThreadRoute = useCommunicationCenterShell
-    ? withSuspense(
-        <MessagesInbox setPage={setPage} currentPage={page} />
-      )
-    : withSuspense(<ConversationThread setPage={setPage} />);
-
   return withStartupChrome(withAssistantLayer(
-    conversationThreadRoute,
+    withSuspense(
+      <ResponsiveConversationThreadRoute
+        setPage={setPage}
+        currentPage={page}
+      />
+    ),
     page,
     setPage
   ), updateNotice);
@@ -1083,7 +1509,14 @@ if (page === "professionalOnboarding") {
 }
 
 if (page === "businessAnalytics") {
-  return withStartupChrome(<BusinessAnalytics setPage={setPage} currentPage={page} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <BusinessAnalytics setPage={setPage} currentPage={page} />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "businessLeads") {
@@ -1095,67 +1528,199 @@ if (page === "businessLeads") {
 }
 
 if (page === "quoteBuilder") {
-  return withStartupChrome(withAssistantLayer(<QuoteBuilder setPage={setPage} />, page, setPage), updateNotice);
+  return withStartupChrome(withAssistantLayer(<QuoteBuilder key={quoteRouteIdentity} setPage={setPage} />, page, setPage), updateNotice);
+}
+
+if (page === "depositRequestBuilder") {
+  return withStartupChrome(withAssistantLayer(
+    <QuoteBuilder setPage={setPage} initialDocument="depositRequest" />,
+    page,
+    setPage
+  ), updateNotice);
 }
 
 if (page === "changeOrderRequest") {
-  return withStartupChrome(<ChangeOrderRequest setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<ChangeOrderRequest setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "businessCommandCenter") {
-  return withStartupChrome(withGuideLayer(<BusinessCommandCenter setPage={setPage} />, page, setPage), updateNotice);
+  return withStartupChrome(
+    withAssistantLayer(<BusinessCommandCenter setPage={setPage} />, page, setPage),
+    updateNotice
+  );
+}
+
+if (page === "professionalSubscription") {
+  return withStartupChrome(
+    <ProfessionalSubscription
+      setPage={setPage}
+      onSubscriptionState={updateSubscriptionGate}
+    />,
+    updateNotice
+  );
 }
 
 if (page === "businessAvailability") {
-  return withStartupChrome(<BusinessAvailability setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<BusinessAvailability setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "customerRelationshipsCenter") {
-  return withStartupChrome(<CustomerRelationshipsCenter setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <CustomerRelationshipsCenter setPage={setPage} />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "hiringCenter") {
-  return withStartupChrome(<HiringCenter setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<HiringCenter setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "teamMembers") {
-  return withStartupChrome(<TeamMembers setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<TeamMembers setPage={setPage} />, page, setPage),
+    updateNotice
+  );
+}
+
+if (page === "employeeJobs") {
+  return withStartupChrome(<EmployeeJobs setPage={setPage} roleMembership={fieldMembership} />, updateNotice);
+}
+
+if (["employeeHome", "employeeSchedule", "employeeTime", "employeeMessages", "employeeProfile"].includes(page)) {
+  if (!fieldMembership) {
+    return withStartupChrome(<LoadingScreen text={t("fieldAccessRequired", language)} />, updateNotice);
+  }
+  const view = {
+    employeeHome: "home",
+    employeeSchedule: "schedule",
+    employeeTime: "time",
+    employeeMessages: "messages",
+    employeeProfile: "profile",
+  }[page];
+  return withStartupChrome(
+    <EmployeePortal membership={fieldMembership} setPage={setPage} view={view} />,
+    updateNotice
+  );
+}
+
+if (page === "employeeAlerts") {
+  if (!fieldMembership) {
+    return withStartupChrome(<LoadingScreen text={t("fieldAccessRequired", language)} />, updateNotice);
+  }
+  return withStartupChrome(
+    <EmployeeShell
+      membership={fieldMembership}
+      currentPage="employeeAlerts"
+      setPage={setPage}
+      title={t("fieldNavAlerts", language)}
+      description={t("fieldAlertsDescription", language)}
+    >
+      {withSuspense(
+        <Notifications setPage={setPage} employeeMode
+          employeeBusinessId={fieldMembership.businessId}
+        />
+      )}
+    </EmployeeShell>,
+    updateNotice
+  );
+}
+
+if (page === "teamOperations") {
+  return withStartupChrome(<TeamOperations setPage={setPage} />, updateNotice);
+}
+
+if (page === "bookkeeperProfile") {
+  if (!bookkeeperMembership) {
+    return withStartupChrome(<LoadingScreen text="Bookkeeper access is required." />, updateNotice);
+  }
+  return withStartupChrome(
+    <BookkeeperProfile membership={bookkeeperMembership} setPage={setPage} />,
+    updateNotice
+  );
 }
 
 if (page === "assetCenter") {
-  return withStartupChrome(<AssetCenter setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<AssetCenter setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "serviceTypesEvaluations") {
-  return withStartupChrome(<ServiceTypesEvaluations setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <ServiceTypesEvaluations setPage={setPage} />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "materialsLibrary") {
-  return withStartupChrome(<MaterialsLibrary setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<MaterialsLibrary setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "pricingLibrary") {
-  return withStartupChrome(<PricingLibrary setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<PricingLibrary setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "contractTemplates") {
-  return withStartupChrome(<ContractTemplates setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<ContractTemplates setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "reportsCenter") {
-  return withStartupChrome(<ReportsCenter setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<ReportsCenter setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "permitCenter") {
-  return withStartupChrome(<PermitCenter setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<PermitCenter setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "complianceCenter") {
-  return withStartupChrome(<ComplianceCenter setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<ComplianceCenter setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "businessIntelligence") {
-  return withStartupChrome(<BusinessIntelligencePage setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <BusinessIntelligencePage setPage={setPage} />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "jobsHiring") {
@@ -1163,7 +1728,10 @@ if (page === "jobsHiring") {
 }
 
 if (page === "jobUpdate") {
-  return withStartupChrome(<JobUpdate setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<JobUpdate setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "projectGallery") {
@@ -1187,7 +1755,10 @@ if (page === "notifications") {
 }
 
 if (page === "favorites") {
-  return withStartupChrome(<Favorites setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(<Favorites setPage={setPage} />, page, setPage),
+    updateNotice
+  );
 }
 
 if (page === "emergency") {
@@ -1195,16 +1766,28 @@ if (page === "emergency") {
 }
 
 if (page === "emergencyRequest") {
-  return withStartupChrome((
-    <EmergencyRequest
-      setPage={setPage}
-      selectedService={safeGetStorageItem("selectedEmergencyService")}
-    />
-  ), updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <EmergencyRequest
+        setPage={setPage}
+        selectedService={safeGetStorageItem("selectedEmergencyService")}
+      />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "invoiceBuilder") {
-  return withStartupChrome(withGuideLayer(<InvoiceBuilder setPage={setPage} />, page, setPage), updateNotice);
+  return withStartupChrome(
+    withAssistantLayer(
+      <InvoiceBuilder key={quoteRouteIdentity} setPage={setPage} />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 if (page === "completionSheet") {
@@ -1220,7 +1803,14 @@ if (page === "completedJobDetails") {
 }
 
 if (page === "contractorJobAccepted") {
-  return withStartupChrome(<ContractorJobAccepted setPage={setPage} />, updateNotice);
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <ContractorJobAccepted setPage={setPage} />,
+      page,
+      setPage
+    ),
+    updateNotice
+  );
 }
 
 return withStartupChrome(withSuspense(<Home setPage={setPage} />), updateNotice);

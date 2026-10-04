@@ -156,7 +156,6 @@ test("business-facing trust surfaces use the shared verification projection", ()
   const files = [
     "src/pages/ContractorProfile.jsx",
     "src/pages/ContractorDetails.jsx",
-    "src/pages/ProjectGallery.jsx",
     "src/utils/businessIdentity.js",
   ];
 

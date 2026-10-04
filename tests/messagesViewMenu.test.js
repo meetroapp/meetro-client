@@ -313,7 +313,7 @@ test("Messages page wrappers initialize before relationship identity render can 
   );
 });
 
-test("Messages exposes Import Contacts as a reviewable relationship flow", () => {
+test("Messages exposes Import Contacts as a reviewable durable Contact flow", () => {
   const conversationActionsBlock = messagesSource.slice(
     messagesSource.indexOf("const CONVERSATION_SECTION_ACTIONS"),
     messagesSource.indexOf("const CONTACTS_SECTION_ACTIONS")
@@ -336,7 +336,10 @@ test("Messages exposes Import Contacts as a reviewable relationship flow", () =>
   assert.match(messagesSource, /messagesSelectAllContacts/);
   assert.match(messagesSource, /messagesReviewBeforeImport/);
   assert.match(messagesSource, /messagesImportDescription/);
-  assert.match(messagesSource, /buildImportedContactRelationship/);
+  assert.match(messagesSource, /messagesSectionContacts/);
+  assert.doesNotMatch(messagesSource, /relationship placeholders/);
+  assert.match(messagesSource, /importBusinessContacts/);
+  assert.doesNotMatch(messagesSource, /buildImportedContactRelationship/);
   assert.match(messagesSource, /setMessageSection\("contacts"\)/);
 });
 
@@ -344,6 +347,8 @@ test("Messages keeps Saved Conversation History as secondary history, not a sect
   assert.match(messagesSource, /const SAVED_HISTORY_ACTION = \["savedHistory", "messagesSavedHistoryTitle"\]/);
   assert.match(messagesSource, /messagesSecondaryActionsAria/);
   assert.match(messagesSource, /style=\{savedHistorySecondaryButton\}/);
+  assert.match(messagesSource, /messageSection === "conversations" && !savedHistoryVisible/);
+  assert.match(messagesSource, /data-conversation-history-navigation="true"/);
   assert.match(messagesSource, /SAVED_HISTORY_ACTION\[0\][\s\S]*t\(SAVED_HISTORY_ACTION\[1\], language\)/);
   assert.match(messagesSource, /messagesSavedManually/);
   assert.doesNotMatch(messagesSource, /return \[\.\.CONVERSATION_SECTION_ACTIONS, SAVED_HISTORY_ACTION\]/);
@@ -482,7 +487,10 @@ test("Emergency relationship rows open conversations and Messages restores saved
   assert.match(messagesSource, /setActiveSplitConversationId\(""\);[\s\S]*setPage\("conversationThread"\)/);
   assert.match(messagesSource, /record\.conversationId,[\s\S]*record\.threadId,[\s\S]*record\.sourceConversationId,[\s\S]*record\.id,/);
   assert.match(messagesSource, /const appLayoutMetrics = useAppLayoutMetrics\(\)/);
-  assert.match(messagesSource, /const isSplitPane = communicationLayout\.mode === "desktop"/);
+  assert.match(
+    messagesSource,
+    /const isSplitPane =\s*communicationLayout\.mode === "desktop" \|\|/
+  );
   assert.match(messagesSource, /function readJsonArray\(key\)/);
   assert.match(messagesSource, /onClick=\{\(\) => openConversationRow\(conversation, options\)\}/);
   assert.match(messagesSource, /type="button"[\s\S]*onClick=\{\(\) => openConversationRow\(conversation, options\)\}/);
@@ -496,17 +504,38 @@ test("Emergency relationship rows open conversations and Messages restores saved
   assert.match(messagesSource, /setSavedHistoryOpen\(true\)/);
   assert.match(messagesSource, /messagesSavedHistoryTitle/);
   assert.match(messagesSource, /savedHistoryQuotes\.map/);
-  assert.match(messagesSource, /!savedHistoryOpen && \(/);
+  assert.match(messagesSource, /!savedHistoryVisible && \(/);
 });
 
 test("Messages renders an adaptive workspace without changing mobile conversation routing", () => {
   assert.match(messagesSource, /const appLayoutMetrics = useAppLayoutMetrics\(\)/);
   assert.match(messagesSource, /const communicationLayout = getCommunicationLayout\(appLayoutMetrics\)/);
-  assert.match(messagesSource, /const isSplitPane = communicationLayout\.mode === "desktop"/);
-  assert.match(messagesSource, /const isWideWorkspace = communicationLayout\.columns === 3/);
+  assert.match(
+    messagesSource,
+    /const routeRequestsCommunicationShell =/
+  );
+
+  assert.match(
+    messagesSource,
+    /const isSplitPane =\s*communicationLayout\.mode === "desktop" \|\|/
+  );
+
+  assert.match(
+    messagesSource,
+    /routeRequestsCommunicationShell &&\s*appLayoutMetrics\.layoutMode === "tablet"/
+  );
+  assert.match(messagesSource, /const isWideWorkspace = getCommunicationLayout\(appLayoutMetrics, \{\s*emergency: activeEmergencyContextMatchesConversation,\s*\}\)\.columns === 3/);
   assert.doesNotMatch(messagesSource, /setIsSplitPane|setIsWideWorkspace/);
   assert.match(messagesSource, /const wideWorkspaceShell = \{/);
-  assert.match(messagesSource, /gridTemplateColumns:\s*\n\s+"minmax\(280px, 0\.28fr\) minmax\(420px, 0\.44fr\) minmax\(280px, 0\.28fr\)"/);
+  assert.match(
+    messagesSource,
+    /gridTemplateColumns:\s*\n\s+"minmax\(230px, 0\.8fr\) minmax\(390px, 1\.35fr\) minmax\(270px, 1fr\)"/
+  );
+
+  assert.match(
+    messagesSource,
+    /maxWidth: "1240px"/
+  );
   assert.match(messagesSource, /isWideWorkspace \? wideWorkspaceShell : \{\}/);
   assert.match(messagesSource, /isWideWorkspace && renderWorkspaceContextPanel\(\)/);
   assert.match(messagesSource, /function renderWorkspaceContextPanel\(\)/);
@@ -623,8 +652,14 @@ test("Saved emergency history preview uses final workflow state before stale des
   assert.match(messagesSource, /function isFinalConversationState\(quote = \{\}\)/);
   assert.match(messagesSource, /messagesCompletedEmergencyService/);
   assert.match(messagesSource, /messagesEmergencyConversationSaved/);
-  assert.match(messagesSource, /<p style=\{conversationRowPreview\}>\s*\{getConversationPreviewText\(conversation\)\}\s*<\/p>/);
-  assert.doesNotMatch(messagesSource, /<p style=\{conversationRowPreview\}>\s*\{conversation\.lastMessage \|\|/);
+  assert.match(
+    messagesSource,
+    /<p[\s\S]{0,220}\.\.\.conversationRowPreview[\s\S]{0,220}\{getConversationPreviewText\(conversation\)\}\s*<\/p>/
+  );
+  assert.doesNotMatch(
+    messagesSource,
+    /<p[\s\S]{0,220}\.\.\.conversationRowPreview[\s\S]{0,220}\{conversation\.lastMessage \|\|/
+  );
 });
 
 test("ConversationThread opens a full-page relationship identity without leaving the thread", () => {
@@ -765,6 +800,7 @@ test("Relationship identity resolver is the canonical source for avatar and acti
 
 test("Relationship detail labels exist in supported languages", () => {
   for (const language of ["en", "es", "fr", "pt-BR"]) {
+    assert.notEqual(t("messagesCustomerRelationship", language), "messagesCustomerRelationship");
     assert.notEqual(t("relationshipDetails", language), "relationshipDetails");
     assert.notEqual(t("viewRelationshipIdentity", language), "viewRelationshipIdentity");
     assert.notEqual(t("relationshipIdentityIntro", language), "relationshipIdentityIntro");
@@ -784,4 +820,94 @@ test("Relationship detail labels exist in supported languages", () => {
     assert.notEqual(t("relationshipViewCurrentWork", language), "relationshipViewCurrentWork");
     assert.notEqual(t("relationshipServiceArea", language), "relationshipServiceArea");
   }
+});
+
+test("relationship detail real avatars open a view-only image preview without hijacking communication navigation", () => {
+  const previewStart =
+    relationshipIdentityPageSource.indexOf(
+      "export function IdentityMediaPreviewDialog"
+    );
+  const previewEnd =
+    relationshipIdentityPageSource.indexOf(
+      "function initialsFor",
+      previewStart
+    );
+
+  assert.notEqual(previewStart, -1);
+  assert.notEqual(previewEnd, -1);
+
+  const previewSource =
+    relationshipIdentityPageSource.slice(
+      previewStart,
+      previewEnd
+    );
+
+  assert.match(
+    previewSource,
+    /role="dialog"/
+  );
+  assert.match(
+    previewSource,
+    /aria-modal="true"/
+  );
+  assert.match(
+    previewSource,
+    /event\.key !== "Escape"/
+  );
+  assert.match(
+    previewSource,
+    /event\.target === event\.currentTarget/
+  );
+  assert.match(
+    previewSource,
+    /aria-label="Close image preview"/
+  );
+  assert.match(
+    relationshipIdentityPageSource,
+    /const identityMediaPreviewImage = \{[\s\S]*?objectFit: "contain"[\s\S]*?\};/
+  );
+  assert.match(
+    previewSource,
+    /document\.body\.style\.overflow = "hidden"/
+  );
+  assert.match(
+    previewSource,
+    /previousFocus\.focus/
+  );
+
+  assert.doesNotMatch(
+    previewSource,
+    /upload|delete|download|share/i
+  );
+
+  assert.match(
+    relationshipIdentityPageSource,
+    /identity\.avatar \? \(\s*<button[\s\S]*setMediaPreviewOpen\(true\)/
+  );
+  assert.match(
+    relationshipIdentityPageSource,
+    /<IdentityMediaPreviewDialog[\s\S]*src=\{identity\.avatar\}/
+  );
+  assert.match(
+    relationshipIdentityPageSource,
+    /\) : \(\s*<div style=\{identityAvatar\}>\s*\{initials\}/
+  );
+
+  assert.doesNotMatch(
+    messagesSource,
+    /IdentityMediaPreviewDialog/
+  );
+  assert.doesNotMatch(
+    conversationThreadSource,
+    /IdentityMediaPreviewDialog/
+  );
+
+  assert.match(
+    messagesSource,
+    /onClick=\{\(\) => openConversationRow\(conversation, options\)\}/
+  );
+  assert.match(
+    conversationThreadSource,
+    /onClick=\{openRelationshipDetails\}/
+  );
 });

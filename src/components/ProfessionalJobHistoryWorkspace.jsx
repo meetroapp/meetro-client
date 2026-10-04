@@ -1,0 +1,206 @@
+import { WorkCenterSourceBadge, WorkCenterSourceFilter } from "./WorkCenterSource.jsx";
+import { filterWorkCenterSources } from "../utils/workCenterSourcePresentation.js";
+import { useEffect, useState } from "react";
+import CanonicalInvoiceDetail from "./CanonicalInvoiceDetail.jsx";
+import {
+  WorkCenterEmptyState,
+  WorkCenterMetricGrid,
+  WorkCenterPageHeader,
+  WorkCenterStatusPill,
+} from "./WorkCenterWorkspaceSystem.jsx";
+import { fetchProfessionalJobHistoryDetail } from "../utils/jobCompletionApi.js";
+import { fetchProfessionalJobInvoice } from "../utils/invoicePaymentApi.js";
+import { getJobCompletionCopy } from "../utils/jobCompletionLanguage.js";
+import { getInvoiceCopy } from "../utils/invoicePaymentLanguage.js";
+import { getWorkCenterWorkspaceCopy } from "../utils/workCenterWorkspaceLanguage.js";
+
+function displayDate(value, language) {
+  const locale = { en: "en-US", es: "es", fr: "fr", "pt-BR": "pt-BR" }[language] || "en-US";
+  return new Intl.DateTimeFormat(locale, { year: "numeric", month: "short", day: "numeric" }).format(new Date(value));
+}
+
+function displayMoney(approvedQuote, language) {
+  if (!approvedQuote) return "";
+  const locale = { en: "en-US", es: "es", fr: "fr", "pt-BR": "pt-BR" }[language] || "en-US";
+  return new Intl.NumberFormat(locale, { style: "currency", currency: approvedQuote.currency }).format(approvedQuote.totalMinor / 100);
+}
+
+export default function ProfessionalJobHistoryWorkspace({
+  sourceState,
+  language = "en",
+  setPage,
+  onRetry,
+  onLoadMore,
+  requestedJobId = "",
+  onBack,
+}) {
+  const copy = getJobCompletionCopy(language);
+  const invoiceCopy = getInvoiceCopy(language);
+  const workspaceCopy = getWorkCenterWorkspaceCopy(language);
+  const [selectedJobId, setSelectedJobId] = useState("");
+  const historyJobId = requestedJobId || selectedJobId;
+  const [sourceFilter, setSourceFilter] = useState("all");
+  const [detailState, setDetailState] = useState({ status: "idle", detail: null, invoice: null, error: "" });
+
+  useEffect(() => {
+    let active = true;
+    if (!historyJobId) {
+      queueMicrotask(() => {
+        if (active) setDetailState({ status: "idle", detail: null, invoice: null, error: "" });
+      });
+      return () => { active = false; };
+    }
+    queueMicrotask(() => {
+      if (active) setDetailState({ status: "loading", detail: null, invoice: null, error: "" });
+    });
+    void Promise.all([
+      fetchProfessionalJobHistoryDetail({ jobId: historyJobId, setPage }),
+      fetchProfessionalJobInvoice({ jobId: historyJobId, setPage })
+        .catch((error) => error?.code === "INVOICE_UNAVAILABLE" ? null : Promise.reject(error)),
+    ])
+      .then(([detail, invoice]) => {
+        if (active) setDetailState({ status: "ready", detail, invoice, error: "" });
+      })
+      .catch((error) => {
+        if (active) setDetailState({ status: "error", detail: null, invoice: null, error: String(error?.code || "JOB_HISTORY_FAILED") });
+      });
+    return () => { active = false; };
+  }, [historyJobId, setPage]);
+
+  if (historyJobId) {
+    const detail = detailState.detail?.jobId === historyJobId ? detailState.detail : null;
+    return (
+      <section style={styles.section} data-professional-job-history-detail={historyJobId}>
+        <button type="button" style={styles.secondaryButton} onClick={() => onBack ? onBack() : setSelectedJobId("")}>
+          {copy.backToHistory}
+        </button>
+        {detailState.status === "loading" && <p role="status">{copy.loading}</p>}
+        {detailState.status === "error" && <p role="alert" style={styles.error}>{copy.historyUnavailable}</p>}
+        {detail && (
+          <>
+            <WorkCenterSourceBadge record={detail} language={language} />
+            <WorkCenterPageHeader
+              eyebrow={copy.workCompleted}
+              title={detail.serviceTitle}
+              description={`${detail.customerName} · ${copy.completedOn} ${displayDate(detail.completedAt, language)}`}
+              action={<WorkCenterStatusPill>{detailState.invoice
+                ? invoiceCopy[detailState.invoice.status === "PAID"
+                  ? "paid"
+                  : detailState.invoice.status === "DRAFT"
+                    ? "drafts"
+                    : detailState.invoice.status === "PARTIALLY_PAID"
+                      ? "outstanding"
+                      : "waiting"]
+                : copy.readyToInvoice}</WorkCenterStatusPill>}
+            />
+            <div style={styles.metrics}>
+              <span><strong>{detail.completionSummary.workstreamCount}</strong> {copy.work}</span>
+              <span><strong>{detail.completionSummary.workItemCount}</strong> {copy.completed}</span>
+              <span><strong>{detail.completionSummary.customerUpdateCount}</strong> {copy.customerUpdates}</span>
+            </div>
+            {detail.approvedQuote && <p><strong>{copy.approvedAmount}:</strong> {displayMoney(detail.approvedQuote, language)}</p>}
+            {detail.originalRequest && (
+              <div>
+                <h3 style={styles.subheading}>{copy.originalRequest}</h3>
+                <p style={styles.body}>{detail.originalRequest.concern}</p>
+              </div>
+            )}
+            <div style={styles.record}>
+              <strong>{copy.preservedRecord}</strong>
+              <p style={styles.body}>{detail.sourceType === "emergency_request" ? "Evaluation, findings, recommendations, and approved Quotes are preserved. Visits and Work Plan are not applicable to this Emergency." : copy.preservedRecordBody}</p>
+            </div>
+            {detailState.invoice && (
+              <section style={styles.financialRecord} aria-label={invoiceCopy.invoice}>
+                <CanonicalInvoiceDetail invoice={detailState.invoice} language={language} sourceRecord={detail} />
+              </section>
+            )}
+          </>
+        )}
+      </section>
+    );
+  }
+
+  const history = sourceState?.history;
+  return (
+    <section style={styles.section} aria-labelledby="professional-job-history-title" data-professional-job-history-status={sourceState?.status || "loading"}>
+      <WorkCenterPageHeader
+        eyebrow={workspaceCopy.historyEyebrow}
+        title={copy.history}
+        titleId="professional-job-history-title"
+        description={workspaceCopy.historyDescription}
+      />
+      {history && (
+        <WorkCenterMetricGrid
+          ariaLabel={copy.history}
+          metrics={[{ key: "completed", icon: "jobHistory", tone: "success", label: copy.completedJobs, value: history.totalCount }]}
+        />
+      )}
+      {sourceState?.status === "loading" && <p role="status">{copy.loading}</p>}
+      {sourceState?.status === "error" && (
+        <div role="alert" style={styles.error}>
+          <p>{copy.historyUnavailable}</p>
+          <button type="button" style={styles.secondaryButton} onClick={onRetry}>{copy.retry}</button>
+        </div>
+      )}
+      {sourceState?.status === "ready" && (sourceState?.pageError || sourceState?.error) && (
+        <div role="alert" style={styles.error}>
+          <p>{copy.pageUnavailable}</p>
+          {history?.pagination.nextCursor && (
+            <button type="button" style={styles.secondaryButton} onClick={onLoadMore} disabled={sourceState?.loadingMore}>{copy.retry}</button>
+          )}
+        </div>
+      )}
+      {sourceState?.status === "ready" && history?.jobs.length === 0 && (
+        <WorkCenterEmptyState
+          icon="jobHistory"
+          title={workspaceCopy.historyEmptyTitle}
+          body={workspaceCopy.historyEmptyBody}
+        />
+      )}
+      <WorkCenterSourceFilter records={history?.jobs || []} value={sourceFilter} onChange={setSourceFilter} language={language} />
+      <div style={styles.list}>
+        {filterWorkCenterSources(history?.jobs || [], sourceFilter).map((job) => (
+          <button key={job.jobId} type="button" className="work-center-content-card" style={styles.row} onClick={() => setSelectedJobId(job.jobId)}>
+            <span style={styles.rowMain}>
+              <WorkCenterSourceBadge record={job} language={language} />
+              <strong style={styles.rowTitle}>{job.customerName}</strong>
+              <span>{job.serviceTitle}</span>
+              <span style={styles.meta}>{copy.completedOn} {displayDate(job.completedAt, language)}</span>
+            </span>
+            <span style={styles.rowAside}>
+              {job.approvedQuote && <strong>{displayMoney(job.approvedQuote, language)}</strong>}
+              <span>{copy.viewJob}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+      {history?.pagination.nextCursor && !(sourceState?.status === "ready" && (sourceState?.pageError || sourceState?.error)) && (
+        <button
+          type="button"
+          style={styles.secondaryButton}
+          disabled={sourceState?.loadingMore}
+          onClick={onLoadMore}
+        >
+          {sourceState?.loadingMore ? copy.loading : copy.loadMore}
+        </button>
+      )}
+    </section>
+  );
+}
+
+const styles = {
+  section: { display: "grid", gap: 16, minWidth: 0 },
+  subheading: { margin: 0, fontSize: 17, letterSpacing: 0 },
+  list: { display: "grid", gap: 12 },
+  row: { minHeight: 72, width: "100%", display: "flex", justifyContent: "space-between", alignItems: "center", gap: 16, padding: 16, border: "1px solid #dce5d8", borderRadius: 8, background: "#fff", color: "#172317", textAlign: "left", cursor: "pointer", boxShadow: "0 8px 24px rgba(28,49,31,.05)" },
+  rowMain: { display: "grid", gap: 4, minWidth: 0 },
+  rowTitle: { overflowWrap: "anywhere" },
+  rowAside: { display: "grid", gap: 4, flexShrink: 0, textAlign: "right", color: "#1f5132" },
+  meta: { color: "#64748b", fontSize: 13 },
+  metrics: { display: "flex", gap: 16, flexWrap: "wrap", padding: "14px 0", borderTop: "1px solid #cbd5e1", borderBottom: "1px solid #cbd5e1" },
+  record: { display: "grid", gap: 6, paddingLeft: 12, borderLeft: "3px solid #1f5132" },
+  financialRecord: { minWidth: 0 },
+  body: { margin: 0, lineHeight: 1.55, overflowWrap: "anywhere" },
+  error: { color: "#991b1b" },
+  secondaryButton: { minHeight: 44, width: "fit-content", padding: "9px 14px", border: "1px solid #64748b", borderRadius: 6, background: "#fff", color: "#243326", fontWeight: 800, cursor: "pointer" },
+};

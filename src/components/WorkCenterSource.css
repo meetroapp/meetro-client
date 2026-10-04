@@ -1,0 +1,61 @@
+.work-center-source-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+  margin-block: 12px;
+}
+.work-center-source-filter button {
+  min-height: 44px;
+  max-width: 100%;
+  padding: 8px 14px;
+  border: 1px solid #dce5e0;
+  border-radius: 999px;
+  background: #f5f8f6;
+  color: #263c5a;
+  font: inherit;
+  font-size: 14px;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+.work-center-source-filter button[aria-pressed="true"] {
+  background: #1f5132;
+  border-color: #1f5132;
+  color: #fff;
+}
+.work-center-source-filter button:focus-visible {
+  outline: 3px solid #8fbda3;
+  outline-offset: 3px;
+}
+#root .work-center-source-badge,
+.work-center-source-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  width: fit-content;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 4px 8px;
+  border: 1px solid #dce5e0;
+  border-radius: 6px;
+  background: #edf5f0;
+  color: #1f5132;
+  font-size: 12px;
+  font-weight: 750;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.work-center-source-badge svg { flex-shrink: 0; }
+#root .work-center-source-badge--emergency,
+.work-center-source-badge--emergency {
+  border-color: #efb8b8;
+  background: #fff0f0;
+  color: #912e2e;
+}
+#root .work-center-source-badge--unknown,
+.work-center-source-badge--unknown { background: #f5f6f7; color: #526052; }
+.work-center-job-card[data-job-source="emergency"],
+.meetro-current-job-list-card[data-job-source="emergency"] {
+  border-color: #efb8b8;
+  border-inline-start: 3px solid #b42336;
+}

@@ -1,14 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import {
-  getNextSpotlightSlideshowIndex,
-  getPreviousSpotlightSlideshowIndex,
+  createSpotlightSlideshowPosition,
+  getSpotlightSlideshowPositionIndex,
   getSpotlightSlideshowState,
+  moveSpotlightSlideshowPosition,
   normalizeSpotlightSlideshowImages,
 } from "../utils/spotlightSlideshowState";
 
 function SpotlightSlideshow({
+  presentationId = "",
   images = [],
-  intervalMs = 4000,
   alt = "",
   className = "",
   photoCountLabel = "",
@@ -20,42 +21,43 @@ function SpotlightSlideshow({
     () => normalizeSpotlightSlideshowImages(images),
     [images]
   );
-  const imageKey = normalizedImages.join("|");
-  const [activeIndex, setActiveIndex] = useState(0);
+  const imageKey = JSON.stringify(normalizedImages);
+  const [position, setPosition] = useState(() =>
+    createSpotlightSlideshowPosition({ presentationId, imageKey })
+  );
+  const activeIndex = getSpotlightSlideshowPositionIndex(position, {
+    presentationId,
+    imageKey,
+    imageCount: normalizedImages.length,
+  });
   const slideshowState = getSpotlightSlideshowState(
     normalizedImages,
     activeIndex
   );
 
-  useEffect(() => {
-    setActiveIndex(0);
-  }, [imageKey]);
-
-  useEffect(() => {
-    if (normalizedImages.length < 2) return undefined;
-
-    const intervalId = window.setInterval(() => {
-      setActiveIndex((currentIndex) =>
-        getNextSpotlightSlideshowIndex(currentIndex, normalizedImages.length)
-      );
-    }, intervalMs);
-
-    return () => window.clearInterval(intervalId);
-  }, [imageKey, intervalMs, normalizedImages.length]);
-
   function showPrevious(event) {
     event.preventDefault();
     event.stopPropagation();
-    setActiveIndex((currentIndex) =>
-      getPreviousSpotlightSlideshowIndex(currentIndex, normalizedImages.length)
+    setPosition((currentPosition) =>
+      moveSpotlightSlideshowPosition(currentPosition, {
+        presentationId,
+        imageKey,
+        imageCount: normalizedImages.length,
+        direction: "previous",
+      })
     );
   }
 
   function showNext(event) {
     event.preventDefault();
     event.stopPropagation();
-    setActiveIndex((currentIndex) =>
-      getNextSpotlightSlideshowIndex(currentIndex, normalizedImages.length)
+    setPosition((currentPosition) =>
+      moveSpotlightSlideshowPosition(currentPosition, {
+        presentationId,
+        imageKey,
+        imageCount: normalizedImages.length,
+        direction: "next",
+      })
     );
   }
 
@@ -81,11 +83,20 @@ function SpotlightSlideshow({
           />
 
           {photoCountLabel && (
-            <span style={photoBadge}>{photoCountLabel}</span>
+            <span className="spotlight-photo-badge" style={photoBadge}>
+              {photoCountLabel}
+            </span>
           )}
 
           {slideshowState.hasMultiple && (
-            <span style={counterBadge}>{slideshowState.counterLabel}</span>
+            <span
+              className="spotlight-counter-badge"
+              style={counterBadge}
+              aria-live="polite"
+              aria-atomic="true"
+            >
+              {slideshowState.counterLabel.replace("/", " / ")}
+            </span>
           )}
 
           {slideshowState.hasMultiple && (
@@ -93,7 +104,8 @@ function SpotlightSlideshow({
               <button
                 type="button"
                 aria-label={previousLabel}
-                style={{ ...slideButton, left: "10px" }}
+                className="spotlight-slide-control spotlight-slide-control-previous"
+                style={{ ...slideButton, left: "12px" }}
                 onClick={showPrevious}
               >
                 ‹
@@ -101,7 +113,8 @@ function SpotlightSlideshow({
               <button
                 type="button"
                 aria-label={nextLabel}
-                style={{ ...slideButton, right: "10px" }}
+                className="spotlight-slide-control spotlight-slide-control-next"
+                style={{ ...slideButton, right: "12px" }}
                 onClick={showNext}
               >
                 ›
@@ -110,8 +123,8 @@ function SpotlightSlideshow({
           )}
         </>
       ) : (
-        <div style={placeholder}>
-          <span style={placeholderIcon}>IMG</span>
+        <div className="spotlight-placeholder" style={placeholder}>
+          <span style={placeholderIcon} aria-hidden="true">✦</span>
           <span>{placeholderLabel}</span>
         </div>
       )}
@@ -122,8 +135,9 @@ function SpotlightSlideshow({
 const slideshowWrap = {
   width: "100%",
   height: "100%",
-  minHeight: "320px",
-  background: "linear-gradient(135deg,#111827,#1e293b)",
+  minHeight: "100%",
+  background:
+    "linear-gradient(145deg, var(--meetro-surface-sage, #e8f1e8), var(--meetro-surface-warm, #f7f2e8))",
   display: "grid",
   placeItems: "center",
   overflow: "hidden",
@@ -145,73 +159,103 @@ const counterBadge = {
   position: "absolute",
   top: "10px",
   right: "10px",
-  padding: "6px 9px",
-  borderRadius: "10px",
-  background: "rgba(15,23,42,0.72)",
+  padding: "5px 8px",
+  borderRadius: "999px",
+  border: "1px solid rgba(255,255,255,0.52)",
+  background: "rgba(255,255,255,0.22)",
   color: "#ffffff",
-  fontSize: "13px",
-  fontWeight: "950",
+  fontSize: "11px",
+  fontWeight: "850",
+  letterSpacing: "0.02em",
   lineHeight: 1,
-  boxShadow: "0 8px 18px rgba(15,23,42,0.2)",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.54), 0 4px 12px rgba(7,19,12,0.15)",
+  backdropFilter: "blur(12px) saturate(145%)",
+  WebkitBackdropFilter: "blur(12px) saturate(145%)",
+  textShadow: "0 1px 7px rgba(7,19,12,0.72)",
+  zIndex: 3,
 };
 
 const photoBadge = {
   position: "absolute",
   top: "10px",
   left: "10px",
-  padding: "6px 9px",
+  padding: "5px 8px",
   borderRadius: "999px",
-  background: "rgba(255,255,255,0.92)",
-  color: "#111827",
+  border: "1px solid rgba(255,255,255,0.52)",
+  background: "rgba(255,255,255,0.22)",
+  color: "#ffffff",
   fontSize: "11px",
-  fontWeight: "950",
+  fontWeight: "850",
+  letterSpacing: "0.02em",
   lineHeight: 1,
-  boxShadow: "0 8px 18px rgba(15,23,42,0.18)",
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.54), 0 4px 12px rgba(7,19,12,0.15)",
+  backdropFilter: "blur(12px) saturate(145%)",
+  WebkitBackdropFilter: "blur(12px) saturate(145%)",
+  textShadow: "0 1px 7px rgba(7,19,12,0.72)",
+  zIndex: 3,
 };
 
 const slideButton = {
   position: "absolute",
   top: "50%",
   transform: "translateY(-50%)",
-  width: "38px",
-  height: "38px",
+  width: "40px",
+  height: "40px",
   borderRadius: "999px",
-  border: "1px solid rgba(255,255,255,0.72)",
-  background: "rgba(255,255,255,0.92)",
-  color: "#111827",
-  fontSize: "30px",
-  fontWeight: "900",
-  lineHeight: "32px",
+  border: "1px solid rgba(255,255,255,0.58)",
+  background: "rgba(255,255,255,0.22)",
+  color: "#ffffff",
+  fontSize: "24px",
+  fontWeight: "750",
+  lineHeight: 1,
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  boxShadow: "0 10px 22px rgba(15,23,42,0.22)",
-  zIndex: 2,
+  boxShadow:
+    "inset 0 1px 0 rgba(255,255,255,0.68), inset 0 -1px 0 rgba(255,255,255,0.08), 0 7px 18px rgba(7,19,12,0.18)",
+  backdropFilter: "blur(16px) saturate(155%)",
+  WebkitBackdropFilter: "blur(16px) saturate(155%)",
+  textShadow: "0 1px 8px rgba(7,19,12,0.76)",
+  cursor: "pointer",
+  transition: "background 160ms ease, border-color 160ms ease, transform 160ms ease",
+  zIndex: 4,
 };
 
 const placeholder = {
   width: "100%",
   height: "100%",
-  display: "grid",
-  placeItems: "center",
-  gap: "6px",
+  display: "flex",
+  alignItems: "flex-start",
+  justifyContent: "center",
+  padding: "20px 20px 0",
+  boxSizing: "border-box",
+  position: "relative",
+  background:
+    "radial-gradient(circle at 16% 18%, rgba(31,77,52,0.14), transparent 27%), radial-gradient(circle at 82% 4%, rgba(183,121,31,0.13), transparent 26%), linear-gradient(145deg, var(--meetro-surface-sage, #e8f1e8), var(--meetro-surface-warm, #f7f2e8))",
   color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "12px",
-  fontWeight: "950",
+  fontWeight: "850",
   textAlign: "center",
 };
 
 const placeholderIcon = {
-  width: "38px",
-  height: "38px",
+  position: "absolute",
+  top: "42%",
+  left: "50%",
+  transform: "translate(-50%, -50%)",
+  width: "88px",
+  height: "88px",
   borderRadius: "999px",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  background: "rgba(31,77,52,0.12)",
-  border: "1px solid rgba(31,77,52,0.20)",
+  background: "rgba(255,255,255,0.34)",
+  border: "1px solid rgba(31,77,52,0.14)",
   color: "var(--meetro-color-forest, #1f4d34)",
-  fontSize: "14px",
+  fontSize: "30px",
+  opacity: 0.34,
 };
 
 export default SpotlightSlideshow;

@@ -1,0 +1,471 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+import {
+  PRODUCTION_API_URL,
+  STAGING_API_URL,
+} from "../src/api.js";
+import {
+  CANONICAL_WORK_CENTER_AUTHORITY,
+  fetchCanonicalWorkCenterEntries,
+  isCanonicalWorkCenterEntry,
+  isCanonicalWorkCenterHydrationEnabled,
+  mergeCanonicalWorkCenterEntries,
+  normalizeCanonicalWorkCenterEntry,
+} from "../src/utils/workCenterCanonicalHydration.js";
+import { getWorkCenterLifecycleProjectionTarget } from "../src/utils/workCenterLifecycleProjection.js";
+import {
+  getProfessionalWorkCenterActiveCount,
+} from "../src/utils/professionalWorkCenterDiscovery.js";
+
+const canonicalSummary = {
+  conversationId: 340,
+  sourceType: "request",
+  project_title: "U1-02A QA lifecycle fixture - sink cabinet water damage",
+  customerName: "Liam Molina",
+};
+
+const canonicalDetail = {
+  conversationId: 340,
+  type: "request",
+  permissions: { canRead: true },
+  participants: {
+    homeowner: { displayName: "Liam Molina" },
+  },
+  relationship: {
+    id: 72,
+    requestId: 41,
+    title: "U1-02A QA lifecycle fixture - sink cabinet water damage",
+    lifecycleContractVersion: 2,
+    jobId: "11111111-1111-4111-8111-111111111111",
+  },
+};
+
+test("canonical professional work hydration preserves stable identity and provenance", () => {
+  const entry = normalizeCanonicalWorkCenterEntry({
+    summary: canonicalSummary,
+    detail: canonicalDetail,
+  });
+
+  assert.equal(entry.postId, 41);
+  assert.equal(entry.requestId, 41);
+  assert.equal(entry.lifecycleContractVersion, 2);
+  assert.equal(entry.jobId, "11111111-1111-4111-8111-111111111111");
+  assert.equal(entry.relationshipId, 72);
+  assert.equal(entry.conversationId, 340);
+  assert.equal(entry.conversationCanSend, false);
+  assert.equal(entry.source, CANONICAL_WORK_CENTER_AUTHORITY);
+  assert.equal(entry.readOnly, true);
+  assert.deepEqual(entry.commandAuthority, []);
+  assert.equal(isCanonicalWorkCenterEntry(entry), true);
+});
+
+test("canonical identity dedupes a matching legacy projection without inheriting local status", () => {
+  const canonicalEntry = normalizeCanonicalWorkCenterEntry({
+    summary: canonicalSummary,
+    detail: canonicalDetail,
+  });
+  const legacyJob = {
+    id: "legacy-41",
+    requestId: 41,
+    customer: "Browser customer override",
+    title: "Browser title override",
+    status: "completed",
+    schedule: {
+      requestId: 41,
+      status: "completed",
+      paymentStatus: "paid",
+    },
+    quote: { requestId: 41, status: "approved" },
+    sourceRecords: [{ type: "schedule", record: { requestId: 41 } }],
+  };
+
+  const result = mergeCanonicalWorkCenterEntries([legacyJob], [canonicalEntry]);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0].id, "canonical-request-41");
+  assert.equal(result[0].customer, "Liam Molina");
+  assert.equal(result[0].title, canonicalSummary.project_title);
+  assert.equal(result[0].status, undefined);
+  assert.equal(result[0].schedule, undefined);
+  assert.equal(result[0].quote, undefined);
+  assert.equal(result[0].compatibilityProjection.schedule.status, "completed");
+  assert.equal(result[0].compatibilityProjection.quote.status, "approved");
+  assert.equal(result[0].readOnly, true);
+});
+
+test("an unverified canonical candidate can be selected for the existing lifecycle adapter", () => {
+  const candidate = normalizeCanonicalWorkCenterEntry({
+    summary: canonicalSummary,
+    detail: {
+      ...canonicalDetail,
+      relationship: {
+        id: 72,
+        requestId: 41,
+        title: canonicalSummary.project_title,
+      },
+    },
+  });
+
+  assert.equal(candidate.lifecycleContractVersion, null);
+  assert.deepEqual(getWorkCenterLifecycleProjectionTarget(candidate), {
+    available: true,
+    reason: "",
+    postId: 41,
+  });
+});
+
+test("an explicitly non-v2 discovery record fails closed", () => {
+  const entry = normalizeCanonicalWorkCenterEntry({
+    summary: canonicalSummary,
+    detail: {
+      ...canonicalDetail,
+      relationship: {
+        ...canonicalDetail.relationship,
+        lifecycleContractVersion: 1,
+      },
+    },
+  });
+
+  assert.equal(entry, null);
+});
+
+test("legacy-only Work Center records remain unchanged", () => {
+  const legacyJob = {
+    id: "legacy-only",
+    requestId: 99,
+    schedule: { requestId: 99, status: "scheduled" },
+  };
+  const result = mergeCanonicalWorkCenterEntries([legacyJob], []);
+
+  assert.equal(result.length, 1);
+  assert.equal(result[0], legacyJob);
+});
+
+test("staging discovery resolves request identity through authorized conversation detail", async () => {
+  const calls = [];
+  const authFetchImpl = async (endpoint, options) => {
+    calls.push({ endpoint, options });
+    if (endpoint === "/conversations?perspective=professional") {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          conversations: [
+            {
+              conversation_id: 340,
+              source: { type: "request" },
+              request_title: canonicalSummary.project_title,
+              display: { name: "Liam Molina" },
+              status: { value: "active", archived: false },
+              permissions: { canSendMessages: true },
+            },
+          ],
+        },
+      };
+    }
+
+    assert.equal(endpoint, "/conversations/340");
+    return {
+      response: { ok: true, status: 200 },
+      data: {
+        success: true,
+        conversation: { id: 340, type: "request", status: "active" },
+        participants: {
+          homeowner: { displayName: "Liam Molina" },
+        },
+        relationship: {
+          id: 72,
+          requestId: 41,
+          title: canonicalSummary.project_title,
+        },
+        permissions: {
+          canRead: true,
+          canSendMessages: true,
+          canManageWorkflow: false,
+        },
+      },
+    };
+  };
+
+  const result = await fetchCanonicalWorkCenterEntries({
+    apiUrl: STAGING_API_URL,
+    authFetchImpl,
+  });
+
+  assert.equal(result.status, "ready");
+  assert.equal(result.entries.length, 1);
+  assert.equal(result.entries[0].postId, 41);
+  assert.equal(result.entries[0].conversationCanSend, true);
+  assert.equal(result.entries[0].lifecycleContractVersion, null);
+  assert.deepEqual(
+    calls.map((call) => call.endpoint),
+    ["/conversations?perspective=professional", "/conversations/340"]
+  );
+  assert.equal(calls.every((call) => call.options.cache === "no-store"), true);
+});
+
+test("canonical list hydration uses server-owned live state when exact Job identity is available", async () => {
+  const calls = [];
+  const authFetchImpl = async (endpoint, options) => {
+    calls.push({ endpoint, options });
+    if (endpoint === "/conversations?perspective=professional") {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          conversations: [{
+            conversation_id: 340,
+            source: { type: "request" },
+            request_title: canonicalSummary.project_title,
+            display: { name: "Liam Molina" },
+            status: { value: "active", archived: false },
+            permissions: { canSendMessages: true },
+          }],
+        },
+      };
+    }
+    if (endpoint === "/conversations/340") {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          conversation: { id: 340, type: "request", status: "active" },
+          participants: { homeowner: { displayName: "Liam Molina" } },
+          relationship: {
+            id: 72,
+            requestId: 41,
+            title: canonicalSummary.project_title,
+            lifecycleContractVersion: 2,
+            jobId: "11111111-1111-4111-8111-111111111111",
+          },
+          permissions: { canRead: true, canSendMessages: true },
+        },
+      };
+    }
+    assert.equal(
+      endpoint,
+      "/jobs/11111111-1111-4111-8111-111111111111/live-state"
+    );
+    return {
+      response: { ok: true, status: 200 },
+      data: {
+        success: true,
+        liveJob: {
+          jobId: "11111111-1111-4111-8111-111111111111",
+          requestId: 41,
+          relationshipId: 72,
+          contractVersion: 1,
+          stage: { code: "EVALUATION_NEEDED", label: "Evaluation needed" },
+          responsibility: { code: "PROFESSIONAL", label: "Professional" },
+          blocker: {
+            code: "EVALUATION_NOT_RECORDED",
+            label: "An evaluation has not been recorded yet.",
+          },
+          nextAction: {
+            code: "START_OR_CONTINUE_EVALUATION",
+            label: "Review or continue the evaluation",
+            description: "Record what you observed before moving forward.",
+          },
+          availableActions: [
+            { code: "VIEW_CONCERN", label: "View customer concern" },
+            { code: "MESSAGE_CUSTOMER", label: "Message customer" },
+            { code: "START_EVALUATION", label: "Start evaluation" },
+          ],
+          reasonCodes: ["NO_EVALUATION_PRESENT"],
+          deposit: {
+            obligationId: null,
+            materialized: false,
+            state: "NOT_REQUIRED",
+            currency: null,
+            requiredMinor: 0,
+            appliedMinor: 0,
+            remainingMinor: 0,
+            latestVersion: null,
+            schedulingLocked: false,
+          },
+          freshness: {
+            derivedAt: "2026-08-12T12:00:00.000Z",
+            jobCreatedAt: "2026-08-10T12:00:00.000Z",
+            evaluationVersion: 0,
+            findingVersion: 0,
+            recommendationVersion: 0,
+            quoteVersion: 0,
+            workstreamVersion: 0,
+            activityVersion: 0,
+            obligationVersion: 0,
+            approvedWorkExecutionVersion: 0,
+            depositVersion: 0,
+            invoiceVersion: 0,
+            evaluationCount: 0,
+            findingCount: 0,
+            recommendationCount: 0,
+            quoteCount: 0,
+            workstreamCount: 0,
+            activityCount: 0,
+            obligationCount: 0,
+          },
+        },
+      },
+    };
+  };
+
+  const result = await fetchCanonicalWorkCenterEntries({
+    apiUrl: STAGING_API_URL,
+    authFetchImpl,
+  });
+  assert.equal(result.status, "ready");
+  assert.equal(result.entries[0].liveJob.stage.code, "EVALUATION_NEEDED");
+  assert.equal(result.entries[0].liveJobStatus, "ready");
+  assert.deepEqual(calls.map((call) => call.endpoint), [
+    "/conversations?perspective=professional",
+    "/conversations/340",
+    "/jobs/11111111-1111-4111-8111-111111111111/live-state",
+  ]);
+});
+
+test("live-state failure retains the canonical Job with truthful unavailable state", async () => {
+  const authFetchImpl = async (endpoint) => {
+    if (endpoint === "/conversations?perspective=professional") {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          conversations: [{
+            conversation_id: 340,
+            source: { type: "request" },
+            request_title: canonicalSummary.project_title,
+            display: { name: "Liam Molina" },
+            status: { value: "active", archived: false },
+            permissions: { canSendMessages: true },
+          }],
+        },
+      };
+    }
+    if (endpoint === "/conversations/340") {
+      return {
+        response: { ok: true, status: 200 },
+        data: {
+          success: true,
+          conversation: { id: 340, type: "request", status: "active" },
+          participants: { homeowner: { displayName: "Liam Molina" } },
+          relationship: {
+            id: 72,
+            requestId: 41,
+            title: canonicalSummary.project_title,
+            lifecycleContractVersion: 2,
+            jobId: "11111111-1111-4111-8111-111111111111",
+          },
+          permissions: { canRead: true, canSendMessages: true },
+        },
+      };
+    }
+    throw new Error("live state unavailable");
+  };
+
+  const result = await fetchCanonicalWorkCenterEntries({
+    apiUrl: STAGING_API_URL,
+    authFetchImpl,
+  });
+  assert.equal(result.entries.length, 1);
+  assert.equal(result.entries[0].liveJob, null);
+  assert.equal(result.entries[0].liveJobStatus, "error");
+  assert.equal(result.entries[0].liveJobUnavailableReason, "LIVE_JOB_NETWORK_ERROR");
+});
+
+test("known Meetro Work Center environments are enabled and unknown APIs fail closed", async () => {
+  let callCount = 0;
+
+  const result = await fetchCanonicalWorkCenterEntries({
+    apiUrl: "https://api.getmeetro.com",
+    authFetchImpl: async () => {
+      callCount += 1;
+      throw new Error("unsupported discovery should remain disabled");
+    },
+  });
+
+  assert.equal(
+    isCanonicalWorkCenterHydrationEnabled(STAGING_API_URL),
+    true
+  );
+
+  assert.equal(
+    isCanonicalWorkCenterHydrationEnabled(PRODUCTION_API_URL),
+    true
+  );
+
+  assert.equal(
+    isCanonicalWorkCenterHydrationEnabled("https://api.getmeetro.com"),
+    false
+  );
+
+  assert.equal(result.status, "disabled");
+  assert.deepEqual(result.entries, []);
+  assert.equal(callCount, 0);
+});
+
+test("production Work Center may perform authenticated read-only canonical discovery", async () => {
+  const calls = [];
+
+  const result = await fetchCanonicalWorkCenterEntries({
+    apiUrl: PRODUCTION_API_URL,
+    authFetchImpl: async (endpoint, options) => {
+      calls.push({ endpoint, options });
+
+      assert.equal(
+        endpoint,
+        "/conversations?perspective=professional"
+      );
+
+      return {
+        response: { ok: true, status: 200 },
+        data: { conversations: [] },
+      };
+    },
+  });
+
+  assert.equal(result.status, "ready");
+  assert.deepEqual(result.entries, []);
+  assert.deepEqual(
+    calls.map((call) => call.endpoint),
+    ["/conversations?perspective=professional"]
+  );
+});
+
+test("canonical Dashboard active count matches Work Center active records", () => {
+  const entries = [
+    {
+      jobId: "ordinary",
+      liveJob: {
+        stage: { code: "EVALUATION_NEEDED" },
+      },
+    },
+    {
+      jobId: "emergency",
+      sourceType: "emergency_request",
+      liveJob: null,
+    },
+    {
+      jobId: "completed",
+      liveJob: {
+        stage: { code: "JOB_COMPLETED" },
+      },
+    },
+  ];
+
+  assert.equal(
+    getProfessionalWorkCenterActiveCount(entries),
+    2
+  );
+});
+
+test("dashboard selection exposes canonical evidence without legacy command controls", () => {
+  const source = readFileSync(
+    new URL("../src/pages/ContractorDashboard.jsx", import.meta.url),
+    "utf8"
+  );
+
+  assert.match(source, /mergeCanonicalWorkCenterEntries/);
+  assert.match(source, /setIsWorkCenterSectionOpen\(false\);\s*setSelectedWorkCenterJob\(job\)/);
+  assert.match(source, /setSelectedWorkCenterJob\(job\)/);
+  assert.match(source, /!isCanonicalReadOnlyJob && \(/);
+  assert.match(source, /showLifecycleAuthorityUnavailable/);
+});

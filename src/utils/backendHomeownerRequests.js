@@ -15,6 +15,8 @@ export function normalizeAuthenticatedHomeownerPost(post = {}) {
   return {
     id: requestId,
     requestId,
+    lifecycleContractVersion: Number(post.lifecycle_contract_version || 1),
+    modificationVersion: Number(post.modification_version || 1),
     source: "authenticated-backend-post",
     title: title || "Service Request",
     description,

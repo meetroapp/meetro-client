@@ -195,8 +195,8 @@ test("high-traffic Home, My Requests, and Work Center labels exist in four langu
 test("French and Portuguese use localized high-traffic labels instead of English fallback", () => {
   assert.equal(t("myRequestsTitle", "fr"), "Centre de travail");
   assert.equal(t("myRequestsTitle", "pt-BR"), "Central de Trabalho");
-  assert.equal(t("workCenterQuotesTitle", "fr"), "Devis / propositions");
-  assert.equal(t("workCenterQuotesTitle", "pt-BR"), "Orçamentos / Propostas");
+  assert.equal(t("workCenterQuotesTitle", "fr"), "Devis et approbations");
+  assert.equal(t("workCenterQuotesTitle", "pt-BR"), "Orçamentos e aprovações");
   assert.equal(t("wcNoActiveWorkTitle", "fr"), "Aucun travail actif pour le moment.");
   assert.equal(t("wcNoActiveWorkTitle", "pt-BR"), "Nenhum trabalho ativo agora.");
   assert.equal(t("communityTitle", "fr"), "Communauté");

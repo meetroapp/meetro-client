@@ -13,6 +13,14 @@ export const BUSINESS_PORTFOLIO_STORAGE_KEYS = Object.freeze([
 ]);
 
 export function getBusinessPortfolioProjectImages(project = {}) {
+  if (Array.isArray(project?.portfolio_media) && project.portfolio_media.length > 0) {
+    const canonicalMediaUrls = project.portfolio_media
+      .map((media) => media?.secure_url || media?.legacy_url || "")
+      .filter(Boolean);
+
+    if (canonicalMediaUrls.length > 0) return canonicalMediaUrls;
+  }
+
   if (Array.isArray(project?.image_urls) && project.image_urls.length > 0) {
     return project.image_urls.filter(Boolean);
   }
@@ -23,7 +31,9 @@ export function getBusinessPortfolioProjectImages(project = {}) {
       if (Array.isArray(parsedImages)) {
         return parsedImages.filter(Boolean);
       }
-    } catch {}
+    } catch {
+      // Invalid compatibility JSON falls through to the remaining safe fields.
+    }
   }
 
   if (Array.isArray(project?.images) && project.images.length > 0) {
@@ -231,7 +241,9 @@ export function readAllBusinessPortfolioItems(storage = globalThis.localStorage)
           ),
         ];
       }
-    } catch {}
+    } catch {
+      // Ignore malformed legacy storage buckets without affecting other sources.
+    }
   });
 
   return collected;

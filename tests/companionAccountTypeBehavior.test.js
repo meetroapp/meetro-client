@@ -144,13 +144,14 @@ test("both account positions remain safe-area constrained", () => {
   }
 });
 
-test("MeetroAssistant keeps pointer dragging enabled in both modes without changing expansion flow", () => {
+test("MeetroAssistant preserves account drag positions outside the Work Center dock and keeps expansion flow", () => {
   const source = readFileSync(
     new URL("../src/components/MeetroAssistant.jsx", import.meta.url),
     "utf8"
   );
 
-  assert.match(source, /data-position-mode="draggable"/);
+  assert.match(source, /data-position-mode=\{compactWorkCenterSafeDock \? "docked" : "draggable"\}/);
+  assert.match(source, /onPointerDown=\{compactWorkCenterSafeDock \? undefined : handleLauncherPointerDown\}/);
   assert.match(source, /function handleLauncherPointerDown\(event\) \{\n\s+if \(open\) return;/);
   assert.doesNotMatch(source, /!launcherAccountBehavior\.draggable/);
   assert.doesNotMatch(source, /getProfessionalAiButtonPosition/);

@@ -57,3 +57,17 @@ export function getCanonicalConversationActionTarget(
     reason: "canonical_conversation_id",
   };
 }
+
+export function getCanonicalWorkCenterConversationActionTarget(source = {}) {
+  const conversationId = normalizeCanonicalConversationId(
+    source?.conversationId
+  );
+
+  return getCanonicalConversationActionTarget(
+    conversationId ? { conversationId } : {},
+    {
+      returnPage: "workCenter",
+      preferCommunicationCenterShell: true,
+    }
+  );
+}

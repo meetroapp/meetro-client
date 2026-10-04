@@ -86,13 +86,15 @@ test("protected media upload surfaces render a deferred state for real-user buil
     "src/pages/ContractorProfile.jsx",
     "src/pages/ProjectGallery.jsx",
     "src/pages/ConversationThread.jsx",
-    "src/pages/CompletionSheet.jsx",
     "src/pages/ContractorDashboard.jsx",
-    "src/pages/CompletedJobDetails.jsx",
   ];
 
   for (const surface of protectedSurfaces) {
-    const contents = read(surface);
+    let contents = read(surface);
+    if (surface === "src/pages/MyRequests.jsx") {
+      contents += read("src/components/HomeownerRequestModificationPanel.jsx");
+      contents += read("src/components/HomeownerRequestEditForm.jsx");
+    }
     const isGovernedBusinessLogoSurface = surface === "src/pages/ContractorProfile.jsx";
     const isGovernedRequestPhotoSurface = [
       "src/pages/Upload.jsx",
@@ -120,7 +122,7 @@ test("protected media upload surfaces render a deferred state for real-user buil
     );
     assert.match(
       contents,
-      /disabled=\{mediaUploadDeferred\}|disabled=\{uploading \|\| mediaUploadDeferred\}|disabled=\{mediaUploadDeferred \|\| uploading \|\| creating\}|disabled=\{addDisabled\}/,
+      /disabled=\{mediaUploadDeferred\}|disabled=\{uploading \|\| mediaUploadDeferred\}|disabled=\{mediaUploadDeferred \|\| uploading \|\| creating\}|disabled=\{addDisabled\}|disabled=\{busy \|\| mediaUploadDeferred\}/,
       `${surface} should disable real-user upload controls`
     );
   }
@@ -156,10 +158,7 @@ test("only governed Request Help and Business Portfolio pass the shared picker b
     /governedUploadEnabled: portfolioMediaEnabled/
   );
 
-  for (const surface of [
-    "src/pages/ConversationThread.jsx",
-    "src/pages/CompletionSheet.jsx",
-  ]) {
+  for (const surface of ["src/pages/ConversationThread.jsx"]) {
     const contents = read(surface);
     assert.match(contents, /openJobPhotoPicker/);
     assert.doesNotMatch(contents, /governedUploadEnabled:\s*true/);
@@ -202,7 +201,14 @@ test("live unsafe media writers are guarded before Friends and Family release", 
       contents.includes("/contractor-profile/logo") &&
       contents.includes("business-logo");
 
-    if (!isGuarded && !isGovernedPersonalProfileUpload && !isGovernedBusinessLogoUpload) {
+    const isGovernedQuickQuoteRecoveryPreview =
+      relative(repoRoot, absolutePath) === "src/pages/QuoteBuilder.jsx" &&
+      contents.includes("isQuickQuoteDraftPhotoUploadEnabled") &&
+      contents.includes("uploadQuoteDraftPhotos") &&
+      contents.includes("pendingFile: file") &&
+      contents.includes("URL.revokeObjectURL(photo.previewUrl)");
+
+    if (!isGuarded && !isGovernedPersonalProfileUpload && !isGovernedBusinessLogoUpload && !isGovernedQuickQuoteRecoveryPreview) {
       unguarded.push(relative(repoRoot, absolutePath));
     }
   }

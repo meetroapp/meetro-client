@@ -1,7 +1,9 @@
 export const APP_DESKTOP_SIDEBAR_MAX_WIDTH = 284;
-export const APP_DESKTOP_SIDEBAR_MIN_WIDTH = 220;
+export const APP_DESKTOP_SIDEBAR_MIN_WIDTH = 248;
 export const APP_DESKTOP_WORKSPACE_MIN_WIDTH = 740;
 export const APP_DESKTOP_SHELL_GUTTER_BUDGET = 76;
+export const APP_TABLET_LAYOUT_MIN_WIDTH = 768;
+const APP_NATIVE_TABLET_MIN_SHORT_SIDE = 600;
 export const APP_DESKTOP_LAYOUT_MIN_WIDTH =
   APP_DESKTOP_SIDEBAR_MAX_WIDTH +
   APP_DESKTOP_WORKSPACE_MIN_WIDTH +
@@ -23,13 +25,86 @@ function cssPixels(value) {
 
 export function getAppSidebarWidth(layoutWidth) {
   const width = Math.max(0, finite(layoutWidth));
-  if (width < APP_DESKTOP_LAYOUT_MIN_WIDTH) return 0;
+  if (width < APP_TABLET_LAYOUT_MIN_WIDTH) return 0;
   if (width >= 1180) return APP_DESKTOP_SIDEBAR_MAX_WIDTH;
+
+  const interpolationRange = 1180 - APP_TABLET_LAYOUT_MIN_WIDTH;
+  const progress = (width - APP_TABLET_LAYOUT_MIN_WIDTH) / interpolationRange;
 
   return Math.min(
     APP_DESKTOP_SIDEBAR_MAX_WIDTH,
-    Math.max(APP_DESKTOP_SIDEBAR_MIN_WIDTH, width * 0.27)
+    Math.max(
+      APP_DESKTOP_SIDEBAR_MIN_WIDTH,
+      APP_DESKTOP_SIDEBAR_MIN_WIDTH +
+        progress *
+          (APP_DESKTOP_SIDEBAR_MAX_WIDTH - APP_DESKTOP_SIDEBAR_MIN_WIDTH)
+    )
   );
+}
+
+export function getAppLayoutMode(
+  layoutWidth,
+  { isNative = false, screenWidth = 0, screenHeight = 0 } = {}
+) {
+  const width = Math.max(0, finite(layoutWidth));
+  const physicalWidth = Math.max(0, finite(screenWidth));
+  const physicalHeight = Math.max(0, finite(screenHeight));
+  const physicalShortSide =
+    physicalWidth && physicalHeight
+      ? Math.min(physicalWidth, physicalHeight)
+      : 0;
+
+  if (
+    isNative &&
+    physicalShortSide &&
+    physicalShortSide < APP_NATIVE_TABLET_MIN_SHORT_SIDE
+  ) {
+    return "mobile";
+  }
+
+  if (width >= APP_DESKTOP_LAYOUT_MIN_WIDTH) return "desktop";
+  if (width >= APP_TABLET_LAYOUT_MIN_WIDTH) return "tablet";
+  return "mobile";
+}
+
+export function getAppLayoutOrientation({
+  windowObject = globalThis.window,
+  layoutWidth = 0,
+  layoutHeight = 0,
+  isNative = false,
+} = {}) {
+  if (isNative) {
+    const orientationType = String(
+      windowObject?.screen?.orientation?.type || ""
+    ).toLowerCase();
+    if (orientationType.startsWith("portrait")) return "portrait";
+    if (orientationType.startsWith("landscape")) return "landscape";
+
+    const screenAngle = windowObject?.screen?.orientation?.angle;
+    if (typeof screenAngle === "number" && Number.isFinite(screenAngle)) {
+      const normalizedAngle = Math.abs(screenAngle) % 180;
+      return normalizedAngle === 90 ? "landscape" : "portrait";
+    }
+
+    const legacyOrientation = windowObject?.orientation;
+    if (
+      typeof legacyOrientation === "number" &&
+      Number.isFinite(legacyOrientation)
+    ) {
+      const normalizedAngle = Math.abs(legacyOrientation) % 180;
+      return normalizedAngle === 90 ? "landscape" : "portrait";
+    }
+
+    const screenWidth = Math.max(0, finite(windowObject?.screen?.width));
+    const screenHeight = Math.max(0, finite(windowObject?.screen?.height));
+    if (screenWidth && screenHeight) {
+      return screenWidth > screenHeight ? "landscape" : "portrait";
+    }
+  }
+
+  return Math.max(0, finite(layoutWidth)) > Math.max(0, finite(layoutHeight))
+    ? "landscape"
+    : "portrait";
 }
 
 function readSafeAreaInsets({ windowObject, documentObject } = {}) {
@@ -63,14 +138,6 @@ function readSafeAreaInsets({ windowObject, documentObject } = {}) {
   });
 }
 
-function readRenderedSidebarWidth(documentObject, fallback) {
-  const sidebar = documentObject?.querySelector?.(".desktop-sidebar");
-  const bounds = sidebar?.getBoundingClientRect?.();
-  if (!bounds || bounds.width <= 0) return fallback;
-
-  return Math.max(0, finite(bounds.right) + 18);
-}
-
 export function getAppLayoutSnapshot({
   windowObject = globalThis.window,
   documentObject = globalThis.document,
@@ -101,9 +168,27 @@ export function getAppLayoutSnapshot({
     0,
     finite(windowObject?.visualViewport?.offsetTop)
   );
+  const visualBottomGap = Math.max(
+    0,
+    layoutHeight - visualHeight - visualOffsetTop
+  );
   const isNative = Boolean(capacitor?.isNativePlatform?.());
   const platform = String(capacitor?.getPlatform?.() || (isNative ? "native" : "web"));
-  const sidebarWidth = getAppSidebarWidth(layoutWidth);
+  const screenWidth = Math.max(0, finite(windowObject?.screen?.width));
+  const screenHeight = Math.max(0, finite(windowObject?.screen?.height));
+  const layoutMode = getAppLayoutMode(layoutWidth, {
+    isNative,
+    screenWidth,
+    screenHeight,
+  });
+  const sidebarWidth =
+    layoutMode === "mobile" ? 0 : getAppSidebarWidth(layoutWidth);
+  const orientation = getAppLayoutOrientation({
+    windowObject,
+    layoutWidth,
+    layoutHeight,
+    isNative,
+  });
 
   return Object.freeze({
     layoutWidth,
@@ -114,11 +199,13 @@ export function getAppLayoutSnapshot({
     visualHeight,
     visualOffsetLeft,
     visualOffsetTop,
+    visualBottomGap,
     isNative,
     platform,
+    orientation,
     sidebarWidth,
     contentWidth: Math.max(0, layoutWidth - sidebarWidth),
-    layoutMode: layoutWidth >= APP_DESKTOP_LAYOUT_MIN_WIDTH ? "desktop" : "mobile",
+    layoutMode,
   });
 }
 
@@ -135,13 +222,10 @@ export function getDesktopContentMetrics({
     capacitor,
   });
   const safeArea = safeAreaInsets || readSafeAreaInsets({ windowObject, documentObject });
-  const sidebarWidth = snapshot.layoutMode === "desktop"
+  const sidebarWidth = snapshot.layoutMode !== "mobile"
     ? Math.max(
         0,
-        finite(
-          renderedSidebarWidth,
-          readRenderedSidebarWidth(documentObject, snapshot.sidebarWidth)
-        )
+        finite(renderedSidebarWidth, snapshot.sidebarWidth)
       )
     : 0;
   const usableViewportWidth = Math.min(
@@ -174,8 +258,7 @@ export function getDesktopContentMetrics({
     safeAreaLeft: safeArea.left,
     desktopMode: snapshot.layoutMode === "desktop",
     mobileMode: snapshot.layoutMode === "mobile",
-    tabletMode:
-      snapshot.layoutMode === "desktop" && snapshot.layoutWidth < 1180,
+    tabletMode: snapshot.layoutMode === "tablet",
   });
 }
 
@@ -187,6 +270,7 @@ function metricsSignature(metrics) {
     metrics.visualHeight,
     metrics.visualOffsetLeft,
     metrics.visualOffsetTop,
+    metrics.visualBottomGap,
     metrics.sidebarWidth,
     metrics.contentWidth,
     metrics.contentHeight,
@@ -195,6 +279,7 @@ function metricsSignature(metrics) {
     metrics.safeAreaBottom,
     metrics.safeAreaLeft,
     metrics.layoutMode,
+    metrics.orientation,
   ].map((value) => String(value)).join(":");
 }
 
@@ -227,6 +312,7 @@ export function publishAppLayoutMetrics(metrics) {
 export function applyAppLayoutDiagnostics(root, snapshot) {
   if (!root || !snapshot) return;
   root.dataset.appLayout = snapshot.layoutMode;
+  root.dataset.appOrientation = snapshot.orientation;
   root.dataset.appLayoutWidth = String(Math.round(snapshot.layoutWidth));
   root.dataset.appWindowWidth = String(Math.round(snapshot.windowWidth));
   root.dataset.appClientWidth = String(Math.round(snapshot.clientWidth));
@@ -235,6 +321,10 @@ export function applyAppLayoutDiagnostics(root, snapshot) {
     snapshot.visualOffsetLeft || 0,
     snapshot.visualOffsetTop || 0,
   ].map((value) => Math.round(value)).join(" ");
+  root.dataset.appVisualHeight = String(Math.round(snapshot.visualHeight));
+  root.dataset.appVisualBottomGap = String(
+    Math.round(snapshot.visualBottomGap || 0)
+  );
   root.dataset.appPlatform = snapshot.platform;
   root.dataset.appNative = String(snapshot.isNative);
   root.dataset.appSidebarWidth = String(Math.round(snapshot.sidebarWidth));
@@ -253,6 +343,26 @@ export function applyAppLayoutDiagnostics(root, snapshot) {
   root.style.setProperty(
     "--meetro-available-content-height",
     `${Math.max(0, snapshot.contentHeight || 0)}px`
+  );
+  root.style.setProperty(
+    "--meetro-visual-viewport-height",
+    `${Math.max(0, snapshot.visualHeight || snapshot.layoutHeight || 0)}px`
+  );
+  root.style.setProperty(
+    "--meetro-visual-viewport-offset-top",
+    `${Math.max(0, snapshot.visualOffsetTop || 0)}px`
+  );
+  root.style.setProperty(
+    "--meetro-visual-viewport-bottom-gap",
+    `${Math.max(0, snapshot.visualBottomGap || 0)}px`
+  );
+  root.style.setProperty(
+    "--meetro-safe-vh",
+    `${Math.max(0, snapshot.visualHeight || snapshot.layoutHeight || 0)}px`
+  );
+  root.style.setProperty(
+    "--meetro-sidebar-width",
+    `${Math.max(0, snapshot.sidebarWidth)}px`
   );
 }
 

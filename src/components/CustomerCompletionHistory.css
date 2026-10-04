@@ -1,0 +1,32 @@
+/* Scope presentation changes to homeowner Job History. */
+.homeowner-history-card, .homeowner-history-detail, .homeowner-job-history {
+  --homeowner-history-control-height: 40px;
+  --homeowner-history-tab-height: 36px;
+  min-width: 0;
+  color: #1F2937;
+}
+.homeowner-history-card { display: grid; gap: 7px; padding: 16px; border: 1px solid #D1D5DB; border-radius: 14px; background: #FFFFFF; }
+.homeowner-history-completed { justify-self: start; padding: 4px 9px; border-radius: 999px; color: #063D26; background: #E8F5EE; font-size: 12px; font-weight: 700; }
+.homeowner-history-card-heading { display: flex; align-items: flex-start; justify-content: space-between; flex-wrap: wrap; gap: 8px 16px; min-width: 0; }
+.homeowner-history-card h3 { flex: 1 1 230px; min-width: 0; margin: 0; font-size: 18px; line-height: 1.35; overflow-wrap: anywhere; color: #063D26; }
+.homeowner-history-card h3, .homeowner-history-card p { text-align: left !important; }
+.homeowner-history-card p { margin: 0; font-size: 14px; overflow-wrap: anywhere; }
+.homeowner-history-date { color: #6B7280; font-size: 13px !important; }
+.homeowner-history-money { white-space: nowrap; flex-shrink: 0; font-size: 18px; color: #0B5D3B; font-variant-numeric: tabular-nums; }
+.homeowner-history-card .homeowner-history-view, .homeowner-history-detail .homeowner-history-back { display: inline-flex; align-items: center; justify-content: center; gap: 8px; justify-self: start; width: fit-content; min-height: var(--homeowner-history-control-height); padding: 6px 12px; border: 1px solid #D1D5DB; border-radius: 9px; color: #0B5D3B; background: #FFFFFF; font-weight: 700; font-size: 14px; cursor: pointer; }
+.homeowner-history-view { margin-top: 3px; }
+.homeowner-history-detail { display: grid; gap: 12px; width: 100%; }
+.homeowner-job-history button:focus-visible, .homeowner-history-card button:focus-visible, .homeowner-history-back:focus-visible { outline: 3px solid #10B981; outline-offset: 2px; }
+.homeowner-history-list-view .home-my-projects-tabs { display: flex !important; }
+.homeowner-history-list-view .home-my-projects-portrait { display: block !important; }
+.homeowner-history-list-view .home-my-projects-landscape { display: none !important; }
+.homeowner-history-list-view .home-my-projects-tabs button { min-height: 40px; }
+.homeowner-job-history nav { flex-wrap: wrap; overflow: visible !important; }
+.homeowner-job-history nav button { font-size: 13px; }
+@media (max-width: 767px) {
+  .homeowner-history-card, .homeowner-history-detail, .homeowner-job-history { --homeowner-history-control-height: 44px; --homeowner-history-tab-height: 44px; }
+  .homeowner-history-card { padding: 14px; }
+  .homeowner-history-list-view .home-my-projects-tabs button { min-height: 44px !important; }
+  .homeowner-history-list-view .home-my-projects-portrait .homeowner-history-view { min-height: 44px; padding: 6px 12px !important; border-radius: 9px !important; }
+  .homeowner-history-card h3 { flex-basis: 200px; }
+}

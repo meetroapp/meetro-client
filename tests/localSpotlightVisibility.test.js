@@ -712,3 +712,72 @@ test("BGone diagnostic: professional portfolio record is included in no-context 
     noContextSpotlightSafe: true,
   });
 });
+
+test("Spotlight domain falls through an unmapped first specialty to the canonical handyman category", () => {
+  const business = {
+    id: 7,
+    business_name: "All Handyman Services",
+    category: "handyman",
+    service_specialties: [
+      "roof_repair",
+      "plumbing_repair",
+      "handyman",
+    ],
+    image_url:
+      "https://example.com/all-handyman-logo.png",
+    businessPortfolio: [
+      {
+        id: 8,
+        title: "Home kitchen Repair",
+        image_url:
+          "https://example.com/kitchen-repair.jpg",
+      },
+    ],
+  };
+
+  const profile =
+    buildSpotlightProfessionalProfile(
+      business
+    );
+
+  const inclusion =
+    getSpotlightBusinessInclusionSummary(
+      business,
+      []
+    );
+
+  assert.equal(
+    profile.serviceDomain,
+    "home_services"
+  );
+
+  assert.equal(
+    isNoContextSpotlightSafeBusiness(
+      business
+    ),
+    true
+  );
+
+  assert.equal(
+    inclusion.hasMedia,
+    true
+  );
+
+  assert.equal(
+    inclusion.passesNoContextSpotlightRule,
+    true
+  );
+
+  assert.equal(
+    inclusion.included,
+    true
+  );
+
+  assert.deepEqual(
+    getEligibleSpotlightBusinesses(
+      [business],
+      []
+    ).map((item) => item.id),
+    [7]
+  );
+});

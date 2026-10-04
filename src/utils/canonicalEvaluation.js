@@ -150,6 +150,12 @@ export function validateCanonicalEvaluationProjection(value) {
   if (!authority.ok || authority.value.aggregate.type !== "evaluation") return null;
   if (!isPlainObject(value.evaluation)) return null;
 
+  const sourceContext = value.aggregate?.sourceContext;
+  if (
+    sourceContext?.type === "ordinary_job" &&
+    !Object.hasOwn(sourceContext, "evaluationVisitId")
+  ) return null;
+
   const evaluation = value.evaluation;
   const id = canonicalUuid(evaluation.id);
   const createdAt = canonicalTimestamp(evaluation.createdAt);
@@ -180,7 +186,6 @@ export function validateCanonicalEvaluationProjection(value) {
     !isPlainObject(capabilities) ||
     Object.keys(capabilities).length !== expectedCapabilityKeys.length ||
     expectedCapabilityKeys.some((key) => typeof capabilities[key] !== "boolean") ||
-    capabilities.canRevise ||
     capabilities.canShareWithCustomer ||
     capabilities.quoteReady ||
     capabilities.authorizationAvailable ||
@@ -219,10 +224,29 @@ export function getCanonicalEvaluationSourceContext(record = {}) {
   const relationshipId = positiveInteger(
     record.relationshipId ?? schedule.relationshipId
   );
-  if (!emergencyRequestId) return null;
+  if (emergencyRequestId) {
+    return {
+      type: "emergency_request",
+      emergencyRequestId,
+      relationshipId,
+    };
+  }
+
+  const jobId = canonicalUuid(record.jobId ?? record.job?.id);
+  const requestId = positiveInteger(
+    record.postId ?? record.requestId ?? record.job?.requestId
+  );
+  const isConfirmedOrdinaryJob =
+    record.source === "CANONICAL_BACKEND_READ" &&
+    record.readOnly === true &&
+    record.lifecycleVerified === true &&
+    positiveInteger(record.lifecycleContractVersion) === 2;
+  if (!isConfirmedOrdinaryJob || !jobId || !requestId) return null;
+
   return {
-    type: "emergency_request",
-    emergencyRequestId,
+    type: "ordinary_job",
+    jobId,
+    requestId,
     relationshipId,
   };
 }
@@ -290,7 +314,9 @@ export function buildCanonicalEvaluationContent(form = {}) {
     }))
     .filter((finding) => finding.summary);
   const findingNotes = String(form.findings || "").trim();
-  if (findings.length === 0 && findingNotes) {
+  const isEmergencyEvaluation =
+    String(form.context || "").trim() === "emergency_request";
+  if (!isEmergencyEvaluation && findings.length === 0 && findingNotes) {
     findings.push({
       summary: findingNotes.slice(0, 1000),
       severity: "informational",
@@ -319,6 +345,51 @@ export function buildCanonicalEvaluationContent(form = {}) {
     relevantConditions: conditions.slice(0, 50),
     supportingMediaReferences: [],
     internalNotes,
+  };
+}
+
+export function buildOrdinaryCanonicalEvaluationContent(
+  form = {},
+  existingContent = null
+) {
+  const existing = isPlainObject(existingContent) ? existingContent : {};
+  return {
+    serviceType:
+      boundedText(existing.serviceType, 120, { nullable: true }) ?? null,
+    evaluationContext:
+      boundedText(existing.evaluationContext, 120, { nullable: true }) ||
+      "ordinary_job",
+    templateKey:
+      boundedText(existing.templateKey, 160, { nullable: true }) ?? null,
+    observations: String(form.observations || "").trim().slice(0, 5000),
+    measurements: Array.isArray(existing.measurements)
+      ? existing.measurements.map((measurement) => ({ ...measurement }))
+      : [],
+    findings: [],
+    diagnosisSummary: String(form.diagnosisSummary || "")
+      .trim()
+      .slice(0, 5000),
+    limitations: String(form.limitations || "").trim().slice(0, 5000),
+    scopeRecommendations: [],
+    relevantConditions: Array.isArray(existing.relevantConditions)
+      ? [...existing.relevantConditions]
+      : [],
+    supportingMediaReferences: [],
+    internalNotes: String(form.internalNotes || "").trim().slice(0, 5000),
+  };
+}
+
+export function ordinaryCanonicalEvaluationContentToForm(evaluation) {
+  const canonical = validateCanonicalEvaluationProjection(evaluation);
+  if (!canonical || canonical.aggregate.sourceContext.type !== "ordinary_job") {
+    return null;
+  }
+  const content = canonical.evaluation.content;
+  return {
+    observations: content.observations,
+    diagnosisSummary: content.diagnosisSummary,
+    limitations: content.limitations,
+    internalNotes: content.internalNotes,
   };
 }
 

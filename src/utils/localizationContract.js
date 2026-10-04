@@ -79,6 +79,7 @@ export const SHARED_INTERFACE_KEYS = Object.freeze([
   "navigationRecords",
   "navigationRelationships",
   "navigationCustomers",
+  "navigationHistoryRecords",
   "navigationProfileAccount",
   "navigationPrimaryDesktop",
   "navigationPrimaryMobile",

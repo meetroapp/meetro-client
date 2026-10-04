@@ -1,12 +1,25 @@
 import { useEffect, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
+import {
+  IdentityMediaPreviewDialog,
+} from "../components/RelationshipIdentityPage";
+import {
+  PortfolioProjectCard,
+  PortfolioProjectGrid,
+  PortfolioProjectView,
+} from "../components/PortfolioProjectPresentation";
 import API_URL from "../api";
 import { authFetch } from "../utils/authFetch";
 import { getLanguage, t } from "../utils/language";
+import { isProfessionalSession } from "../utils/session";
 import {
-  getProfessionalReviews,
-  getProfessionalReviewStats,
+  listHomeownerProfessionals,
+  removeHomeownerSavedProfessional,
+  saveHomeownerProfessional,
+} from "../utils/homeownerProfessionalsApi";
+import {
   saveProfessionalReview,
 } from "../utils/reviewStorage";
 import {
@@ -17,8 +30,10 @@ import {
 import { getBusinessIdentityProjection } from "../utils/businessIdentity";
 import { getBusinessServicesProjection } from "../utils/businessServiceProfile";
 import { getBusinessVerificationProjection } from "../utils/businessVerification";
-import { getBusinessPortfolioProofProjection } from "../utils/businessPortfolioProof";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import {
+  parseEmergencyRequestRoute,
+} from "../utils/emergencyRoutes";
 
 const PORTFOLIO_PREVIEW_MAX_IMAGES = 5;
 
@@ -27,10 +42,23 @@ function ContractorDetails({ setPage, currentPage }) {
   const [reviews, setReviews] = useState([]);
   const [reviewStats, setReviewStats] = useState(null);
   const [projects, setProjects] = useState([]);
-  const [selectedProject, setSelectedProject] = useState(null);
-  const [activeProjectImage, setActiveProjectImage] = useState("");
-  const [expandedProjectImage, setExpandedProjectImage] = useState("");
+  const [selectedProjectId, setSelectedProjectId] = useState("");
   const [loading, setLoading] = useState(true);
+  const [
+    businessLogoPreviewOpen,
+    setBusinessLogoPreviewOpen,
+  ] = useState(false);
+
+  const [
+    savedProfessionalState,
+    setSavedProfessionalState,
+  ] = useState({
+    phase: "idle",
+    saved: false,
+    workedWith: false,
+    pending: false,
+    error: "",
+  });
 
   const [showQuoteForm, setShowQuoteForm] = useState(false);
   const [projectTitle, setProjectTitle] = useState("");
@@ -41,12 +69,92 @@ function ContractorDetails({ setPage, currentPage }) {
   const [rating, setRating] = useState(5);
   const [reviewText, setReviewText] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
-  const language = getLanguage();
+  const language = useLanguage();
   const isSpanish = language === "es";
 
   useEffect(() => {
     fetchContractor();
+    // This loader intentionally runs once for the selected public profile.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    const contractorProfileId =
+      Number(profile?.id);
+
+    if (
+      isProfessionalSession() ||
+      !Number.isSafeInteger(
+        contractorProfileId
+      ) ||
+      contractorProfileId <= 0
+    ) {
+      setSavedProfessionalState({
+        phase: "not_applicable",
+        saved: false,
+        workedWith: false,
+        pending: false,
+        error: "",
+      });
+      return undefined;
+    }
+
+    let active = true;
+
+    setSavedProfessionalState({
+      phase: "loading",
+      saved: false,
+      workedWith: false,
+      pending: false,
+      error: "",
+    });
+
+    listHomeownerProfessionals({
+      setPage,
+    })
+      .then((directory) => {
+        if (!active) return;
+
+        const saved =
+          directory.saved.some(
+            (professional) =>
+              professional.contractorProfileId ===
+              contractorProfileId
+          );
+
+        const workedWith =
+          directory.workedWith.some(
+            (professional) =>
+              professional.contractorProfileId ===
+              contractorProfileId
+          );
+
+        setSavedProfessionalState({
+          phase: "ready",
+          saved,
+          workedWith,
+          pending: false,
+          error: "",
+        });
+      })
+      .catch((error) => {
+        if (!active) return;
+
+        setSavedProfessionalState({
+          phase: "unavailable",
+          saved: false,
+          workedWith: false,
+          pending: false,
+          error:
+            error?.message ||
+            "Saved Professional status is unavailable.",
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [profile?.id]);
 
   function safeJson(key, fallback = []) {
     try {
@@ -63,6 +171,27 @@ function ContractorDetails({ setPage, currentPage }) {
     return new URLSearchParams(query).get("profileId") || "";
   }
 
+  function getLinkedReturnPage() {
+    const hash =
+      window.location.hash.replace(
+        "#",
+        ""
+      );
+
+    const query =
+      hash.includes("?")
+        ? hash.slice(
+            hash.indexOf("?") + 1
+          )
+        : "";
+
+    return (
+      new URLSearchParams(
+        query
+      ).get("returnPage") || ""
+    );
+  }
+
   function getStoredPublicProfile(profileId) {
     if (!profileId) return null;
 
@@ -71,13 +200,38 @@ function ContractorDetails({ setPage, currentPage }) {
   }
 
   function returnToBusinessDirectory() {
+    const linkedReturnPage =
+      getLinkedReturnPage();
+
     const returnPage =
-      localStorage.getItem("contractorDetailsReturnPage") || "discover";
+      linkedReturnPage ||
+      localStorage.getItem(
+        "contractorDetailsReturnPage"
+      ) ||
+      "discover";
 
     localStorage.removeItem("contractorDetailsReturnPage");
 
+    const emergencyReturn =
+      parseEmergencyRequestRoute(
+        returnPage
+      );
+
+    if (
+      emergencyReturn.valid &&
+      emergencyReturn.hasRequestId
+    ) {
+      setPage(returnPage);
+      return;
+    }
+
     if (returnPage === "home") {
       setPage("home");
+      return;
+    }
+
+    if (returnPage === "myProfessionals") {
+      setPage("myProfessionals");
       return;
     }
 
@@ -113,7 +267,9 @@ function ContractorDetails({ setPage, currentPage }) {
         if (Array.isArray(parsedImages)) {
           imageUrls = parsedImages.filter(Boolean);
         }
-      } catch {}
+      } catch {
+        // Preserve the empty canonical media list when compatibility JSON is invalid.
+      }
     }
 
     const fallbackImage =
@@ -147,103 +303,6 @@ function ContractorDetails({ setPage, currentPage }) {
     };
   }
 
-  function getLocalGalleryForProfile(contractorProfile) {
-    if (!contractorProfile) return [];
-
-    const profileId = String(contractorProfile.id || "");
-    const profileName = String(
-      contractorProfile.business_name || contractorProfile.name || ""
-    ).toLowerCase();
-
-    const possibleKeys = [
-      "businessGallery",
-      "businessGalleryPhotos",
-      "projectGallery",
-      "projectGalleryPhotos",
-      "contractorProjects",
-      "meetroBusinessPhotos",
-      "meetroProjectGallery",
-      "uploadedBusinessPhotos",
-      "uploadedGalleryPhotos",
-    ];
-
-    let collected = [];
-
-    possibleKeys.forEach((key) => {
-      const saved = safeJson(key, []);
-
-      if (Array.isArray(saved)) {
-        collected = [...collected, ...saved];
-      }
-    });
-
-    const selectedBusiness = safeJson("selectedContractor", {});
-
-    const embeddedGallery = [
-      ...(Array.isArray(contractorProfile.gallery) ? contractorProfile.gallery : []),
-      ...(Array.isArray(contractorProfile.photos) ? contractorProfile.photos : []),
-      ...(Array.isArray(contractorProfile.projects) ? contractorProfile.projects : []),
-      ...(Array.isArray(contractorProfile.projectGallery)
-        ? contractorProfile.projectGallery
-        : []),
-      ...(Array.isArray(selectedBusiness.gallery) ? selectedBusiness.gallery : []),
-      ...(Array.isArray(selectedBusiness.photos) ? selectedBusiness.photos : []),
-      ...(Array.isArray(selectedBusiness.projects) ? selectedBusiness.projects : []),
-      ...(Array.isArray(selectedBusiness.projectGallery)
-        ? selectedBusiness.projectGallery
-        : []),
-    ];
-
-    collected = [...collected, ...embeddedGallery];
-
-    return collected
-      .filter((item) => item && typeof item === "object")
-      .filter((item) => {
-        const itemBusinessId = String(
-          item.businessId ||
-            item.business_id ||
-            item.contractorId ||
-            item.contractor_id ||
-            ""
-        );
-
-        const itemBusinessName = String(
-          item.businessName ||
-            item.business_name ||
-            item.contractorName ||
-            item.contractor_name ||
-            item.ownerName ||
-            ""
-        ).toLowerCase();
-
-        if (!itemBusinessId && !itemBusinessName) return true;
-
-        return (
-          (profileId && itemBusinessId === profileId) ||
-          (profileName && itemBusinessName === profileName)
-        );
-      })
-      .map((item, index) => normalizeGalleryItem(item, index, "local"))
-      .filter((item) => item.image_url);
-  }
-
-  function mergeProjects(apiProjects, localProjects) {
-    const seen = new Set();
-
-    return [...apiProjects, ...localProjects].filter((project) => {
-      const key =
-        project.id ||
-        project.image_url ||
-        project.title ||
-        JSON.stringify(project);
-
-      if (seen.has(key)) return false;
-
-      seen.add(key);
-      return true;
-    });
-  }
-
   function getProjectImages(project) {
     if (Array.isArray(project?.image_urls) && project.image_urls.length > 0) {
       return project.image_urls.filter(Boolean);
@@ -264,21 +323,25 @@ function ContractorDetails({ setPage, currentPage }) {
       const linkedContractor = getStoredPublicProfile(linkedProfileId);
       const savedContractor =
         linkedContractor ||
-        JSON.parse(localStorage.getItem("selectedContractor") || "{}");
+        (!linkedProfileId
+          ? JSON.parse(
+              localStorage.getItem(
+                "selectedContractor"
+              ) || "{}"
+            )
+          : {});
 
       if (savedContractor.name || savedContractor.business_name) {
         localStorage.setItem("selectedContractor", JSON.stringify(savedContractor));
 
-        const localGallery = getLocalGalleryForProfile(savedContractor);
-
         setProfile(savedContractor);
 
         if (savedContractor.id) {
-          await fetchProjects(savedContractor.id, localGallery);
-          await fetchReviews(savedContractor.id, savedContractor);
+          await fetchProjects(savedContractor.id);
+          await fetchReviews(savedContractor.id);
         } else {
-          setProjects(localGallery);
-          await fetchReviews("", savedContractor);
+          setProjects([]);
+          await fetchReviews("");
         }
 
         setLoading(false);
@@ -299,16 +362,12 @@ function ContractorDetails({ setPage, currentPage }) {
       const data = await response.json();
 
       if (data.profile) {
-        const localGallery = getLocalGalleryForProfile(data.profile);
-
         setProfile(data.profile);
-        await fetchReviews(data.profile.id, data.profile);
-        await fetchProjects(data.profile.id, localGallery);
+        await fetchReviews(data.profile.id);
+        await fetchProjects(data.profile.id);
       } else if (savedContractor.id || savedContractor.name) {
-        const localGallery = getLocalGalleryForProfile(savedContractor);
-
         setProfile(savedContractor);
-        setProjects(localGallery);
+        setProjects([]);
       }
     } catch (error) {
       console.error(error);
@@ -318,65 +377,32 @@ function ContractorDetails({ setPage, currentPage }) {
       );
 
       if (savedContractor.id || savedContractor.name) {
-        const localGallery = getLocalGalleryForProfile(savedContractor);
-
         setProfile(savedContractor);
-        setProjects(localGallery);
+        setProjects([]);
       }
     } finally {
       setLoading(false);
     }
   }
 
-  async function fetchReviews(contractorId, contractorProfile = profile) {
-    const localReviews = getProfessionalReviews({
-      professionalId: contractorId || contractorProfile?.id,
-      professionalName:
-        contractorProfile?.business_name || contractorProfile?.name,
-    });
-    const localStats = getProfessionalReviewStats(localReviews);
-
+  async function fetchReviews(contractorId) {
     try {
       const response = await fetch(`${API_URL}/reviews/${contractorId}`);
       const data = await response.json();
       const apiReviews = data.reviews || [];
-      const combinedReviews = [...localReviews, ...apiReviews];
-      const seen = new Set();
-      const dedupedReviews = combinedReviews.filter((review) => {
-        const key =
-          review.id ||
-          [
-            review.professionalId || contractorId,
-            review.jobId || review.requestId,
-            review.createdAt || review.created_at,
-            review.comment || review.review_text,
-          ].join(":");
-
-        if (seen.has(key)) return false;
-        seen.add(key);
-        return true;
-      });
-
-      const combinedStats = getProfessionalReviewStats(dedupedReviews);
-
-      setReviews(dedupedReviews);
+      setReviews(apiReviews);
       setReviewStats({
-        average_rating:
-          combinedStats.averageRating || data.stats?.average_rating || "",
-        total_reviews:
-          combinedStats.totalReviews || data.stats?.total_reviews || 0,
+        average_rating: data.stats?.average_rating || "",
+        total_reviews: data.stats?.total_reviews || 0,
       });
     } catch (error) {
       console.error(error);
-      setReviews(localReviews);
-      setReviewStats({
-        average_rating: localStats.averageRating,
-        total_reviews: localStats.totalReviews,
-      });
+      setReviews([]);
+      setReviewStats(null);
     }
   }
 
-  async function fetchProjects(contractorId, localGallery = []) {
+  async function fetchProjects(contractorId) {
     try {
       const response = await fetch(
         `${API_URL}/contractor-projects/${contractorId}`
@@ -388,10 +414,10 @@ function ContractorDetails({ setPage, currentPage }) {
         normalizeGalleryItem(project, index, "api")
       );
 
-      setProjects(mergeProjects(apiProjects, localGallery));
+      setProjects(apiProjects);
     } catch (error) {
       console.error(error);
-      setProjects(localGallery);
+      setProjects([]);
     }
   }
 
@@ -478,7 +504,7 @@ function ContractorDetails({ setPage, currentPage }) {
         setRating(5);
         setReviewText("");
 
-        await fetchReviews(profile.id, profile);
+        await fetchReviews(profile.id);
       } else {
         alert(data.error || t("reviewFailed"));
       }
@@ -487,6 +513,74 @@ function ContractorDetails({ setPage, currentPage }) {
       alert(t("serverError"));
     } finally {
       setSubmittingReview(false);
+    }
+  }
+
+  async function toggleSavedProfessional() {
+    const contractorProfileId =
+      Number(profile?.id);
+
+    if (
+      !Number.isSafeInteger(
+        contractorProfileId
+      ) ||
+      contractorProfileId <= 0 ||
+      isProfessionalSession() ||
+      savedProfessionalState.pending ||
+      (
+        savedProfessionalState.workedWith &&
+        !savedProfessionalState.saved
+      )
+    ) {
+      return;
+    }
+
+    const wasSaved =
+      savedProfessionalState.saved;
+
+    setSavedProfessionalState(
+      (current) => ({
+        ...current,
+        phase: "ready",
+        pending: true,
+        error: "",
+      })
+    );
+
+    try {
+      if (wasSaved) {
+        await removeHomeownerSavedProfessional({
+          contractorProfileId,
+          setPage,
+        });
+      } else {
+        await saveHomeownerProfessional({
+          contractorProfileId,
+          setPage,
+        });
+      }
+
+      setSavedProfessionalState({
+        phase: "ready",
+        saved: !wasSaved,
+        workedWith:
+          savedProfessionalState.workedWith,
+        pending: false,
+        error: "",
+      });
+    } catch (error) {
+      setSavedProfessionalState({
+        phase: "ready",
+        saved: wasSaved,
+        workedWith:
+          savedProfessionalState.workedWith,
+        pending: false,
+        error:
+          error?.message ||
+          (isSpanish
+            ? "No se pudo actualizar el profesional guardado."
+            : "The Saved Professional change could not be completed."),
+      });
     }
   }
 
@@ -586,18 +680,21 @@ function ContractorDetails({ setPage, currentPage }) {
   const servicesOffered = getServicesOffered(profile, profileCategory, isSpanish);
   const availabilitySummary = getAvailabilitySummary(profile, isSpanish);
   const credentialSummary = getCredentialSummary(profile, isSpanish);
-  const portfolioProof = getBusinessPortfolioProofProjection(
-    {
-      ...profile,
-      businessPortfolio: projects,
-      projectGallery: projects,
-    },
-    {
-      translate: (key) => t(key),
-      reviews,
-    }
+  const publicPortfolioProjects = projects;
+  const selectedPortfolioProject = publicPortfolioProjects.find(
+    (project) => String(project.id) === String(selectedProjectId)
   );
-  const publicPortfolioProjects = portfolioProof.projects;
+  const businessReviewTrust = reviewStats?.total_reviews && reviewStats?.average_rating
+    ? {
+        reviewCount: Number(reviewStats.total_reviews),
+        averageRating: Number(reviewStats.average_rating),
+      }
+    : null;
+  const canonicalReviewCount = businessReviewTrust?.reviewCount || 0;
+  const canonicalAverageRating = businessReviewTrust?.averageRating || 0;
+  const publicPortfolioMediaUrls = [
+    ...new Set(publicPortfolioProjects.flatMap((project) => getProjectImages(project))),
+  ];
   const portfolioPreviewProjectByUrl = new Map();
 
   publicPortfolioProjects.forEach((project) => {
@@ -608,7 +705,7 @@ function ContractorDetails({ setPage, currentPage }) {
     });
   });
 
-  const portfolioPreviewImages = portfolioProof.mediaUrls
+  const portfolioPreviewImages = publicPortfolioMediaUrls
     .slice(0, PORTFOLIO_PREVIEW_MAX_IMAGES)
     .map((url, index) => {
       const project = portfolioPreviewProjectByUrl.get(url);
@@ -617,13 +714,13 @@ function ContractorDetails({ setPage, currentPage }) {
       return {
         url,
         alt:
-          portfolioProof.mediaUrls.length > 1
+          publicPortfolioMediaUrls.length > 1
             ? `${baseAlt} ${isSpanish ? "foto" : "photo"} ${index + 1}`
             : baseAlt,
       };
     });
   const hasMorePortfolioPreviewImages =
-    portfolioProof.mediaUrls.length > PORTFOLIO_PREVIEW_MAX_IMAGES;
+    publicPortfolioMediaUrls.length > PORTFOLIO_PREVIEW_MAX_IMAGES;
   const allowedForHomeownerContext = isProfileAllowedForHomeownerContext(profile);
 
   if (!allowedForHomeownerContext) {
@@ -649,84 +746,17 @@ function ContractorDetails({ setPage, currentPage }) {
     );
   }
 
-  if (selectedProject) {
-    const selectedImages = getProjectImages(selectedProject);
-    const mainProjectImage = activeProjectImage || selectedImages[0] || "";
-
+  if (selectedPortfolioProject) {
     return (
       <div className="app-page meetro-readable-page meetro-visual-page" style={pageWrapper}>
-        <button
-          onClick={() => {
-            setSelectedProject(null);
-            setActiveProjectImage("");
-          }}
-          style={backButton}
-        >
-          ← {t("back")}
-        </button>
-
-        <div className="meetro-visual-surface" style={cardStyle}>
-          <h1 style={businessTitle}>{selectedProject.title}</h1>
-
-          <p style={mutedText}>
-            {profileName || t("businessProfile")}
-          </p>
-
-          {selectedProject.description && (
-            <p style={bioStyle}>{selectedProject.description}</p>
-          )}
-
-          {selectedImages[0] && (
-            <img
-              src={mainProjectImage}
-              alt={selectedProject.title}
-              style={publicMainImage}
-              onClick={() => setExpandedProjectImage(mainProjectImage)}
-            />
-          )}
-
-          {selectedImages.length > 1 && (
-            <div style={publicGalleryGrid}>
-              {selectedImages.map((url, index) => (
-                <img
-                  key={`${selectedProject.id}-${index}`}
-                  src={url}
-                  alt={`${selectedProject.title} ${index + 1}`}
-                  style={{
-                    ...publicGalleryImage,
-                    ...(mainProjectImage === url ? activeThumbnailImage : {}),
-                  }}
-                  onClick={() => setActiveProjectImage(url)}
-                />
-              ))}
-            </div>
-          )}
-
-          <button onClick={messageContractor} className="meetro-visual-primary-button" style={primaryButton}>
-            {t("messageContractor")}
-          </button>
-
-          <button
-            onClick={() => {
-              setSelectedProject(null);
-              setShowQuoteForm(true);
-            }}
-            style={secondaryButton}
-          >
-            {t("requestQuote")}
-          </button>
-        </div>
-
-        {expandedProjectImage && (
-          <div style={imagePreviewOverlay} onClick={() => setExpandedProjectImage("")}>
-            <button style={closePreviewBtn}>×</button>
-            <img
-              src={expandedProjectImage}
-              alt="Expanded project preview"
-              style={expandedPreviewImage}
-            />
-          </div>
-        )}
+        <PortfolioProjectView
+          project={selectedPortfolioProject}
+          businessName={profileName}
+          businessLogo={businessIdentity.imageUrl}
+          showBusinessIdentity
+          trustContext={businessReviewTrust}
+          onBack={() => setSelectedProjectId("")}
+        />
 
         <BottomNav setPage={setPage} currentPage={currentPage} />
       </div>
@@ -741,11 +771,32 @@ function ContractorDetails({ setPage, currentPage }) {
 
       <div className="meetro-visual-surface" style={cardStyle}>
         {businessIdentity.imageUrl ? (
-          <img
-            src={businessIdentity.imageUrl}
-            alt={profileName}
-            style={profileImage}
-          />
+          <button
+            type="button"
+            style={profileImageButton}
+            aria-label={
+              isSpanish
+                ? `Ver imagen de ${profileName}`
+                : `View ${profileName} image`
+            }
+            title={
+              isSpanish
+                ? `Ver imagen de ${profileName}`
+                : `View ${profileName} image`
+            }
+            onClick={() =>
+              setBusinessLogoPreviewOpen(true)
+            }
+          >
+            <img
+              src={businessIdentity.imageUrl}
+              alt={profileName}
+              style={{
+                ...profileImage,
+                marginBottom: 0,
+              }}
+            />
+          </button>
         ) : (
           <div style={imagePlaceholder}>
             {businessIdentity.initials}
@@ -768,14 +819,14 @@ function ContractorDetails({ setPage, currentPage }) {
         </p>
 
         <div style={ratingSummary}>
-          {portfolioProof.reviewCount ? (
+          {canonicalReviewCount ? (
             <>
               <strong style={{ color: "var(--meetro-color-ink)" }}>
-                 {portfolioProof.averageRating || profile.rating}
+                 {canonicalAverageRating}
               </strong>
 
               <span style={{ color: "var(--meetro-color-muted)", marginLeft: "8px" }}>
-                ({portfolioProof.reviewCount} {t("reviews")})
+                ({canonicalReviewCount} {t("reviews")})
               </span>
             </>
           ) : (
@@ -801,6 +852,50 @@ function ContractorDetails({ setPage, currentPage }) {
             <span style={featuredBadge}>{t("featured")}</span>
           )}
         </div>
+
+        {!isProfessionalSession() &&
+          savedProfessionalState.phase !==
+            "not_applicable" &&
+          (
+            !savedProfessionalState.workedWith ||
+            savedProfessionalState.saved
+          ) && (
+            <>
+              <button
+                type="button"
+                data-homeowner-profile-bookmark="canonical"
+                data-homeowner-saved-professional-action="canonical"
+                onClick={toggleSavedProfessional}
+                disabled={
+                  savedProfessionalState.pending ||
+                  savedProfessionalState.phase ===
+                    "loading"
+                }
+                style={secondaryButton}
+              >
+                {savedProfessionalState.pending
+                  ? isSpanish
+                    ? "Guardando…"
+                    : "Saving…"
+                  : savedProfessionalState.saved
+                  ? isSpanish
+                    ? "Quitar de guardados"
+                    : "Remove Saved"
+                  : isSpanish
+                  ? "Guardar profesional"
+                  : "Save Professional"}
+              </button>
+
+              {savedProfessionalState.error && (
+                <p
+                  style={savedProfessionalError}
+                  role="alert"
+                >
+                  {savedProfessionalState.error}
+                </p>
+              )}
+            </>
+          )}
 
         <p style={bioStyle}>{description}</p>
       </div>
@@ -838,9 +933,7 @@ function ContractorDetails({ setPage, currentPage }) {
         ) : (
           <div className="meetro-visual-empty-state" style={mediaPlaceholder}>
             <span style={mediaPlaceholderIcon}>▻</span>
-            <strong>
-              {isSpanish ? "Medios próximamente" : "Media coming soon"}
-            </strong>
+            <strong>{t("noProjectPhotos")}</strong>
             <p>
               {isSpanish
                 ? "Fotos o videos del portafolio aparecerán aquí cuando estén disponibles."
@@ -886,8 +979,8 @@ function ContractorDetails({ setPage, currentPage }) {
           <TrustItem
             label={isSpanish ? "Reseñas" : "Reviews"}
             value={
-              portfolioProof.reviewCount
-                ? `${portfolioProof.reviewCount} ${t("reviews")}`
+              canonicalReviewCount
+                ? `${canonicalReviewCount} ${t("reviews")}`
                 : isSpanish
                 ? "Reseñas pendientes"
                 : "Reviews pending"
@@ -901,62 +994,33 @@ function ContractorDetails({ setPage, currentPage }) {
         className="meetro-visual-surface"
         style={cardStyle}
       >
-        <h2 style={sectionTitle}>{t("projectGallery")}</h2>
+        <h2 style={sectionTitle}>
+          {isSpanish ? "Portafolio del negocio" : "Business Portfolio"}
+        </h2>
 
         {publicPortfolioProjects.length === 0 && (
-          <p style={mutedText}>{t("noProjectPhotos")}</p>
+          <p style={mutedText}>
+            {isSpanish
+              ? "Este negocio aún no ha publicado proyectos en su portafolio."
+              : "This business has not published any Portfolio projects yet."}
+          </p>
         )}
 
-        {publicPortfolioProjects.map((project) => {
-          const projectImages = getProjectImages(project);
-          const coverImage = projectImages[0];
-
-          return (
-            <div key={project.id} style={portfolioCard}>
-              {coverImage && (
-                <div style={portfolioCoverWrap}>
-                  <img
-                    src={coverImage}
-                    alt={project.title}
-                    style={portfolioCoverImage}
-                    onError={(event) => {
-                      event.currentTarget.style.display = "none";
-                    }}
-                  />
-
-                  {projectImages.length > 1 && (
-                    <span style={portfolioPhotoBadge}>
-                      +{projectImages.length - 1} photos
-                    </span>
-                  )}
-                </div>
-              )}
-
-              <div style={portfolioContent}>
-                <span style={portfolioTrustBadge}>
-                  {t("projectGallery")}
-                </span>
-
-                <h3 style={innerTitle}>{project.title}</h3>
-
-                {project.description && (
-                  <p style={innerText}>{project.description}</p>
-                )}
-
-                <button
-                  style={portfolioOpenButton}
-                  onClick={() => {
-                    const projectImages = getProjectImages(project);
-                    setSelectedProject(project);
-                    setActiveProjectImage(projectImages[0] || "");
-                  }}
-                >
-                  {t("viewPortfolioWork")}
-                </button>
-              </div>
-            </div>
-          );
-        })}
+        {publicPortfolioProjects.length > 0 && (
+          <PortfolioProjectGrid ariaLabel="Public Portfolio projects">
+            {publicPortfolioProjects.map((project) => (
+              <PortfolioProjectCard
+                key={project.id}
+                project={project}
+                businessName={profileName}
+                businessLogo={businessIdentity.imageUrl}
+                showBusinessIdentity
+                trustContext={businessReviewTrust}
+                onView={(exactProjectId) => setSelectedProjectId(exactProjectId)}
+              />
+            ))}
+          </PortfolioProjectGrid>
+        )}
       </div>
 
       <div className="meetro-visual-surface" style={cardStyle}>
@@ -1111,6 +1175,16 @@ function ContractorDetails({ setPage, currentPage }) {
         ))}
       </div>
 
+      <IdentityMediaPreviewDialog
+        open={businessLogoPreviewOpen}
+        src={businessIdentity.imageUrl}
+        alt={profileName}
+        title={profileName}
+        onClose={() =>
+          setBusinessLogoPreviewOpen(false)
+        }
+      />
+
       <BottomNav setPage={setPage} currentPage={currentPage} />
     </div>
   );
@@ -1150,7 +1224,7 @@ function isProfileAllowedForHomeownerContext(profile = {}) {
 
 function getHomeownerRequestContexts() {
   if (!canReadLegacyWorkflowStorage()) return [];
-  let requests = [];
+  let requests;
 
   try {
     requests = JSON.parse(localStorage.getItem("homeownerRequests") || "[]");
@@ -1550,6 +1624,14 @@ const inputStyle = {
   color: "var(--meetro-color-ink)",
 };
 
+const savedProfessionalError = {
+  margin: "9px 0 0",
+  color: "#991b1b",
+  fontSize: "12px",
+  lineHeight: 1.4,
+  fontWeight: "800",
+};
+
 const primaryButton = {
   width: "100%",
   marginTop: "18px",
@@ -1575,75 +1657,6 @@ const secondaryButton = {
   fontWeight: "bold",
   fontSize: "16px",
   cursor: "pointer",
-};
-
-const imagePreviewOverlay = {
-  position: "fixed",
-  inset: 0,
-  background: "rgba(15,23,42,0.92)",
-  zIndex: 80,
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  padding: "18px",
-};
-
-const expandedPreviewImage = {
-  maxWidth: "100%",
-  maxHeight: "86vh",
-  objectFit: "contain",
-  borderRadius: "18px",
-};
-
-const closePreviewBtn = {
-  position: "fixed",
-  top: "18px",
-  right: "18px",
-  width: "42px",
-  height: "42px",
-  borderRadius: "999px",
-  border: "none",
-  background: "var(--meetro-surface-paper)",
-  color: "var(--meetro-color-ink)",
-  fontSize: "28px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const publicMainImage = {
-  width: "100%",
-  height: "260px",
-  objectFit: "cover",
-  borderRadius: "22px",
-  background: "#f1f5f9",
-  marginTop: "18px",
-  marginBottom: "12px",
-};
-
-const publicGalleryGrid = {
-  display: "flex",
-  gap: "12px",
-  overflowX: "auto",
-  paddingBottom: "6px",
-  marginTop: "18px",
-  marginBottom: "18px",
-  scrollSnapType: "x mandatory",
-};
-
-const activeThumbnailImage = {
-  border: "3px solid var(--meetro-color-forest)",
-  opacity: 1,
-};
-
-const publicGalleryImage = {
-  minWidth: "260px",
-  width: "260px",
-  height: "170px",
-  objectFit: "cover",
-  borderRadius: "18px",
-  background: "#f1f5f9",
-  flexShrink: 0,
-  scrollSnapAlign: "start",
 };
 
 const portfolioPreviewStack = {
@@ -1682,65 +1695,6 @@ const portfolioPreviewThumbImage = {
   display: "block",
 };
 
-const portfolioCard = {
-  background: "var(--meetro-surface-paper)",
-  borderRadius: "22px",
-  overflow: "hidden",
-  marginTop: "14px",
-  border: "1px solid var(--meetro-color-line)",
-  boxShadow: "var(--meetro-shadow-soft)",
-};
-
-const portfolioCoverWrap = {
-  position: "relative",
-  width: "min(320px, calc(100% - 32px))",
-  aspectRatio: "16 / 9",
-  margin: "16px 16px 0",
-  background: "#f1f5f9",
-  overflow: "hidden",
-  borderRadius: "18px",
-  boxSizing: "border-box",
-};
-
-const portfolioCoverImage = {
-  width: "100%",
-  height: "100%",
-  objectFit: "cover",
-  objectPosition: "center",
-  display: "block",
-};
-
-const portfolioPhotoBadge = {
-  position: "absolute",
-  right: "14px",
-  bottom: "14px",
-  background: "rgba(15,23,42,0.78)",
-  color: "white",
-  padding: "8px 12px",
-  borderRadius: "999px",
-  fontSize: "12px",
-  fontWeight: "900",
-};
-
-const portfolioContent = {
-  padding: "16px",
-};
-
-const portfolioTrustBadge = {
-  display: "inline-flex",
-  alignItems: "center",
-  gap: "6px",
-  background: "transparent",
-  color: "var(--meetro-color-muted)",
-  padding: "0",
-  borderRadius: "0",
-  fontSize: "12px",
-  fontWeight: "800",
-  marginBottom: "10px",
-  textTransform: "uppercase",
-  letterSpacing: "0.6px",
-};
-
 const portfolioOpenButton = {
   width: "auto",
   alignSelf: "center",
@@ -1776,21 +1730,6 @@ const reviewEmptyCard = {
   color: "var(--meetro-color-ink)",
 };
 
-const projectImage = {
-  width: "100%",
-  maxHeight: "280px",
-  objectFit: "contain",
-  background: "var(--meetro-surface-warm)",
-  borderRadius: "16px",
-  padding: "10px",
-  boxSizing: "border-box",
-};
-
-const innerTitle = {
-  color: "var(--meetro-color-ink)",
-  marginBottom: "8px",
-};
-
 const innerText = {
   color: "var(--meetro-color-muted)",
   lineHeight: 1.6,
@@ -1813,6 +1752,22 @@ const starButton = {
   background: "transparent",
   fontSize: "30px",
   cursor: "pointer",
+};
+
+const profileImageButton = {
+  width: "96px",
+  height: "96px",
+  border: 0,
+  borderRadius: "28px",
+  padding: 0,
+  margin: "0 0 18px",
+  background: "transparent",
+  overflow: "hidden",
+  display: "inline-block",
+  verticalAlign: "top",
+  cursor: "zoom-in",
+  appearance: "none",
+  WebkitAppearance: "none",
 };
 
 const profileImage = {

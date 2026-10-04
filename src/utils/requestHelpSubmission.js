@@ -11,6 +11,27 @@ const REQUEST_HELP_SERVICE_DOMAINS = new Set([
   "transportation",
 ]);
 
+const COUNTRY_CODE_PATTERN = /^[A-Z]{2}$/;
+
+export function isCanonicalRequestServiceLocationComplete(serviceLocation = {}) {
+  const intakeMode = String(serviceLocation.intakeMode || "").trim();
+  const countryCode = String(serviceLocation.countryCode || "").trim().toUpperCase();
+  const hasLocality = [
+    serviceLocation.city,
+    serviceLocation.region,
+    serviceLocation.postalCode,
+  ].every((value) => Boolean(String(value || "").trim())) &&
+    COUNTRY_CODE_PATTERN.test(countryCode);
+  const hasStreetAddress = Boolean(String(serviceLocation.addressLine1 || "").trim());
+  const hasUnitNumber = Boolean(String(serviceLocation.unitNumber || "").trim());
+
+  return Boolean(
+    hasLocality &&
+      ((intakeMode === "exact_on_file" && hasStreetAddress) ||
+        (intakeMode === "address_after_selection" && !hasStreetAddress && !hasUnitNumber))
+  );
+}
+
 export function isSupportedRequestHelpService(service = {}) {
   return (
     REQUEST_HELP_SERVICE_DOMAINS.has(
@@ -53,24 +74,7 @@ export function validateRequestHelpSubmission({
     errors.category = REQUEST_HELP_ERROR.MATCH_REQUIRED;
   }
 
-  const intakeMode = String(serviceLocation.intakeMode || "").trim();
-  const hasLocality = [
-    serviceLocation.city,
-    serviceLocation.region,
-    serviceLocation.postalCode,
-    serviceLocation.countryCode,
-  ].every((value) => Boolean(String(value || "").trim()));
-  const exactLocationComplete =
-    intakeMode === "exact_on_file" &&
-    Boolean(String(serviceLocation.addressLine1 || "").trim()) &&
-    hasLocality;
-  const addressLaterComplete =
-    intakeMode === "address_after_selection" &&
-    hasLocality &&
-    !String(serviceLocation.addressLine1 || "").trim() &&
-    !String(serviceLocation.unitNumber || "").trim();
-
-  if (!exactLocationComplete && !addressLaterComplete) {
+  if (!isCanonicalRequestServiceLocationComplete(serviceLocation)) {
     errors.location = REQUEST_HELP_ERROR.LOCATION_REQUIRED;
   }
 

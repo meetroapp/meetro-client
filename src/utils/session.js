@@ -496,6 +496,7 @@ const businessModePages = new Set([
   "quoteRequests",
   "quoteBuilder",
   "invoiceBuilder",
+  "depositRequestBuilder",
   "contractorDashboard",
   "workCenter",
   "completionSheet",
@@ -507,6 +508,7 @@ const personalModePages = new Set([
   "myRequests",
   "assistant",
   "emergency",
+  "emergencyRequest",
 ]);
 
 export function getAccountModeForPage(page = "", fallbackMode = "personal") {

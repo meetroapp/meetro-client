@@ -14,12 +14,20 @@ const businessDashboardSource = readFileSync(
   new URL("../src/pages/BusinessDashboard.jsx", import.meta.url),
   "utf8"
 );
+const homeDashboardStyles = readFileSync(
+  new URL("../src/styles/homeDashboard.css", import.meta.url),
+  "utf8"
+);
 const contractorDetailsSource = readFileSync(
   new URL("../src/pages/ContractorDetails.jsx", import.meta.url),
   "utf8"
 );
 const projectGallerySource = readFileSync(
   new URL("../src/pages/ProjectGallery.jsx", import.meta.url),
+  "utf8"
+);
+const portfolioPresentationSource = readFileSync(
+  new URL("../src/components/PortfolioProjectPresentation.jsx", import.meta.url),
   "utf8"
 );
 const contractorProfileSource = readFileSync(
@@ -123,7 +131,7 @@ test("standard workspaces consume the shared desktop shell classes", () => {
   assert.match(projectGallerySource, /className="app-page meetro-responsive-page"/);
   assert.match(contractorProfileSource, /className="app-page business-profile-page meetro-readable-page"/);
   assert.match(profileSource, /: "app-page meetro-readable-page meetro-visual-page"/);
-  assert.match(homeSource, /className="app-page meetro-responsive-page"/);
+  assert.match(homeSource, /className="app-page meetro-responsive-page homeowner-home-dashboard"/);
   assert.match(myRequestsSource, /className="app-page meetro-responsive-page meetro-visual-page"/);
   assert.match(uploadSource, /className="app-page request-help-page upload-page meetro-form-page meetro-visual-page"/);
   assert.match(projectDetailsSource, /className="app-page meetro-readable-page"/);
@@ -132,18 +140,18 @@ test("standard workspaces consume the shared desktop shell classes", () => {
 
 test("Business Dashboard uses the centered shared workspace calculation", () => {
   assert.match(
-    businessDashboardSource,
-    /--meetro-dashboard-workspace-max: min\(var\(--meetro-layout-wide-mid-max\), var\(--meetro-workspace-max-width\)\);/
+    homeDashboardStyles,
+    /business-dashboard-content-lane[\s\S]*width: 100%;[\s\S]*max-width: 1120px;[\s\S]*margin: 0 auto;/
   );
   assert.match(
-    businessDashboardSource,
-    /--meetro-dashboard-workspace-extra: max\(0px, calc\(\(100vw - var\(--meetro-sidebar-width\) - var\(--meetro-dashboard-workspace-max\)\) \/ 2\)\);/
+    homeDashboardStyles,
+    /#root\[data-app-layout="tablet"\] \.business-dashboard/
   );
   assert.match(
-    businessDashboardSource,
-    /margin-left: calc\(var\(--meetro-sidebar-width\) \+ var\(--meetro-dashboard-workspace-extra\)\) !important;/
+    homeDashboardStyles,
+    /#root\[data-app-layout="desktop"\] \.business-dashboard/
   );
-  assert.match(businessDashboardSource, /margin-right: var\(--meetro-dashboard-workspace-extra\) !important;/);
+  assert.doesNotMatch(businessDashboardSource, /--meetro-dashboard-workspace-extra/);
   assert.doesNotMatch(businessDashboardSource, /1228px/);
 });
 
@@ -166,12 +174,11 @@ test("tablet and phone containment remain governed by existing mobile rules", ()
 });
 
 test("portfolio project media rules stay bounded and are not reverted", () => {
-  assert.match(contractorDetailsSource, /width: "min\(320px, calc\(100% - 32px\)\)"/);
-  assert.match(contractorDetailsSource, /aspectRatio: "16 \/ 9"/);
-  assert.match(projectGallerySource, /width: "min\(320px, calc\(100% - 36px\)\)"/);
-  assert.match(projectGallerySource, /aspectRatio: "16 \/ 9"/);
-  assert.doesNotMatch(contractorDetailsSource, /const portfolioCoverWrap = \{[\s\S]*height: "180px"/);
-  assert.doesNotMatch(projectGallerySource, /const coverImageWrap = \{[\s\S]*height: "250px"/);
+  assert.match(contractorDetailsSource, /PortfolioProjectCard/);
+  assert.match(projectGallerySource, /PortfolioProjectCard/);
+  assert.match(portfolioPresentationSource, /width: "100%"/);
+  assert.match(portfolioPresentationSource, /aspectRatio: "16 \/ 9"/);
+  assert.doesNotMatch(portfolioPresentationSource, /const cardMediaFrame = \{[\s\S]*height: "(?:180|250)px"/);
 });
 
 test("workspace width governance does not add state, route, or viewport polling authority", () => {

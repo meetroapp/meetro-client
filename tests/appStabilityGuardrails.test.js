@@ -26,7 +26,18 @@ test("major route groups render inside route error boundaries", () => {
   assert.match(appSource, /withAssistantLayer\(withSuspense\(<Profile/);
   assert.match(appSource, /withSuspense\(<BusinessDashboard/);
   assert.match(appSource, /withSuspense\(<BusinessLeads/);
-  assert.match(appSource, /withSuspense\(<ConversationThread/);
+  assert.match(
+    appSource,
+    /function ResponsiveConversationThreadRoute/
+  );
+  assert.match(
+    appSource,
+    /withSuspense\(\s*<ResponsiveConversationThreadRoute/
+  );
+  assert.match(
+    appSource,
+    /<ConversationThread setPage=\{setPage\} \/>/
+  );
   assert.match(appSource, /withSuspense\(<ProfessionalOnboarding/);
 });
 

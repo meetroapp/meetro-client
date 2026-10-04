@@ -26,6 +26,7 @@ import {
 } from "../utils/loginErrorPresentation";
 import MeetroIcon from "../components/MeetroIcon";
 import PasswordResetWorkspace from "../components/PasswordResetWorkspace";
+import { inspectBusinessTeamInvitation } from "../utils/teamApi";
 
 function readStoredVerificationContext() {
   try {
@@ -51,10 +52,49 @@ function readStoredVerificationContext() {
   }
 }
 
+function preservePendingTeamInvitation() {
+  try {
+    const hash = String(window.location.hash || "");
+    const cleanHash = hash.startsWith("#") ? hash.slice(1) : hash;
+    const [route, query = ""] = cleanHash.split("?");
+    const params = new URLSearchParams(query);
+
+    const token =
+      route === "teamMembers"
+        ? params.get("invitation") || ""
+        : route === "login"
+        ? params.get("teamInvitation") || ""
+        : "";
+
+    return /^[A-Za-z0-9_-]{32,200}$/.test(token) ? token : "";
+  } catch {
+    return "";
+  }
+}
+
+function readTeamInvitationLoginMode() {
+  try {
+    const hash = String(window.location.hash || "");
+    const cleanHash = hash.startsWith("#") ? hash.slice(1) : hash;
+    const [route, query = ""] = cleanHash.split("?");
+
+    if (route !== "login") return "";
+
+    const mode =
+      new URLSearchParams(query).get("mode") || "";
+
+    return ["login", "signup"].includes(mode) ? mode : "";
+  } catch {
+    return "";
+  }
+}
+
 function Login({ setPage }) {
   const [initialVerificationContext] = useState(readStoredVerificationContext);
   const [mode, setMode] = useState(
-    localStorage.getItem("meetroLoginMode") || "login"
+    readTeamInvitationLoginMode() ||
+      localStorage.getItem("meetroLoginMode") ||
+      "login"
   );
   const [language, updateLanguage] = useState(getLanguage() || "en");
   const [accountType, setAccountType] = useState("homeowner");
@@ -62,7 +102,9 @@ function Login({ setPage }) {
   const [name, setName] = useState("");
   const [businessName, setBusinessName] = useState("");
   const [mobileNumber, setMobileNumber] = useState("");
-  const [email, setEmail] = useState(initialVerificationContext.email);
+  const [email, setEmail] = useState(
+    initialVerificationContext.email
+  );
   const [password, setPassword] = useState("");
   const [twoFactorCode, setTwoFactorCode] = useState("");
   const [twoFactorStep, setTwoFactorStep] = useState(
@@ -81,6 +123,34 @@ function Login({ setPage }) {
   const [authError, setAuthError] = useState("");
   const [categorySearch, setCategorySearch] = useState("");
   const [legalAccepted, setLegalAccepted] = useState(false);
+
+  useEffect(() => {
+    const invitationToken = preservePendingTeamInvitation();
+
+    if (!invitationToken || initialVerificationContext.email) return;
+
+    let cancelled = false;
+
+    inspectBusinessTeamInvitation(invitationToken)
+      .then((result) => {
+        if (cancelled) return;
+
+        const invitedEmail = String(
+          result?.invitation?.email || ""
+        ).trim();
+
+        if (invitedEmail) {
+          setEmail((current) => current || invitedEmail);
+        }
+      })
+      .catch(() => {
+        // The sign-in form remains usable if invitation preview is unavailable.
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [initialVerificationContext.email]);
 
   const text = {
     en: {
@@ -833,6 +903,7 @@ function Login({ setPage }) {
 
       const isFirstLogin = localStorage.getItem("firstLogin") === "true";
       const sessionResult = saveUserData(verifiedLoginData);
+      const pendingTeamInvitationToken = preservePendingTeamInvitation();
 
       if (isFirstLogin) {
         clearNewHomeownerRelationshipState();
@@ -845,7 +916,14 @@ function Login({ setPage }) {
       setTwoFactorCode("");
       setVerificationError("");
 
+      if (pendingTeamInvitationToken) {
+        localStorage.removeItem("firstLogin");
+        setPage(`teamMembers?invitation=${encodeURIComponent(pendingTeamInvitationToken)}`);
+        return;
+      }
+
       if (isFirstLogin) {
+        localStorage.removeItem("firstLogin");
         setPage("welcome");
         return;
       }
@@ -1380,25 +1458,25 @@ function Login({ setPage }) {
 const pageWrapper = {
   minHeight: "100dvh",
   background:
-    "radial-gradient(circle at 12% 30%, rgba(247,186,93,0.28), transparent 13%), radial-gradient(circle at 88% 32%, rgba(183,121,31,0.18), transparent 17%), radial-gradient(circle at 50% 92%, rgba(31,77,52,0.42), transparent 34%), linear-gradient(180deg, #0f1c1a 0%, #1b2c22 45%, #18271e 100%)",
+    "var(--meetro-gradient-community-page)",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 18px) max(18px, env(safe-area-inset-right, 0px)) calc(env(safe-area-inset-bottom, 0px) + 18px) max(18px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
   fontFamily:
-    "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Arial, sans-serif",
+    "var(--meetro-font-family, Poppins, system-ui, sans-serif)",
   width: "100%",
   maxWidth: "980px",
   margin: "0 auto",
-  color: "var(--meetro-color-paper, #fffdf8)",
+  color: "var(--meetro-color-ink, #111827)",
   overflowX: "hidden",
 };
 
 const languageBar = {
   display: "flex",
   justifyContent: "center",
-  margin: "0 auto 22px",
+  margin: "0 auto 16px",
   width: "100%",
-  maxWidth: "620px",
+  maxWidth: "440px",
 };
 
 const languageBox = {
@@ -1408,25 +1486,25 @@ const languageBox = {
   gap: "8px",
   padding: "4px",
   borderRadius: "18px",
-  background: "rgba(255,253,248,0.12)",
-  border: "1px solid rgba(255,253,248,0.18)",
+  background: "var(--meetro-color-forest-deep, #063D26)",
+  border: "1px solid var(--meetro-color-line, #E5E7EB)",
   boxSizing: "border-box",
 };
 
 const languageButton = {
-  minHeight: "54px",
+  minHeight: "44px",
   border: "1px solid rgba(255,253,248,0.22)",
-  borderRadius: "20px",
+  borderRadius: "12px",
   background: "rgba(12,20,18,0.34)",
   color: "rgba(255,253,248,0.9)",
-  fontSize: "18px",
-  fontWeight: "850",
+  fontSize: "15px",
+  fontWeight: "600",
   cursor: "pointer",
-  padding: "12px 16px",
+  padding: "8px 12px",
   display: "inline-flex",
   alignItems: "center",
   justifyContent: "center",
-  gap: "12px",
+  gap: "8px",
 };
 
 const languageButtonActive = {
@@ -1439,14 +1517,13 @@ const languageButtonActive = {
 
 const heroCard = {
   background:
-    "linear-gradient(180deg, rgba(255,253,248,0.09), rgba(255,253,248,0.025))",
+    "var(--meetro-gradient-community-hero)",
   borderRadius: "32px 32px 18px 18px",
-  padding: "34px 22px 72px",
+  padding: "26px 20px 44px",
   color: "var(--meetro-color-paper, #fffdf8)",
-  marginBottom: "-34px",
+  marginBottom: "16px",
   position: "relative",
   overflow: "hidden",
-  minHeight: "386px",
   display: "grid",
   alignContent: "center",
 };
@@ -1589,17 +1666,17 @@ const brandWordmark = {
   position: "relative",
   zIndex: 2,
   color: "rgba(255,253,248,0.84)",
-  fontSize: "50px",
-  fontWeight: "950",
+  fontSize: "38px",
+  fontWeight: "700",
   letterSpacing: 0,
-  lineHeight: 0.92,
+  lineHeight: 1.1,
 };
 
 const brandLockup = {
   display: "flex",
   alignItems: "center",
   justifyContent: "center",
-  margin: "0 0 34px",
+  margin: "0 0 22px",
   position: "relative",
   zIndex: 2,
 };
@@ -1607,23 +1684,23 @@ const brandLockup = {
 const brandCommunity = {
   margin: "6px 0 0",
   color: "var(--meetro-color-sage, #93a982)",
-  fontSize: "18px",
+  fontSize: "14px",
   lineHeight: 1,
-  fontWeight: "950",
+  fontWeight: "600",
   letterSpacing: "0.22em",
   textTransform: "uppercase",
 };
 
 const heroTitle = {
-  fontSize: "clamp(42px, 9vw, 64px)",
-  fontWeight: "950",
+  fontSize: "clamp(36px, 5.5vw, 46px)",
+  fontWeight: "700",
   margin: "0 0 18px",
   textAlign: "center",
   position: "relative",
   zIndex: 2,
   color: "var(--meetro-color-paper, #fffdf8)",
   letterSpacing: 0,
-  lineHeight: 1.02,
+  lineHeight: 1.12,
 };
 
 const heroTrademark = {
@@ -1644,11 +1721,11 @@ const securityTitle = {
 
 const heroSubtitle = {
   textAlign: "center",
-  fontSize: "18px",
+  fontSize: "16px",
   lineHeight: "1.68",
   opacity: 0.98,
   margin: "0 auto",
-  maxWidth: "340px",
+  maxWidth: "440px",
   position: "relative",
   zIndex: 2,
   color: "#f8fafc",
@@ -1665,8 +1742,8 @@ const securityText = {
 
 const cardStyle = {
   background: "var(--meetro-surface-paper, rgba(255,253,248,0.96))",
-  borderRadius: "28px",
-  padding: "28px 32px",
+  borderRadius: "24px",
+  padding: "24px clamp(18px, 4vw, 24px)",
   boxShadow: "var(--meetro-shadow-lifted, 0 24px 70px rgba(49,35,20,0.14))",
   border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   position: "relative",
@@ -1685,9 +1762,9 @@ const toggleRow = {
 const toggleButton = {
   border: "1px solid rgba(31,77,52,0.18)",
   borderRadius: "16px",
-  minHeight: "58px",
-  padding: "14px 16px",
-  fontWeight: "900",
+  minHeight: "46px",
+  padding: "10px 14px",
+  fontWeight: "600",
   cursor: "pointer",
   display: "inline-flex",
   alignItems: "center",
@@ -1716,17 +1793,17 @@ const authIntro = {
 const authIntroTitle = {
   margin: "0 0 5px",
   color: "var(--meetro-color-forest-deep, #14351f)",
-  fontSize: "clamp(28px, 6vw, 42px)",
-  fontWeight: "950",
+  fontSize: "clamp(30px, 4vw, 34px)",
+  fontWeight: "700",
   letterSpacing: 0,
 };
 
 const authIntroText = {
   margin: 0,
   color: "var(--meetro-color-muted, #65705f)",
-  fontSize: "18px",
+  fontSize: "16px",
   lineHeight: 1.4,
-  fontWeight: "750",
+  fontWeight: "400",
 };
 
 const sectionTitle = {
@@ -1779,12 +1856,14 @@ const accountIcon = {
 const input = {
   width: "100%",
   border: "1px solid rgba(78,68,55,0.16)",
-  borderRadius: "20px",
-  padding: "20px 22px",
+  borderRadius: "14px",
+  padding: "14px 16px",
+  minHeight: "54px",
+  lineHeight: "24px",
   fontSize: "16px",
   boxSizing: "border-box",
   outline: "none",
-  marginBottom: "18px",
+  marginBottom: "14px",
   background: "rgba(255,253,248,0.72)",
   boxShadow: "inset 0 1px 0 rgba(255,255,255,0.6)",
 };
@@ -1938,14 +2017,16 @@ const authErrorBox = {
 };
 
 const submitButton = {
+  minHeight: "52px",
+  lineHeight: "24px",
   width: "100%",
-  padding: "16px",
+  padding: "12px 16px",
   borderRadius: "18px",
   border: "none",
   background: "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
   color: "white",
   fontSize: "16px",
-  fontWeight: "900",
+  fontWeight: "600",
   cursor: "pointer",
   marginTop: "10px",
   boxShadow: "0 12px 24px rgba(49,35,20,0.18)",
@@ -1960,15 +2041,16 @@ const passwordRequirementText = {
 };
 
 const forgotPasswordButton = {
+  minHeight: "44px",
   display: "block",
   width: "100%",
   border: "none",
   background: "transparent",
   color: "var(--meetro-color-forest, #1f4d34)",
   fontSize: "14px",
-  fontWeight: "900",
+  fontWeight: "600",
   textAlign: "right",
-  padding: "0 2px 14px",
+  padding: "8px 2px",
   cursor: "pointer",
 };
 
@@ -2020,18 +2102,18 @@ const legalFooter = {
   flexWrap: "wrap",
   justifyContent: "center",
   gap: "8px 12px",
-  margin: "30px auto 16px",
-  paddingTop: "22px",
-  borderTop: "1px solid rgba(255,253,248,0.22)",
+  margin: "20px auto 16px",
+  paddingTop: "12px",
+  borderTop: "1px solid var(--meetro-color-line, #E5E7EB)",
   maxWidth: "780px",
 };
 
 const footerLegalLink = {
   border: "none",
   background: "transparent",
-  color: "rgba(255,253,248,0.82)",
-  fontSize: "14px",
-  fontWeight: "800",
+  color: "var(--meetro-color-forest, #0B5D3B)",
+  fontSize: "13px",
+  fontWeight: "400",
   textDecoration: "underline",
   cursor: "pointer",
   padding: "6px",
@@ -2043,29 +2125,29 @@ const supportPanel = {
   display: "grid",
   gridTemplateColumns: "1fr",
   alignItems: "center",
-  color: "var(--meetro-color-paper, #fffdf8)",
-  background: "rgba(255,253,248,0.08)",
-  border: "1px solid rgba(255,253,248,0.18)",
+  color: "var(--meetro-color-ink, #111827)",
+  background: "var(--meetro-surface-paper, #FFFFFF)",
+  border: "1px solid var(--meetro-color-line, #E5E7EB)",
   borderRadius: "18px",
-  padding: "26px 32px",
-  boxShadow: "0 18px 48px rgba(0,0,0,0.18)",
+  padding: "18px 20px",
+  boxShadow: "var(--meetro-shadow-soft)",
 };
 
 const supportHeading = {
   margin: "0 0 10px",
-  color: "var(--meetro-color-paper, #fffdf8)",
-  fontSize: "clamp(24px, 5vw, 32px)",
-  lineHeight: 1.12,
-  fontWeight: "950",
+  color: "var(--meetro-color-forest-deep, #063D26)",
+  fontSize: "clamp(18px, 3vw, 22px)",
+  lineHeight: 1.3,
+  fontWeight: "600",
   letterSpacing: 0,
 };
 
 const supportBody = {
   margin: 0,
-  color: "rgba(255,253,248,0.86)",
-  fontSize: "17px",
-  lineHeight: 1.35,
-  fontWeight: "650",
+  color: "var(--meetro-color-muted, #6B7280)",
+  fontSize: "15px",
+  lineHeight: 1.5,
+  fontWeight: "400",
 };
 
 const guestButton = {

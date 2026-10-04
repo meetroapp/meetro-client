@@ -1,22 +1,20 @@
-import { useEffect, useState } from "react";
+import "../styles/homeDashboard.css";
+import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
+import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import LoadingScreen from "../components/LoadingScreen";
 import MeetroIcon from "../components/MeetroIcon";
+import BusinessPlanStatusCard from "../components/BusinessPlanStatusCard";
 import { authFetch } from "../utils/authFetch";
-import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { getLanguage, t } from "../utils/language";
 import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
-import { getNotifications } from "../utils/notifications";
 import {
   getStoredProfessionalMatchProfile,
   inferRequestCategory,
 } from "../utils/professionalRequestMatching";
 import { canProfessionalSeeLocalLead } from "../utils/localLeadVisibility";
 import { formatDashboardScheduleItem } from "../utils/businessDashboardScheduleLabels";
-import {
-  getConversationMetrics,
-  getProfessionalWorkMetrics,
-} from "../utils/dashboardMetrics";
+import { getConversationMetrics } from "../utils/dashboardMetrics";
 import { setBusinessAvailability } from "../utils/businessAvailability";
 import {
   buildBusinessProfilePayloadFromCanonical,
@@ -25,10 +23,29 @@ import {
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
 import { PROFESSIONAL_OPPORTUNITY_STATUS } from "../utils/professionalOpportunityState";
 import {
+  getProfessionalHomeDaypart,
+  getProfessionalHomeGreetingRefreshDelay,
+} from "../utils/professionalHomeGreeting.js";
+import {
   PROFESSIONAL_OPPORTUNITY_PHASE,
   requestProfessionalOpportunities,
   subscribeProfessionalOpportunities,
 } from "../utils/professionalOpportunityCoordinator";
+import {
+  fetchProfessionalQuotes,
+  getProfessionalPendingQuoteCount,
+  getProfessionalPendingQuotes,
+} from "../utils/professionalQuotesProjection.js";
+import {
+  fetchProfessionalSchedule,
+  getProfessionalScheduleCounts,
+  groupProfessionalSchedule,
+} from "../utils/professionalScheduleProjection";
+import {
+  fetchProfessionalWorkCenterEntries,
+  getProfessionalWorkCenterActiveCount,
+  getProfessionalWorkCenterActiveEntries,
+} from "../utils/professionalWorkCenterDiscovery.js";
 
 const profileLoadText = {
   en: {
@@ -53,6 +70,41 @@ const profileLoadText = {
   },
 };
 
+const availabilityText = {
+  en: {
+    title: "Availability", available: "Available Now", dispatch: "Dispatch Ready",
+    availableHelp: "Show your business as available for matching Emergency requests.",
+    dispatchHelp: "Allow direct Emergency selection when Available Now is on.",
+    dependency: "Turn on Available Now to appear for direct Emergency selection.",
+    on: "ON", off: "OFF", saving: "Saving…",
+    error: "Availability could not be saved. Try again.",
+  },
+  es: {
+    title: "Disponibilidad", available: "Disponible Ahora", dispatch: "Selección Directa",
+    availableHelp: "Muestra tu negocio como disponible para solicitudes de Emergencia compatibles.",
+    dispatchHelp: "Permite la selección directa de Emergencia cuando Disponible Ahora está activado.",
+    dependency: "Activa Disponible Ahora para aparecer en la selección directa de Emergencia.",
+    on: "ACTIVO", off: "INACTIVO", saving: "Guardando…",
+    error: "No se pudo guardar la disponibilidad. Intenta de nuevo.",
+  },
+  fr: {
+    title: "Disponibilité", available: "Disponible Maintenant", dispatch: "Sélection Directe",
+    availableHelp: "Affichez votre entreprise comme disponible pour les demandes d’urgence correspondantes.",
+    dispatchHelp: "Autorisez la sélection directe d’urgence lorsque Disponible Maintenant est activé.",
+    dependency: "Activez Disponible Maintenant pour apparaître dans la sélection directe d’urgence.",
+    on: "ACTIF", off: "INACTIF", saving: "Enregistrement…",
+    error: "La disponibilité n’a pas pu être enregistrée. Réessayez.",
+  },
+  "pt-BR": {
+    title: "Disponibilidade", available: "Disponível Agora", dispatch: "Seleção Direta",
+    availableHelp: "Mostre sua empresa como disponível para solicitações de Emergência compatíveis.",
+    dispatchHelp: "Permita a seleção direta de Emergência quando Disponível Agora estiver ativado.",
+    dependency: "Ative Disponível Agora para aparecer na seleção direta de Emergência.",
+    on: "ATIVO", off: "INATIVO", saving: "Salvando…",
+    error: "Não foi possível salvar a disponibilidade. Tente novamente.",
+  },
+};
+
 function BusinessDashboard({ setPage }) {
   const [profile, setProfile] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -63,8 +115,26 @@ function BusinessDashboard({ setPage }) {
   );
 
   const [availableNow, setAvailableNow] = useState(false);
+  const [dispatchReady, setDispatchReady] = useState(false);
+  const availabilityUpdateRef = useRef(false);
+  const [availabilitySaving, setAvailabilitySaving] = useState(false);
+  const [availabilityError, setAvailabilityError] = useState(false);
+  const availabilityCopy = availabilityText[language] || availabilityText.en;
   const [leadStatus, setLeadStatus] = useState(PROFESSIONAL_OPPORTUNITY_STATUS.LOADING);
   const [authoritativeLeads, setAuthoritativeLeads] = useState([]);
+  const [canonicalSchedule, setCanonicalSchedule] = useState(null);
+  const [canonicalQuotesSummary, setCanonicalQuotesSummary] = useState({
+    status: "loading",
+    projection: null,
+  });
+  const [canonicalWorkCenterSummary, setCanonicalWorkCenterSummary] =
+    useState({
+      status: "loading",
+      entries: [],
+    });
+  const [professionalHomeDaypart, setProfessionalHomeDaypart] = useState(() =>
+    getProfessionalHomeDaypart()
+  );
   const legacyEmergencyAuthorityEnabled =
     canReadLegacyWorkflowStorage();
 
@@ -85,10 +155,7 @@ function BusinessDashboard({ setPage }) {
     category: businessCategory,
   };
 
-  const professionalMetrics = getProfessionalWorkMetrics();
-
-
-  useEffect(() => {
+   useEffect(() => {
     const syncUnreadMessages = () => {
       setLiveUnreadCount(
         getConversationMetrics({ role: "business" }).unreadConversationCount
@@ -141,6 +208,33 @@ function BusinessDashboard({ setPage }) {
   }, []);
 
   useEffect(() => {
+    let boundaryTimer = 0;
+
+    const refreshLocalDaypart = () => {
+      const now = new Date();
+      setProfessionalHomeDaypart(getProfessionalHomeDaypart(now));
+      window.clearTimeout(boundaryTimer);
+      boundaryTimer = window.setTimeout(
+        refreshLocalDaypart,
+        getProfessionalHomeGreetingRefreshDelay(now)
+      );
+    };
+    const refreshWhenVisible = () => {
+      if (!document.hidden) refreshLocalDaypart();
+    };
+
+    refreshLocalDaypart();
+    window.addEventListener("focus", refreshLocalDaypart);
+    document.addEventListener("visibilitychange", refreshWhenVisible);
+
+    return () => {
+      window.clearTimeout(boundaryTimer);
+      window.removeEventListener("focus", refreshLocalDaypart);
+      document.removeEventListener("visibilitychange", refreshWhenVisible);
+    };
+  }, []);
+
+  useEffect(() => {
     fetchProfile();
   }, [language]);
 
@@ -169,6 +263,103 @@ function BusinessDashboard({ setPage }) {
     return unsubscribe;
   }, [profile?.id, setPage]);
 
+  useEffect(() => {
+    if (!profile?.id) return undefined;
+    let active = true;
+    void fetchProfessionalSchedule({ view: "active", limit: 50, setPage })
+      .then((schedule) => {
+        if (active) setCanonicalSchedule(schedule);
+      })
+      .catch(() => {
+        if (active) setCanonicalSchedule(null);
+      });
+    return () => { active = false; };
+  }, [profile?.id, setPage]);
+
+  useEffect(() => {
+    if (!profile?.id) return undefined;
+
+    let active = true;
+
+    setCanonicalQuotesSummary({
+      status: "loading",
+      projection: null,
+    });
+
+    void fetchProfessionalQuotes({
+      classification: "all",
+      limit: 50,
+      setPage,
+    })
+      .then((projection) => {
+        if (!active) return;
+
+        setCanonicalQuotesSummary({
+          status: "ready",
+          projection,
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+
+        setCanonicalQuotesSummary({
+          status: "unavailable",
+          projection: null,
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [profile?.id, setPage]);
+
+  useEffect(() => {
+    if (!profile?.id) return undefined;
+
+    let active = true;
+
+    setCanonicalWorkCenterSummary({
+      status: "loading",
+      entries: [],
+    });
+
+    void fetchProfessionalWorkCenterEntries({ setPage })
+      .then((result) => {
+        if (!active) return;
+
+        if (
+          result?.status === "ready" ||
+          (Array.isArray(result?.entries) &&
+            result.entries.length > 0)
+        ) {
+          setCanonicalWorkCenterSummary({
+            status: "ready",
+            entries: Array.isArray(result.entries)
+              ? result.entries
+              : [],
+          });
+          return;
+        }
+
+        setCanonicalWorkCenterSummary({
+          status: "unavailable",
+          entries: [],
+        });
+      })
+      .catch(() => {
+        if (!active) return;
+
+        setCanonicalWorkCenterSummary({
+          status: "unavailable",
+          entries: [],
+        });
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [profile?.id, setPage]);
+
   async function fetchProfile() {
     setLoading(true);
     setProfileLoadFailed(false);
@@ -185,7 +376,14 @@ function BusinessDashboard({ setPage }) {
 
         setProfile(backendProfile);
         setAvailableNow(backendProfile.available_now === true);
+        setDispatchReady(backendProfile.dispatch_ready === true);
         setBusinessAvailability(backendProfile.available_now === true);
+        localStorage.setItem(
+          "meetroDispatchReady",
+          String(
+            backendProfile.dispatch_ready === true
+          )
+        );
 
         localStorage.setItem(
           "contractorProfile",
@@ -221,25 +419,99 @@ function BusinessDashboard({ setPage }) {
     }
   }
 
+  async function withAvailabilityUpdate(update) {
+    if (!profile?.id || availabilityUpdateRef.current) return;
+    // Both PUTs carry the full profile; serialize them to preserve the other setting.
+    availabilityUpdateRef.current = true;
+    setAvailabilitySaving(true);
+    setAvailabilityError(false);
+    try {
+      await update();
+    } catch {
+      setAvailabilityError(true);
+    } finally {
+      availabilityUpdateRef.current = false;
+      setAvailabilitySaving(false);
+    }
+  }
+
   async function updateBusinessAvailability(nextValue) {
-    if (!profile?.id) return;
-    const result = await authFetch(
-      `/contractor-profiles/${profile.id}`,
-      {
-        method: "PUT",
-        body: JSON.stringify(
-          buildBusinessProfilePayloadFromCanonical(profile, {
-            available_now: nextValue,
-          })
-        ),
-      },
-      setPage
-    );
-    const confirmedProfile = getConfirmedBusinessProfile(result);
-    if (!confirmedProfile) return;
-    setProfile(confirmedProfile);
-    setAvailableNow(confirmedProfile.available_now === true);
-    setBusinessAvailability(confirmedProfile.available_now === true);
+    return withAvailabilityUpdate(async () => {
+      const result = await authFetch(
+        `/contractor-profiles/${profile.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify(
+            buildBusinessProfilePayloadFromCanonical(profile, {
+              available_now: nextValue,
+            })
+          ),
+        },
+        setPage
+      );
+      const confirmedProfile = getConfirmedBusinessProfile(result);
+      if (!confirmedProfile) throw new Error("Business Profile update not confirmed");
+      setProfile(confirmedProfile);
+      setAvailableNow(confirmedProfile.available_now === true);
+      setDispatchReady(confirmedProfile.dispatch_ready === true);
+      setBusinessAvailability(confirmedProfile.available_now === true);
+      localStorage.setItem("meetroDispatchReady", String(confirmedProfile.dispatch_ready === true));
+    });
+  }
+
+  async function updateDispatchReady(
+    nextValue
+  ) {
+    return withAvailabilityUpdate(async () => {
+
+      const result = await authFetch(
+        `/contractor-profiles/${profile.id}`,
+        {
+          method: "PUT",
+          body: JSON.stringify(
+            buildBusinessProfilePayloadFromCanonical(
+              profile,
+              {
+                dispatch_ready: nextValue,
+              }
+            )
+          ),
+        },
+        setPage
+      );
+
+      const confirmedProfile =
+        getConfirmedBusinessProfile(
+          result
+        );
+
+      if (!confirmedProfile) throw new Error("Business Profile update not confirmed");
+
+      setProfile(confirmedProfile);
+
+      setAvailableNow(
+        confirmedProfile.available_now ===
+          true
+      );
+
+      setDispatchReady(
+        confirmedProfile.dispatch_ready ===
+          true
+      );
+
+      setBusinessAvailability(
+        confirmedProfile.available_now ===
+          true
+      );
+
+      localStorage.setItem(
+        "meetroDispatchReady",
+        String(
+          confirmedProfile.dispatch_ready ===
+            true
+        )
+      );
+    });
   }
 
   function formatCategory(value) {
@@ -327,24 +599,75 @@ function BusinessDashboard({ setPage }) {
       dispatchStatus
     );
 
-  const businessSchedule = professionalMetrics.scheduleItems;
-  const todayScheduleCount = professionalMetrics.scheduledJobsCount;
+  const canonicalScheduleGroups = canonicalSchedule
+    ? groupProfessionalSchedule(canonicalSchedule)
+    : null;
+  const canonicalScheduleCounts = canonicalSchedule
+    ? getProfessionalScheduleCounts(canonicalSchedule)
+    : null;
+  const businessSchedule = (canonicalScheduleGroups?.today || []).map((visit) => ({
+    id: visit.id,
+    canonicalVisitId: visit.id,
+    canonicalVisitVersion: visit.currentVersion,
+    title: `${visit.purpose === "EVALUATION" ? "Evaluation Visit" : "Work Visit"} · ${visit.customer.displayName}`,
+    service: visit.job.title,
+    status: "confirmed",
+    dateLabel: "today",
+    time: new Intl.DateTimeFormat(language, {
+      hour: "numeric",
+      minute: "2-digit",
+      timeZone: visit.timeZone,
+    }).format(new Date(visit.scheduledStartAt)),
+    location: visit.job.title,
+  }));
+  const todayScheduleCount = canonicalScheduleCounts?.today || 0;
 
-  const homeownerRequests =
-    getStoredHomeownerRequests();
+  const canonicalActiveWorkItems =
+    canonicalWorkCenterSummary.status === "ready"
+      ? getProfessionalWorkCenterActiveEntries(
+          canonicalWorkCenterSummary.entries
+        )
+      : [];
 
-  const activeProjectsCount = professionalMetrics.activeWorkCount;
-  const pendingQuotesCount = professionalMetrics.pendingQuoteCount;
-  const quoteResponseAlertCount = professionalMetrics.quoteResponseAlertCount;
+  const activeProjectsCount =
+    canonicalWorkCenterSummary.status === "ready"
+      ? getProfessionalWorkCenterActiveCount(
+          canonicalWorkCenterSummary.entries
+        )
+      : null;
+  const canonicalPendingQuotes =
+    canonicalQuotesSummary.status === "ready"
+      ? getProfessionalPendingQuotes(canonicalQuotesSummary.projection)
+      : [];
+  const pendingQuotesCount =
+    canonicalQuotesSummary.status === "ready"
+      ? getProfessionalPendingQuoteCount(canonicalQuotesSummary.projection)
+      : null;
+  const activeWorkPreview = canonicalActiveWorkItems[0];
+  const pendingQuotePreview = canonicalPendingQuotes?.[0];
+  const activeWorkPreviewLabel =
+    activeWorkPreview?.projectTitle ||
+    activeWorkPreview?.project_title ||
+    activeWorkPreview?.jobTitle ||
+    activeWorkPreview?.title ||
+    activeWorkPreview?.service ||
+    "";
+  const pendingQuotePreviewLabel =
+    pendingQuotePreview?.job?.title ||
+    pendingQuotePreview?.customer?.displayName ||
+    pendingQuotePreview?.projectTitle ||
+    pendingQuotePreview?.project_title ||
+    pendingQuotePreview?.jobTitle ||
+    pendingQuotePreview?.title ||
+    pendingQuotePreview?.customerName ||
+    "";
 
-  const scheduleResponseAlertCount = getNotifications().filter(
-    (notice) =>
-      !notice.read &&
-      (notice.targetRole === "professional" || notice.targetRole === "all") &&
-      ["appointment_confirmed", "appointment_change_requested", "schedule_response"].includes(
-        notice.type
-      )
-  ).length;
+  const canonicalScheduleAttentionCount = canonicalScheduleCounts
+    ? canonicalScheduleCounts.needsScheduling +
+      canonicalScheduleCounts.waiting +
+      canonicalScheduleCounts.changeRequested +
+      canonicalScheduleCounts.inProgress
+    : 0;
 
   function openWorkCenterSection(section, options = {}) {
     localStorage.setItem("meetroWorkCenterTab", section);
@@ -356,8 +679,8 @@ function BusinessDashboard({ setPage }) {
       localStorage.removeItem("workCenterScheduleFilter");
     }
 
-    if (options.quoteStatusFilter) {
-      localStorage.setItem("quoteStatusFilter", options.quoteStatusFilter);
+    if (section === "quotes") {
+      localStorage.removeItem("quoteStatusFilter");
     }
 
     setPage("contractorDashboard");
@@ -431,29 +754,37 @@ function BusinessDashboard({ setPage }) {
     openWorkCenterSection("schedule", { filter: "today" });
   }
 
-  function openFirstActiveProjectConversation() {
-    const project = homeownerRequests.find((item) =>
-      ["accepted", "scheduled", "active"].includes(String(item.status || "").toLowerCase())
-    );
+  function openCurrentJobs() {
+    openWorkCenterSection("currentJobs");
+  }
 
-    if (project && openRelationshipConversation(project, "active")) return;
-
-    openWorkCenterSection("active");
+  function openWorkCenterLanding() {
+    localStorage.removeItem("meetroWorkCenterTab");
+    localStorage.removeItem("activeWorkCenterTab");
+    localStorage.removeItem("workCenterScheduleFilter");
+    localStorage.removeItem("conversationReturnSection");
+    localStorage.removeItem("quoteStatusFilter");
+    window.dispatchEvent(new Event("meetroWorkCenterResetToLanding"));
+    setPage("contractorDashboard");
   }
 
   const unreadMessages = liveUnreadCount;
+  const greetingName = String(localStorage.getItem("userName") || "")
+    .trim()
+    .split(/\s+/)[0];
 
   const dashboardText = {
     en: {
       dashboard: "Business Dashboard",
-      subtitle: "Handle what matters first.",
+      openBusinessProfile: "Open business profile",
+      subtitle: "Keep your business moving forward.",
       online: "Online",
       offline: "Offline",
       available: "Available now",
       notAvailable: "Not accepting jobs",
       messages: "Communication",
       unread: "Unread",
-      todayJobs: "Today's Jobs",
+      todayJobs: "Today's Schedule",
       activeJobs: "Active Jobs",
       pendingQuotes: "Pending Quotes",
       scheduledToday: "Scheduled today",
@@ -498,15 +829,12 @@ function BusinessDashboard({ setPage }) {
       workCenter: "Work Center",
       workSubtitle: "Active jobs, quotes, and work records.",
       openWorkCenter: "Continue Work",
-      newLeads: "Matching Requests",
+      newLeads: "New Leads & Matching Requests",
       viewAllLeads: "Review leads",
-      upgradeTitle: "Founding professional access",
-      upgradeText:
-        "Business profile and operational tools remain available while Meetro prepares authorized opportunity sharing.",
-      upgrade: "Upgrade to Meetro Pro",
     },
     es: {
       dashboard: "Panel de Negocio",
+      openBusinessProfile: "Abrir perfil del negocio",
       subtitle: "Atiende primero lo más importante.",
       online: "En línea",
       offline: "Desconectado",
@@ -561,13 +889,10 @@ function BusinessDashboard({ setPage }) {
       openWorkCenter: "Continuar trabajo",
       newLeads: "Solicitudes coincidentes",
       viewAllLeads: "Revisar oportunidades",
-      upgradeTitle: "Acceso profesional fundador",
-      upgradeText:
-        "El perfil y las herramientas operativas permanecen disponibles mientras Meetro prepara el intercambio autorizado de oportunidades.",
-      upgrade: "Actualizar a Meetro Pro",
     },
     fr: {
       dashboard: "Tableau de bord",
+      openBusinessProfile: "Ouvrir le profil professionnel",
       subtitle: "Traitez d’abord ce qui compte.",
       online: "En ligne",
       offline: "Hors ligne",
@@ -622,13 +947,10 @@ function BusinessDashboard({ setPage }) {
       openWorkCenter: "Continuer le travail",
       newLeads: "Demandes correspondantes",
       viewAllLeads: "Examiner les prospects",
-      upgradeTitle: "Accès professionnel fondateur",
-      upgradeText:
-        "Le profil et les outils opérationnels restent disponibles pendant que Meetro prépare le partage autorisé des opportunités.",
-      upgrade: "Passer à Meetro Pro",
     },
     "pt-BR": {
       dashboard: "Painel do negócio",
+      openBusinessProfile: "Abrir perfil da empresa",
       subtitle: "Cuide primeiro do que importa.",
       online: "Online",
       offline: "Offline",
@@ -683,13 +1005,12 @@ function BusinessDashboard({ setPage }) {
       openWorkCenter: "Continuar trabalho",
       newLeads: "Solicitações correspondentes",
       viewAllLeads: "Revisar oportunidades",
-      upgradeTitle: "Acesso profissional fundador",
-      upgradeText:
-        "O perfil e as ferramentas operacionais permanecem disponíveis enquanto o Meetro prepara o compartilhamento autorizado de oportunidades.",
-      upgrade: "Atualizar para Meetro Pro",
     },
   };
   const text = dashboardText[language] || dashboardText.en;
+  const professionalHomeGreeting = greetingName
+    ? `${professionalHomeDaypart}, ${greetingName}`
+    : professionalHomeDaypart;
   const openBusinessProfile = () => {
     localStorage.setItem("contractorProfileReturnPage", "businessDashboard");
     setPage("contractorProfile");
@@ -705,11 +1026,31 @@ function BusinessDashboard({ setPage }) {
       ? {
           label: text.reviewPendingQuotes,
           note: text.awaitingResponse,
-          onClick: () =>
-            openWorkCenterSection("quotes", {
-              quoteStatusFilter:
-                quoteResponseAlertCount > 0 ? "accepted" : undefined,
-            }),
+          onClick: () => openWorkCenterSection("quotes"),
+        }
+      : (canonicalScheduleCounts?.changeRequested || 0) > 0
+      ? {
+          label: "Review customer’s new time",
+          note: "Customer proposed a new time",
+          onClick: () => openWorkCenterSection("schedule"),
+        }
+      : (canonicalScheduleCounts?.inProgress || 0) > 0
+      ? {
+          label: "Continue Evaluation Visit",
+          note: `${canonicalScheduleCounts.inProgress} visit in progress`,
+          onClick: () => openWorkCenterSection("schedule"),
+        }
+      : (canonicalScheduleCounts?.needsScheduling || 0) > 0
+      ? {
+          label: "Schedule Evaluation Visit",
+          note: `${canonicalScheduleCounts.needsScheduling} visits need scheduling`,
+          onClick: () => openWorkCenterSection("schedule"),
+        }
+      : (canonicalScheduleCounts?.waiting || 0) > 0
+      ? {
+          label: "Review Schedule",
+          note: `${canonicalScheduleCounts.waiting} visit waiting for customer`,
+          onClick: () => openWorkCenterSection("schedule"),
         }
       : todayScheduleCount > 0
       ? {
@@ -721,7 +1062,7 @@ function BusinessDashboard({ setPage }) {
       ? {
           label: text.continueWork,
           note: text.inProgress,
-          onClick: openFirstActiveProjectConversation,
+          onClick: openCurrentJobs,
         }
       : {
           label: text.reviewBusinessReadiness,
@@ -729,24 +1070,8 @@ function BusinessDashboard({ setPage }) {
           onClick: openBusinessProfile,
         };
   const dashboardQuickAccessItems = [
-    {
-      key: "schedule",
-      icon: "schedule",
-      label: text.quickAccessSchedule,
-      note: text.quickAccessScheduleNote,
-      tone: "#0284c7",
-      toneBg: "rgba(2,132,199,0.13)",
-      onClick: () => openWorkCenterSection("schedule", { filter: "today" }),
-    },
-    {
-      key: "messages",
-      icon: "messages",
-      label: text.quickAccessMessages,
-      note: text.quickAccessMessagesNote,
-      tone: "#1f4d34",
-      toneBg: "rgba(31,77,52,0.12)",
-      onClick: () => setPage("messagesInbox"),
-    },
+
+
     {
       key: "hiring",
       icon: "hiringCenter",
@@ -763,7 +1088,16 @@ function BusinessDashboard({ setPage }) {
       note: text.quickAccessQuoteBuilderNote,
       tone: "#d97706",
       toneBg: "rgba(217,119,6,0.13)",
-      onClick: () => setPage("quoteBuilder"),
+      onClick: () => {
+        clearGenericNewQuoteContext();
+        localStorage.removeItem("selectedQuoteRequest");
+        localStorage.removeItem("selectedQuoteForEdit");
+        localStorage.removeItem("selectedWorkCenterRequest");
+        localStorage.removeItem("selectedHomeownerRequest");
+        localStorage.setItem("quoteBuilderSource", "business_dashboard_new_quote");
+        localStorage.setItem("quoteBuilderReturnPage", "businessDashboard");
+        setPage("quoteBuilder?new=1");
+      },
     },
     {
       key: "invoice-builder",
@@ -772,17 +1106,14 @@ function BusinessDashboard({ setPage }) {
       note: text.quickAccessInvoiceBuilderNote,
       tone: "#16a34a",
       toneBg: "rgba(22,163,74,0.13)",
-      onClick: () => setPage("invoiceBuilder"),
+      onClick: () => {
+        localStorage.setItem("invoiceBuilderSource", "business_dashboard_new_invoice");
+        localStorage.setItem("invoiceBuilderReturnPage", "businessDashboard");
+        setPage("invoiceBuilder");
+      },
     },
-    {
-      key: "business-profile",
-      icon: "businessProfile",
-      label: t("businessProfile", language),
-      note: text.quickAccessBusinessProfileNote,
-      tone: "#14351f",
-      toneBg: "rgba(31,77,52,0.13)",
-      onClick: openBusinessProfile,
-    },
+
+    { key: "timesheet", icon: "schedule", label: "Timesheet", note: "Track hours & work time", tone: "#3B82F6", toneBg: "#EFF6FF", onClick: () => setPage("teamOperations?view=timesheets") },
   ];
 
   return (
@@ -805,7 +1136,7 @@ function BusinessDashboard({ setPage }) {
           }
 
           .business-dashboard-quick-access {
-            display: none;
+            display: grid;
           }
 
           .business-dashboard-community-entry {
@@ -821,153 +1152,28 @@ function BusinessDashboard({ setPage }) {
             outline-offset: 2px;
           }
 
-          @media (min-width: 1100px) {
-            #root[data-app-layout="desktop"] .app-page.business-dashboard.meetro-wide-page {
-              --meetro-dashboard-workspace-max: min(var(--meetro-layout-wide-mid-max), var(--meetro-workspace-max-width));
-              --meetro-dashboard-workspace-extra: max(0px, calc((100vw - var(--meetro-sidebar-width) - var(--meetro-dashboard-workspace-max)) / 2));
-              width: min(calc(100vw - var(--meetro-sidebar-width)), var(--meetro-dashboard-workspace-max)) !important;
-              max-width: var(--meetro-dashboard-workspace-max) !important;
-              margin-left: calc(var(--meetro-sidebar-width) + var(--meetro-dashboard-workspace-extra)) !important;
-              margin-right: var(--meetro-dashboard-workspace-extra) !important;
-              padding-top: clamp(24px, 2.8vw, 40px) !important;
-              padding-left: clamp(24px, 3vw, 48px) !important;
-              padding-right: clamp(24px, 3vw, 48px) !important;
-            }
-
-            .business-dashboard-content-lane {
-              display: block !important;
-              width: 100%;
-              max-width: 1180px;
-              margin: 0;
-            }
-
-            .business-dashboard-header-section {
-              padding: 18px !important;
-              margin-bottom: 18px !important;
-              border-radius: 28px !important;
-            }
-
-            .business-dashboard-hero-card {
-              padding: 18px !important;
-              border-radius: 24px !important;
-            }
-
-            .business-dashboard-hero-card h1 {
-              font-size: clamp(24px, 2.1vw, 30px) !important;
-            }
-
-            .business-dashboard-status-strip {
-              margin-bottom: 14px !important;
-            }
-
-            .business-dashboard-today-focus {
-              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-              padding: 10px !important;
-              margin-bottom: 10px !important;
-            }
-
-            .business-dashboard-hero-context,
-            .business-dashboard-primary-action {
-              display: flex !important;
-            }
-
-            .business-dashboard-quick-access {
-              display: grid;
-            }
-
-            .business-dashboard-community-entry {
-              display: none !important;
-            }
-
-            .business-dashboard-quick-access-grid {
-              grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-            }
-
-            .business-dashboard-glance-grid {
-              grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-              gap: 10px !important;
-            }
-
-            .business-dashboard-main-grid {
-              display: grid !important;
-              grid-template-columns: minmax(0, 1fr);
-              gap: 18px;
-              align-items: start;
-            }
-
-            .business-dashboard-primary-column,
-            .business-dashboard-secondary-column {
-              display: grid !important;
-              gap: 18px;
-              min-width: 0;
-            }
-
-            .business-dashboard-section-card,
-            .business-dashboard-leads-card {
-              margin-bottom: 0 !important;
-              padding: 18px !important;
-              border-radius: 22px !important;
-            }
-
-            .business-dashboard-tools-row {
-              display: grid !important;
-              grid-template-columns: minmax(0, 1fr);
-              gap: 18px;
-              align-items: stretch;
-              margin-top: 18px;
-            }
-
-            .business-dashboard-tools-section {
-              margin-bottom: 0 !important;
-            }
-
-            .business-dashboard-tools-section > button,
-            .business-dashboard-upgrade-card {
-              min-height: 100%;
-            }
-
-            @media (min-width: 1100px) {
-              .business-dashboard-quick-access-grid {
-                grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
-              }
-
-              .business-dashboard-glance-grid {
-                grid-template-columns: repeat(3, minmax(0, 1fr)) !important;
-              }
-
-              .business-dashboard-main-grid {
-                grid-template-columns: minmax(0, 1.08fr) minmax(300px, 0.92fr);
-              }
-
-              .business-dashboard-tools-row {
-                grid-template-columns: minmax(0, 1.08fr) minmax(280px, 0.92fr);
-              }
-            }
-          }
         `}
       </style>
       <div className="business-dashboard-content-lane" style={dashboardContentLane}>
         <section className="business-dashboard-header-section" style={dashboardHeaderSection}>
-          <div style={topBar}>
-            <div style={brandWrap}>
-              <span style={brandMain}>Meetro</span>
-              <span style={brandBadge}>Business</span>
+          <div className="home-dashboard-topbar" style={topBar}>
+            <div className="home-dashboard-brand-wrap" style={brandWrap}>
+              <span className="home-dashboard-brand-mark" aria-hidden="true">M</span>
+              <span className="home-dashboard-brand-copy">
+                <strong style={brandMain}>Meetro</strong>
+                <small className="business-dashboard-desktop-brand-badge" style={brandBadge}>Business</small>
+                <small className="business-dashboard-mobile-brand-tagline" style={brandBadge}>Real work. Real opportunity.</small>
+              </span>
             </div>
-
-            <button
-              onClick={() => {
-                openBusinessProfile();
-              }}
-              style={profileMini}
-            >
-              {profile?.image_url ? (
-                <img src={profile.image_url} alt={businessName} style={miniAvatar} />
-              ) : (
-                <span style={profileInitial}>
-                  {String(businessName || "B").charAt(0).toUpperCase()}
-                </span>
-              )}
-            </button>
+            <div className="home-dashboard-topbar-actions">
+              <button className="home-dashboard-notification" type="button" aria-label="Open communications" onClick={() => setPage("messagesInbox")}>
+                <MeetroIcon name="notifications" size={20} decorative />
+                {unreadMessages > 0 ? <span className="home-dashboard-notification-count">{unreadMessages}</span> : null}
+              </button>
+              <button className="home-dashboard-profile-button" type="button" aria-label={`${text.openBusinessProfile}: ${businessName}`} onClick={openBusinessProfile} style={profileMini}>
+                {profile?.image_url ? <img src={profile.image_url} alt="" style={miniAvatar} /> : <span style={profileInitial} aria-hidden="true">{String(businessName || "B").charAt(0).toUpperCase()}</span>}
+              </button>
+            </div>
           </div>
 
           {hasActiveEmergency && (
@@ -1011,6 +1217,44 @@ function BusinessDashboard({ setPage }) {
               </div>
             </button>
 
+            <button
+              style={statusItem}
+              onClick={() =>
+                updateDispatchReady(
+                  !dispatchReady
+                )
+              }
+            >
+              <span
+                style={statusDot(
+                  availableNow &&
+                    dispatchReady
+                )}
+              />
+
+              <div>
+                <strong>
+                  {language === "es"
+                    ? "Selección directa de Emergencia"
+                    : "Allow Direct Emergency Selection"}
+                </strong>
+
+                <p>
+                  {dispatchReady
+                    ? availableNow
+                      ? language === "es"
+                        ? "Los propietarios pueden elegir tu negocio directamente."
+                        : "Homeowners may choose your business directly."
+                      : language === "es"
+                        ? "Activado — enciende Disponible Ahora para aparecer."
+                        : "Enabled — turn on Available Now to appear."
+                    : language === "es"
+                      ? "La selección directa está desactivada."
+                      : "Direct selection is off."}
+                </p>
+              </div>
+            </button>
+
             <button style={statusItem} onClick={() => setPage("messagesInbox")}>
               <span style={messageIcon} aria-hidden="true">
                 <span style={messageIconLine} />
@@ -1026,11 +1270,14 @@ function BusinessDashboard({ setPage }) {
 
           <section className="business-dashboard-hero-card" style={heroCard}>
             <div style={heroHeader}>
-              <div>
-                <h1 style={heroTitle}>{text.dashboard}</h1>
-
-                <p style={heroSubtitle}>{text.subtitle}</p>
-                <p style={businessNameLine}>{businessName}</p>
+              <div className="business-dashboard-desktop-intro">
+                <h1 style={heroTitle}>{language === "en" ? professionalHomeGreeting : text.dashboard}</h1>
+                <p className="home-dashboard-greeting" style={heroSubtitle}>{language === "en" ? "Handle what matters first." : text.subtitle}</p>
+              </div>
+              <div className="business-dashboard-mobile-intro">
+                <p className="home-dashboard-greeting" style={heroSubtitle}>{language === "en" ? professionalHomeGreeting : text.dashboard}</p>
+                <h1 style={heroTitle}>{text.reviewOpportunities}</h1>
+                <p className="business-dashboard-hero-support">{text.subtitle}</p>
               </div>
 
               <div
@@ -1083,72 +1330,216 @@ function BusinessDashboard({ setPage }) {
               </button>
             </div>
 
+            <div className="business-dashboard-hero-actions">
+              <button
+                className="business-dashboard-hero-continue"
+                type="button"
+                onClick={() => openWorkCenterSection("schedule")}
+              >
+                <span>{text.continueWork}</span>
+                <span aria-hidden="true">→</span>
+              </button>
+            </div>
+
+
+          </section>
+        </section>
+
+        <section className="business-dashboard-availability" aria-labelledby="dashboard-availability-title">
+          <h2 id="dashboard-availability-title">{availabilityCopy.title}</h2>
+          <div className="business-dashboard-availability-grid" aria-busy={availabilitySaving}>
+            {[
+              { key: "available", value: availableNow, update: updateBusinessAvailability },
+              { key: "dispatch", value: dispatchReady, update: updateDispatchReady },
+            ].map(({ key, value, update }) => (
+              <div className="business-dashboard-availability-row" key={key}>
+                <div>
+                  <strong id={`dashboard-${key}-label`}>{availabilityCopy[key]}</strong>
+                  <p id={`dashboard-${key}-help`}>{availabilityCopy[`${key}Help`]}</p>
+                </div>
+                <button
+                  type="button"
+                  className="business-dashboard-availability-switch"
+                  role="switch"
+                  aria-checked={value}
+                  aria-labelledby={`dashboard-${key}-label`}
+                  aria-describedby={`dashboard-${key}-help`}
+                  disabled={availabilitySaving}
+                  onClick={() => update(!value)}
+                >
+                  <span className="business-dashboard-availability-thumb" aria-hidden="true" />
+                  <span>{value ? availabilityCopy.on : availabilityCopy.off}</span>
+                </button>
+              </div>
+            ))}
+          </div>
+          {!availableNow && dispatchReady && <p className="business-dashboard-availability-note">{availabilityCopy.dependency}</p>}
+          {availabilitySaving && <p className="business-dashboard-availability-note" role="status">{availabilityCopy.saving}</p>}
+          {availabilityError && <p className="business-dashboard-availability-error" role="alert">{availabilityCopy.error}</p>}
+        </section>
+
+            <section className="business-dashboard-leads-card" style={leadsCard}>
+              <div className="home-dashboard-leads-heading">
+                <span className="home-dashboard-leads-icon" aria-hidden="true">
+                  <MeetroIcon name="leadPerson" size={28} decorative />
+                </span>
+                <div className="home-dashboard-leads-heading-copy">
+                  <div className="home-dashboard-leads-title-row">
+                    {leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.READY ? (
+                      <span className="home-dashboard-leads-new-badge">{authoritativeLeads.length} NEW</span>
+                    ) : null}
+                    <h2 style={sectionTitle}>{text.newLeads}</h2>
+                  </div>
+                  {leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.READY ? (
+                    <>
+                      <strong className="home-dashboard-leads-count">
+                        {authoritativeLeads.length} new {authoritativeLeads.length === 1 ? "lead" : "leads"}
+                      </strong>
+                      <p className="home-dashboard-leads-support">Review the authoritative opportunities available to your business.</p>
+                    </>
+                  ) : null}
+                </div>
+                <button
+                  className="home-dashboard-leads-more"
+                  type="button"
+                  aria-label={text.viewAllLeads}
+                  onClick={() => setPage("businessLeads")}
+                >
+                  •••
+                </button>
+              </div>
+
+              <div style={emptyLeadsState} role={leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE ? "alert" : "status"}>
+                {leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.LOADING ? (
+                  <><strong>Loading matching requests…</strong><p>Meetro is checking the authorized opportunity projection.</p></>
+                ) : leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE ? (
+                  <><strong>Request opportunities unavailable</strong><p>Meetro could not verify eligible requests. Try again from Business Leads.</p></>
+                ) : leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.EMPTY ? (
+                  <><strong>No matching requests are available right now.</strong><p>Authorized request matching is active for your saved services and service area.</p></>
+                ) : (
+                  authoritativeLeads.slice(0, 1).map((lead) => <div className="home-dashboard-lead" key={lead.request_id}>
+                    <h3>{lead.project_title || lead.title}</h3>
+                    <p>{[lead.city, lead.state].filter(Boolean).join(", ")}</p>
+                    <p>{lead.project_description || lead.description}</p>
+                    <button type="button" onClick={() => setPage("businessLeads")}>Review Lead →</button>
+                  </div>)
+                )}
+              </div>
+            </section>
+        <section className="home-dashboard-glance" aria-labelledby="dashboard-glance-title">
+          <div className="business-dashboard-section-heading">
+            <h2 id="dashboard-glance-title">At a Glance</h2>
+            <p>Your business at a glance.</p>
+            <button type="button" onClick={() => openWorkCenterSection("active")}>View All →</button>
+          </div>
+            <div className="business-dashboard-glance-grid" style={glanceGrid}>
+              <GlanceItem
+                icon="revenue"
+                title={t("wc52revenue", language)}
+                value={t("wc52viewRevenue", language)}
+                note={t("wc52revenueHelp", language)}
+                onClick={() => openWorkCenterSection("revenue")}
+              />
+
+              <GlanceItem
+                icon="briefcase"
+                title={text.activeJobs}
+                value={
+                  canonicalWorkCenterSummary.status === "ready"
+                    ? activeProjectsCount
+                    : "—"
+                }
+                note={
+                  canonicalWorkCenterSummary.status === "loading"
+                    ? t("loadingBusinessDashboard")
+                    : canonicalWorkCenterSummary.status === "unavailable"
+                      ? t("stateUnavailable")
+                      : activeProjectsCount > 0
+                        ? text.inProgress
+                        : "No active jobs"
+                }
+                detail={activeWorkPreviewLabel}
+                onClick={openWorkCenterLanding}
+              />
+
+              <div
+                style={
+                  pendingQuotesCount > 0
+                    ? pendingQuoteGlowWrap
+                    : {}
+                }
+              >
+                <GlanceItem
+                  icon="quoteDoc"
+                  title={text.pendingQuotes}
+                  value={
+                    canonicalQuotesSummary.status === "ready"
+                      ? pendingQuotesCount
+                      : "—"
+                  }
+                  note={
+                    canonicalQuotesSummary.status === "loading"
+                      ? t("loadingBusinessDashboard")
+                      : canonicalQuotesSummary.status === "unavailable"
+                        ? t("stateUnavailable")
+                        : pendingQuotesCount > 0
+                          ? text.awaitingResponse
+                          : "No pending quotes"
+                  }
+                  detail={pendingQuotePreviewLabel}
+                  onClick={() => openWorkCenterSection("quotes")}
+                />
+              </div>
+
+              <div
+                style={
+                  canonicalScheduleAttentionCount > 0
+                    ? pendingQuoteGlowWrap
+                    : {}
+                }
+              >
+                <GlanceItem
+                  icon="schedule"
+                  title={text.todayJobs}
+                  value={canonicalScheduleCounts ? todayScheduleCount : "—"}
+                  note={
+                    canonicalScheduleAttentionCount > 0
+                      ? (canonicalScheduleCounts?.changeRequested || 0) > 0
+                        ? "Customer proposed a new time"
+                        : (canonicalScheduleCounts?.inProgress || 0) > 0
+                          ? `${canonicalScheduleCounts.inProgress} visit in progress`
+                        : (canonicalScheduleCounts?.needsScheduling || 0) > 0
+                          ? `${canonicalScheduleCounts.needsScheduling} visits need scheduling`
+                          : `${canonicalScheduleCounts?.waiting || 0} visit waiting for customer`
+                      : todayScheduleCount > 0
+                        ? text.scheduledToday
+                        : canonicalScheduleCounts
+                          ? "No visits today"
+                          : "Schedule unavailable"
+                  }
+                  detail={businessSchedule[0]?.title || ""}
+                  onClick={openFirstScheduledConversation}
+                />
+              </div>
+            </div>
+        </section>
             <section
               className="business-dashboard-quick-access"
               style={quickAccessPanel}
               aria-label={text.quickAccessTitle}
             >
-              <div style={quickAccessHeader}>
-                <span>{text.quickAccessTitle}</span>
+              <div className="business-dashboard-section-heading" style={quickAccessHeader}>
+                <h2>{text.quickAccessTitle}</h2>
+                <p>Tools to get things done.</p>
               </div>
 
               <div className="business-dashboard-quick-access-grid" style={quickAccessGrid}>
-                {dashboardQuickAccessItems.map((item) => (
-                  <DashboardQuickAccessShortcut key={item.key} {...item} />
+                {dashboardQuickAccessItems.map(({ key, ...item }) => (
+                  <DashboardQuickAccessShortcut key={key} {...item} />
                 ))}
               </div>
             </section>
 
-            <div className="business-dashboard-glance-grid" style={glanceGrid}>
-              <div
-                style={
-                  scheduleResponseAlertCount > 0
-                    ? pendingQuoteGlowWrap
-                    : {}
-                }
-              >
-                <GlanceItem
-                  title={text.todayJobs}
-                  value={todayScheduleCount}
-                  note={
-                    scheduleResponseAlertCount > 0
-                      ? language === "es"
-                        ? "Respuesta de cita"
-                        : "Appointment response"
-                      : text.scheduledToday
-                  }
-                  onClick={openFirstScheduledConversation}
-                />
-              </div>
-
-              <GlanceItem
-                title={text.activeJobs}
-                value={activeProjectsCount}
-                note={text.inProgress}
-                onClick={openFirstActiveProjectConversation}
-              />
-
-              <div
-                style={
-                  quoteResponseAlertCount > 0
-                    ? pendingQuoteGlowWrap
-                    : {}
-                }
-              >
-                <GlanceItem
-                  title={text.pendingQuotes}
-                  value={pendingQuotesCount}
-                  note={text.awaitingResponse}
-                  onClick={() =>
-                    openWorkCenterSection("quotes", {
-                      quoteStatusFilter: quoteResponseAlertCount > 0 ? "accepted" : undefined,
-                    })
-                  }
-                />
-              </div>
-            </div>
-          </section>
-        </section>
 
         <section
           className="business-dashboard-community-entry"
@@ -1159,10 +1550,10 @@ function BusinessDashboard({ setPage }) {
             style={communityEntryCard}
             onClick={() => setPage("discover")}
           >
-            <span style={communityEntryIcon}>
+            <span className="business-dashboard-support-icon" style={communityEntryIcon}>
               <MeetroIcon name="discover" size={24} decorative />
             </span>
-            <span style={communityEntryCopy}>
+            <span className="business-dashboard-support-copy" style={communityEntryCopy}>
               <strong style={communityEntryTitle}>
                 {t("communityEntryTitle", language)}
               </strong>
@@ -1170,7 +1561,7 @@ function BusinessDashboard({ setPage }) {
                 {t("communityEntryBusinessCopy", language)}
               </span>
             </span>
-            <span style={communityEntryAction}>
+            <span className="business-dashboard-support-action" style={communityEntryAction}>
               {t("communityOpenAction", language)} →
             </span>
           </button>
@@ -1232,56 +1623,32 @@ function BusinessDashboard({ setPage }) {
             </section>
           </div>
 
-          <div className="business-dashboard-secondary-column" style={dashboardDesktopFlow}>
-            <section className="business-dashboard-leads-card" style={leadsCard}>
-              <div style={sectionTop}>
-                <h2 style={sectionTitle}>{text.newLeads}</h2>
 
-                <button
-                  style={linkButton}
-                  onClick={() => setPage("businessLeads")}
-                >
-                  {text.viewAllLeads} →
-                </button>
-              </div>
-
-              <div style={emptyLeadsState} role={leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE ? "alert" : "status"}>
-                {leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.LOADING ? (
-                  <><strong>Loading matching requests…</strong><p>Meetro is checking the authorized opportunity projection.</p></>
-                ) : leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.UNAVAILABLE ? (
-                  <><strong>Request opportunities unavailable</strong><p>Meetro could not verify eligible requests. Try again from Business Leads.</p></>
-                ) : leadStatus === PROFESSIONAL_OPPORTUNITY_STATUS.EMPTY ? (
-                  <><strong>No matching requests are available right now.</strong><p>Authorized request matching is active for your saved services and service area.</p></>
-                ) : (
-                  <><strong>{authoritativeLeads.length} matching {authoritativeLeads.length === 1 ? "request" : "requests"}</strong><p>Review the authoritative opportunities available to your business.</p></>
-                )}
-              </div>
-            </section>
-          </div>
         </div>
 
         <div className="business-dashboard-tools-row" style={dashboardDesktopFlow}>
           <section className="business-dashboard-tools-section" style={singleActionSection}>
             <button
+              className="business-dashboard-tools-button"
               style={quoteActionButton}
               onClick={() => setPage("businessCommandCenter")}
             >
-              <div style={quoteActionIcon}>
+              <div className="business-dashboard-support-icon" style={quoteActionIcon}>
                 <MeetroIcon name="businessTools" size={34} decorative />
               </div>
 
-              <div style={quoteActionContent}>
-                <span style={quoteActionEyebrow}>{text.businessToolsSubtitle}</span>
+              <div className="business-dashboard-support-copy" style={quoteActionContent}>
+                <span className="business-dashboard-tools-eyebrow" style={quoteActionEyebrow}>{text.businessToolsSubtitle}</span>
 
                 <strong style={{ fontSize: "18px" }}>
                   {text.businessToolsTitle}
                 </strong>
 
-                <span style={{ opacity: 0.82, lineHeight: "1.5" }}>
+                <span className="business-dashboard-tools-description" style={{ opacity: 0.82, lineHeight: "1.5" }}>
                   {text.businessToolsDescription}
                 </span>
 
-                <div style={businessToolsFeatureList} aria-hidden="true">
+                <div className="business-dashboard-tools-features" style={businessToolsFeatureList} aria-hidden="true">
                   {text.businessToolsFeatures.map((feature) => (
                     <span key={feature} style={businessToolsFeatureChip}>
                       {feature}
@@ -1289,20 +1656,17 @@ function BusinessDashboard({ setPage }) {
                   ))}
                 </div>
 
-                <span style={businessToolsCta}>
+                <span className="business-dashboard-support-action business-dashboard-tools-cta" style={businessToolsCta}>
                   {text.openBusinessTools} →
                 </span>
               </div>
             </button>
           </section>
 
-          <section className="business-dashboard-upgrade-card" style={upgradeCard}>
-            <div>
-              <span style={upgradeBadge}>Founding Pro</span>
-              <h2 style={upgradeTitle}>{text.upgradeTitle}</h2>
-              <p style={upgradeText}>{text.upgradeText}</p>
-            </div>
-          </section>
+          <BusinessPlanStatusCard
+            setPage={setPage}
+            className="business-dashboard-plan-card"
+          />
         </div>
       </div>
 
@@ -1311,7 +1675,7 @@ function BusinessDashboard({ setPage }) {
   );
 }
 
-function GlanceItem({ title, value, note, onClick }) {
+function GlanceItem({ icon, title, value, note, detail, onClick }) {
   const Component = onClick ? "button" : "div";
 
   return (
@@ -1323,9 +1687,11 @@ function GlanceItem({ title, value, note, onClick }) {
       }}
       onClick={onClick}
     >
+      <span className="home-dashboard-glance-icon" aria-hidden="true"><MeetroIcon name={icon} size={20} decorative /></span>
       <span style={glanceTitle}>{title}</span>
       <strong style={glanceValue}>{value}</strong>
       <p style={glanceNote}>{note}</p>
+      {detail ? <span className="home-dashboard-glance-record">{detail}</span> : null}
     </Component>
   );
 }
@@ -1344,11 +1710,23 @@ function QuickAction({ icon, label, note, badge, onClick }) {
   );
 }
 
-function DashboardQuickAccessShortcut({ icon, label, note, tone, toneBg, onClick }) {
+function DashboardQuickAccessShortcut({
+  icon,
+  label,
+  note,
+  tone,
+  toneBg,
+  desktopDuplicate = false,
+  onClick,
+}) {
   return (
     <button
       type="button"
-      className="business-dashboard-quick-access-item"
+      className={`business-dashboard-quick-access-item${
+        desktopDuplicate
+          ? " business-dashboard-quick-access-item--desktop-duplicate"
+          : ""
+      }`}
       style={quickAccessShortcut}
       onClick={onClick}
     >
@@ -1471,9 +1849,11 @@ const brandBadge = {
 };
 
 const profileMini = {
-  width: "50px",
-  height: "50px",
-  borderRadius: "18px",
+  width: "62px",
+  height: "62px",
+  borderRadius: "999px",
+  padding: "6px",
+  overflow: "hidden",
   border: "1px solid rgba(255,255,255,0.18)",
   background: "rgba(255,255,255,0.08)",
   color: "white",
@@ -1489,7 +1869,13 @@ const profileMini = {
 const miniAvatar = {
   width: "100%",
   height: "100%",
-  objectFit: "cover",
+  objectFit: "contain",
+  padding: "4px",
+  boxSizing: "border-box",
+  background: "#ffffff",
+  borderRadius: "999px",
+  padding: "6px",
+  boxSizing: "border-box",
 };
 
 const profileInitial = {
@@ -1672,13 +2058,6 @@ const profileUnavailableButton = {
   color: "#fff",
   fontWeight: 800,
   cursor: "pointer",
-};
-
-const businessNameLine = {
-  margin: "0 0 18px",
-  color: "#e2e8f0",
-  fontSize: "13px",
-  fontWeight: "800",
 };
 
 const todayFocusPanel = {
@@ -2293,39 +2672,6 @@ const leadsCard = {
   marginBottom: "16px",
   border: "1px solid var(--meetro-color-line, rgba(78,68,55,0.12))",
   boxShadow: "var(--meetro-shadow-soft, 0 16px 38px rgba(49,35,20,0.08))",
-};
-
-const upgradeCard = {
-  background:
-    "var(--meetro-gradient-community-action, linear-gradient(135deg, #14351f, #1f4d34))",
-  color: "white",
-  borderRadius: "26px",
-  padding: "20px",
-  display: "flex",
-  gap: "14px",
-  alignItems: "center",
-  boxShadow: "0 18px 40px rgba(49,35,20,0.18)",
-};
-
-const upgradeBadge = {
-  background: "rgba(255,255,255,0.18)",
-  padding: "6px 10px",
-  borderRadius: "999px",
-  fontSize: "11px",
-  fontWeight: "900",
-  textTransform: "uppercase",
-};
-
-const upgradeTitle = {
-  margin: "10px 0 6px",
-  fontSize: "20px",
-};
-
-const upgradeText = {
-  margin: 0,
-  lineHeight: 1.45,
-  opacity: 0.92,
-  fontSize: "14px",
 };
 
 export default BusinessDashboard;

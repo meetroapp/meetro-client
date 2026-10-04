@@ -162,9 +162,13 @@ test("browser-authored Emergency lifecycle and conversation authority fail close
     threadSource,
     /const isLegacyEmergencyThread =[\s\S]*?legacyWorkflowStorageEnabled[\s\S]*?!isCanonicalThread[\s\S]*?conversationType === "emergency"/
   );
-  assert.match(
+  assert.doesNotMatch(
     threadSource,
-    /if \(isCanonicalEmergencyThread\) \{[\s\S]*?transitionEmergencyDispatch[\s\S]*?if \(!isLegacyEmergencyThread\) return;[\s\S]*?transitionEmergencyStatus/
+    /transitionEmergencyDispatch/
+  );
+  assert.doesNotMatch(
+    threadSource,
+    /transitionEmergencyStatus/
   );
   assert.match(
     businessDashboardSource,

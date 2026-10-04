@@ -9,7 +9,10 @@ import {
   loadCanonicalEvaluationForRecord,
   saveCanonicalEvaluationDraft,
 } from "../src/utils/evaluationAuthorityController.js";
-import { canonicalEvaluationFixture } from "./canonicalEvaluation.test.js";
+import {
+  canonicalEvaluationFixture,
+  ordinaryCanonicalEvaluationFixture,
+} from "./canonicalEvaluation.test.js";
 
 const root = join(import.meta.dirname, "..");
 const dashboardSource = readFileSync(join(root, "src/pages/ContractorDashboard.jsx"), "utf8");
@@ -111,7 +114,46 @@ test("ambiguous ordinary/project records and browser media fail before any API c
   }
 });
 
-test("production Evaluation path is guarded before both legacy writers and exposes no Quote authority", () => {
+test("ordinary Evaluation creation is available before a canonical Evaluation Visit", async () => {
+  const fixture = ordinaryCanonicalEvaluationFixture({ aggregate: { version: 1 } });
+  const ordinary = ordinaryCanonicalEvaluationFixture({
+    aggregate: {
+      version: 1,
+      sourceContext: {
+        ...fixture.aggregate.sourceContext,
+        evaluationVisitId: null,
+      },
+    },
+  });
+  const jobId = ordinary.aggregate.sourceContext.jobId;
+  const browser = installBrowser([
+    { status: 200, body: { success: true, evaluations: [] } },
+    { status: 201, body: { success: true, ...ordinary } },
+  ]);
+  try {
+    const record = {
+      source: "CANONICAL_BACKEND_READ",
+      readOnly: true,
+      lifecycleVerified: true,
+      lifecycleContractVersion: 2,
+      jobId,
+      requestId: 41,
+      relationshipId: 72,
+    };
+    const created = await saveCanonicalEvaluationDraft({
+      record,
+      form: form(),
+      createIdempotencyKey: () => "evaluation-create-from-visit",
+    });
+    assert.equal(created.evaluation.id, ordinary.evaluation.id);
+    assert.equal(JSON.parse(browser.calls[1].options.body).visitId, null);
+    assert.doesNotMatch(browser.calls.map((call) => call.url).join("\n"), /visits|quotes|workstreams|payments|invoices/);
+  } finally {
+    browser.restore();
+  }
+});
+
+test("production Evaluation remains canonically guarded while Leads own no post-selection Evaluation routing", () => {
   assert.match(
     dashboardSource,
     /function saveEvaluationRecord[\s\S]*if \(!canReadLegacyWorkflowStorage\(\)\) \{[\s\S]*persistCanonicalEvaluation/
@@ -121,11 +163,14 @@ test("production Evaluation path is guarded before both legacy writers and expos
     /const saveSarahPageEvaluationNotes[\s\S]*if \(!canReadLegacyWorkflowStorage\(\)\) \{[\s\S]*persistCanonicalEvaluation/
   );
   assert.match(dashboardSource, /loadCanonicalEvaluationForRecord/);
-  assert.match(leadsSource, /buildCanonicalEvaluationRoute/);
-  assert.match(
+  assert.doesNotMatch(leadsSource, /buildCanonicalEvaluationRoute/);
+  assert.doesNotMatch(leadsSource, /Open Evaluation/);
+  assert.doesNotMatch(
     leadsSource,
-    /professional_arrived[\s\S]*work_in_progress[\s\S]*completed[\s\S]*Open Evaluation/
+    /professional_arrived[\s\S]*Open Evaluation/
   );
+  assert.match(leadsSource, /listProfessionalEmergencyOpportunities/);
+  assert.match(leadsSource, /respondToEmergencyOpportunity/);
   assert.doesNotMatch(controllerSource, /localStorage|sessionStorage|Date\.now|Math\.random/);
   assert.equal(isCanonicalQuoteCreationAvailable(), false);
   assert.doesNotMatch(controllerSource, /\/quotes|\/authorizations|\/start-work/);

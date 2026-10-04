@@ -5,6 +5,8 @@ import {
 
 export const EMERGENCY_API_ENDPOINTS = Object.freeze({
   createDraft: "/emergency-requests/drafts",
+  followUpJobRequest: (emergencyRequestId) =>
+    `/emergency-requests/${emergencyRequestId}/follow-up-job-request`,
   requests: "/emergency-requests",
   professionalOpportunities:
     "/professional-emergency-opportunities",
@@ -16,6 +18,13 @@ export const EMERGENCY_API_ENDPOINTS = Object.freeze({
     `/emergency-requests/${emergencyRequestId}/responses`,
   selectResponse: (emergencyRequestId, relationshipId) =>
     `/emergency-requests/${emergencyRequestId}/responses/${relationshipId}/select`,
+  availableProfessionals: (emergencyRequestId) =>
+    `/emergency-requests/${emergencyRequestId}/available-professionals`,
+  selectAvailableProfessional: (
+    emergencyRequestId,
+    contractorProfileId
+  ) =>
+    `/emergency-requests/${emergencyRequestId}/available-professionals/${contractorProfileId}/select`,
   safetyAssessment: (emergencyRequestId) =>
     `/emergency-requests/${emergencyRequestId}/safety-assessment`,
   prepare: (emergencyRequestId) =>
@@ -729,6 +738,107 @@ export function normalizeHomeownerEmergencyResponsesResult(result) {
   };
 }
 
+export function normalizeHomeownerAvailableEmergencyProfessionalsResult(
+  result
+) {
+  const normalized = normalizeTransportResult(
+    result,
+    "Available Emergency professionals could not be loaded."
+  );
+  const source = normalized.data?.professionals;
+  const requestId = normalizeEmergencyRequestId(
+    normalized.data?.emergencyRequest?.id
+  );
+
+  if (
+    !normalized.ok ||
+    !requestId ||
+    !Array.isArray(source)
+  ) {
+    return {
+      ...normalized,
+      ok: false,
+      emergencyRequest: null,
+      professionals: [],
+    };
+  }
+
+  const professionals = source
+    .map((professional) => {
+      if (!isRecord(professional)) {
+        return null;
+      }
+
+      const contractorProfileId =
+        normalizeEmergencyRequestId(
+          professional.contractorProfileId
+        );
+      const businessName = cleanText(
+        professional.businessName
+      );
+      const serviceSpecialties =
+        professional.serviceSpecialties;
+
+      if (
+        !contractorProfileId ||
+        !businessName ||
+        !Array.isArray(serviceSpecialties) ||
+        serviceSpecialties.some(
+          (value) => typeof value !== "string"
+        ) ||
+        professional.availableNow !== true ||
+        professional.dispatchReady !== true
+      ) {
+        return null;
+      }
+
+      return {
+        contractorProfileId,
+        businessName,
+        category: cleanText(
+          professional.category
+        ),
+        serviceSpecialties:
+          serviceSpecialties
+            .map((value) => value.trim())
+            .filter(Boolean),
+        profileImageUrl:
+          cleanText(
+            professional.profileImageUrl
+          ) || null,
+        serviceArea: cleanText(
+          professional.serviceArea
+        ),
+        availableNow: true,
+        dispatchReady: true,
+      };
+    })
+    .filter(Boolean);
+
+  if (professionals.length !== source.length) {
+    return {
+      ...normalized,
+      ok: false,
+      code: EMERGENCY_CLIENT_ERROR.INVALID_RESPONSE,
+      message:
+        "The Available Now professional list was invalid.",
+      emergencyRequest: null,
+      professionals: [],
+    };
+  }
+
+  return {
+    ...normalized,
+    emergencyRequest: {
+      id: requestId,
+      status: cleanText(
+        normalized.data.emergencyRequest.status
+      ),
+    },
+    professionals,
+  };
+}
+
 export function normalizeEmergencySelectionResult(result) {
   const normalized = normalizeTransportResult(
     result,
@@ -953,6 +1063,79 @@ export function listHomeownerEmergencyResponses(
   });
 }
 
+export function listHomeownerAvailableEmergencyProfessionals(
+  emergencyRequestId,
+  {
+    authFetchImpl = authFetch,
+    setPage,
+  } = {}
+) {
+  const normalizedId =
+    normalizeEmergencyRequestId(emergencyRequestId);
+
+  if (!normalizedId) {
+    return Promise.resolve(
+      invalidEmergencyRequestIdResult()
+    );
+  }
+
+  return executeEmergencyRequest({
+    endpoint:
+      EMERGENCY_API_ENDPOINTS.availableProfessionals(
+        normalizedId
+      ),
+    method: "GET",
+    authFetchImpl,
+    setPage,
+    normalizeResult:
+      normalizeHomeownerAvailableEmergencyProfessionalsResult,
+  });
+}
+
+export function selectHomeownerAvailableEmergencyProfessional(
+  emergencyRequestId,
+  contractorProfileId,
+  {
+    authFetchImpl = authFetch,
+    setPage,
+  } = {}
+) {
+  const normalizedRequestId =
+    normalizeEmergencyRequestId(emergencyRequestId);
+  const normalizedContractorProfileId =
+    normalizeEmergencyRequestId(contractorProfileId);
+
+  if (!normalizedRequestId) {
+    return Promise.resolve(
+      invalidEmergencyRequestIdResult()
+    );
+  }
+
+  if (!normalizedContractorProfileId) {
+    return Promise.resolve(
+      buildEmergencyClientFailure({
+        code: "INVALID_CONTRACTOR_PROFILE_ID",
+        message:
+          "A valid professional profile ID is required.",
+        status: 400,
+      })
+    );
+  }
+
+  return executeEmergencyRequest({
+    endpoint:
+      EMERGENCY_API_ENDPOINTS.selectAvailableProfessional(
+        normalizedRequestId,
+        normalizedContractorProfileId
+      ),
+    method: "POST",
+    body: {},
+    authFetchImpl,
+    setPage,
+    normalizeResult: normalizeEmergencySelectionResult,
+  });
+}
+
 export function selectHomeownerEmergencyResponse(
   emergencyRequestId,
   relationshipId,
@@ -1118,4 +1301,58 @@ export function transitionEmergencyDispatch(
     setPage,
     normalizeResult: normalizeEmergencyDispatchResult,
   });
+}
+
+// Reuse the Standard Request Help body; the endpoint supplies all source authority.
+export async function createEmergencyFollowUpJobRequest(
+  emergencyRequestId,
+  payload,
+  { idempotencyKey, authFetchImpl = authFetch, setPage } = {}
+) {
+  const id = normalizeEmergencyRequestId(emergencyRequestId);
+  if (!id) return invalidEmergencyRequestIdResult();
+  if (!cleanText(idempotencyKey)) {
+    return buildEmergencyClientFailure({ code: "JOB_REQUEST_IDEMPOTENCY_KEY_REQUIRED", status: 400,
+      message: "A submission intent is required." });
+  }
+  if (typeof authFetchImpl !== "function") {
+    return buildEmergencyClientFailure({ code: EMERGENCY_CLIENT_ERROR.INVALID_TRANSPORT,
+      message: "The authenticated Emergency transport is unavailable." });
+  }
+  try {
+    const result = await authFetchImpl(EMERGENCY_API_ENDPOINTS.followUpJobRequest(id), {
+      method: "POST",
+      cache: "no-store",
+      headers: { "Idempotency-Key": idempotencyKey },
+      body: JSON.stringify(payload),
+    }, setPage);
+    const normalized = normalizeTransportResult(result, "The follow-up request could not be created.");
+    const data = normalized.data;
+    if (!normalized.ok) {
+      return { ...normalized, failureType:
+        normalized.code.includes("IDEMPOTENCY_CONFLICT") ? "conflict" :
+          (!normalized.status || normalized.status >= 500 || result?.response?.ok) ? "ambiguous" : "definitive" };
+    }
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    const replayed = normalized.code === "EMERGENCY_FOLLOW_UP_JOB_REQUEST_REPLAYED";
+    if (
+      ![200, 201].includes(normalized.status) ||
+      !["EMERGENCY_FOLLOW_UP_JOB_REQUEST_CREATED", "EMERGENCY_FOLLOW_UP_JOB_REQUEST_REPLAYED"].includes(normalized.code) ||
+      data.replayed !== replayed ||
+      normalizeEmergencyRequestId(data.emergencyRequestId) !== id ||
+      typeof data.emergencyJobId !== "string" || !uuid.test(data.emergencyJobId) ||
+      typeof data.linkageId !== "string" || !uuid.test(data.linkageId) ||
+      !isRecord(data.post) || !normalizeEmergencyRequestId(data.post.id)
+    ) {
+      return { ...buildEmergencyClientFailure({ code: EMERGENCY_CLIENT_ERROR.INVALID_RESPONSE,
+        status: normalized.status, message: "The follow-up service did not return a valid request. Retry this submission." }),
+        failureType: "ambiguous" };
+    }
+    return { ok: true, status: normalized.status, code: normalized.code, replayed,
+      emergencyRequestId: id, emergencyJobId: data.emergencyJobId, linkageId: data.linkageId,
+      post: data.post, reportedConcern: data.reportedConcern ?? null };
+  } catch {
+    return { ...buildEmergencyClientFailure({ code: EMERGENCY_CLIENT_ERROR.NETWORK_FAILURE,
+      message: "The follow-up service could not be reached. Retry this submission." }), failureType: "ambiguous" };
+  }
 }

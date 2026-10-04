@@ -135,12 +135,12 @@ function emergencyConversation(overrides = {}) {
     },
     workflow: {
       status: "assigned",
-      allowedActions: ["mark_en_route"],
+      allowedActions: [],
     },
     permissions: {
       canSendMessages: true,
-      canManageWorkflow: true,
-      canMarkEnRoute: true,
+      canManageWorkflow: false,
+      canMarkEnRoute: false,
     },
     conversation_available: true,
     ...overrides,
@@ -155,7 +155,12 @@ function detail(overrides = {}) {
       homeowner: { id: 7, displayName: "Jordan" },
       business: { id: 9, name: "Door Pro" },
     },
-    relationship: { id: 21, requestId: 71, title: "Repair entry door" },
+    relationship: {
+      id: 21,
+      requestId: 71,
+      jobId: "11111111-1111-4111-8111-111111111111",
+      title: "Repair entry door",
+    },
     permissions: { canSendMessages: true },
     ...overrides,
   };
@@ -326,8 +331,8 @@ test("Emergency list projection preserves canonical identity without private loc
   assert.equal(record.emergencyRequestId, 81);
   assert.equal(record.sourceType, "emergency");
   assert.equal(record.conversation_type, "emergency");
-  assert.deepEqual(record.workflow.allowedActions, ["mark_en_route"]);
-  assert.equal(record.permissions.canManageWorkflow, true);
+  assert.deepEqual(record.workflow.allowedActions, []);
+  assert.equal(record.permissions.canManageWorkflow, false);
   assert.equal(Object.hasOwn(record, "location"), false);
   assert.equal(
     findCanonicalEmergencyConversation([record], 81),
@@ -374,6 +379,7 @@ test("canonical Emergency routes survive reload without browser storage identity
     conversationId: 95,
     returnPage: "messagesInbox",
     shell: "",
+    invoiceId: null,
     valid: true,
   });
 });
@@ -411,7 +417,9 @@ test("canonical conversation IDs do not parse decimal or symbolic text", () => {
 });
 
 test("canonical detail accepts only matching authoritative identity", () => {
-  assert.equal(normalizeCanonicalConversationDetail(detail(), 91)?.conversationId, 91);
+  const normalized = normalizeCanonicalConversationDetail(detail(), 91);
+  assert.equal(normalized?.conversationId, 91);
+  assert.equal(normalized?.relationship.jobId, "11111111-1111-4111-8111-111111111111");
   assert.equal(normalizeCanonicalConversationDetail(detail(), 92), null);
   assert.equal(
     normalizeCanonicalConversationDetail(
@@ -419,6 +427,13 @@ test("canonical detail accepts only matching authoritative identity", () => {
       91
     )?.conversationId,
     91
+  );
+  assert.equal(
+    normalizeCanonicalConversationDetail(
+      detail({ relationship: { id: 21, requestId: 71, jobId: "browser-job", title: "Repair" } }),
+      91
+    )?.relationship.jobId,
+    null
   );
 });
 
@@ -433,7 +448,17 @@ test("Emergency detail accepts backend workflow and post-selection location", ()
       relationship: {
         id: 21,
         emergencyRequestId: 81,
-        title: "Electrical Emergency",
+        jobId: "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA",
+        title: "  Electrical Emergency  ",
+        source: {
+          type: "emergency",
+          id: 81,
+          title: "Electrical Emergency",
+          serviceDomain: "home_services",
+          serviceSpecialty: "electrical",
+          isEmergency: true,
+          privateField: "discard me",
+        },
       },
       workflow: {
         status: "professional_arrived",
@@ -442,13 +467,13 @@ test("Emergency detail accepts backend workflow and post-selection location", ()
         arrivedAt: "2026-07-22T12:20:00.000Z",
         workStartedAt: null,
         completedAt: null,
-        allowedActions: ["start_work"],
+        allowedActions: [],
       },
       permissions: {
         canRead: true,
         canSendMessages: true,
-        canManageWorkflow: true,
-        canStartWork: true,
+        canManageWorkflow: false,
+        canStartWork: false,
       },
       location: {
         locationText: "101 Test Ave",
@@ -462,13 +487,53 @@ test("Emergency detail accepts backend workflow and post-selection location", ()
   assert.equal(normalized.type, "emergency");
   assert.equal(normalized.emergencyRequestId, 81);
   assert.equal(normalized.workflow.status, "professional_arrived");
-  assert.deepEqual(normalized.workflow.allowedActions, ["start_work"]);
-  assert.equal(normalized.permissions.canStartWork, true);
+  assert.deepEqual(normalized.workflow.allowedActions, []);
+  assert.equal(normalized.permissions.canManageWorkflow, false);
+  assert.equal(normalized.permissions.canStartWork, false);
+  assert.equal(normalized.relationship.id, 21);
+  assert.equal(normalized.relationship.emergencyRequestId, 81);
+  assert.equal(normalized.relationship.jobId, "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa");
+  assert.equal(normalized.relationship.title, "Electrical Emergency");
+  assert.deepEqual(normalized.relationship.source, {
+    type: "emergency",
+    id: 81,
+    title: "Electrical Emergency",
+    serviceDomain: "home_services",
+    serviceSpecialty: "electrical",
+    isEmergency: true,
+  });
   assert.deepEqual(normalized.location, {
     locationText: "101 Test Ave",
     unitNumber: "Unit 2",
     accessNotes: "Call at gate",
   });
+});
+
+test("Emergency detail rejects malformed Job identity without confusing Request and Conversation IDs", () => {
+  const normalized = normalizeCanonicalConversationDetail(
+    detail({
+      conversation: {
+        id: 91,
+        type: "emergency",
+        status: "active",
+      },
+      relationship: {
+        id: "21",
+        emergencyRequestId: "81",
+        jobId: "emergency-request-81",
+        title: "Emergency".repeat(100),
+        source: { type: "not-emergency", id: 81 },
+      },
+    }),
+    91
+  );
+
+  assert.equal(normalized.conversationId, 91);
+  assert.equal(normalized.emergencyRequestId, 81);
+  assert.notEqual(normalized.conversationId, normalized.emergencyRequestId);
+  assert.equal(normalized.relationship.jobId, null);
+  assert.equal(normalized.relationship.title.length, 200);
+  assert.equal(normalized.relationship.source, null);
 });
 
 test("canSendMessages is enabled only by the exact true permission", () => {
@@ -534,6 +599,58 @@ test("professional canonical message renders once for the homeowner", () => {
   assert.equal(messages.length, 1);
   assert.equal(messages[0].senderRole, "business");
   assert.equal(messages[0].text, "I can help with this repair.");
+});
+
+test("canonical message normalization preserves only safe delegated employee attribution", () => {
+  const valid = normalizeCanonicalMessageCollection(
+    {
+      success: true,
+      conversationId: 91,
+      messages: [{
+        ...message(203, false, "I’m on my way."),
+        delegatedAuthor: {
+          type: "FIELD_EMPLOYEE",
+          displayName: "  Liam Molina  ",
+          role: "FIELD_EMPLOYEE",
+          actorUserId: 44,
+        },
+      }],
+    },
+    91,
+    "homeowner"
+  );
+  assert.deepEqual(valid[0].delegatedAuthor, {
+    type: "FIELD_EMPLOYEE",
+    displayName: "Liam Molina",
+    role: "FIELD_EMPLOYEE",
+  });
+  assert.deepEqual(Object.keys(valid[0].delegatedAuthor).sort(), ["displayName", "role", "type"]);
+
+  for (const delegatedAuthor of [
+    null,
+    { type: "BUSINESS", displayName: "Liam", role: "FIELD_EMPLOYEE" },
+    { type: "FIELD_EMPLOYEE", displayName: " ", role: "FIELD_EMPLOYEE" },
+    { type: "FIELD_EMPLOYEE", displayName: "Liam", role: "OWNER" },
+  ]) {
+    const [normalized] = normalizeCanonicalMessageCollection(
+      {
+        success: true,
+        conversationId: 91,
+        messages: [{ ...message(204, true, "Hello"), delegatedAuthor }],
+      },
+      91,
+      "business"
+    );
+    assert.equal(Object.hasOwn(normalized, "delegatedAuthor"), false);
+  }
+});
+
+test("ConversationThread limits the localized EMPLOYEE pill to server-attributed ordinary text", () => {
+  assert.match(threadSource, /msg\.type === "text" && msg\.delegatedAuthor/);
+  assert.match(threadSource, /msg\.delegatedAuthor\.displayName/);
+  assert.match(threadSource, /conversationDelegatedFieldEmployeeRole/);
+  assert.match(threadSource, /conversationEmployeeTag/);
+  assert.doesNotMatch(threadSource, /sender_id.*FIELD_EMPLOYEE|senderRole.*FIELD_EMPLOYEE/);
 });
 
 test("canonical message collection rejects mismatched or malformed responses", () => {

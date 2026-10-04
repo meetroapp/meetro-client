@@ -24,7 +24,7 @@ const previewRenderBlock = sourceBetween(
 
 const previewStyleBlock = sourceBetween(
   "const portfolioPreviewStack = {",
-  "const portfolioCard = {"
+  "const portfolioOpenButton = {"
 );
 
 const galleryBlock = sourceBetween(
@@ -39,7 +39,7 @@ test("contractor details portfolio preview uses bounded canonical media thumbnai
   );
   assert.match(
     contractorDetailsSource,
-    /const portfolioPreviewImages = portfolioProof\.mediaUrls\s*\.slice\(0, PORTFOLIO_PREVIEW_MAX_IMAGES\)/
+    /const portfolioPreviewImages = publicPortfolioMediaUrls\s*\.slice\(0, PORTFOLIO_PREVIEW_MAX_IMAGES\)/
   );
   assert.match(previewRenderBlock, /portfolioPreviewImages\.length > 0/);
   assert.match(previewRenderBlock, /portfolioPreviewImages\.map\(\(image\) =>/);
@@ -80,11 +80,11 @@ test("portfolio preview preserves canonical order and caps the row at five image
   assert.match(previewDataBlock, /getProjectImages\(project\)\.forEach/);
   assert.match(
     previewDataBlock,
-    /portfolioProof\.mediaUrls\s*\.slice\(0, PORTFOLIO_PREVIEW_MAX_IMAGES\)/
+    /publicPortfolioMediaUrls\s*\.slice\(0, PORTFOLIO_PREVIEW_MAX_IMAGES\)/
   );
   assert.match(
     previewDataBlock,
-    /portfolioProof\.mediaUrls\.length > PORTFOLIO_PREVIEW_MAX_IMAGES/
+    /publicPortfolioMediaUrls\.length > PORTFOLIO_PREVIEW_MAX_IMAGES/
   );
 });
 
@@ -100,18 +100,17 @@ test("view more photos remains centered and targets the existing gallery section
   assert.match(previewRenderBlock, /View more photos/);
   assert.match(
     contractorDetailsSource,
-    /id="contractor-details-project-gallery"[\s\S]*<h2 style=\{sectionTitle\}>\{t\("projectGallery"\)\}<\/h2>/
+    /id="contractor-details-project-gallery"[\s\S]*Business Portfolio/
   );
   assert.match(contractorDetailsSource, /justifySelf: "center"/);
 });
 
-test("existing full gallery card navigation stays isolated from preview styling", () => {
-  assert.match(galleryBlock, /style=\{portfolioCoverWrap\}/);
-  assert.match(galleryBlock, /style=\{portfolioCoverImage\}/);
-  assert.match(galleryBlock, /setSelectedProject\(project\)/);
-  assert.match(galleryBlock, /setActiveProjectImage\(projectImages\[0\] \|\| ""\)/);
-  assert.match(galleryBlock, /style=\{portfolioOpenButton\}/);
-  assert.match(galleryBlock, /t\("viewPortfolioWork"\)/);
+test("full gallery navigation uses the shared exact-project presentation", () => {
+  assert.match(galleryBlock, /<PortfolioProjectGrid/);
+  assert.match(galleryBlock, /<PortfolioProjectCard/);
+  assert.match(galleryBlock, /project=\{project\}/);
+  assert.match(galleryBlock, /onView=\{\(exactProjectId\) => setSelectedProjectId\(exactProjectId\)\}/);
+  assert.doesNotMatch(galleryBlock, /setSelectedProject\(project\)|setActiveProjectImage/);
 });
 
 test("preview images keep accessible alt text and lazy image loading", () => {
@@ -130,4 +129,36 @@ test("portfolio preview does not introduce media ownership or persistence author
   assert.doesNotMatch(previewRenderBlock, /upload|setItem|persist/i);
   assert.doesNotMatch(previewRenderBlock, /setPage\(/);
   assert.doesNotMatch(previewRenderBlock, /https:\/\/getmeetro\.com|https:\/\/meetro/i);
+});
+
+test("public business logo opens the shared view-only identity media preview", () => {
+  assert.match(
+    contractorDetailsSource,
+    /import \{\s*IdentityMediaPreviewDialog,\s*\} from "\.\.\/components\/RelationshipIdentityPage";/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /const \[\s*businessLogoPreviewOpen,\s*setBusinessLogoPreviewOpen,\s*\] = useState\(false\)/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /businessIdentity\.imageUrl \? \(\s*<button[\s\S]*setBusinessLogoPreviewOpen\(true\)[\s\S]*src=\{businessIdentity\.imageUrl\}/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /<IdentityMediaPreviewDialog[\s\S]*open=\{businessLogoPreviewOpen\}[\s\S]*src=\{businessIdentity\.imageUrl\}[\s\S]*setBusinessLogoPreviewOpen\(false\)/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /\) : \(\s*<div style=\{imagePlaceholder\}>[\s\S]*businessIdentity\.initials/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /const profileImageButton = \{[\s\S]*cursor: "zoom-in"/
+  );
 });

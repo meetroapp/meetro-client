@@ -75,21 +75,27 @@ test("bottom and desktop navigation use one localized semantic key set", () => {
     businessDesktop: readNavigationItems(
       source,
       "const businessDesktopNavItems = [",
-      "useEffect(() => {\n    setKeyboardOpen"
+      "const businessDesktopShortcutItems = ["
     ),
   };
   const semanticPairs = [
     ["personalMobile", "personalDesktop", "home", "navigationHome", "navigationHome"],
     ["personalMobile", "personalDesktop", "myRequests", "navigationWorkCenter", "navigationWorkCenter"],
     ["personalMobile", "personalDesktop", "messagesInbox", "navigationChat", "navigationCommunication"],
-    ["personalMobile", "personalDesktop", "notifications", "navigationAlerts", "navigationAlerts"],
     ["personalMobile", "personalDesktop", "profile", "navigationProfile", "navigationProfileAccount"],
     ["businessMobile", "businessDesktop", "businessDashboard", "navigationHome", "navigationHome"],
     ["businessMobile", "businessDesktop", "contractorDashboard", "navigationWorkCenter", "navigationWorkCenter"],
     ["businessMobile", "businessDesktop", "messagesInbox", "navigationChat", "navigationCommunication"],
-    ["businessMobile", "businessDesktop", "notifications", "navigationAlerts", "navigationAlerts"],
     ["businessMobile", "businessDesktop", "profile", "navigationProfile", "navigationProfileAccount"],
   ];
+
+  for (const items of Object.values(navigationSets)) {
+    assert.equal(
+      items.notifications,
+      undefined,
+      "standalone Alerts must not re-enter primary navigation"
+    );
+  }
 
   for (const [mobileSet, desktopSet, page, mobileKey, desktopKey] of semanticPairs) {
     assert.equal(translationKey(navigationSets[mobileSet][page]?.label), mobileKey);
@@ -115,15 +121,31 @@ test("bottom and desktop navigation use one localized semantic key set", () => {
     }
   }
 
-  assert.match(source, /const getItemAccessibleLabel = \(item, unread\) =>/);
-  assert.match(source, /return `\$\{item\.label\}\. \$\{item\.sub\}`/);
+  assert.match(
+    source,
+    /const getItemAccessibleLabel = \(item\) => `\$\{item\.label\}\. \$\{item\.sub\}`;/
+  );
   assert.equal(
-    (source.match(/aria-label=\{getItemAccessibleLabel\(item, unread\)\}/g) || [])
+    (source.match(/aria-label=\{getItemAccessibleLabel\(item\)\}/g) || [])
       .length,
     2
   );
-  assert.match(source, /desktopNavItems\.map\(\(item\) => renderNavItem\(item, "sidebar"\)\)/);
-  assert.match(source, /mobileNavItems\.map\(\(item\) => renderNavItem\(item, "bottom"\)\)/);
+  assert.match(
+    source,
+    /desktopNavItems\s*\.filter\(\(item\) => item\.page !== "profile"\)\s*\.map\(\(item\) => renderNavItem\(item, "sidebar"\)\)/
+  );
+  assert.match(
+    source,
+    /businessDesktopShortcutItems\.map\(\(item\) =>\s*renderNavItem\(item, "sidebar"\)\s*\)/
+  );
+  assert.match(
+    source,
+    /desktopNavItems\s*\.filter\(\(item\) => item\.page === "profile"\)\s*\.map\(\(item\) => \(/
+  );
+  assert.match(
+    source,
+    /mobileNavItems\.map\(\(item\) => renderNavItem\(item, "bottom"\)\)/
+  );
   assert.match(source, /title=\{`\$\{item\.label\} — \$\{item\.sub\}`\}/);
   assert.doesNotMatch(source, /aria-label="Primary (desktop|mobile) navigation"/);
 });

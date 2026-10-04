@@ -23,6 +23,18 @@ const SESSION_ERROR_TOKENS = new Set([
   "unauthorized",
 ]);
 
+const ACCOUNT_ACCESS_ERROR_TOKENS = new Set([
+  "account_access_blocked",
+  "account_connection_blocked",
+  "account_connection_required",
+]);
+
+const GLOBAL_ACCOUNT_CONNECTION_REASONS = new Set([
+  "account_inactive",
+  "account_disconnected",
+  "account_access_blocked",
+]);
+
 function getDefaultStorage() {
   if (typeof localStorage === "undefined") return null;
   return localStorage;
@@ -196,6 +208,12 @@ function responseText(data = {}) {
     .join(" ");
 }
 
+function isAccountQualified(text = "") {
+  return ["account", "user", "profile", "login", "session"].some((token) =>
+    text.includes(token)
+  );
+}
+
 export function getAccountConnectionStateFromAuthResult(result = {}) {
   const status = Number(result?.response?.status || 0);
   const data = result?.data || {};
@@ -206,10 +224,11 @@ export function getAccountConnectionStateFromAuthResult(result = {}) {
   }
 
   if (
-    text.includes("inactive") ||
-    text.includes("disabled") ||
-    text.includes("deactivated") ||
-    text.includes("suspended")
+    isAccountQualified(text) &&
+    (text.includes("inactive") ||
+      text.includes("disabled") ||
+      text.includes("deactivated") ||
+      text.includes("suspended"))
   ) {
     return state("account_inactive", {
       status: text,
@@ -217,19 +236,35 @@ export function getAccountConnectionStateFromAuthResult(result = {}) {
   }
 
   if (
-    text.includes("disconnected") ||
-    text.includes("unlinked") ||
-    text.includes("revoked") ||
-    text.includes("not_connected")
+    isAccountQualified(text) &&
+    (text.includes("disconnected") ||
+      text.includes("unlinked") ||
+      text.includes("revoked") ||
+      text.includes("not_connected"))
   ) {
     return state("account_disconnected", {
       status: text,
     });
   }
 
-  if (status === 403) {
+  if (
+    status === 403 &&
+    [...ACCOUNT_ACCESS_ERROR_TOKENS].some((token) => text.includes(token))
+  ) {
     return state("account_access_blocked", {
       status: text || "forbidden",
+    });
+  }
+
+  /*
+   * A resource-level denial does not invalidate the authenticated account.
+   * Keep it local to the caller so optional projections (for example Visit
+   * scheduling) cannot replace an authorized Communication Center with an
+   * account-reconnect screen.
+   */
+  if (status === 403) {
+    return state("connected", {
+      status: text || "request_forbidden",
     });
   }
 
@@ -241,6 +276,15 @@ export function getAccountConnectionStateFromAuthResult(result = {}) {
   }
 
   return state("connected");
+}
+
+export function shouldAnnounceAccountConnectionIssue(connectionState = {}) {
+  return (
+    connectionState?.connected === false &&
+    GLOBAL_ACCOUNT_CONNECTION_REASONS.has(
+      String(connectionState?.reason || "")
+    )
+  );
 }
 
 export function getAccountConnectionStateFromLoginData(data = {}, fallbackEmail = "") {

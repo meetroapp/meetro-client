@@ -88,6 +88,19 @@ test("creates a local non-canonical draft identity with explicit version and emp
   assert.equal(Object.hasOwn(draft, "postId"), false);
 });
 
+test("homeowner availability satisfies the timing warning without changing submission authority", () => {
+  const draft = applyHomeownerInput(createJobRequestDraft(), {
+    "timing.availability": "Available this week",
+  });
+
+  assert.equal(
+    draft.readiness.warnings.some(({ code }) => code === "timing_missing"),
+    false
+  );
+  assert.equal(draft.submission.status, "idle");
+  assert.equal(draft.submission.snapshot, null);
+});
+
 test("assistant suggestions cannot overwrite homeowner-confirmed fields", () => {
   let draft = createJobRequestDraft();
   draft = applyAssistantSuggestion(draft, {
@@ -257,6 +270,52 @@ test("address-after-selection draft clears street and unit while preserving loca
   assert.equal(draft.location.city, "Fort Myers");
   assert.equal(draft.location.accessNotes, "Call from the gate");
   assert.equal(getJobRequestDraftReadiness(draft).isReady, true);
+});
+
+test("Cape Coral governed and manual edits share canonical address-later readiness", () => {
+  let draft = createJobRequestDraft({ initialCity: "Cape Coral" });
+  draft = applyAssistantSuggestion(draft, {
+    "job.title": "Structural repairs in Cape Coral",
+    "job.description": "Repair the damaged structural area.",
+    "timing.availability": "Available this week",
+  });
+  draft = setServiceClassification(draft, {
+    category: "structural_repairs",
+    requestCategory: "structural_repairs",
+    domain: "home_services",
+    specialty: "structural_repairs",
+    selectedServiceOptionId: "service:structural_repairs",
+    displayLabel: "Structural Repairs",
+  });
+  draft = setJobRequestLocationIntakeMode(
+    draft,
+    JOB_REQUEST_LOCATION_INTAKE_MODE.ADDRESS_AFTER_SELECTION
+  );
+
+  assert.equal(draft.location.city, "Cape Coral");
+  assert.equal(getJobRequestDraftReadiness(draft).isReady, false);
+  assert.deepEqual(getJobRequestDraftReadiness(draft).missingRequiredFields, ["location"]);
+
+  draft = applyHomeownerInput(draft, {
+    "location.region": "FL",
+    "location.postalCode": "33904",
+  });
+
+  const readiness = getJobRequestDraftReadiness(draft);
+  const review = buildJobRequestReviewModel(draft);
+  const payload = buildJobRequestDraftCanonicalPayload(draft);
+
+  assert.equal(readiness.isReady, true);
+  assert.equal(readiness.readyForReview, true);
+  assert.equal(readiness.readyForSubmit, true);
+  assert.equal(review.location.formattedAddress, "Cape Coral, FL 33904");
+  assert.equal(payload.location_intake_mode, "address_after_selection");
+  assert.equal(payload.service_city, "Cape Coral");
+  assert.equal(payload.service_region, "FL");
+  assert.equal(payload.service_postal_code, "33904");
+  assert.equal(payload.service_country_code, "US");
+  assert.equal(Object.hasOwn(payload, "service_address_line1"), false);
+  assert.equal(Object.hasOwn(payload, "unit_number"), false);
 });
 
 test("readiness and review model remain non-canonical", () => {

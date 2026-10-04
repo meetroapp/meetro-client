@@ -1,0 +1,136 @@
+const UUID_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function uuid(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return UUID_PATTERN.test(normalized) ? normalized : null;
+}
+
+const WORK_CENTER_STAGE_SET = new Set([
+  "evaluation",
+  "quote",
+  "deposit",
+  "schedule",
+  "work",
+  "invoice",
+  "completion",
+  "review",
+]);
+
+const WORK_CENTER_RETURN_PAGE_SET = new Set([
+  "notifications",
+  "customerRelationshipsCenter",
+  "messagesInbox",
+]);
+
+function stage(value) {
+  return typeof value === "string" &&
+    WORK_CENTER_STAGE_SET.has(value)
+    ? value
+    : null;
+}
+
+export function buildProfessionalWorkCenterRoute({
+  jobId,
+  quoteId = null,
+  visitId = null,
+  stage: stageValue = null,
+  returnPage = "",
+} = {}) {
+  const canonicalJobId = uuid(jobId);
+  const canonicalQuoteId = uuid(quoteId);
+  const canonicalVisitId = uuid(visitId);
+  const canonicalStage = stage(stageValue);
+
+  if (
+    !canonicalJobId ||
+    (quoteId != null && String(quoteId).trim() && !canonicalQuoteId) ||
+    (visitId != null && String(visitId).trim() && !canonicalVisitId) ||
+    (stageValue != null && String(stageValue).trim() && !canonicalStage)
+  ) {
+    return null;
+  }
+
+  const query = new URLSearchParams({
+    jobId: canonicalJobId,
+  });
+
+  if (canonicalQuoteId) {
+    query.set("quoteId", canonicalQuoteId);
+  }
+
+  if (canonicalVisitId) {
+    query.set("visitId", canonicalVisitId);
+  }
+
+  if (canonicalStage) {
+    query.set("stage", canonicalStage);
+  }
+
+  if (WORK_CENTER_RETURN_PAGE_SET.has(returnPage)) {
+    query.set("returnPage", returnPage);
+  }
+
+  return `workCenter?${query.toString()}`;
+}
+
+export function parseProfessionalWorkCenterRoute(value) {
+  const route = String(value || "").replace(/^#/, "");
+  const [page, query = ""] = route.split("?", 2);
+  if (page !== "workCenter") return null;
+  const params = new URLSearchParams(query);
+  if (
+    [...params.keys()].some(
+      (key) =>
+        ![
+          "jobId",
+          "quoteId",
+          "visitId",
+          "stage",
+          "returnPage",
+        ].includes(key)
+    )
+  ) {
+    return null;
+  }
+
+  const jobId = uuid(params.get("jobId"));
+  const quoteId = uuid(params.get("quoteId"));
+  const visitId = uuid(params.get("visitId"));
+  const canonicalStage = stage(params.get("stage"));
+  const requestedReturnPage = params.get("returnPage");
+  const returnPage = WORK_CENTER_RETURN_PAGE_SET.has(requestedReturnPage)
+    ? requestedReturnPage
+    : "";
+
+  if (
+    !jobId ||
+    (params.has("quoteId") && !quoteId) ||
+    (params.has("visitId") && !visitId) ||
+    (params.has("stage") && !canonicalStage)
+  ) {
+    return null;
+  }
+
+  if (
+    quoteId &&
+    !visitId &&
+    !canonicalStage &&
+    !returnPage
+  ) {
+    return Object.freeze({ jobId, quoteId });
+  }
+
+  const result = {
+    jobId,
+    quoteId,
+    visitId,
+    returnPage,
+  };
+
+  if (canonicalStage) {
+    result.stage = canonicalStage;
+  }
+
+  return Object.freeze(result);
+}

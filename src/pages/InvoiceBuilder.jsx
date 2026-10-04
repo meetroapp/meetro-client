@@ -1,5 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import QuoteBuilder from "./QuoteBuilder.jsx";
+import ProfessionalInvoiceWorkspace from "../components/ProfessionalInvoiceWorkspace.jsx";
+import { parseInvoiceBuilderRoute } from "../utils/completedJobInvoiceHandoff.js";
 import { getLanguage } from "../utils/language";
 import { getWorkCenterContextReturnLabel } from "../utils/workCenterReturnLabels";
 import {
@@ -15,9 +18,19 @@ import {
   CONVERSATION_ACTION_STAGE,
   getConversationActionLabel,
 } from "../utils/conversationActionLanguage";
+import { getBusinessIdentityProjection } from "../utils/businessIdentity";
+import { buildQuickInvoiceDocumentModel } from "../utils/customerDocumentModel";
+import {
+  downloadCustomerDocumentPdf,
+  getCustomerDocumentActionCopy,
+  shareCustomerDocumentPdf,
+} from "../utils/customerDocumentPdf";
 
-function todayIsoDate() {
-  return new Date().toISOString().slice(0, 10);
+function todayIsoDate(now = new Date()) {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
 }
 
 function createEmptyLineItem() {
@@ -34,7 +47,7 @@ function formatMoney(value) {
   return `$${moneyValue(value).toFixed(2)}`;
 }
 
-function InvoiceBuilder({ setPage }) {
+export function LegacyInvoiceBuilder({ setPage }) {
   const activeJobSnapshot = getActiveJobSnapshot();
 
   const language = getLanguage();
@@ -131,12 +144,18 @@ function InvoiceBuilder({ setPage }) {
     completed: isSpanish ? "Completado" : "Completed",
   };
   const returnPage = localStorage.getItem("invoiceBuilderReturnPage") || "";
+  const invoiceBuilderSource =
+    localStorage.getItem("invoiceBuilderSource") || "";
   const isWorkCenterReceipt = returnPage === "workCenter";
   const isBusinessToolsInvoice = returnPage === "businessCommandCenter";
+  const isDesktopSidebarInvoice =
+    invoiceBuilderSource === "desktop_sidebar_quick_invoice";
+  const isStandaloneQuickInvoice =
+    isBusinessToolsInvoice || isDesktopSidebarInvoice;
   const workCenterScheduleId = localStorage.getItem("invoiceBuilderScheduleId") || "";
   const workCenterQuoteId = localStorage.getItem("invoiceBuilderQuoteId") || "";
 
-  const service = isBusinessToolsInvoice
+  const service = isStandaloneQuickInvoice
     ? ""
     : activeJobSnapshot?.service ||
       localStorage.getItem("activeJobService") ||
@@ -145,7 +164,7 @@ function InvoiceBuilder({ setPage }) {
       "Service";
 
   const [customerName, setCustomerName] = useState(
-    isBusinessToolsInvoice
+    isStandaloneQuickInvoice
       ? ""
       : activeJobSnapshot?.customer ||
           localStorage.getItem("activeJobCustomer") ||
@@ -153,21 +172,21 @@ function InvoiceBuilder({ setPage }) {
           ""
   );
   const [customerPhone, setCustomerPhone] = useState(
-    isBusinessToolsInvoice
+    isStandaloneQuickInvoice
       ? ""
       : localStorage.getItem("activeCustomerPhone") ||
           localStorage.getItem("customerPhone") ||
           ""
   );
   const [customerEmail, setCustomerEmail] = useState(
-    isBusinessToolsInvoice
+    isStandaloneQuickInvoice
       ? ""
       : localStorage.getItem("activeCustomerEmail") ||
           localStorage.getItem("customerEmail") ||
           ""
   );
   const [serviceAddress, setServiceAddress] = useState(
-    isBusinessToolsInvoice
+    isStandaloneQuickInvoice
       ? ""
       : activeJobSnapshot?.location ||
           localStorage.getItem("activeJobLocation") ||
@@ -179,7 +198,7 @@ function InvoiceBuilder({ setPage }) {
   const [dueDate, setDueDate] = useState("");
   const [serviceDescription, setServiceDescription] = useState(service);
   const [jobReference, setJobReference] = useState(
-    isBusinessToolsInvoice
+    isStandaloneQuickInvoice
       ? ""
       : workCenterScheduleId || workCenterQuoteId || activeJobSnapshot?.id || ""
   );
@@ -360,6 +379,34 @@ function InvoiceBuilder({ setPage }) {
     };
   }
 
+  function buildQuickInvoicePdfModel() {
+    return buildQuickInvoiceDocumentModel(buildInvoicePayload(), {
+      locale: language,
+      branding: getBusinessIdentityProjection({}, {
+        fallbackName: "Meetro Professional",
+      }),
+    });
+  }
+
+  async function exportQuickInvoicePdf() {
+    const copy = getCustomerDocumentActionCopy(language);
+    setStatusMessage(
+      await downloadCustomerDocumentPdf(buildQuickInvoicePdfModel())
+        ? copy.pdfReady
+        : copy.pdfUnavailable
+    );
+  }
+
+  async function shareQuickInvoicePdf() {
+    const copy = getCustomerDocumentActionCopy(language);
+    const result = await shareCustomerDocumentPdf({
+      model: buildQuickInvoicePdfModel(),
+      message: buildInvoiceSummary(),
+    });
+    if (!result.ok && result.method !== "cancelled") setStatusMessage(copy.pdfUnavailable);
+    if (result.ok) setStatusMessage(copy.pdfReady);
+  }
+
   function buildInvoiceSummary() {
     const invoice = buildInvoicePayload();
     const untitledItem = isSpanish ? "Partida sin título" : "Untitled item";
@@ -483,8 +530,9 @@ ${invoice.customerMessage || "—"}`;
           onClick={() => {
             if (restoreConversationOriginContext(setPage)) return;
 
-            if (isBusinessToolsInvoice) {
+            if (isBusinessToolsInvoice || isDesktopSidebarInvoice) {
               localStorage.removeItem("invoiceBuilderReturnPage");
+              localStorage.removeItem("invoiceBuilderSource");
             }
 
             setPage(
@@ -492,6 +540,8 @@ ${invoice.customerMessage || "—"}`;
                 ? "businessCommandCenter"
                 : isWorkCenterReceipt
                 ? "workCenter"
+                : isDesktopSidebarInvoice && returnPage
+                ? returnPage
                 : "conversationThread"
             );
           }}
@@ -742,22 +792,6 @@ ${invoice.customerMessage || "—"}`;
           </div>
         </section>
 
-        <section style={availabilityNotice} role="status">
-          <p style={availabilityEyebrow}>
-            {isSpanish ? "Disponibilidad" : "Availability"}
-          </p>
-          <h2 style={availabilityTitle}>
-            {isSpanish
-              ? "Guardar y entregar facturas aún no está disponible."
-              : "Invoice saving and delivery are not available yet."}
-          </h2>
-          <p style={availabilityText}>
-            {isSpanish
-              ? "Puedes preparar y revisar esta factura en esta página, pero no se guarda ni se entrega al cliente."
-              : "You can prepare and review this invoice on this page, but it is not saved or delivered to the customer."}
-          </p>
-        </section>
-
         <div style={actionsGrid}>
           <button style={secondaryBtn} onClick={() => setPreviewOpen((open) => !open)}>
             {previewOpen ? invoiceCopy.hidePreview : invoiceCopy.previewInvoice}
@@ -767,6 +801,12 @@ ${invoice.customerMessage || "—"}`;
           </button>
           <button style={secondaryBtn} onClick={printInvoice}>
             {invoiceCopy.printInvoice}
+          </button>
+          <button style={secondaryBtn} onClick={() => void exportQuickInvoicePdf()}>
+            {getCustomerDocumentActionCopy(language).exportPdf}
+          </button>
+          <button style={secondaryBtn} onClick={() => void shareQuickInvoicePdf()}>
+            {getCustomerDocumentActionCopy(language).sharePdf}
           </button>
         </div>
 
@@ -778,7 +818,13 @@ ${invoice.customerMessage || "—"}`;
 
       <BottomNav
         setPage={setPage}
-        currentPage={isBusinessToolsInvoice ? "businessDashboard" : "messages"}
+        currentPage={
+          isDesktopSidebarInvoice
+            ? "invoiceBuilder"
+            : isBusinessToolsInvoice
+            ? "businessDashboard"
+            : "messages"
+        }
       />
     </div>
   );
@@ -1288,36 +1334,6 @@ const aiSuggestionBox = {
   gap: "8px",
 };
 
-const availabilityNotice = {
-  marginTop: "18px",
-  padding: "16px",
-  borderRadius: "18px",
-  border: "1px solid rgba(31,77,52,0.18)",
-  background: "var(--meetro-surface-warm, rgba(251,246,237,0.92))",
-};
-
-const availabilityEyebrow = {
-  margin: "0 0 6px",
-  color: "var(--meetro-color-coffee, #4a3428)",
-  fontSize: "12px",
-  fontWeight: "900",
-  textTransform: "uppercase",
-};
-
-const availabilityTitle = {
-  margin: "0 0 6px",
-  color: "#111827",
-  fontSize: "17px",
-  lineHeight: 1.3,
-};
-
-const availabilityText = {
-  margin: 0,
-  color: "#64748b",
-  fontSize: "14px",
-  lineHeight: 1.45,
-};
-
 const actionsGrid = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
@@ -1327,6 +1343,7 @@ const actionsGrid = {
 };
 
 const secondaryBtn = {
+  minHeight: "44px",
   width: "100%",
   padding: "14px",
   borderRadius: "16px",
@@ -1462,4 +1479,26 @@ const printTotalDue = {
   fontWeight: "950",
 };
 
-export default InvoiceBuilder;
+export default function InvoiceBuilder({ setPage }) {
+  const route = parseInvoiceBuilderRoute(window.location.hash);
+  if (!route.valid) {
+    return (
+      <div className="app-page meetro-form-page business-document-context-gate" role="alert">
+        <h1>Invoice review unavailable</h1>
+        <p>Meetro could not verify this exact Invoice route. Nothing was opened or changed.</p>
+        <button type="button" onClick={() => setPage("workCenter")}>Go Back</button>
+      </div>
+    );
+  }
+  if (route.intent === "EXACT_CANONICAL_INVOICE") {
+    return (
+      <ProfessionalInvoiceWorkspace
+        setPage={setPage}
+        initialInvoiceId={route.invoiceId}
+        expectedJobId={route.jobId}
+        onBack={() => setPage(`workCenter?jobId=${encodeURIComponent(route.jobId)}`)}
+      />
+    );
+  }
+  return <QuoteBuilder setPage={setPage} initialDocument="invoice" />;
+}

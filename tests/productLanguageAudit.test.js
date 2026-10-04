@@ -73,8 +73,19 @@ test("audited workflow screens do not use legacy AI-first visible language", () 
 });
 
 test("audited workflow screens use action-first labels for major project actions", () => {
+  const canonicalRequesterConversationCtas = activeWorkflowSource.match(
+    /openConversation: "Open Conversation"/g
+  ) || [];
+  assert.equal(
+    canonicalRequesterConversationCtas.length,
+    1,
+    "Only the R4 canonical requester Conversation entry may use Open Conversation."
+  );
   assert.doesNotMatch(
-    activeWorkflowSource,
+    activeWorkflowSource.replace(
+      /openConversation: "Open Conversation"/,
+      "openConversation: canonical-requester-cta"
+    ),
     /Open Conversation|Open Chat|View Chat|Message Thread|View Quote|View Proposal|View Invoice|Open Work Center|Open Active Work|Open Schedule|Open Project/
   );
   assert.match(activeWorkflowSource, /assistantActionOpenConversation/);

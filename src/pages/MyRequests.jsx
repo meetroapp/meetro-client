@@ -1,7 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import useLanguage from "../hooks/useLanguage";
 import BottomNav from "../components/BottomNav";
+import {
+  WorkCenterAttentionBadge,
+} from "../components/WorkCenterWorkspaceSystem.jsx";
 import EmergencyTimeline from "../components/EmergencyTimeline";
 import HomeownerProfessionalResponseReview from "../components/HomeownerProfessionalResponseReview";
+import HomeownerRequestModificationPanel from "../components/HomeownerRequestModificationPanel";
 import { getLanguage, t } from "../utils/language";
 import { addNotification } from "../utils/notifications";
 import { authFetch } from "../utils/authFetch";
@@ -11,28 +16,11 @@ import {
   resolveHomeownerRequestCollection,
 } from "../utils/requestLifecycleState";
 import {
-  getMediaDeferredCopy,
   isFriendsAndFamilyMediaDeferred,
 } from "../utils/mediaDeferral";
 import {
-  REQUEST_PHOTO_MAX_COUNT,
-  cleanupRequestPhoto,
-  createTemporaryRequestPhotoPreview,
   isRequestPhotoUploadEnabled,
-  uploadRequestPhotos,
-  validateRequestPhotoFiles,
 } from "../utils/requestPhotoMedia";
-import {
-  REQUEST_EDIT_LEGACY_PHOTO_RESOLUTION_REQUIRED,
-  buildRequestPhotoReplacementPayload,
-  createLocalRequestPhotoItem,
-  getPendingLocalRequestPhotoItems,
-  getRequestPhotoPreviewUrl,
-  hydrateRequestEditPhotos,
-  removeRequestEditPhotoAt,
-  reorderRequestEditPhotos,
-  revokeLocalRequestEditPhotoPreviews,
-} from "../utils/requestEditPhotoState";
 import {
   getHomeownerLifecycleStage,
   getAuthoritativeHomeownerRequestCounts,
@@ -43,10 +31,19 @@ import {
 import { getStoredHomeownerRequests } from "../utils/workflowTimeline";
 import { saveSelectedActiveProject } from "../utils/workCenter";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
-import { getEmergencyRequests } from "../utils/emergencyApi";
+import {
+  cancelEmergencyRequest,
+  getEmergencyRequests,
+} from "../utils/emergencyApi";
 import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoordinator";
 import { buildEmergencyRequestRoute } from "../utils/emergencyRoutes";
 import { buildCanonicalConversationRoute } from "../utils/canonicalConversationMessaging";
+import { fetchCanonicalConversations } from "../utils/requestCommunication";
+import { getRequesterResponseInbox } from "../utils/requestResponseInboxApi";
+import {
+  deriveRequestPresentationState,
+  REQUEST_PRESENTATION_STATES,
+} from "../utils/requestPresentationState";
 import {
   getCanonicalConversationActionTarget,
 } from "../utils/conversationActionRouting";
@@ -60,6 +57,22 @@ import {
   getConversationActionLabel,
 } from "../utils/conversationActionLanguage";
 import { formatLocaleDate } from "../utils/localeFormat";
+import {
+  getHomeownerRequestCardId,
+  normalizeHomeownerRequestCardId,
+  resolveHomeownerRequestById,
+} from "../utils/homeownerRequestCardIdentity";
+import { fetchCustomerJobQuotes } from "../utils/customerJobQuotesApi.js";
+import { parseHomeownerRequestAlertRoute } from "../utils/alertWorkflowRoutes.js";
+import {
+  getAlertCountSnapshot,
+  subscribeAlertCounts,
+} from "../utils/alertCountCoordinator.js";
+import {
+  getHomeownerWorkCenterSection,
+  getWorkCenterGroupedStageUnread,
+  getWorkCenterRequestAttention,
+} from "../utils/workCenterAlertAttention.js";
 
 const UNSUPPORTED_WORKFLOW_STATUSES = new Set([
   "accepted",
@@ -159,64 +172,6 @@ function getApprovalSchedulingUnavailableCopy(language) {
   };
 }
 
-function getRequestEditPhotoErrorMessage(code, language) {
-  if (code === "REQUEST_PHOTO_FORMAT_INVALID") {
-    return t("invalidProfileImageFormat", language);
-  }
-  if (code === "REQUEST_PHOTO_TOO_LARGE") {
-    return t("profileImageTooLarge", language);
-  }
-  if (code === "REQUEST_PHOTO_COUNT_EXCEEDED") {
-    return language === "es"
-      ? `Agrega hasta ${REQUEST_PHOTO_MAX_COUNT} fotos por solicitud.`
-      : `Add up to ${REQUEST_PHOTO_MAX_COUNT} photos per request.`;
-  }
-  if (code === "REQUEST_PHOTO_UPLOAD_FAILED") {
-    return t("uploadError", language);
-  }
-  if (code === "REQUEST_EDIT_PHOTO_METADATA_REQUIRED") {
-    return language === "es"
-      ? "No se pudo confirmar la información gobernada de estas fotos. Vuelve a seleccionar las fotos e inténtalo otra vez."
-      : "Meetro could not confirm governed metadata for these photos. Re-select the photos and try again.";
-  }
-  if (code === REQUEST_EDIT_LEGACY_PHOTO_RESOLUTION_REQUIRED) {
-    return language === "es"
-      ? "Esta solicitud incluye fotos antiguas que se pueden ver, pero no se pueden preservar mediante la edición gobernada. Elimina esas fotos y agrégalas otra vez antes de guardar cambios de fotos."
-      : "This request includes older photos that can be viewed, but cannot be preserved through governed photo editing. Remove those photos and add them again before saving photo changes.";
-  }
-  return t("uploadFailed", language);
-}
-
-function getRequestEditCleanupWarning(language) {
-  return language === "es"
-    ? "La solicitud no se guardó. Meetro intentó limpiar las fotos nuevas cargadas durante este intento, pero algunas pueden requerir limpieza más tarde."
-    : "The request was not saved. Meetro tried to clean up the new photos uploaded during this attempt, but some may need later cleanup.";
-}
-
-function getRequestEditPhotoOrderLabel(language, direction, index) {
-  const position = index + 1;
-  const labels = {
-    es:
-      direction < 0
-        ? `Mover foto ${position} a la izquierda`
-        : `Mover foto ${position} a la derecha`,
-    fr:
-      direction < 0
-        ? `Deplacer la photo ${position} vers la gauche`
-        : `Deplacer la photo ${position} vers la droite`,
-    pt:
-      direction < 0
-        ? `Mover foto ${position} para a esquerda`
-        : `Mover foto ${position} para a direita`,
-  };
-  return (
-    labels[language] ||
-    (direction < 0
-      ? `Move photo ${position} left`
-      : `Move photo ${position} right`)
-  );
-}
-
 function PhotoStrip({ request, onPreview, language }) {
   const photos = [
     ...(Array.isArray(request.request_photos)
@@ -279,178 +234,6 @@ function PhotoStrip({ request, onPreview, language }) {
           </div>
         )}
       </div>
-    </div>
-  );
-}
-
-function EditPhotoManager({
-  photos,
-  uploading,
-  onUpload,
-  onRemove,
-  onMove,
-  onPreview,
-  language,
-  mediaUploadDeferred = false,
-  photoError = "",
-  cleanupWarning = "",
-}) {
-  const mediaDeferredCopy = getMediaDeferredCopy(language);
-  const mainPhotoLabel = language === "es" ? "Foto principal" : "Main Photo";
-  const getPhotoLabel = (index) =>
-    language === "es" ? `Foto ${index + 1}` : `Photo ${index + 1}`;
-  const addDisabled =
-    uploading ||
-    mediaUploadDeferred ||
-    photos.length >= REQUEST_PHOTO_MAX_COUNT;
-
-  return (
-    <div style={editPhotoManager}>
-      <div style={swipeGalleryHeader}>
-        <strong>
-          {language === "es"
-            ? `${t("projectPhotos")} (${photos.length})`
-            : `${t("projectPhotos")} (${photos.length})`}
-        </strong>
-
-        <button
-          type="button"
-          style={{
-            ...addPhotoButton,
-            ...(addDisabled ? disabledAddPhotoButton : {}),
-          }}
-          onClick={() => {
-            if (!addDisabled) {
-              document.getElementById("editPhotoInput")?.click();
-            }
-          }}
-          disabled={addDisabled}
-        >
-          {mediaUploadDeferred
-            ? mediaDeferredCopy.title
-            : uploading
-            ? t("uploading")
-            : photos.length >= REQUEST_PHOTO_MAX_COUNT
-            ? language === "es"
-              ? "Máximo de fotos"
-              : "Photo limit"
-            : t("addPhotos")}
-        </button>
-      </div>
-
-      <input
-        id="editPhotoInput"
-        type="file"
-        accept="image/jpeg,image/png,image/webp"
-        multiple
-        disabled={addDisabled}
-        onChange={onUpload}
-        style={{ display: "none" }}
-      />
-
-      {photoError && (
-        <p role="alert" aria-live="assertive" style={uploadingText}>
-          {photoError}
-        </p>
-      )}
-
-      {cleanupWarning && (
-        <p role="status" aria-live="polite" style={editPhotoCleanupWarning}>
-          {cleanupWarning}
-        </p>
-      )}
-
-      {photos.length === 0 ? (
-        <div style={galleryEmpty}>
-          <div style={galleryEmptyIcon}>IMG</div>
-          <strong>{t("noPhotosYet")}</strong>
-          <span>{mediaUploadDeferred ? mediaDeferredCopy.detail : t("addPhotosHelp")}</span>
-        </div>
-      ) : (
-        <div style={swipeGalleryRow}>
-          {photos.map((photo, index) => {
-            const previewUrl = getRequestPhotoPreviewUrl(photo);
-            return (
-              <div key={photo.id || previewUrl || index} style={editPhotoCard}>
-                <button
-                  type="button"
-                  style={editPhotoPreviewButton}
-                  onClick={() => previewUrl && onPreview(previewUrl)}
-                >
-                  <img src={previewUrl} alt="" style={swipePhotoImage} />
-                </button>
-
-                <button
-                  type="button"
-                  style={deletePhotoButton}
-                  onClick={() => onRemove(index)}
-                  aria-label={
-                    language === "es"
-                      ? `Eliminar foto ${index + 1}`
-                      : `Remove photo ${index + 1}`
-                  }
-                  title={
-                    language === "es"
-                      ? `Eliminar foto ${index + 1}`
-                      : `Remove photo ${index + 1}`
-                  }
-                >
-                  ×
-                </button>
-
-                <div style={editPhotoOrderControls}>
-                  <button
-                    type="button"
-                    onClick={() => onMove(index, -1)}
-                    disabled={index === 0}
-                    aria-label={getRequestEditPhotoOrderLabel(language, -1, index)}
-                    title={getRequestEditPhotoOrderLabel(language, -1, index)}
-                    style={{
-                      ...editPhotoOrderButton,
-                      ...(index === 0 ? editPhotoOrderButtonDisabled : {}),
-                    }}
-                  >
-                    ←
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => onMove(index, 1)}
-                    disabled={index === photos.length - 1}
-                    aria-label={getRequestEditPhotoOrderLabel(language, 1, index)}
-                    title={getRequestEditPhotoOrderLabel(language, 1, index)}
-                    style={{
-                      ...editPhotoOrderButton,
-                      ...(index === photos.length - 1
-                        ? editPhotoOrderButtonDisabled
-                        : {}),
-                    }}
-                  >
-                    →
-                  </button>
-                </div>
-
-                <span style={swipePhotoOverlay}>
-                  {index === 0 ? mainPhotoLabel : getPhotoLabel(index)}
-                </span>
-
-                {photo.displayOnly && (
-                  <span style={legacyPhotoBadge}>
-                    {language === "es" ? "Antigua" : "Older photo"}
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
-
-      {photos.some((photo) => photo?.displayOnly) && (
-        <p role="note" style={legacyPhotoWarning}>
-          {language === "es"
-            ? "Esta foto antigua se puede ver, pero no se puede preservar mediante la edición gobernada. Elimínala y agrégala otra vez antes de guardar cambios de fotos."
-            : "This older photo can be viewed, but it cannot be preserved through governed photo editing. Remove it and add it again before saving photo changes."}
-        </p>
-      )}
     </div>
   );
 }
@@ -585,12 +368,19 @@ function getQuoteNotesText(quote) {
 function HomeownerWorkflowHub({
   request,
   language,
+  presentationState,
   linkedAppointment,
   onOpenConversation,
+  onReviewResponse,
   onPrimaryAction,
   hideCommunicationAction = false,
+  alertAttention = null,
+  focusStage = "",
 }) {
   const workflow = getHomeownerWorkflowPresentation(request, language);
+  const canonicalPresentation = presentationState?.applicable
+    ? presentationState
+    : null;
   const timeline = getHomeownerWorkflowTimeline(request, language);
   const hasQuote = Array.isArray(request.quotesReceived) && request.quotesReceived.length > 0;
   const hasPayment = Boolean(
@@ -605,43 +395,80 @@ function HomeownerWorkflowHub({
   const hasCompletion =
     String(request.status || "").toLowerCase() === "completed" ||
     Boolean(request.completionRecord);
+  const focusedSection =
+    getHomeownerWorkCenterSection(
+      focusStage
+    );
+
   const visibleSections = [
     {
       key: "schedule",
+      alertStages: ["schedule"],
       label: t("myRequestsScheduleVisit", language),
       visible: Boolean(linkedAppointment || request.scheduledAt || request.appointmentDate),
     },
     {
       key: "evaluation",
+      alertStages: ["evaluation"],
       label: t("myRequestsEvaluationSummary", language),
       visible: Boolean(request.evaluationSummary || request.evaluationNotes || request.evaluationCompletedAt),
     },
     {
       key: "quote",
+      alertStages: ["quote"],
       label: t("myRequestsQuoteProposal", language),
       visible: hasQuote,
     },
     {
       key: "payment",
+      alertStages: ["deposit"],
       label: t("myRequestsPaymentDeposit", language),
       visible: hasPayment,
     },
     {
       key: "work",
+      alertStages: ["work"],
       label: t("myRequestsActiveWork", language),
       visible: hasActiveWork,
     },
     {
       key: "completion",
+      alertStages: [
+        "invoice",
+        "completion",
+        "review",
+      ],
       label: t("myRequestsCompletion", language),
       visible: hasCompletion,
     },
     {
       key: "history",
+      alertStages: [],
       label: t("myRequestsServiceHistory", language),
       visible: Boolean(request.closedAt || request.savedToHistory),
     },
-  ].filter((section) => section.visible);
+  ]
+    .map((section) => {
+      const attentionCount =
+        getWorkCenterGroupedStageUnread(
+          alertAttention,
+          section.alertStages
+        );
+
+      const focused =
+        focusedSection === section.key;
+
+      return {
+        ...section,
+        attentionCount,
+        focused,
+        visible:
+          section.visible ||
+          attentionCount > 0 ||
+          focused,
+      };
+    })
+    .filter((section) => section.visible);
   const primaryIsConversation = workflow.primaryActionKey === "messageProfessional";
   const conversationActionStage = ["completion", "history"].includes(
     workflow.key
@@ -649,13 +476,18 @@ function HomeownerWorkflowHub({
     ? CONVERSATION_ACTION_STAGE.HISTORY
     : CONVERSATION_ACTION_STAGE.ACTIVE;
   const submittedOnly = workflow.key === "request";
+  const responseReceived =
+    canonicalPresentation?.key === REQUEST_PRESENTATION_STATES.RESPONSE_RECEIVED;
+  const professionalSelected =
+    canonicalPresentation?.key === REQUEST_PRESENTATION_STATES.PROFESSIONAL_SELECTED;
   const hasAuthoritativeConversation = Boolean(
     !submittedOnly &&
       request.conversation_available === true &&
       getCanonicalConversationActionTarget(request).ok
   );
-  const showPrimaryAction =
-    !submittedOnly && (!primaryIsConversation || hasAuthoritativeConversation);
+  const showPrimaryAction = canonicalPresentation
+    ? responseReceived || professionalSelected
+    : !submittedOnly && (!primaryIsConversation || hasAuthoritativeConversation);
 
   return (
     <div style={workflowHubCard}>
@@ -664,14 +496,18 @@ function HomeownerWorkflowHub({
           <span style={workflowHubEyebrow}>
             {t("myRequestsWorkflow", language)}
           </span>
-          <h3 style={workflowHubTitle}>{workflow.statusLabel}</h3>
+          <h3 style={workflowHubTitle}>
+            {canonicalPresentation?.statusLabel || workflow.statusLabel}
+          </h3>
         </div>
-        <span style={workflowHubStatusBadge}>{workflow.progressHint}</span>
+        <span style={workflowHubStatusBadge}>
+          {canonicalPresentation?.nextActionLabel || workflow.progressHint}
+        </span>
       </div>
 
       <div style={workflowHubNextStep}>
         <span>{t("myRequestsNextStep", language)}</span>
-        <strong>{workflow.nextAction}</strong>
+        <strong>{canonicalPresentation?.guidance || workflow.nextAction}</strong>
       </div>
 
       <div style={workflowTimelineRow}>
@@ -692,8 +528,37 @@ function HomeownerWorkflowHub({
       {visibleSections.length > 0 && (
         <div style={workflowSectionList}>
           {visibleSections.map((section) => (
-            <span key={section.key} style={workflowSectionPill}>
+            <span
+              key={section.key}
+              id={`homeowner-work-center-section-${section.key}`}
+              data-homeowner-work-center-section={section.key}
+              tabIndex={section.focused ? -1 : undefined}
+              style={{
+                ...workflowSectionPill,
+                display: "inline-flex",
+                alignItems: "center",
+                gap: 7,
+                ...(section.attentionCount > 0
+                  ? {
+                      border:
+                        "1px solid rgba(185, 28, 28, 0.34)",
+                      background:
+                        "rgba(254, 242, 242, 0.92)",
+                    }
+                  : {}),
+                ...(section.focused
+                  ? {
+                      outline:
+                        "2px solid rgba(31, 77, 52, 0.34)",
+                      outlineOffset: 2,
+                    }
+                  : {}),
+              }}
+            >
               {section.label}
+              <WorkCenterAttentionBadge
+                count={section.attentionCount}
+              />
             </span>
           ))}
         </div>
@@ -703,13 +568,17 @@ function HomeownerWorkflowHub({
         {showPrimaryAction && <button
           type="button"
           style={workflowHubPrimaryButton}
-          onClick={() =>
-            primaryIsConversation
+          onClick={() => {
+            if (responseReceived) return onReviewResponse?.();
+            if (professionalSelected) return onOpenConversation?.();
+            return primaryIsConversation
               ? onOpenConversation?.()
-              : onPrimaryAction?.(workflow, request)
-          }
+              : onPrimaryAction?.(workflow, request);
+          }}
         >
-          {primaryIsConversation
+          {canonicalPresentation
+            ? canonicalPresentation.ctaLabel
+            : primaryIsConversation
             ? getConversationActionLabel(
                 conversationActionStage,
                 language
@@ -729,11 +598,34 @@ function HomeownerWorkflowHub({
   );
 }
 
+const WORK_CENTER_CANCELLABLE_EMERGENCY_STATUSES = new Set([
+  "draft",
+  "ready_for_distribution",
+  "active",
+  "selection_pending",
+]);
+
+function canCancelEmergencyRequestFromWorkCenter(
+  emergencyRequest
+) {
+  const normalizedStatus = String(
+    emergencyRequest?.status || ""
+  )
+    .trim()
+    .toLowerCase();
+
+  return WORK_CENTER_CANCELLABLE_EMERGENCY_STATUSES.has(
+    normalizedStatus
+  );
+}
+
 function EmergencyRequestCard({
   emergencyRequest,
   language,
   onOpen,
   onOpenConversation,
+  onCancel,
+  cancelPending = false,
 }) {
   const responsePresentation =
     getEmergencyResponsePresentation({
@@ -783,6 +675,11 @@ function EmergencyRequestCard({
     )
       ? CONVERSATION_ACTION_STAGE.HISTORY
       : CONVERSATION_ACTION_STAGE.ACTIVE;
+  const canCancelFromWorkCenter =
+    canCancelEmergencyRequestFromWorkCenter(
+      emergencyRequest
+    );
+
   return (
     <article
       className="meetro-visual-surface"
@@ -855,6 +752,26 @@ function EmergencyRequestCard({
             : "View Emergency Request"}
         </button>
 
+        {canCancelFromWorkCenter && (
+          <button
+            type="button"
+            style={emergencyRequestSecondaryAction}
+            onClick={onCancel}
+            disabled={cancelPending}
+            aria-busy={cancelPending ? "true" : undefined}
+          >
+            {cancelPending
+              ? t(
+                  "myRequestsEmergencyCancelling",
+                  language
+                )
+              : t(
+                  "myRequestsEmergencyCancel",
+                  language
+                )}
+          </button>
+        )}
+
         {canOpenConversation && (
           <button
             type="button"
@@ -873,11 +790,16 @@ function EmergencyRequestCard({
   );
 }
 
-function MyRequests({ setPage }) {
-  const language = getLanguage();
+function MyRequests({ setPage, view = "list" }) {
+  const language = useLanguage();
+  const isDetailView = view === "detail";
   const requestPhotoUploadEnabled = isRequestPhotoUploadEnabled();
   const mediaUploadDeferred =
     isFriendsAndFamilyMediaDeferred() && !requestPhotoUploadEnabled;
+  const alertRoute = parseHomeownerRequestAlertRoute(
+    typeof window === "undefined" ? "" : window.location.hash
+  );
+  const detailReturnPage = alertRoute?.returnPage || "myRequests";
 
   const [recoveryTick, setRecoveryTick] = useState(0);
   const [backendRequests, setBackendRequests] = useState([]);
@@ -885,8 +807,13 @@ function MyRequests({ setPage }) {
     REQUEST_COLLECTION_STATUS.LOADING
   );
   const [requestReloadKey, setRequestReloadKey] = useState(0);
+  const [canonicalRequesterResponses, setCanonicalRequesterResponses] = useState([]);
+  const [canonicalRequesterConversations, setCanonicalRequesterConversations] = useState([]);
+  const [confirmationResponseId, setConfirmationResponseId] = useState(null);
   const [requestMutationStatus, setRequestMutationStatus] = useState("idle");
   const [requestMutationError, setRequestMutationError] = useState("");
+  const [customerQuoteDiscovery, setCustomerQuoteDiscovery] = useState(null);
+  const customerQuoteDiscoveryEpochRef = useRef(0);
   const [emergencyRequests, setEmergencyRequests] = useState([]);
   const [
     emergencyRequestStatus,
@@ -894,6 +821,71 @@ function MyRequests({ setPage }) {
   ] = useState(REQUEST_COLLECTION_STATUS.LOADING);
   const [emergencyReloadKey, setEmergencyReloadKey] =
     useState(0);
+  const [
+    emergencyCancelRequestId,
+    setEmergencyCancelRequestId,
+  ] = useState(null);
+  const [
+    emergencyCancelError,
+    setEmergencyCancelError,
+  ] = useState("");
+  const [
+    canonicalAlertCountSnapshot,
+    setCanonicalAlertCountSnapshot,
+  ] = useState(getAlertCountSnapshot);
+
+  useEffect(() => {
+    return subscribeAlertCounts(
+      setCanonicalAlertCountSnapshot
+    );
+  }, []);
+
+  const handleCanonicalLifecycleLoaded = useCallback(
+    ({ requestId, lifecycle }) => {
+      const jobId = String(lifecycle?.job?.id || "").trim();
+      if (!requestId || !jobId) {
+        setCustomerQuoteDiscovery({
+          status: "unavailable",
+          requestId: requestId || null,
+          jobId: null,
+          quotes: null,
+          errorCode: "CUSTOMER_JOB_ID_UNAVAILABLE",
+        });
+        return;
+      }
+
+      const epoch = ++customerQuoteDiscoveryEpochRef.current;
+      setCustomerQuoteDiscovery({
+        status: "loading",
+        requestId,
+        jobId,
+        quotes: null,
+        errorCode: "",
+      });
+      void fetchCustomerJobQuotes({ jobId, setPage })
+        .then((quotes) => {
+          if (epoch !== customerQuoteDiscoveryEpochRef.current) return;
+          setCustomerQuoteDiscovery({
+            status: "confirmed",
+            requestId,
+            jobId,
+            quotes,
+            errorCode: "",
+          });
+        })
+        .catch((error) => {
+          if (epoch !== customerQuoteDiscoveryEpochRef.current) return;
+          setCustomerQuoteDiscovery({
+            status: "unavailable",
+            requestId,
+            jobId,
+            quotes: null,
+            errorCode: String(error?.code || "CUSTOMER_JOB_QUOTES_FAILED"),
+          });
+        });
+    },
+    [setPage]
+  );
 
   function readRequestArray(key) {
     try {
@@ -948,6 +940,41 @@ function MyRequests({ setPage }) {
     }
 
     recoverHomeownerRequests();
+  }, [requestReloadKey, setPage]);
+
+  useEffect(() => {
+    if (canReadLegacyWorkflowStorage()) return undefined;
+
+    let active = true;
+    const loadCanonicalPresentationSources = () => {
+      void Promise.all([
+        getRequesterResponseInbox({ setPage }),
+        fetchCanonicalConversations("personal", { setPage }),
+      ]).then(([responseResult, conversationResult]) => {
+        if (!active) return;
+        if (responseResult.ok) {
+          setCanonicalRequesterResponses(responseResult.responses);
+        }
+        if (conversationResult.ok) {
+          setCanonicalRequesterConversations(conversationResult.conversations);
+        }
+      });
+    };
+    loadCanonicalPresentationSources();
+    window.addEventListener("focus", loadCanonicalPresentationSources);
+    window.addEventListener(
+      "meetro-messages-updated",
+      loadCanonicalPresentationSources
+    );
+
+    return () => {
+      active = false;
+      window.removeEventListener("focus", loadCanonicalPresentationSources);
+      window.removeEventListener(
+        "meetro-messages-updated",
+        loadCanonicalPresentationSources
+      );
+    };
   }, [requestReloadKey, setPage]);
 
   useEffect(() => {
@@ -1008,35 +1035,88 @@ function MyRequests({ setPage }) {
     };
   }, [emergencyReloadKey, setPage]);
 
+  async function handleWorkCenterEmergencyCancel(
+    emergencyRequest
+  ) {
+    const requestId =
+      emergencyRequest?.emergencyRequestId;
+
+    if (
+      !requestId ||
+      emergencyCancelRequestId !== null ||
+      !canCancelEmergencyRequestFromWorkCenter(
+        emergencyRequest
+      )
+    ) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      t(
+        "myRequestsEmergencyCancelConfirm",
+        language
+      )
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setEmergencyCancelError("");
+    setEmergencyCancelRequestId(requestId);
+
+    try {
+      const result = await cancelEmergencyRequest(
+        requestId,
+        { setPage }
+      );
+      const returnedStatus = String(
+        result?.emergencyRequest?.status || ""
+      )
+        .trim()
+        .toLowerCase();
+
+      if (
+        !result?.ok ||
+        !result?.emergencyRequest ||
+        returnedStatus !== "cancelled"
+      ) {
+        setEmergencyCancelError(
+          t(
+            "myRequestsEmergencyCancelFailed",
+            language
+          )
+        );
+        return;
+      }
+
+      setEmergencyReloadKey(
+        (value) => value + 1
+      );
+    } catch {
+      setEmergencyCancelError(
+        t(
+          "myRequestsEmergencyCancelFailed",
+          language
+        )
+      );
+    } finally {
+      setEmergencyCancelRequestId(null);
+    }
+  }
+
   void recoveryTick;
 
-  const selectedId = localStorage.getItem("selectedHomeownerRequestId");
+  const [selectedRequestId, setSelectedRequestId] = useState(() =>
+    normalizeHomeownerRequestCardId(
+      alertRoute?.requestId || localStorage.getItem("selectedHomeownerRequestId")
+    )
+  );
   const [previewImage, setPreviewImage] = useState(null);
-  const [editingId, setEditingId] = useState(null);
   const [revisionQuoteId, setRevisionQuoteId] = useState(null);
   const [revisionText, setRevisionText] = useState("");
   const [pendingCancelId, setPendingCancelId] = useState(null);
   const [cancellationCheckAt, setCancellationCheckAt] = useState(null);
-  const [editForm, setEditForm] = useState({
-    title: "",
-    description: "",
-    location: "",
-    locationIntakeMode: "",
-    locationNormalizationStatus: "legacy_unclassified",
-    serviceAddressLine1: "",
-    serviceCity: "",
-    serviceRegion: "",
-    servicePostalCode: "",
-    serviceCountryCode: "",
-    unitNumber: "",
-    accessNotes: "",
-    photos: [],
-    photosChanged: false,
-    photoError: "",
-    cleanupWarning: "",
-  });
-  const [uploadingPhotos, setUploadingPhotos] = useState(false);
-  const editPhotoSessionUploadsRef = useRef([]);
 
   const pendingCancelRequest = pendingCancelId
     ? requests.find(
@@ -1065,11 +1145,93 @@ function MyRequests({ setPage }) {
     minutesSinceAccepted !== null &&
     minutesSinceAccepted > freeCancelWindowMinutes;
 
-  const sortedRequests = [...requests].sort((a, b) => {
-    const aSelected = String(a.requestId || a.id) === String(selectedId) ? 1 : 0;
-    const bSelected = String(b.requestId || b.id) === String(selectedId) ? 1 : 0;
-    return bSelected - aSelected;
-  });
+  // Preserve canonical collection order on the compact Work Center.
+  const sortedRequests = [...requests];
+  const selectedRequest = isDetailView
+    ? resolveHomeownerRequestById(requests, selectedRequestId)
+    : null;
+  const visibleRequests = isDetailView
+    ? selectedRequest
+      ? [selectedRequest]
+      : []
+    : sortedRequests;
+
+  const alertFocusSection =
+    getHomeownerWorkCenterSection(
+      alertRoute?.stage || ""
+    );
+
+  const selectedRequestIdentity =
+    selectedRequest
+      ? String(
+          selectedRequest.requestId ||
+          selectedRequest.id ||
+          ""
+        )
+      : "";
+
+  useEffect(() => {
+    if (
+      !isDetailView ||
+      !selectedRequestIdentity ||
+      !alertFocusSection
+    ) {
+      return undefined;
+    }
+
+    const timeoutId = window.setTimeout(
+      () => {
+        const exactContent =
+          document.querySelector(
+            `[data-homeowner-work-center-content="${alertFocusSection}"]`
+          );
+
+        const lifecycleSection =
+          document.querySelector(
+            `[data-homeowner-work-center-section="${alertFocusSection}"]`
+          );
+
+        const target =
+          exactContent || lifecycleSection;
+
+        if (!target) return;
+
+        target.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+
+        if (
+          typeof target.focus === "function"
+        ) {
+          target.focus({
+            preventScroll: true,
+          });
+        }
+      },
+      140
+    );
+
+    return () =>
+      window.clearTimeout(timeoutId);
+  }, [
+    alertFocusSection,
+    isDetailView,
+    selectedRequestIdentity,
+  ]);
+
+  function getPresentationForRequest(request = {}) {
+    return deriveRequestPresentationState({
+      request,
+      responses: canonicalRequesterResponses,
+      conversations: canonicalRequesterConversations,
+      confirmationResponseId:
+        String(request.requestId || request.id) === String(selectedRequestId)
+          ? confirmationResponseId
+          : null,
+      language,
+    });
+  }
 
   function saveHomeownerRequests(updatedRequests, options = {}) {
     if (!canReadLegacyWorkflowStorage()) return false;
@@ -1253,332 +1415,6 @@ function MyRequests({ setPage }) {
     openRequestConversation(projectRecord, workflow.quote || {});
   }
 
-  async function cleanupUploadedEditRequestPhotos(mediaItems = []) {
-    if (!mediaItems.length) return true;
-    try {
-      const results = await Promise.all(
-        mediaItems.map((media) =>
-          cleanupRequestPhoto({
-            media,
-            authFetchImpl: authFetch,
-            setPage,
-          })
-        )
-      );
-      return results.every(Boolean);
-    } catch {
-      return false;
-    }
-  }
-
-  function startEdit(request) {
-    revokeLocalRequestEditPhotoPreviews(editForm.photos);
-    if (editPhotoSessionUploadsRef.current.length > 0) {
-      void cleanupUploadedEditRequestPhotos(editPhotoSessionUploadsRef.current);
-      editPhotoSessionUploadsRef.current = [];
-    }
-    setEditingId(request.requestId || request.id);
-    setEditForm({
-      title: request.title || "",
-      description: request.description || "",
-      location: request.location || "",
-      locationIntakeMode: request.locationIntakeMode || "",
-      locationNormalizationStatus:
-        request.locationNormalizationStatus || "legacy_unclassified",
-      serviceAddressLine1: request.serviceAddressLine1 || "",
-      serviceCity: request.serviceCity || "",
-      serviceRegion: request.serviceRegion || "",
-      servicePostalCode: request.servicePostalCode || "",
-      serviceCountryCode: request.serviceCountryCode || "",
-      unitNumber: request.unitNumber || "",
-      accessNotes: request.accessNotes || "",
-      photos: hydrateRequestEditPhotos(request),
-      photosChanged: false,
-      photoError: "",
-      cleanupWarning: "",
-    });
-  }
-
-  useEffect(() => {
-    if (localStorage.getItem("meetroOpenHomeownerRequestEdit") !== "true") {
-      return;
-    }
-
-    const selectedRequest = requests.find(
-      (request) =>
-        String(request.requestId || request.id) === String(selectedId)
-    );
-
-    if (
-      !selectedRequest ||
-      ["completed", "cancelled"].includes(selectedRequest.status)
-    ) {
-      return;
-    }
-
-    localStorage.removeItem("meetroOpenHomeownerRequestEdit");
-    const timeoutId = window.setTimeout(() => startEdit(selectedRequest), 0);
-    return () => window.clearTimeout(timeoutId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [requests, selectedId]);
-
-  function clearEditPhotoSession() {
-    revokeLocalRequestEditPhotoPreviews(editForm.photos);
-    editPhotoSessionUploadsRef.current = [];
-    setEditForm({
-      title: "",
-      description: "",
-      location: "",
-      locationIntakeMode: "",
-      locationNormalizationStatus: "legacy_unclassified",
-      serviceAddressLine1: "",
-      serviceCity: "",
-      serviceRegion: "",
-      servicePostalCode: "",
-      serviceCountryCode: "",
-      unitNumber: "",
-      accessNotes: "",
-      photos: [],
-      photosChanged: false,
-      photoError: "",
-      cleanupWarning: "",
-    });
-  }
-
-  async function saveEdit(requestId) {
-    if (canReadLegacyWorkflowStorage()) return;
-    setRequestMutationStatus("pending");
-    setRequestMutationError("");
-    setEditForm((current) => ({
-      ...current,
-      photoError: "",
-      cleanupWarning: "",
-    }));
-
-    let uploadedMediaForCleanup = [];
-
-    try {
-      const body = {
-        title: editForm.title.trim(),
-        description: editForm.description.trim(),
-      };
-      if (editForm.locationNormalizationStatus === "normalized") {
-        Object.assign(body, {
-          location_intake_mode: editForm.locationIntakeMode,
-          service_city: editForm.serviceCity.trim(),
-          service_region: editForm.serviceRegion.trim(),
-          service_postal_code: editForm.servicePostalCode.trim(),
-          service_country_code: editForm.serviceCountryCode.trim(),
-          access_notes: editForm.accessNotes.trim(),
-        });
-        if (editForm.locationIntakeMode === "exact_on_file") {
-          Object.assign(body, {
-            service_address_line1: editForm.serviceAddressLine1.trim(),
-            unit_number: editForm.unitNumber.trim(),
-          });
-        }
-      } else {
-        body.location = editForm.location.trim();
-      }
-
-      if (editForm.photosChanged) {
-        if (mediaUploadDeferred) {
-          const copy = getMediaDeferredCopy(language);
-          setRequestMutationStatus("failed");
-          setEditForm((current) => ({
-            ...current,
-            photoError: copy.detail,
-          }));
-          return;
-        }
-
-        if (editForm.photos.some((photo) => photo?.displayOnly)) {
-          setRequestMutationStatus("failed");
-          setEditForm((current) => ({
-            ...current,
-            photoError: getRequestEditPhotoErrorMessage(
-              REQUEST_EDIT_LEGACY_PHOTO_RESOLUTION_REQUIRED,
-              language
-            ),
-          }));
-          return;
-        }
-
-        const pendingLocalPhotos = getPendingLocalRequestPhotoItems(editForm.photos);
-        const uploadedMediaByItemId = new Map();
-
-        if (pendingLocalPhotos.length > 0) {
-          setUploadingPhotos(true);
-          const uploadedRequestPhotos = await uploadRequestPhotos({
-            files: pendingLocalPhotos.map((photo) => photo.file),
-            authFetchImpl: authFetch,
-            setPage,
-          });
-
-          if (!uploadedRequestPhotos.ok) {
-            setRequestMutationStatus("failed");
-            setEditForm((current) => ({
-              ...current,
-              photoError: getRequestEditPhotoErrorMessage(
-                uploadedRequestPhotos.code,
-                language
-              ),
-            }));
-            return;
-          }
-
-          uploadedMediaForCleanup = uploadedRequestPhotos.photos;
-          editPhotoSessionUploadsRef.current = uploadedMediaForCleanup;
-          pendingLocalPhotos.forEach((photo, index) => {
-            uploadedMediaByItemId.set(photo.id, uploadedMediaForCleanup[index]);
-          });
-        }
-
-        const replacement = buildRequestPhotoReplacementPayload(editForm.photos, {
-          uploadedMediaByItemId,
-        });
-
-        if (!replacement.ok) {
-          const cleanupSucceeded = await cleanupUploadedEditRequestPhotos(
-            uploadedMediaForCleanup
-          );
-          editPhotoSessionUploadsRef.current = [];
-          setRequestMutationStatus("failed");
-          setEditForm((current) => ({
-            ...current,
-            photoError: getRequestEditPhotoErrorMessage(replacement.code, language),
-            cleanupWarning: cleanupSucceeded
-              ? ""
-              : getRequestEditCleanupWarning(language),
-          }));
-          return;
-        }
-
-        body.request_photos = replacement.request_photos;
-      }
-
-      const result = await authFetch(
-        `/posts/${encodeURIComponent(requestId)}`,
-        {
-          method: "PUT",
-          body: JSON.stringify(body),
-        },
-        setPage
-      );
-      if (!result?.response?.ok || !result.data?.post) {
-        const cleanupSucceeded = await cleanupUploadedEditRequestPhotos(
-          uploadedMediaForCleanup
-        );
-        editPhotoSessionUploadsRef.current = [];
-        setRequestMutationStatus("failed");
-        setRequestMutationError(result?.data?.message || "The request could not be updated.");
-        setEditForm((current) => ({
-          ...current,
-          cleanupWarning: cleanupSucceeded
-            ? ""
-            : getRequestEditCleanupWarning(language),
-        }));
-        return;
-      }
-      setBackendRequests((records) => replaceCanonicalRequest(records, result.data.post));
-      setRequestMutationStatus("confirmed");
-      setEditingId(null);
-      clearEditPhotoSession();
-    } catch {
-      const cleanupSucceeded = await cleanupUploadedEditRequestPhotos(
-        uploadedMediaForCleanup
-      );
-      editPhotoSessionUploadsRef.current = [];
-      setRequestMutationStatus("failed");
-      setRequestMutationError("The request could not be updated. Try again.");
-      setEditForm((current) => ({
-        ...current,
-        cleanupWarning: cleanupSucceeded
-          ? ""
-          : getRequestEditCleanupWarning(language),
-      }));
-    } finally {
-      setUploadingPhotos(false);
-    }
-  }
-
-  function handleEditPhotoUpload(event) {
-    const files = Array.from(event.target.files || []);
-    event.target.value = "";
-
-    if (mediaUploadDeferred) {
-      const copy = getMediaDeferredCopy(language);
-      setEditForm((current) => ({
-        ...current,
-        photoError: copy.detail,
-      }));
-      addNotification({ title: copy.title, message: copy.detail, type: "media" });
-      return;
-    }
-
-    const validation = validateRequestPhotoFiles(files, {
-      existingCount: editForm.photos.length,
-    });
-    if (!validation.ok) {
-      setEditForm((current) => ({
-        ...current,
-        photoError: getRequestEditPhotoErrorMessage(validation.code, language),
-      }));
-      return;
-    }
-
-    const additions = validation.files.map((file) =>
-      createLocalRequestPhotoItem(createTemporaryRequestPhotoPreview(file))
-    );
-    setEditForm((current) => ({
-      ...current,
-      photos: [...current.photos, ...additions],
-      photosChanged: true,
-      photoError: "",
-      cleanupWarning: "",
-    }));
-  }
-
-  function removeEditPhoto(indexToRemove) {
-    setEditForm((current) => {
-      const removed = current.photos[indexToRemove];
-      if (!removed) return current;
-      if (removed.kind === "local") removed.revoke?.();
-      return {
-        ...current,
-        photos: removeRequestEditPhotoAt(current.photos, indexToRemove),
-        photosChanged: true,
-        photoError: "",
-        cleanupWarning: "",
-      };
-    });
-  }
-
-  function moveEditPhoto(index, direction) {
-    setEditForm((current) => ({
-      ...current,
-      photos: reorderRequestEditPhotos(current.photos, index, direction),
-      photosChanged: true,
-      photoError: "",
-      cleanupWarning: "",
-    }));
-  }
-
-  async function cancelEdit() {
-    const cleanupSucceeded = await cleanupUploadedEditRequestPhotos(
-      editPhotoSessionUploadsRef.current
-    );
-    if (!cleanupSucceeded) {
-      addNotification({
-        title: language === "es" ? "Limpieza pendiente" : "Cleanup pending",
-        message: getRequestEditCleanupWarning(language),
-        type: "media",
-      });
-    }
-    setEditingId(null);
-    clearEditPhotoSession();
-  }
-
   function requestCancelProject(requestId) {
     setCancellationCheckAt(Date.now());
     setPendingCancelId(requestId);
@@ -1602,7 +1438,6 @@ function MyRequests({ setPage }) {
       }
       setBackendRequests((records) => replaceCanonicalRequest(records, result.data.post));
       setRequestMutationStatus("confirmed");
-      setEditingId(null);
       setPendingCancelId(null);
       setCancellationCheckAt(null);
     } catch {
@@ -1657,37 +1492,56 @@ function MyRequests({ setPage }) {
 
   return (
     <div className="app-page meetro-responsive-page meetro-visual-page" style={page}>
-      <button style={backButton} onClick={goBackFromRequests}>
-        {t("myRequestsBack", language)}
+      <button
+        style={backButton}
+        onClick={
+          isDetailView ? () => setPage(detailReturnPage) : goBackFromRequests
+        }
+      >
+        {isDetailView
+          ? language === "es"
+            ? "Volver al Centro de Trabajo"
+            : "Back to Work Center"
+          : t("myRequestsBack", language)}
       </button>
 
       <div style={header}>
         <h1 style={title}>
-          {t("myRequestsTitle", language)}
+          {isDetailView
+            ? language === "es"
+              ? "Detalles de la Solicitud"
+              : "Request Details"
+            : t("myRequestsTitle", language)}
         </h1>
 
         <p style={subtitle}>
-          {t("myRequestsSubtitle", language)}
+          {isDetailView
+            ? language === "es"
+              ? "Consulta el historial, los participantes, las fotos y las respuestas profesionales."
+              : "Review the request history, participants, photos, and professional responses."
+            : t("myRequestsSubtitle", language)}
         </p>
       </div>
 
-      <section
-        className="meetro-visual-hero"
-        style={workCenterPerspectiveCard}
-        aria-label={t("myRequestsPerspectiveTitle", language)}
-      >
-        <span style={workCenterPerspectiveEyebrow}>
-          {t("myRequestsPerspectiveEyebrow", language)}
-        </span>
-        <strong style={workCenterPerspectiveTitle}>
-          {t("myRequestsPerspectiveTitle", language)}
-        </strong>
-        <p style={workCenterPerspectiveText}>
-          {t("myRequestsPerspectiveText", language)}
-        </p>
-      </section>
+      {!isDetailView && (
+        <section
+          className="meetro-visual-hero"
+          style={workCenterPerspectiveCard}
+          aria-label={t("myRequestsPerspectiveTitle", language)}
+        >
+          <span style={workCenterPerspectiveEyebrow}>
+            {t("myRequestsPerspectiveEyebrow", language)}
+          </span>
+          <strong style={workCenterPerspectiveTitle}>
+            {t("myRequestsPerspectiveTitle", language)}
+          </strong>
+          <p style={workCenterPerspectiveText}>
+            {t("myRequestsPerspectiveText", language)}
+          </p>
+        </section>
+      )}
 
-      {emergencyRequestStatus ===
+      {!isDetailView && emergencyRequestStatus ===
         REQUEST_COLLECTION_STATUS.LOADING && (
         <section
           style={emergencyRequestSection}
@@ -1713,7 +1567,7 @@ function MyRequests({ setPage }) {
         </section>
       )}
 
-      {emergencyRequestStatus ===
+      {!isDetailView && emergencyRequestStatus ===
         REQUEST_COLLECTION_STATUS.UNAVAILABLE && (
         <section
           style={emergencyRequestSection}
@@ -1750,7 +1604,7 @@ function MyRequests({ setPage }) {
         </section>
       )}
 
-      {emergencyRequestStatus ===
+      {!isDetailView && emergencyRequestStatus ===
         REQUEST_COLLECTION_STATUS.READY &&
         emergencyRequests.length > 0 && (
           <section
@@ -1787,11 +1641,53 @@ function MyRequests({ setPage }) {
                       )
                     )
                   }
+                  onCancel={() => {
+                    void handleWorkCenterEmergencyCancel(
+                      emergencyRequest
+                    );
+                  }}
+                  cancelPending={
+                    String(
+                      emergencyCancelRequestId || ""
+                    ) ===
+                    String(
+                      emergencyRequest.emergencyRequestId ||
+                        ""
+                    )
+                  }
                 />
               ))}
             </div>
           </section>
         )}
+
+      {!isDetailView &&
+        emergencyCancelError && (
+          <div
+            className="meetro-visual-surface"
+            style={emptyCard}
+            role="alert"
+          >
+            <strong>{emergencyCancelError}</strong>
+          </div>
+        )}
+
+      {!isDetailView && (
+        <section
+          style={emergencyRequestSection}
+          aria-labelledby="service-requests-heading"
+        >
+          <h2
+            id="service-requests-heading"
+            style={emergencyRequestSectionTitle}
+          >
+            {t(
+              "myRequestsServiceRequestsHeading",
+              language
+            )}
+          </h2>
+        </section>
+      )}
 
       {requestMutationStatus === "pending" && (
         <div className="meetro-visual-surface" style={emptyCard} role="status">
@@ -1827,9 +1723,36 @@ function MyRequests({ setPage }) {
             Try Again
           </button>
         </div>
-      ) : sortedRequests.length === 0 ? (
-        <div className="meetro-visual-empty-state" style={emptyCard}>
+      ) : isDetailView && !selectedRequest ? (
+        <div
+          className="meetro-visual-empty-state"
+          style={emptyCard}
+          role="alert"
+          data-homeowner-request-detail-unavailable="true"
+        >
           <div style={emptyIcon}>REQ</div>
+          <h2>
+            {language === "es"
+              ? "Solicitud no disponible"
+              : "Request unavailable"}
+          </h2>
+          <p>
+            {language === "es"
+              ? "No pudimos encontrar esta solicitud. Vuelve al Centro de Trabajo y selecciónala otra vez."
+              : "Meetro could not find this request. Return to Work Center and choose it again."}
+          </p>
+          <button
+            className="meetro-visual-primary-button"
+            style={primaryButton}
+            onClick={() => setPage(detailReturnPage)}
+          >
+            {language === "es"
+              ? "Volver al Centro de Trabajo"
+              : "Back to Work Center"}
+          </button>
+        </div>
+      ) : !isDetailView && sortedRequests.length === 0 ? (
+        <div className="meetro-visual-empty-state" style={emptyCard}>
 
           <h2>{t("myRequestsEmptyTitle", language)}</h2>
 
@@ -1842,29 +1765,70 @@ function MyRequests({ setPage }) {
           </button>
         </div>
       ) : (
-        <div className="meetro-responsive-grid meetro-grid-2" style={list}>
-          {sortedRequests.map((request) => {
-            const requestId = request.requestId || request.id;
-            const isSelected = String(requestId) === String(selectedId);
+        <div
+          className={
+            isDetailView
+              ? "meetro-request-detail"
+              : "meetro-responsive-grid meetro-grid-2"
+          }
+          style={isDetailView ? requestDetailLayout : list}
+          data-homeowner-request-detail-view={isDetailView ? "true" : undefined}
+        >
+          {visibleRequests.map((request) => {
+            const requestId = getHomeownerRequestCardId(request);
+            const showsDedicatedDetail =
+              isDetailView && requestId === selectedRequestId;
+            const requestTitle =
+              request.title ||
+              request.category ||
+              t("myRequestsServiceRequest", language);
+            const requestDetailContentId = `homeowner-request-details-${encodeURIComponent(
+              requestId
+            )}`;
             const truthfulRequest = getTruthfulWorkflowRequest(request);
             const unsupportedWorkflow = truthfulRequest !== request;
             const unavailableCopy = getApprovalSchedulingUnavailableCopy(language);
             const lifecycle = getHomeownerLifecycleStage(truthfulRequest, language);
+            const requestPresentation = getPresentationForRequest(truthfulRequest);
+            const canonicalPresentation = requestPresentation.applicable
+              ? requestPresentation
+              : null;
             const linkedAppointment = null;
             const hasQuoteReview =
               Array.isArray(truthfulRequest.quotesReceived) &&
               truthfulRequest.quotesReceived.length > 0;
+            const conversationAvailable = canonicalPresentation
+              ? canonicalPresentation.canOpenConversation
+              : getCanonicalConversationActionTarget(request).ok;
 
             const authoritativeCounts = getAuthoritativeHomeownerRequestCounts(request);
 
+            const requestAlertAttention =
+              getWorkCenterRequestAttention(
+                canonicalAlertCountSnapshot,
+                "",
+                requestId
+              );
+
+            const requestAlertCount =
+              Number.isSafeInteger(
+                requestAlertAttention?.unread
+              )
+                ? requestAlertAttention.unread
+                : 0;
+
             return (
               <div
-                className={`meetro-visual-surface${isSelected ? " meetro-selected-card" : ""}`}
+                className="meetro-visual-surface"
                 style={{
                   ...requestCard,
-                  ...(isSelected ? selectedRequestCard : {}),
+                  ...(isDetailView ? dedicatedRequestDetail : {}),
                 }}
-                key={requestId || request.createdAt}
+                key={requestId}
+                data-homeowner-request-id={requestId}
+                data-homeowner-request-detail-id={
+                  isDetailView ? requestId : undefined
+                }
               >
                 <div
                   style={{
@@ -1883,13 +1847,12 @@ function MyRequests({ setPage }) {
                   >
                     <div style={{ flex: 1 }}>
                       <div style={cardPillRow}>
-                        <span style={statusPill}>{lifecycle.stageLabel}</span>
-
-                        {isSelected && (
-                          <span style={selectedPill}>
-                            {t("myRequestsSelected", language)}
-                          </span>
-                        )}
+                        <span style={statusPill}>
+                          {canonicalPresentation?.statusLabel || lifecycle.stageLabel}
+                        </span>
+                        <WorkCenterAttentionBadge
+                          count={requestAlertCount}
+                        />
                       </div>
 
                       <h3
@@ -1900,10 +1863,14 @@ function MyRequests({ setPage }) {
                           color: "#111827",
                         }}
                       >
-                        {request.title ||
-                          request.category ||
-                          t("myRequestsServiceRequest", language)}
+                        {requestTitle}
                       </h3>
+
+                      {canonicalPresentation?.businessName && (
+                        <strong style={selectedBusinessName}>
+                          {canonicalPresentation.businessName}
+                        </strong>
+                      )}
 
                       <p
                         style={{
@@ -1949,7 +1916,7 @@ function MyRequests({ setPage }) {
                         lineHeight: 1.35,
                       }}
                     >
-                      {lifecycle.nextStep}
+                      {canonicalPresentation?.guidance || lifecycle.nextStep}
                     </strong>
                   </div>
 
@@ -1970,52 +1937,125 @@ function MyRequests({ setPage }) {
                   </div>
                   )}
 
-                  <button
-                    type="button"
-                    style={{
-                      marginTop: 2,
-                      width: "100%",
-                      border: "1px solid rgba(99, 102, 241, 0.18)",
-                      background: isSelected ? "rgba(99, 102, 241, 0.08)" : "#ffffff",
-                      color: "var(--meetro-color-charcoal, #172317)",
-                      borderRadius: 16,
-                      padding: "12px 14px",
-                      fontWeight: 900,
-                      fontSize: 14,
-                    }}
-                    onClick={() => {
-                      if (isSelected) {
-                        localStorage.removeItem("selectedHomeownerRequestId");
-                      } else {
-                        localStorage.setItem("selectedHomeownerRequestId", requestId);
+                  {!isDetailView && (
+                    <button
+                      type="button"
+                      style={{
+                        marginTop: 2,
+                        width: "100%",
+                        border: "1px solid rgba(99, 102, 241, 0.18)",
+                        background: "#ffffff",
+                        color: "var(--meetro-color-charcoal, #172317)",
+                        borderRadius: 16,
+                        padding: "12px 14px",
+                        fontWeight: 900,
+                        fontSize: 14,
+                      }}
+                      aria-label={
+                        language === "es"
+                          ? `Ver detalles de ${requestTitle}`
+                          : `Review details for ${requestTitle}`
                       }
-
-                      setRecoveryTick((value) => value + 1);
-                    }}
-                  >
-                    {isSelected
-                      ? language === "es"
-                        ? "Ocultar detalles"
-                        : "Hide Details"
-                      : language === "es"
-                      ? "Ver detalles"
-                      : "Review Details"}
-                  </button>
+                      onClick={() => {
+                        if (canonicalPresentation?.canOpenConversation) {
+                          openRequestConversation(request, canonicalPresentation);
+                          return;
+                        }
+                        setSelectedRequestId(requestId);
+                        localStorage.setItem(
+                          "selectedHomeownerRequestId",
+                          requestId
+                        );
+                        setPage("homeownerRequestDetails");
+                      }}
+                    >
+                      {canonicalPresentation?.ctaLabel ||
+                        (language === "es" ? "Ver detalles" : "Review Details")}
+                    </button>
+                  )}
                 </div>
 
-                {isSelected && (
-                  <>
+                {showsDedicatedDetail && (
+                  <div
+                    id={requestDetailContentId}
+                    data-homeowner-request-details-id={requestId}
+                    data-customer-job-quotes-status={
+                      String(customerQuoteDiscovery?.requestId) ===
+                      String(requestId)
+                        ? customerQuoteDiscovery.status
+                        : "idle"
+                    }
+                    data-customer-job-id={
+                      String(customerQuoteDiscovery?.requestId) ===
+                      String(requestId)
+                        ? customerQuoteDiscovery.jobId || ""
+                        : ""
+                    }
+                    data-customer-quotes-count={
+                      String(customerQuoteDiscovery?.requestId) ===
+                        String(requestId) &&
+                      customerQuoteDiscovery?.status === "confirmed"
+                        ? customerQuoteDiscovery.quotes.quotes.length
+                        : ""
+                    }
+                    data-customer-quotes-summary={
+                      String(customerQuoteDiscovery?.requestId) ===
+                        String(requestId) &&
+                      customerQuoteDiscovery?.status === "confirmed"
+                        ? JSON.stringify(
+                            customerQuoteDiscovery.quotes.quotes.map(
+                              ({
+                                quoteId,
+                                businessStatus,
+                                lineageLabel,
+                                customerDecision,
+                                actions,
+                              }) => ({
+                                quoteId,
+                                businessStatus,
+                                lineageLabel,
+                                customerDecision,
+                                actions,
+                              })
+                            )
+                          )
+                        : ""
+                    }
+                    data-customer-quotes-error={
+                      String(customerQuoteDiscovery?.requestId) ===
+                      String(requestId)
+                        ? customerQuoteDiscovery.errorCode || ""
+                        : ""
+                    }
+                    style={requestDetailContent}
+                  >
                     <HomeownerWorkflowHub
                       request={truthfulRequest}
                       language={language}
+                      presentationState={canonicalPresentation}
                       linkedAppointment={linkedAppointment}
-                      onOpenConversation={() => openRequestConversation(request)}
+                      onOpenConversation={() =>
+                        openRequestConversation(request, canonicalPresentation || {})
+                      }
+                      onReviewResponse={() =>
+                        document
+                          .getElementById(`professional-responses-${requestId}`)
+                          ?.scrollIntoView({ behavior: "smooth", block: "start" })
+                      }
                       onPrimaryAction={(workflow) =>
                         workflow.key === "cancelled"
                           ? setPage("upload")
                           : openHomeownerWorkflow(truthfulRequest, workflow)
                       }
                       hideCommunicationAction={hasQuoteReview}
+                      alertAttention={
+                        requestAlertAttention
+                      }
+                      focusStage={
+                        showsDedicatedDetail
+                          ? alertRoute?.stage || ""
+                          : ""
+                      }
                     />
 
                     <div
@@ -2037,136 +2077,53 @@ function MyRequests({ setPage }) {
                         {t("myRequestsDetails", language)}
                       </h3>
 
-                      {editingId === requestId && !["completed", "cancelled"].includes(request.status) ? (
-                        <div style={{ display: "flex", flexDirection: "column", gap: 10, marginBottom: 12 }}>
-                          <input
-                            value={editForm.title}
-                            onChange={(event) =>
-                              setEditForm((current) => ({
-                                ...current,
-                                title: event.target.value,
-                              }))
-                            }
-                            placeholder={t("myRequestsTitlePlaceholder", language)}
-                            style={input}
-                          />
+                      <p
+                        style={{
+                          margin: "0 0 12px",
+                          color: "#64748b",
+                          fontSize: 14,
+                          lineHeight: 1.45,
+                        }}
+                      >
+                        {request.description || t("myRequestsNoDetails", language)}
+                      </p>
 
-                          <textarea
-                            value={editForm.description}
-                            onChange={(event) =>
-                              setEditForm((current) => ({
-                                ...current,
-                                description: event.target.value,
-                              }))
-                            }
-                            placeholder={t("myRequestsDetailsPlaceholder", language)}
-                            style={{ ...textarea, minHeight: 110 }}
-                          />
-
-                          {editForm.locationNormalizationStatus === "normalized" ? (
-                            <div style={{ display: "grid", gap: 10 }}>
-                              {editForm.locationIntakeMode === "exact_on_file" && (
-                                <input
-                                  value={editForm.serviceAddressLine1}
-                                  onChange={(event) =>
-                                    setEditForm((current) => ({
-                                      ...current,
-                                      serviceAddressLine1: event.target.value,
-                                    }))
-                                  }
-                                  placeholder={t("streetAddress", language)}
-                                  style={input}
-                                />
-                              )}
-                              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(130px, 1fr))", gap: 10 }}>
-                                <input
-                                  value={editForm.serviceCity}
-                                  onChange={(event) =>
-                                    setEditForm((current) => ({
-                                      ...current,
-                                      serviceCity: event.target.value,
-                                    }))
-                                  }
-                                  placeholder={t("city", language)}
-                                  style={input}
-                                />
-                                <input
-                                  value={editForm.serviceRegion}
-                                  onChange={(event) =>
-                                    setEditForm((current) => ({
-                                      ...current,
-                                      serviceRegion: event.target.value,
-                                    }))
-                                  }
-                                  placeholder={t("state", language)}
-                                  style={input}
-                                />
-                                <input
-                                  value={editForm.servicePostalCode}
-                                  onChange={(event) =>
-                                    setEditForm((current) => ({
-                                      ...current,
-                                      servicePostalCode: event.target.value,
-                                    }))
-                                  }
-                                  placeholder={t("zipCode", language)}
-                                  style={input}
-                                />
-                              </div>
-                            </div>
-                          ) : (
-                            <input
-                              value={editForm.location}
-                              onChange={(event) =>
-                                setEditForm((current) => ({
-                                  ...current,
-                                  location: event.target.value,
-                                }))
-                              }
-                              placeholder={t("myRequestsLocationPlaceholder", language)}
-                              style={input}
-                            />
-                          )}
-                        </div>
-                      ) : (
-                        <p
-                          style={{
-                            margin: "0 0 12px",
-                            color: "#64748b",
-                            fontSize: 14,
-                            lineHeight: 1.45,
-                          }}
-                        >
-                          {request.description || t("myRequestsNoDetails", language)}
-                        </p>
-                      )}
-
-                      {editingId === requestId && !["completed", "cancelled"].includes(request.status) ? (
-                        <EditPhotoManager
-                          photos={editForm.photos}
-                          uploading={uploadingPhotos}
-                          onUpload={handleEditPhotoUpload}
-                          onRemove={removeEditPhoto}
-                          onMove={moveEditPhoto}
-                          onPreview={setPreviewImage}
-                          language={language}
-                          mediaUploadDeferred={mediaUploadDeferred}
-                          photoError={editForm.photoError}
-                          cleanupWarning={editForm.cleanupWarning}
-                        />
-                      ) : (
-                        <PhotoStrip
-                          request={request}
-                          onPreview={setPreviewImage}
-                          language={language}
-                        />
-                      )}
+                      <PhotoStrip
+                        request={request}
+                        onPreview={setPreviewImage}
+                        language={language}
+                      />
                     </div>
+
+                    <HomeownerRequestModificationPanel
+                      request={request}
+                      language={language}
+                      setPage={setPage}
+                      mediaUploadDeferred={mediaUploadDeferred}
+                      conversationAvailable={conversationAvailable}
+                      onOpenConversation={() => openRequestConversation(request)}
+                      onPreview={setPreviewImage}
+                      onRequestChanged={(post) =>
+                        setBackendRequests((records) =>
+                          replaceCanonicalRequest(records, post)
+                        )
+                      }
+                      onCanonicalRefresh={() =>
+                        setRequestReloadKey((value) => value + 1)
+                      }
+                      onCanonicalLifecycleLoaded={
+                        handleCanonicalLifecycleLoaded
+                      }
+                    />
 
                     <HomeownerProfessionalResponseReview
                       requestId={requestId}
                       language={language}
                       setPage={setPage}
+                      onSelectionStateChange={setConfirmationResponseId}
+                      onSelectionConfirmed={() =>
+                        setRequestReloadKey((value) => value + 1)
+                      }
                     />
 
                     {unsupportedWorkflow && (
@@ -2182,7 +2139,11 @@ function MyRequests({ setPage }) {
 
                 {Array.isArray(truthfulRequest.quotesReceived) &&
                   truthfulRequest.quotesReceived.length > 0 && (
-                    <div style={quoteSection}>
+                    <div
+                      style={quoteSection}
+                      data-homeowner-work-center-content="quote"
+                      tabIndex={-1}
+                    >
                       <div style={quoteHeader}>
                         <div>
                           <h3 style={quoteTitle}>
@@ -2551,65 +2512,7 @@ function MyRequests({ setPage }) {
                   </div>
                 )}
 
-                {editingId === requestId && !["completed", "cancelled"].includes(request.status) ? (
                   <div style={actionRow}>
-                    <button
-                      style={primaryButton}
-                      onClick={() => saveEdit(requestId)}
-                      disabled={requestMutationStatus === "pending"}
-                    >
-                      {t("myRequestsSaveChanges", language)}
-                    </button>
-
-                    <button
-                      style={secondaryButton}
-                      onClick={cancelEdit}
-                    >
-                      {t("myRequestsCancelEdit", language)}
-                    </button>
-                  </div>
-                ) : (
-                  <div style={actionRow}>
-                    {!["completed", "cancelled"].includes(request.status) && (
-                      <button
-                        style={secondaryButton}
-                        onClick={() => {
-                          localStorage.setItem("selectedHomeownerRequestId", requestId);
-
-                          localStorage.setItem(
-                            "selectedChangeOrderRequest",
-                            JSON.stringify(request)
-                          );
-
-                          localStorage.setItem(
-                            "selectedHomeownerRequest",
-                            JSON.stringify(request)
-                          );
-
-                          localStorage.setItem(
-                            "selectedHomeownerRequestId",
-                            requestId
-                          );
-
-                          if (request.status === "accepted") {
-                            setPage("changeOrderRequest");
-                            return;
-                          }
-
-                          startEdit(request);
-                          return;
-                        }}
-                      >
-                        {request.status === "accepted"
-                          ? language === "es"
-                            ? "Solicitar Cambio"
-                            : "Request Service Change"
-                          : language === "es"
-                          ? "Editar Solicitud"
-                          : "Edit Request"}
-                      </button>
-                    )}
-
                     {request.status === "completed" ? (
                       <>
                         {request.needsReview && (
@@ -2672,8 +2575,7 @@ function MyRequests({ setPage }) {
                       )
                     )}
                   </div>
-                    )}
-                  </>
+                  </div>
                 )}
               </div>
             );
@@ -2997,8 +2899,20 @@ const list = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 340px), 1fr))",
   gap: "16px",
+  alignItems: "start",
   minWidth: 0,
   overflowX: "hidden",
+};
+
+const requestDetailLayout = {
+  width: "100%",
+  maxWidth: "760px",
+  margin: "0 auto",
+  minWidth: 0,
+};
+
+const requestDetailContent = {
+  minWidth: 0,
 };
 
 const requestCard = {
@@ -3013,9 +2927,9 @@ const requestCard = {
   boxSizing: "border-box",
 };
 
-const selectedRequestCard = {
-  border: "2px solid var(--meetro-color-forest)",
-  boxShadow: "0 18px 42px rgba(20,53,31,.14)",
+const dedicatedRequestDetail = {
+  border: "1px solid var(--meetro-color-line)",
+  boxShadow: "var(--meetro-shadow-lifted)",
 };
 
 const workflowHubCard = {
@@ -3163,14 +3077,12 @@ const statusPill = {
   fontSize: "12px",
 };
 
-const selectedPill = {
-  display: "inline-flex",
-  background: "#ecfdf5",
+const selectedBusinessName = {
+  display: "block",
+  marginTop: "8px",
   color: "#047857",
-  padding: "7px 11px",
-  borderRadius: "999px",
   fontWeight: "900",
-  fontSize: "12px",
+  fontSize: "15px",
 };
 
 const swipeGalleryWrap = {
@@ -3567,31 +3479,6 @@ const cancelRevisionButton = {
   cursor: "pointer",
 };
 
-const input = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid rgba(148, 163, 184, 0.35)",
-  borderRadius: 14,
-  padding: "12px 14px",
-  fontSize: 14,
-  color: "#111827",
-  background: "#ffffff",
-  outline: "none",
-};
-
-const textarea = {
-  width: "100%",
-  boxSizing: "border-box",
-  border: "1px solid rgba(148, 163, 184, 0.35)",
-  borderRadius: 14,
-  padding: "12px 14px",
-  fontSize: 14,
-  color: "#111827",
-  background: "#ffffff",
-  outline: "none",
-  resize: "vertical",
-};
-
 const actionRow = {
   display: "grid",
   gridTemplateColumns: "repeat(auto-fit, minmax(min(100%, 150px), 1fr))",
@@ -3671,130 +3558,6 @@ const cancelledRequestNotice = {
   boxSizing: "border-box",
 };
 
-const editPhotoManager = {
-  display: "grid",
-  gap: "12px",
-};
-
-const uploadingText = {
-  margin: 0,
-  color: "#b45309",
-  fontSize: "13px",
-  fontWeight: "800",
-};
-
-const editPhotoCleanupWarning = {
-  margin: 0,
-  color: "#92400e",
-  fontSize: "13px",
-  lineHeight: 1.45,
-};
-
-const addPhotoButton = {
-  border: "none",
-  background: "var(--meetro-color-forest, #1f4d34)",
-  color: "white",
-  padding: "9px 12px",
-  borderRadius: "999px",
-  fontSize: "12px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const disabledAddPhotoButton = {
-  background: "#e2e8f0",
-  color: "#64748b",
-  cursor: "not-allowed",
-};
-
-const editPhotoCard = {
-  position: "relative",
-  width: "140px",
-  height: "150px",
-  borderRadius: "18px",
-  overflow: "hidden",
-  flex: "0 0 auto",
-  scrollSnapAlign: "start",
-  background: "#111827",
-  boxShadow: "0 10px 22px rgba(15,23,42,0.12)",
-};
-
-const editPhotoPreviewButton = {
-  width: "100%",
-  height: "100%",
-  border: "none",
-  background: "transparent",
-  padding: 0,
-  cursor: "pointer",
-};
-
-const deletePhotoButton = {
-  position: "absolute",
-  top: "8px",
-  right: "8px",
-  width: "30px",
-  height: "30px",
-  borderRadius: "50%",
-  border: "none",
-  background: "rgba(239,68,68,0.95)",
-  color: "white",
-  fontSize: "20px",
-  fontWeight: "900",
-  cursor: "pointer",
-  zIndex: 2,
-};
-
-const editPhotoOrderControls = {
-  position: "absolute",
-  left: "8px",
-  bottom: "8px",
-  display: "flex",
-  gap: "6px",
-  zIndex: 2,
-};
-
-const editPhotoOrderButton = {
-  width: "34px",
-  height: "34px",
-  borderRadius: "999px",
-  border: "1px solid rgba(255,255,255,0.64)",
-  background: "rgba(15,23,42,0.72)",
-  color: "white",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-const editPhotoOrderButtonDisabled = {
-  opacity: 0.4,
-  cursor: "not-allowed",
-};
-
-const legacyPhotoBadge = {
-  position: "absolute",
-  left: "8px",
-  top: "8px",
-  zIndex: 3,
-  borderRadius: "999px",
-  padding: "4px 8px",
-  background: "rgba(251, 191, 36, 0.94)",
-  color: "#78350f",
-  fontSize: "10px",
-  fontWeight: "950",
-  letterSpacing: "0.02em",
-};
-
-const legacyPhotoWarning = {
-  margin: 0,
-  padding: "10px 12px",
-  borderRadius: "14px",
-  border: "1px solid rgba(251, 191, 36, 0.42)",
-  background: "#fffbeb",
-  color: "#92400e",
-  fontSize: "13px",
-  fontWeight: "800",
-  lineHeight: 1.45,
-};
-
 const primaryButton = {
   border: "none",
   background: "var(--meetro-gradient-community-action)",
@@ -3804,17 +3567,6 @@ const primaryButton = {
   fontWeight: "900",
   cursor: "pointer",
 };
-
-const secondaryButton = {
-  width: "100%",
-  border: "1px solid #e5e7eb",
-  background: "white",
-  borderRadius: "16px",
-  padding: "13px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
 
 const confirmOverlay = {
   position: "fixed",

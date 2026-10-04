@@ -10,7 +10,7 @@ export const ALERT_COUNT_PHASE = Object.freeze({
   REFRESH_ERROR: "refresh_error",
 });
 
-export const ALERT_COUNT_POLL_INTERVAL_MS = 5_000;
+export const ALERT_COUNT_POLL_INTERVAL_MS = 15_000;
 
 function normalizeIdentity(value) {
   return typeof value === "string" ? value.trim() : "";
@@ -56,6 +56,7 @@ export function createAlertCountCoordinator({
   schedule = (callback, delay) => globalThis.setTimeout(callback, delay),
   cancelSchedule = (timer) => globalThis.clearTimeout(timer),
   visibilitySource = globalThis.document,
+  focusSource = globalThis.window,
   pollIntervalMs = ALERT_COUNT_POLL_INTERVAL_MS,
 } = {}) {
   if (typeof request !== "function") {
@@ -65,7 +66,7 @@ export function createAlertCountCoordinator({
     throw new TypeError("Alert count scheduling functions are required.");
   }
   if (!Number.isFinite(pollIntervalMs) || pollIntervalMs < ALERT_COUNT_POLL_INTERVAL_MS) {
-    throw new TypeError("Alert count polling must be at least five seconds.");
+    throw new TypeError("Alert count polling must be at least fifteen seconds.");
   }
 
   const subscribers = new Set();
@@ -76,6 +77,7 @@ export function createAlertCountCoordinator({
   let refreshQueued = false;
   let pollTimer = null;
   let visibilityListenerAttached = false;
+  let focusListenerAttached = false;
   let visible = readVisibility(visibilitySource);
   let requestCount = 0;
   let activeRequestCount = 0;
@@ -223,11 +225,21 @@ export function createAlertCountCoordinator({
     if (identity && subscribers.size > 0) void requestRefresh();
   };
 
+  const handleFocus = () => {
+    if (visible && identity && subscribers.size > 0) void requestRefresh();
+  };
+
   const attachVisibilityListener = () => {
     if (visibilityListenerAttached || !visibilitySource?.addEventListener) return;
     visible = readVisibility(visibilitySource);
     visibilitySource.addEventListener("visibilitychange", handleVisibilityChange);
     visibilityListenerAttached = true;
+  };
+
+  const attachFocusListener = () => {
+    if (focusListenerAttached || !focusSource?.addEventListener) return;
+    focusSource.addEventListener("focus", handleFocus);
+    focusListenerAttached = true;
   };
 
   const detachVisibilityListener = () => {
@@ -237,6 +249,12 @@ export function createAlertCountCoordinator({
       handleVisibilityChange
     );
     visibilityListenerAttached = false;
+  };
+
+  const detachFocusListener = () => {
+    if (!focusListenerAttached) return;
+    focusSource?.removeEventListener?.("focus", handleFocus);
+    focusListenerAttached = false;
   };
 
   function setIdentity(nextIdentity) {
@@ -284,6 +302,7 @@ export function createAlertCountCoordinator({
 
     if (wasEmpty) {
       attachVisibilityListener();
+      attachFocusListener();
       if (canRequest()) {
         if (inFlight) refreshQueued = true;
         else void startRequest();
@@ -301,6 +320,7 @@ export function createAlertCountCoordinator({
       refreshQueued = false;
       cancelPolling();
       detachVisibilityListener();
+      detachFocusListener();
     };
   }
 
@@ -308,6 +328,7 @@ export function createAlertCountCoordinator({
     getMetrics() {
       return Object.freeze({
         activeRequestCount,
+        focusListenerAttached,
         hasPollTimer: pollTimer !== null,
         maximumConcurrentRequests,
         requestCount,

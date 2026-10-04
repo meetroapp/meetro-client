@@ -3,6 +3,7 @@ import {
   JOB_REQUEST_DRAFT_VERSION,
   JOB_REQUEST_DRAFT_SOURCE,
   JOB_REQUEST_DRAFT_UNCERTAINTY,
+  confirmDraftField,
   updateDraftField,
 } from "./jobRequestDraft.js";
 
@@ -17,6 +18,9 @@ export const JOB_REQUEST_INTERPRET_PATCH_PATHS = Object.freeze([
   "service.domain",
   "service.specialty",
   "location.affectedArea",
+  "location.city",
+  "location.region",
+  "location.postalCode",
   "timing.urgency",
   "timing.desiredTiming",
   "timing.availability",
@@ -31,6 +35,8 @@ export const JOB_REQUEST_INTERPRET_INTENT_STATUS = Object.freeze({
 });
 
 const PATCH_PATHS = new Set(JOB_REQUEST_INTERPRET_PATCH_PATHS);
+const REVIEW_ACTIONS = Object.freeze(["ACCEPTED", "EDITED", "REJECTED"]);
+const REVIEW_ACTION_SET = new Set(REVIEW_ACTIONS);
 const SERVICE_PATHS = new Set([
   "service.category",
   "service.requestCategory",
@@ -62,6 +68,9 @@ const PATCH_VALUE_LIMITS = Object.freeze({
   "service.domain": 80,
   "service.specialty": 120,
   "location.affectedArea": 200,
+  "location.city": 120,
+  "location.region": 120,
+  "location.postalCode": 32,
   "timing.urgency": 120,
   "timing.desiredTiming": 300,
   "timing.availability": 500,
@@ -180,6 +189,18 @@ export function buildJobRequestInterpretRequest({ text, draft, locale = "en-US" 
           affectedArea: cleanBoundedText(
             draft.location?.affectedArea,
             PATCH_VALUE_LIMITS["location.affectedArea"]
+          ),
+          city: cleanBoundedText(
+            draft.location?.city,
+            PATCH_VALUE_LIMITS["location.city"]
+          ),
+          region: cleanBoundedText(
+            draft.location?.region,
+            PATCH_VALUE_LIMITS["location.region"]
+          ),
+          postalCode: cleanBoundedText(
+            draft.location?.postalCode,
+            PATCH_VALUE_LIMITS["location.postalCode"]
           ),
         },
         timing: {
@@ -429,4 +450,79 @@ export function applyJobRequestInterpretationPatch(draft, interpretation) {
 
   if (next !== draft) next.submission = originalSubmission;
   return { draft: next, appliedFields, rejectedFields };
+}
+
+export function confirmAppliedJobRequestInterpretationFields(
+  draft,
+  appliedFields = []
+) {
+  if (!draft || typeof draft !== "object" || !Array.isArray(appliedFields)) {
+    throw new TypeError("A draft and applied interpretation fields are required.");
+  }
+
+  return [...new Set(appliedFields)].reduce(
+    (current, path) =>
+      PATCH_PATHS.has(path) ? confirmDraftField(current, path) : current,
+    draft
+  );
+}
+
+export function createJobRequestInterpretationReviewKeys(
+  fields,
+  { createKey } = {}
+) {
+  if (!Array.isArray(fields) || typeof createKey !== "function") {
+    throw new TypeError("Governed interpretation fields and a key factory are required.");
+  }
+  const paths = fields.map((field) => String(field?.path || ""));
+  if (
+    paths.length === 0 ||
+    new Set(paths).size !== paths.length ||
+    paths.some((path) => !PATCH_PATHS.has(path))
+  ) {
+    throw new TypeError("Governed interpretation fields are invalid.");
+  }
+
+  return Object.freeze(Object.fromEntries(REVIEW_ACTIONS.map((action) => [
+    action,
+    Object.freeze(Object.fromEntries(paths.map((path) => [path, createKey()]))),
+  ])));
+}
+
+export async function recordJobRequestInterpretationReviews({
+  operationId,
+  fields,
+  action,
+  reviewKeys,
+  recordReview,
+  setPage,
+  authFetchImpl,
+}) {
+  if (
+    typeof operationId !== "string" ||
+    !Array.isArray(fields) ||
+    !REVIEW_ACTION_SET.has(action) ||
+    !reviewKeys ||
+    typeof recordReview !== "function"
+  ) {
+    throw new TypeError("A governed interpretation review is required.");
+  }
+
+  return Promise.all(fields.map((field) => {
+    const path = String(field?.path || "");
+    const idempotencyKey = reviewKeys[action]?.[path];
+    if (!PATCH_PATHS.has(path) || typeof idempotencyKey !== "string") {
+      throw new TypeError("A governed interpretation review key is required.");
+    }
+    return recordReview({
+      proposalId: operationId,
+      elementId: path,
+      action,
+      editedValue: action === "EDITED" ? field.value : undefined,
+      reasonCategory: action === "REJECTED" ? "HOMEOWNER_DISMISSED" : undefined,
+      idempotencyKey,
+      setPage,
+      authFetchImpl,
+    });
+  }));
 }

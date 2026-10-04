@@ -1,13 +1,17 @@
 import {
   buildCanonicalEvaluationContent,
+  buildOrdinaryCanonicalEvaluationContent,
   getCanonicalEvaluationSourceContext,
 } from "./canonicalEvaluation.js";
 import {
   EvaluationApiError,
   completeEvaluation,
   createEvaluation,
+  createOrdinaryJobEvaluation,
   createEvaluationIdempotencyKey,
   listEvaluationsForEmergencyRequest,
+  listEvaluationsForJob,
+  reviseEvaluation,
   updateEvaluationDraft,
 } from "./evaluationApi.js";
 
@@ -32,10 +36,16 @@ function requireCanonicalContext(record) {
 
 export async function loadCanonicalEvaluationForRecord({ record, setPage }) {
   const sourceContext = requireCanonicalContext(record);
-  const evaluations = await listEvaluationsForEmergencyRequest({
-    emergencyRequestId: sourceContext.emergencyRequestId,
-    setPage,
-  });
+  const evaluations =
+    sourceContext.type === "ordinary_job"
+      ? await listEvaluationsForJob({
+          jobId: sourceContext.jobId,
+          setPage,
+        })
+      : await listEvaluationsForEmergencyRequest({
+          emergencyRequestId: sourceContext.emergencyRequestId,
+          setPage,
+        });
   return evaluations[0] || null;
 }
 
@@ -43,6 +53,7 @@ export async function saveCanonicalEvaluationDraft({
   record,
   form,
   currentEvaluation = null,
+  evaluationVisitId = null,
   setPage,
   createIdempotencyKey = createEvaluationIdempotencyKey,
 }) {
@@ -54,25 +65,60 @@ export async function saveCanonicalEvaluationDraft({
       message: "Supporting Evaluation media is not available for canonical saving yet.",
     });
   }
-  const content = buildCanonicalEvaluationContent(form);
   const confirmed =
     currentEvaluation ||
     (await loadCanonicalEvaluationForRecord({ record, setPage }));
+  const content =
+    sourceContext.type === "ordinary_job"
+      ? buildOrdinaryCanonicalEvaluationContent(
+          form,
+          confirmed?.evaluation?.content
+        )
+      : buildCanonicalEvaluationContent(form);
   if (!confirmed) {
+    const idempotencyKey = createIdempotencyKey("create");
+    if (sourceContext.type === "ordinary_job") {
+      return createOrdinaryJobEvaluation({
+          jobId: sourceContext.jobId,
+          visitId: evaluationVisitId || null,
+          content,
+          idempotencyKey,
+          setPage,
+        });
+    }
     return createEvaluation({
-      sourceContext,
+          sourceContext,
+          content,
+          idempotencyKey,
+          setPage,
+        });
+  }
+  if (confirmed.evaluation.status === "completed") {
+    if (confirmed.evaluation.capabilities?.canRevise !== true) {
+      throw new EvaluationApiError({
+        status: 409,
+        code: "EVALUATION_REVISION_UNAVAILABLE",
+        message: "Evaluation revision is not available for this record.",
+      });
+    }
+
+    return reviseEvaluation({
+      evaluationId: confirmed.evaluation.id,
+      expectedVersion: confirmed.aggregate.version,
       content,
-      idempotencyKey: createIdempotencyKey("create"),
+      idempotencyKey: createIdempotencyKey("revise"),
       setPage,
     });
   }
+
   if (confirmed.evaluation.status !== "draft") {
     throw new EvaluationApiError({
       status: 409,
-      code: "EVALUATION_COMPLETED",
-      message: "A completed Evaluation cannot be edited or reopened.",
+      code: "EVALUATION_UPDATE_UNAVAILABLE",
+      message: "Evaluation updating is not available for this record.",
     });
   }
+
   return updateEvaluationDraft({
     evaluationId: confirmed.evaluation.id,
     expectedVersion: confirmed.aggregate.version,
@@ -86,6 +132,7 @@ export async function completeCanonicalEvaluationDraft({
   record,
   form,
   currentEvaluation = null,
+  evaluationVisitId = null,
   setPage,
   createIdempotencyKey = createEvaluationIdempotencyKey,
 }) {
@@ -93,6 +140,7 @@ export async function completeCanonicalEvaluationDraft({
     record,
     form,
     currentEvaluation,
+    evaluationVisitId,
     setPage,
     createIdempotencyKey,
   });

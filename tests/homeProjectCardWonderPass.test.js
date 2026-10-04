@@ -21,8 +21,9 @@ test("Home renders My Projects with Active and History tabs", () => {
 });
 
 test("active project cards render a visible Next Step message", () => {
-  assert.match(homeSource, /function ProjectCard\(\{ request, language, conversationEntry, onClick \}\)/);
-  assert.match(homeSource, /const nextStepCopy = getHomeProjectNextStepCopy\(request, journey, language\)/);
+  assert.match(homeSource, /function ProjectCard\(\{ request, language, conversationEntry, presentationState, onClick \}\)/);
+  assert.match(homeSource, /canonicalPresentation\?\.statusLabel \|\| journey\.currentTitle/);
+  assert.match(homeSource, /const nextStepCopy = canonicalPresentation\?\.guidance \|\|\s*getHomeProjectNextStepCopy\(request, journey, language\)/);
   assert.match(homeSource, /style=\{projectNextStepPanel\}/);
   assert.match(homeSource, /t\("homeProjectNextStepLabel", language\)/);
   assert.match(homeSource, /\{nextStepCopy\}/);

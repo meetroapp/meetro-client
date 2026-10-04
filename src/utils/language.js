@@ -1,9 +1,16 @@
+import { workCenterPresentationLanguage } from "./workCenterPresentationLanguage.js";
 import { isDeferredTranslationKey } from "./localizationContract.js";
 import { coreWorkflowLanguage } from "./coreWorkflowLanguage.js";
 import { messagesWorkflowLanguage } from "./messagesWorkflowLanguage.js";
 import { conversationWorkflowLanguage } from "./conversationWorkflowLanguage.js";
 import { coreRouteParityLanguage } from "./coreRouteParityLanguage.js";
 import { dailyWorkflowLanguage } from "./dailyWorkflowLanguage.js";
+import { professionalScheduleLanguage } from "./professionalScheduleLanguage.js";
+import { customerQuoteLanguage } from "./customerQuoteLanguage.js";
+import { businessDocumentCustomerLanguage } from "./businessDocumentCustomerLanguage.js";
+import { businessDocumentWorkflowLanguage } from "./businessDocumentWorkflowLanguage.js";
+import { fieldEmployeeLanguage } from "./fieldEmployeeLanguage.js";
+import { alertLifecycleLanguage } from "./alertLifecycleLanguage.js";
 
 export const SUPPORTED_LANGUAGES = [
   { code: "en", label: "English" },
@@ -90,6 +97,7 @@ export function getLanguageLabel(language = getLanguage()) {
 
 export const translations = {
   en: {
+    ...alertLifecycleLanguage.en,
     home: "Home",
     discover: "Discover",
     chat: "Chat",
@@ -208,7 +216,7 @@ export const translations = {
     homeHelpTodaySubtitle:
       "Request service, track active work, continue conversations, and review service history.",
     requestService: "Request Service",
-    homeWorkflowLabel: "Homeowner workflow",
+    homeWorkflowLabel: "Your workflow",
     homeMyProjects: "My Projects",
     homeMyProjectsSubtitle: "Active and completed work in one place.",
     homeMyProjectsActive: "Active",
@@ -1016,7 +1024,7 @@ noDescriptionAdded:
   "No description added.",
 businessCommandCenter: "Business Tools",
 commandCenterSubtitle:
-  "Manage business setup, visibility, support tools, and safe shortcuts into customer relationship areas.",
+  "Manage business setup, visibility, support tools, and safe shortcuts into Customer History.",
 correctWorkflow: "Correct workflow",
 correctWorkflowText:
   "Business Dashboard → Command Center → Select/Create Project Folder → Save project data inside that folder.",
@@ -1575,6 +1583,7 @@ afterApprovalWorkStarts: "After approval work starts",
 },
 
   es: {
+    ...alertLifecycleLanguage.es,
     home: "Inicio",
     discover: "Descubrir",
     chat: "Chat",
@@ -2517,7 +2526,7 @@ noDescriptionAdded:
   "No se agregó descripción.",
 businessCommandCenter: "Herramientas del Negocio",
 commandCenterSubtitle:
-  "Administra configuracion del negocio, visibilidad, soporte y accesos seguros a relaciones con clientes.",
+  "Administra la configuración del negocio, la visibilidad, el soporte y los accesos seguros al historial del cliente.",
 correctWorkflow: "Flujo correcto",
 correctWorkflowText:
   "Panel del Negocio → Centro de Control → Seleccionar/Crear Carpeta de Proyecto → Guardar la información dentro de esa carpeta.",
@@ -4254,14 +4263,22 @@ const highTrafficParityLabels = {
     myRequestsServiceHistory: "Service History",
     myRequestsBack: "Back",
     myRequestsTitle: "Work Center",
-    myRequestsSubtitle: "Manage your home projects, requests, quotes, schedule, and history.",
-    myRequestsPerspectiveEyebrow: "Homeowner perspective",
+    myRequestsSubtitle: "Manage your projects, requests, quotes, schedule, and history.",
+    myRequestsPerspectiveEyebrow: "Your projects",
     myRequestsPerspectiveTitle: "How we move forward together",
     myRequestsPerspectiveText:
       "See the current status, the next step, and where the conversation continues for every project.",
-    myRequestsEmptyTitle: "No requests yet",
-    myRequestsEmptyText: "Request help to start receiving professional responses.",
-    myRequestsRequestHelp: "Request Help",
+    myRequestsEmptyTitle: "No active service requests",
+    myRequestsEmptyText:
+      "Need help with a home project or repair? Start a service request and Meetro will help organize the details and connect you with professionals.",
+    myRequestsRequestHelp: "Start Service Request",
+    myRequestsServiceRequestsHeading: "Service Requests",
+    myRequestsEmergencyCancel: "Cancel Emergency Request",
+    myRequestsEmergencyCancelConfirm:
+      "Cancel this Emergency request? Cancellation is permanent.",
+    myRequestsEmergencyCancelling: "Cancelling…",
+    myRequestsEmergencyCancelFailed:
+      "The Emergency request could not be cancelled. Try again.",
     myRequestsSelected: "Selected",
     myRequestsServiceRequest: "Service Request",
     myRequestsService: "Service",
@@ -4274,6 +4291,16 @@ const highTrafficParityLabels = {
     myRequestsDetailsPlaceholder: "Request details",
     myRequestsLocationPlaceholder: "Location",
     myRequestsNoDetails: "No details added.",
+    reportedConcernHistory: "Reported Concern History",
+    originallyReported: "Originally reported",
+    concernClarifications: "Clarifications",
+    knownJobParticipants: "Known Participants",
+    lifecycleParticipant: "Participant",
+    lifecycleHistoryUnavailable: "Request history is temporarily unavailable.",
+    lifecycleRoleCustomerRepresentative: "Customer",
+    lifecycleRoleSiteOccupant: "Site occupant",
+    lifecycleRolePrimaryProfessional: "Lead Professional",
+    lifecycleRoleSpecialist: "Specialist",
     myRequestsQuoteAccepted: "Quote Accepted",
     myRequestsSelectedProfessionalNotice:
       "You selected {professional} to continue with this service.",
@@ -4327,10 +4354,10 @@ const highTrafficParityLabels = {
     wcRevenueNote: "Operational summary of revenue, closed jobs, and open quotes.",
     activeJobs: "Active Jobs",
     workCenterPurposeStatement:
-      "See what needs attention, what happens next, and where each customer relationship moves forward.",
+      "See what needs your attention and what to do next.",
     workCenterProfessionalPerspectiveLine:
       "Customer work stays connected through requests, evaluations, quotes, schedule, active jobs, completion, and history.",
-    workCenterQuotesTitle: "Quotes / Proposals",
+    workCenterQuotesTitle: "Quotes & Approvals",
     workCenterActiveWorkTitle: "Active Work",
     workCenterRevenueTitle: "Revenue",
     workCenterCurrentJobsTitle: "Current Jobs",
@@ -4670,14 +4697,22 @@ const highTrafficParityLabels = {
     myRequestsServiceHistory: "Historial de servicio",
     myRequestsBack: "Volver",
     myRequestsTitle: "Work Center",
-    myRequestsSubtitle: "Administra proyectos del hogar, solicitudes, cotizaciones, agenda e historial.",
-    myRequestsPerspectiveEyebrow: "Perspectiva del propietario",
+    myRequestsSubtitle: "Administra tus proyectos, solicitudes, cotizaciones, agenda e historial.",
+    myRequestsPerspectiveEyebrow: "Tus proyectos",
     myRequestsPerspectiveTitle: "Cómo avanzamos juntos",
     myRequestsPerspectiveText:
       "Ve el estado actual, el siguiente paso y dónde continúa la conversación de cada proyecto.",
-    myRequestsEmptyTitle: "No hay solicitudes todavía",
-    myRequestsEmptyText: "Solicita ayuda para comenzar a recibir respuestas profesionales.",
-    myRequestsRequestHelp: "Solicitar Ayuda",
+    myRequestsEmptyTitle: "No hay solicitudes de servicio activas",
+    myRequestsEmptyText:
+      "¿Necesitas ayuda con un proyecto o una reparación en casa? Inicia una solicitud de servicio y Meetro te ayudará a organizar los detalles y conectarte con profesionales.",
+    myRequestsRequestHelp: "Iniciar Solicitud de Servicio",
+    myRequestsServiceRequestsHeading: "Solicitudes de Servicio",
+    myRequestsEmergencyCancel: "Cancelar Solicitud de Emergencia",
+    myRequestsEmergencyCancelConfirm:
+      "¿Cancelar esta solicitud de Emergencia? La cancelación es permanente.",
+    myRequestsEmergencyCancelling: "Cancelando…",
+    myRequestsEmergencyCancelFailed:
+      "No se pudo cancelar la solicitud de Emergencia. Inténtalo nuevamente.",
     myRequestsSelected: "Seleccionado",
     myRequestsServiceRequest: "Solicitud de servicio",
     myRequestsService: "Servicio",
@@ -4690,6 +4725,16 @@ const highTrafficParityLabels = {
     myRequestsDetailsPlaceholder: "Detalles de la solicitud",
     myRequestsLocationPlaceholder: "Ubicación",
     myRequestsNoDetails: "No se agregaron detalles.",
+    reportedConcernHistory: "Historial del problema reportado",
+    originallyReported: "Reportado originalmente",
+    concernClarifications: "Aclaraciones",
+    knownJobParticipants: "Participantes conocidos",
+    lifecycleParticipant: "Participante",
+    lifecycleHistoryUnavailable: "El historial de la solicitud no está disponible temporalmente.",
+    lifecycleRoleCustomerRepresentative: "Representante del cliente",
+    lifecycleRoleSiteOccupant: "Ocupante del lugar",
+    lifecycleRolePrimaryProfessional: "Profesional principal",
+    lifecycleRoleSpecialist: "Especialista",
     myRequestsQuoteAccepted: "Cotización aceptada",
     myRequestsSelectedProfessionalNotice:
       "Seleccionaste a {professional} para continuar con este servicio.",
@@ -4743,10 +4788,10 @@ const highTrafficParityLabels = {
     wcRevenueNote: "Resumen operativo de ingresos, trabajos cerrados y cotizaciones abiertas.",
     activeJobs: "Trabajos activos",
     workCenterPurposeStatement:
-      "Ve qué necesita atención, qué ocurre después y cómo avanza cada relación con clientes.",
+      "Ve qué necesita tu atención y qué hacer después.",
     workCenterProfessionalPerspectiveLine:
       "El trabajo con clientes se mantiene conectado entre solicitudes, evaluaciones, cotizaciones, agenda, trabajos activos, finalización e historial.",
-    workCenterQuotesTitle: "Cotizaciones / Propuestas",
+    workCenterQuotesTitle: "Cotizaciones y aprobaciones",
     workCenterActiveWorkTitle: "Trabajo activo",
     workCenterRevenueTitle: "Ingresos",
     workCenterCurrentJobsTitle: "Trabajos actuales",
@@ -4923,6 +4968,7 @@ const highTrafficParityLabels = {
     momentsVerifiedLabel: "Meetro Moment verificado",
   },
   fr: {
+    ...alertLifecycleLanguage.fr,
     homeLocalServicesEyebrow: "Inspiration communautaire",
     homeMyProjects: "Mes projets",
     homeMyProjectsSubtitle:
@@ -5087,14 +5133,22 @@ const highTrafficParityLabels = {
     myRequestsServiceHistory: "Historique du service",
     myRequestsBack: "Retour",
     myRequestsTitle: "Centre de travail",
-    myRequestsSubtitle: "Gérez vos projets de maison, demandes, devis, planning et historique.",
-    myRequestsPerspectiveEyebrow: "Point de vue propriétaire",
+    myRequestsSubtitle: "Gérez vos projets, demandes, devis, planning et historique.",
+    myRequestsPerspectiveEyebrow: "Vos projets",
     myRequestsPerspectiveTitle: "Comment avançons-nous ensemble",
     myRequestsPerspectiveText:
       "Voyez le statut actuel, la prochaine étape et où la conversation continue pour chaque projet.",
-    myRequestsEmptyTitle: "Aucune demande pour le moment",
-    myRequestsEmptyText: "Demandez de l'aide pour commencer à recevoir des réponses de professionnels.",
-    myRequestsRequestHelp: "Demander de l'aide",
+    myRequestsEmptyTitle: "Aucune demande de service active",
+    myRequestsEmptyText:
+      "Besoin d’aide pour un projet ou une réparation à domicile ? Lancez une demande de service et Meetro vous aidera à organiser les détails et à vous mettre en relation avec des professionnels.",
+    myRequestsRequestHelp: "Démarrer une demande de service",
+    myRequestsServiceRequestsHeading: "Demandes de service",
+    myRequestsEmergencyCancel: "Annuler la demande d’urgence",
+    myRequestsEmergencyCancelConfirm:
+      "Annuler cette demande d’urgence ? L’annulation est définitive.",
+    myRequestsEmergencyCancelling: "Annulation…",
+    myRequestsEmergencyCancelFailed:
+      "La demande d’urgence n’a pas pu être annulée. Réessayez.",
     myRequestsSelected: "Sélectionné",
     myRequestsServiceRequest: "Demande de service",
     myRequestsService: "Service",
@@ -5107,6 +5161,16 @@ const highTrafficParityLabels = {
     myRequestsDetailsPlaceholder: "Détails de la demande",
     myRequestsLocationPlaceholder: "Lieu",
     myRequestsNoDetails: "Aucun détail ajouté.",
+    reportedConcernHistory: "Historique du problème signalé",
+    originallyReported: "Signalé à l'origine",
+    concernClarifications: "Clarifications",
+    knownJobParticipants: "Participants connus",
+    lifecycleParticipant: "Participant",
+    lifecycleHistoryUnavailable: "L'historique de la demande est temporairement indisponible.",
+    lifecycleRoleCustomerRepresentative: "Représentant du client",
+    lifecycleRoleSiteOccupant: "Occupant du site",
+    lifecycleRolePrimaryProfessional: "Professionnel principal",
+    lifecycleRoleSpecialist: "Spécialiste",
     myRequestsQuoteAccepted: "Devis accepté",
     myRequestsSelectedProfessionalNotice:
       "Vous avez choisi {professional} pour continuer ce service.",
@@ -5161,10 +5225,10 @@ const highTrafficParityLabels = {
     activeJobs: "Travaux actifs",
     workCenterDashboardTitle: "Centre de travail",
     workCenterPurposeStatement:
-      "Voyez ce qui demande de l’attention, ce qui vient ensuite et comment chaque relation client avance.",
+      "Voyez ce qui demande votre attention et quoi faire ensuite.",
     workCenterProfessionalPerspectiveLine:
       "Le travail client reste connecté entre demandes, évaluations, devis, planning, travaux actifs, achèvement et historique.",
-    workCenterQuotesTitle: "Devis / propositions",
+    workCenterQuotesTitle: "Devis et approbations",
     workCenterActiveWorkTitle: "Travail actif",
     workCenterRevenueTitle: "Revenus",
     workCenterCurrentJobsTitle: "Travaux en cours",
@@ -5364,6 +5428,7 @@ const highTrafficParityLabels = {
     viewMyRequests: "Examiner mes demandes",
   },
   "pt-BR": {
+    ...alertLifecycleLanguage["pt-BR"],
     homeLocalServicesEyebrow: "Inspiração da comunidade",
     homeMyProjects: "Meus projetos",
     homeMyProjectsSubtitle:
@@ -5528,14 +5593,22 @@ const highTrafficParityLabels = {
     myRequestsServiceHistory: "Histórico de serviços",
     myRequestsBack: "Voltar",
     myRequestsTitle: "Work Center",
-    myRequestsSubtitle: "Gerencie projetos da casa, solicitações, orçamentos, agenda e histórico.",
-    myRequestsPerspectiveEyebrow: "Perspectiva do proprietário",
+    myRequestsSubtitle: "Gerencie seus projetos, solicitações, orçamentos, agenda e histórico.",
+    myRequestsPerspectiveEyebrow: "Seus projetos",
     myRequestsPerspectiveTitle: "Como avançamos juntos",
     myRequestsPerspectiveText:
       "Veja o status atual, a próxima etapa e onde a conversa continua para cada projeto.",
-    myRequestsEmptyTitle: "Ainda não há solicitações",
-    myRequestsEmptyText: "Solicite ajuda para começar a receber respostas de profissionais.",
-    myRequestsRequestHelp: "Solicitar ajuda",
+    myRequestsEmptyTitle: "Nenhuma solicitação de serviço ativa",
+    myRequestsEmptyText:
+      "Precisa de ajuda com um projeto ou reparo em casa? Inicie uma solicitação de serviço e o Meetro ajudará a organizar os detalhes e conectar você a profissionais.",
+    myRequestsRequestHelp: "Iniciar Solicitação de Serviço",
+    myRequestsServiceRequestsHeading: "Solicitações de Serviço",
+    myRequestsEmergencyCancel: "Cancelar Solicitação de Emergência",
+    myRequestsEmergencyCancelConfirm:
+      "Cancelar esta solicitação de Emergência? O cancelamento é permanente.",
+    myRequestsEmergencyCancelling: "Cancelando…",
+    myRequestsEmergencyCancelFailed:
+      "Não foi possível cancelar a solicitação de Emergência. Tente novamente.",
     myRequestsSelected: "Selecionado",
     myRequestsServiceRequest: "Solicitação de serviço",
     myRequestsService: "Serviço",
@@ -5548,6 +5621,16 @@ const highTrafficParityLabels = {
     myRequestsDetailsPlaceholder: "Detalhes da solicitação",
     myRequestsLocationPlaceholder: "Localização",
     myRequestsNoDetails: "Nenhum detalhe adicionado.",
+    reportedConcernHistory: "Histórico do problema relatado",
+    originallyReported: "Relatado originalmente",
+    concernClarifications: "Esclarecimentos",
+    knownJobParticipants: "Participantes conhecidos",
+    lifecycleParticipant: "Participante",
+    lifecycleHistoryUnavailable: "O histórico da solicitação está temporariamente indisponível.",
+    lifecycleRoleCustomerRepresentative: "Representante do cliente",
+    lifecycleRoleSiteOccupant: "Ocupante do local",
+    lifecycleRolePrimaryProfessional: "Profissional principal",
+    lifecycleRoleSpecialist: "Especialista",
     myRequestsQuoteAccepted: "Orçamento aceito",
     myRequestsSelectedProfessionalNotice:
       "Você selecionou {professional} para continuar este serviço.",
@@ -5602,10 +5685,10 @@ const highTrafficParityLabels = {
     activeJobs: "Trabalhos ativos",
     workCenterDashboardTitle: "Work Center",
     workCenterPurposeStatement:
-      "Veja o que precisa de atenção, o que vem a seguir e como cada relacionamento com cliente avança.",
+      "Veja o que precisa da sua atenção e o que fazer a seguir.",
     workCenterProfessionalPerspectiveLine:
       "O trabalho com clientes permanece conectado entre solicitações, avaliações, orçamentos, agenda, trabalhos ativos, conclusão e histórico.",
-    workCenterQuotesTitle: "Orçamentos / Propostas",
+    workCenterQuotesTitle: "Orçamentos e aprovações",
     workCenterActiveWorkTitle: "Trabalho ativo",
     workCenterRevenueTitle: "Receita",
     workCenterCurrentJobsTitle: "Trabalhos atuais",
@@ -5818,6 +5901,11 @@ const projectJourneyLabels = {
     requestDetails: "Request Details",
     editRequest: "Edit Request",
     requestChange: "Request Change",
+    projectRequestActionsChecking: "Checking available request actions…",
+    projectRequestActionsUnavailable:
+      "Request changes are unavailable until Meetro confirms current access.",
+    projectContractChangeUnavailable:
+      "Changes to agreed work need a contract change. That action is not available here yet; the original request remains unchanged.",
     continueConversation: "Continue Conversation",
     homeProjectNextStepLabel: "Next Step",
     requestSubmitted: "Request Submitted",
@@ -5928,6 +6016,11 @@ const projectJourneyLabels = {
     requestDetails: "Detalles de la solicitud",
     editRequest: "Editar solicitud",
     requestChange: "Solicitar cambio",
+    projectRequestActionsChecking: "Comprobando las acciones disponibles…",
+    projectRequestActionsUnavailable:
+      "Los cambios no están disponibles hasta que Meetro confirme el acceso actual.",
+    projectContractChangeUnavailable:
+      "Los cambios al trabajo acordado requieren un cambio de contrato. Esa acción aún no está disponible aquí; la solicitud original no cambia.",
     continueConversation: "Continuar conversación",
     homeProjectNextStepLabel: "Próximo paso",
     requestSubmitted: "Solicitud enviada",
@@ -6038,6 +6131,11 @@ const projectJourneyLabels = {
     requestDetails: "Détails de la demande",
     editRequest: "Modifier la demande",
     requestChange: "Demander un changement",
+    projectRequestActionsChecking: "Vérification des actions disponibles…",
+    projectRequestActionsUnavailable:
+      "Les modifications ne sont pas disponibles tant que Meetro n’a pas confirmé l’accès actuel.",
+    projectContractChangeUnavailable:
+      "Les modifications des travaux convenus nécessitent un avenant. Cette action n’est pas encore disponible ici; la demande d’origine reste inchangée.",
     continueConversation: "Continuer la conversation",
     homeProjectNextStepLabel: "Prochaine étape",
     requestSubmitted: "Demande envoyée",
@@ -6148,6 +6246,11 @@ const projectJourneyLabels = {
     requestDetails: "Detalhes da solicitação",
     editRequest: "Editar solicitação",
     requestChange: "Solicitar alteração",
+    projectRequestActionsChecking: "Verificando as ações disponíveis…",
+    projectRequestActionsUnavailable:
+      "As alterações não estão disponíveis até que o Meetro confirme o acesso atual.",
+    projectContractChangeUnavailable:
+      "Alterações no trabalho acordado exigem uma mudança contratual. Essa ação ainda não está disponível aqui; a solicitação original permanece inalterada.",
     continueConversation: "Continuar conversa",
     homeProjectNextStepLabel: "Próximo passo",
     requestSubmitted: "Solicitação enviada",
@@ -8631,6 +8734,8 @@ const alertCenterLabels = {
     alertCenterUnreadCountPlural: "{count} unread messages",
     alertCenterLoadMore: "Load more",
     alertCenterLoadingMore: "Loading more…",
+    alertCenterOpenDetails: "Open details",
+    alertCenterBack: "Back to Alerts",
     alertCenterCategoryGeneral: "General",
     alertCenterCategoryCommunication: "Communication",
     alertCenterCategoryEmergency: "Emergency",
@@ -8651,6 +8756,42 @@ const alertCenterLabels = {
     alertCenterPriorityInformational: "Informational priority",
     "alerts.communication.newMessage.title": "New message",
     "alerts.communication.newMessage.message": "You have a new conversation message.",
+    "alerts.request.newLead.title": "New lead",
+    "alerts.request.newLead.message": "A new request matches your services.",
+    "alerts.request.professionalResponse.title": "New professional response",
+    "alerts.request.professionalResponse.message": "A professional responded to your request.",
+    "alerts.request.professionalSelected.title": "You were selected",
+    "alerts.request.professionalSelected.message": "The customer selected you for this request.",
+    "alerts.emergency.request.title": "Emergency request",
+    "alerts.emergency.request.message": "A new Emergency request matches your services.",
+    "alerts.emergency.response.title": "Emergency update",
+    "alerts.emergency.response.message": "A professional responded to your Emergency request.",
+    "alerts.schedule.visitProposed.title": "Visit proposed",
+    "alerts.schedule.visitProposed.message": "A Visit time is ready for your review.",
+    "alerts.schedule.visitScheduleProposed.title": "New time proposed",
+    "alerts.schedule.visitScheduleProposed.message": "A different Visit time needs your review.",
+    "alerts.schedule.visitChangeRequested.title": "Visit change requested",
+    "alerts.schedule.visitChangeRequested.message": "The Visit schedule needs your review.",
+    "alerts.schedule.visitConfirmed.title": "Visit confirmed",
+    "alerts.schedule.visitConfirmed.message": "The Visit schedule was confirmed.",
+    "alerts.schedule.visitCancelled.title": "Visit cancelled",
+    "alerts.schedule.visitCancelled.message": "The Visit was cancelled.",
+    "alerts.work.jobAssigned.title": "Job assigned",
+    "alerts.work.jobAssigned.message": "A Job was assigned to your Team membership.",
+    "alerts.work.jobAssignmentChanged.title": "Job assignment changed",
+    "alerts.work.jobAssignmentChanged.message": "The Team assignment for your Job changed.",
+    "alerts.work.jobReassigned.title": "Job reassigned",
+    "alerts.work.jobReassigned.message": "A Job was reassigned to your Team membership.",
+    "alerts.work.jobUnassigned.title": "Job assignment removed",
+    "alerts.work.jobUnassigned.message": "A Job is no longer assigned to your Team membership.",
+    "alerts.work.fieldStatus.on_my_way.title": "Employee is on the way",
+    "alerts.work.fieldStatus.on_my_way.message": "A Field Employee is on the way to an assigned Job.",
+    "alerts.work.fieldStatus.arrived.title": "Employee arrived",
+    "alerts.work.fieldStatus.arrived.message": "A Field Employee arrived for an assigned Job.",
+    "alerts.work.fieldStatus.field_work_completed.title": "Field work reported complete",
+    "alerts.work.fieldStatus.field_work_completed.message": "A Field Employee reported their assigned field work complete.",
+    "alerts.work.fieldMessage.title": "New internal Job message",
+    "alerts.work.fieldMessage.message": "A Team member sent an internal message about an assigned Job.",
   },
   es: {
     navigationAlerts: "Alertas",
@@ -8705,6 +8846,8 @@ const alertCenterLabels = {
     alertCenterUnreadCountPlural: "{count} mensajes no leídos",
     alertCenterLoadMore: "Cargar más",
     alertCenterLoadingMore: "Cargando más…",
+    alertCenterOpenDetails: "Abrir detalles",
+    alertCenterBack: "Volver a Alertas",
     alertCenterCategoryGeneral: "General",
     alertCenterCategoryCommunication: "Comunicación",
     alertCenterCategoryEmergency: "Emergencia",
@@ -8725,6 +8868,42 @@ const alertCenterLabels = {
     alertCenterPriorityInformational: "Prioridad informativa",
     "alerts.communication.newMessage.title": "Mensaje nuevo",
     "alerts.communication.newMessage.message": "Tienes un nuevo mensaje en una conversación.",
+    "alerts.request.newLead.title": "Cliente potencial nuevo",
+    "alerts.request.newLead.message": "Una solicitud nueva coincide con tus servicios.",
+    "alerts.request.professionalResponse.title": "Nueva respuesta profesional",
+    "alerts.request.professionalResponse.message": "Un profesional respondió a tu solicitud.",
+    "alerts.request.professionalSelected.title": "Fuiste seleccionado",
+    "alerts.request.professionalSelected.message": "El cliente te seleccionó para esta solicitud.",
+    "alerts.emergency.request.title": "Solicitud de Emergencia",
+    "alerts.emergency.request.message": "Una solicitud de Emergencia coincide con tus servicios.",
+    "alerts.emergency.response.title": "Actualización de Emergencia",
+    "alerts.emergency.response.message": "Un profesional respondió a tu solicitud de Emergencia.",
+    "alerts.schedule.visitProposed.title": "Visita propuesta",
+    "alerts.schedule.visitProposed.message": "Hay una hora de Visita lista para revisar.",
+    "alerts.schedule.visitScheduleProposed.title": "Nueva hora propuesta",
+    "alerts.schedule.visitScheduleProposed.message": "Debes revisar una hora de Visita diferente.",
+    "alerts.schedule.visitChangeRequested.title": "Cambio de Visita solicitado",
+    "alerts.schedule.visitChangeRequested.message": "Debes revisar el horario de la Visita.",
+    "alerts.schedule.visitConfirmed.title": "Visita confirmada",
+    "alerts.schedule.visitConfirmed.message": "Se confirmó el horario de la Visita.",
+    "alerts.schedule.visitCancelled.title": "Visita cancelada",
+    "alerts.schedule.visitCancelled.message": "La Visita fue cancelada.",
+    "alerts.work.jobAssigned.title": "Trabajo asignado",
+    "alerts.work.jobAssigned.message": "Se asignó un trabajo a tu membresía del equipo.",
+    "alerts.work.jobAssignmentChanged.title": "Asignación modificada",
+    "alerts.work.jobAssignmentChanged.message": "Cambió la asignación del equipo para tu trabajo.",
+    "alerts.work.jobReassigned.title": "Trabajo reasignado",
+    "alerts.work.jobReassigned.message": "Se reasignó un trabajo a tu membresía del equipo.",
+    "alerts.work.jobUnassigned.title": "Asignación eliminada",
+    "alerts.work.jobUnassigned.message": "Este trabajo ya no está asignado a tu membresía del equipo.",
+    "alerts.work.fieldStatus.on_my_way.title": "Empleado en camino",
+    "alerts.work.fieldStatus.on_my_way.message": "Un empleado de campo está en camino a un trabajo asignado.",
+    "alerts.work.fieldStatus.arrived.title": "Empleado llegó",
+    "alerts.work.fieldStatus.arrived.message": "Un empleado de campo llegó a un trabajo asignado.",
+    "alerts.work.fieldStatus.field_work_completed.title": "Trabajo de campo reportado como completado",
+    "alerts.work.fieldStatus.field_work_completed.message": "Un empleado de campo reportó que completó su trabajo asignado.",
+    "alerts.work.fieldMessage.title": "Nuevo mensaje interno del trabajo",
+    "alerts.work.fieldMessage.message": "Un miembro del equipo envió un mensaje interno sobre un trabajo asignado.",
   },
   fr: {
     navigationAlerts: "Alertes",
@@ -8779,6 +8958,8 @@ const alertCenterLabels = {
     alertCenterUnreadCountPlural: "{count} messages non lus",
     alertCenterLoadMore: "Charger plus",
     alertCenterLoadingMore: "Chargement…",
+    alertCenterOpenDetails: "Ouvrir les détails",
+    alertCenterBack: "Retour aux alertes",
     alertCenterCategoryGeneral: "Général",
     alertCenterCategoryCommunication: "Communication",
     alertCenterCategoryEmergency: "Urgence",
@@ -8799,6 +8980,42 @@ const alertCenterLabels = {
     alertCenterPriorityInformational: "Priorité informative",
     "alerts.communication.newMessage.title": "Nouveau message",
     "alerts.communication.newMessage.message": "Vous avez un nouveau message de conversation.",
+    "alerts.request.newLead.title": "Nouveau prospect",
+    "alerts.request.newLead.message": "Une nouvelle demande correspond à vos services.",
+    "alerts.request.professionalResponse.title": "Nouvelle réponse professionnelle",
+    "alerts.request.professionalResponse.message": "Un professionnel a répondu à votre demande.",
+    "alerts.request.professionalSelected.title": "Vous avez été sélectionné",
+    "alerts.request.professionalSelected.message": "Le client vous a sélectionné pour cette demande.",
+    "alerts.emergency.request.title": "Demande d’urgence",
+    "alerts.emergency.request.message": "Une nouvelle demande d’urgence correspond à vos services.",
+    "alerts.emergency.response.title": "Mise à jour d’urgence",
+    "alerts.emergency.response.message": "Un professionnel a répondu à votre demande d’urgence.",
+    "alerts.schedule.visitProposed.title": "Visite proposée",
+    "alerts.schedule.visitProposed.message": "Une heure de visite est prête à être examinée.",
+    "alerts.schedule.visitScheduleProposed.title": "Nouvelle heure proposée",
+    "alerts.schedule.visitScheduleProposed.message": "Une autre heure de visite doit être examinée.",
+    "alerts.schedule.visitChangeRequested.title": "Modification de visite demandée",
+    "alerts.schedule.visitChangeRequested.message": "Le calendrier de la visite doit être examiné.",
+    "alerts.schedule.visitConfirmed.title": "Visite confirmée",
+    "alerts.schedule.visitConfirmed.message": "Le calendrier de la visite a été confirmé.",
+    "alerts.schedule.visitCancelled.title": "Visite annulée",
+    "alerts.schedule.visitCancelled.message": "La visite a été annulée.",
+    "alerts.work.jobAssigned.title": "Travail attribué",
+    "alerts.work.jobAssigned.message": "Un travail a été attribué à votre adhésion d’équipe.",
+    "alerts.work.jobAssignmentChanged.title": "Attribution modifiée",
+    "alerts.work.jobAssignmentChanged.message": "L’attribution d’équipe de votre travail a changé.",
+    "alerts.work.jobReassigned.title": "Travail réattribué",
+    "alerts.work.jobReassigned.message": "Un travail a été réattribué à votre adhésion d’équipe.",
+    "alerts.work.jobUnassigned.title": "Attribution retirée",
+    "alerts.work.jobUnassigned.message": "Ce travail n’est plus attribué à votre adhésion d’équipe.",
+    "alerts.work.fieldStatus.on_my_way.title": "Employé en route",
+    "alerts.work.fieldStatus.on_my_way.message": "Un employé de terrain est en route vers un travail attribué.",
+    "alerts.work.fieldStatus.arrived.title": "Employé arrivé",
+    "alerts.work.fieldStatus.arrived.message": "Un employé de terrain est arrivé pour un travail attribué.",
+    "alerts.work.fieldStatus.field_work_completed.title": "Travail de terrain déclaré terminé",
+    "alerts.work.fieldStatus.field_work_completed.message": "Un employé de terrain a déclaré son travail attribué terminé.",
+    "alerts.work.fieldMessage.title": "Nouveau message interne de travail",
+    "alerts.work.fieldMessage.message": "Un membre de l’équipe a envoyé un message interne concernant un travail attribué.",
   },
   "pt-BR": {
     navigationAlerts: "Alertas",
@@ -8853,6 +9070,8 @@ const alertCenterLabels = {
     alertCenterUnreadCountPlural: "{count} mensagens não lidas",
     alertCenterLoadMore: "Carregar mais",
     alertCenterLoadingMore: "Carregando mais…",
+    alertCenterOpenDetails: "Abrir detalhes",
+    alertCenterBack: "Voltar aos Alertas",
     alertCenterCategoryGeneral: "Geral",
     alertCenterCategoryCommunication: "Comunicação",
     alertCenterCategoryEmergency: "Emergência",
@@ -8873,6 +9092,42 @@ const alertCenterLabels = {
     alertCenterPriorityInformational: "Prioridade informativa",
     "alerts.communication.newMessage.title": "Nova mensagem",
     "alerts.communication.newMessage.message": "Você tem uma nova mensagem em uma conversa.",
+    "alerts.request.newLead.title": "Novo lead",
+    "alerts.request.newLead.message": "Uma nova solicitação corresponde aos seus serviços.",
+    "alerts.request.professionalResponse.title": "Nova resposta profissional",
+    "alerts.request.professionalResponse.message": "Um profissional respondeu à sua solicitação.",
+    "alerts.request.professionalSelected.title": "Você foi selecionado",
+    "alerts.request.professionalSelected.message": "O cliente selecionou você para esta solicitação.",
+    "alerts.emergency.request.title": "Solicitação de Emergência",
+    "alerts.emergency.request.message": "Uma nova solicitação de Emergência corresponde aos seus serviços.",
+    "alerts.emergency.response.title": "Atualização de Emergência",
+    "alerts.emergency.response.message": "Um profissional respondeu à sua solicitação de Emergência.",
+    "alerts.schedule.visitProposed.title": "Visita proposta",
+    "alerts.schedule.visitProposed.message": "Um horário de Visita está pronto para sua análise.",
+    "alerts.schedule.visitScheduleProposed.title": "Novo horário proposto",
+    "alerts.schedule.visitScheduleProposed.message": "Um horário de Visita diferente precisa da sua análise.",
+    "alerts.schedule.visitChangeRequested.title": "Alteração de Visita solicitada",
+    "alerts.schedule.visitChangeRequested.message": "O horário da Visita precisa da sua análise.",
+    "alerts.schedule.visitConfirmed.title": "Visita confirmada",
+    "alerts.schedule.visitConfirmed.message": "O horário da Visita foi confirmado.",
+    "alerts.schedule.visitCancelled.title": "Visita cancelada",
+    "alerts.schedule.visitCancelled.message": "A Visita foi cancelada.",
+    "alerts.work.jobAssigned.title": "Trabalho atribuído",
+    "alerts.work.jobAssigned.message": "Um trabalho foi atribuído à sua associação de equipe.",
+    "alerts.work.jobAssignmentChanged.title": "Atribuição alterada",
+    "alerts.work.jobAssignmentChanged.message": "A atribuição da equipe para seu trabalho foi alterada.",
+    "alerts.work.jobReassigned.title": "Trabalho reatribuído",
+    "alerts.work.jobReassigned.message": "Um trabalho foi reatribuído à sua associação de equipe.",
+    "alerts.work.jobUnassigned.title": "Atribuição removida",
+    "alerts.work.jobUnassigned.message": "Este trabalho não está mais atribuído à sua associação de equipe.",
+    "alerts.work.fieldStatus.on_my_way.title": "Funcionário a caminho",
+    "alerts.work.fieldStatus.on_my_way.message": "Um funcionário de campo está a caminho de um trabalho atribuído.",
+    "alerts.work.fieldStatus.arrived.title": "Funcionário chegou",
+    "alerts.work.fieldStatus.arrived.message": "Um funcionário de campo chegou para um trabalho atribuído.",
+    "alerts.work.fieldStatus.field_work_completed.title": "Trabalho de campo informado como concluído",
+    "alerts.work.fieldStatus.field_work_completed.message": "Um funcionário de campo informou que concluiu o trabalho atribuído.",
+    "alerts.work.fieldMessage.title": "Nova mensagem interna do trabalho",
+    "alerts.work.fieldMessage.message": "Um membro da equipe enviou uma mensagem interna sobre um trabalho atribuído.",
   },
 };
 
@@ -10759,7 +11014,7 @@ const assistantRequestPreparationLabels = {
     jobRequestDraftReadyTitle: "Ready to review",
     jobRequestDraftGuidanceService: "Choose the closest service so the right professionals can see it.",
     jobRequestDraftGuidanceJobTitle: "Add a short title for the work you need.",
-    jobRequestDraftGuidanceLocation: "Add where service is needed before sending.",
+    jobRequestDraftGuidanceLocation: "Add city, state or region, postal code, and country before sending. The exact address can wait until selection.",
     jobRequestDraftGuidanceConfirmService: "Confirm the service match before sending.",
     jobRequestDraftGuidanceDescription: "Add a few details about what is happening.",
     jobRequestDraftGuidanceTiming: "Add timing if it matters for this request.",
@@ -10977,7 +11232,7 @@ const assistantRequestPreparationLabels = {
     jobRequestDraftReadyTitle: "Lista para revisar",
     jobRequestDraftGuidanceService: "Elige el servicio más cercano para que lo vean los profesionales correctos.",
     jobRequestDraftGuidanceJobTitle: "Agrega un título corto para el trabajo que necesitas.",
-    jobRequestDraftGuidanceLocation: "Agrega dónde se necesita el servicio antes de enviar.",
+    jobRequestDraftGuidanceLocation: "Agrega ciudad, estado o región, código postal y país antes de enviar. La dirección exacta puede esperar hasta la selección.",
     jobRequestDraftGuidanceConfirmService: "Confirma el servicio antes de enviar.",
     jobRequestDraftGuidanceDescription: "Agrega algunos detalles sobre lo que está pasando.",
     jobRequestDraftGuidanceTiming: "Agrega el horario si es importante para esta solicitud.",
@@ -11195,7 +11450,7 @@ const assistantRequestPreparationLabels = {
     jobRequestDraftReadyTitle: "Prête à relire",
     jobRequestDraftGuidanceService: "Choisissez le service le plus proche pour atteindre les bons professionnels.",
     jobRequestDraftGuidanceJobTitle: "Ajoutez un court titre pour le travail demandé.",
-    jobRequestDraftGuidanceLocation: "Ajoutez où le service est nécessaire avant l’envoi.",
+    jobRequestDraftGuidanceLocation: "Ajoutez la ville, l’État ou la région, le code postal et le pays avant l’envoi. L’adresse exacte peut attendre la sélection.",
     jobRequestDraftGuidanceConfirmService: "Confirmez le service avant l’envoi.",
     jobRequestDraftGuidanceDescription: "Ajoutez quelques détails sur ce qui se passe.",
     jobRequestDraftGuidanceTiming: "Ajoutez le moment souhaité si c’est important.",
@@ -11413,7 +11668,7 @@ const assistantRequestPreparationLabels = {
     jobRequestDraftReadyTitle: "Pronta para revisar",
     jobRequestDraftGuidanceService: "Escolha o serviço mais próximo para alcançar os profissionais certos.",
     jobRequestDraftGuidanceJobTitle: "Adicione um título curto para o trabalho necessário.",
-    jobRequestDraftGuidanceLocation: "Adicione onde o serviço é necessário antes de enviar.",
+    jobRequestDraftGuidanceLocation: "Adicione cidade, estado ou região, código postal e país antes de enviar. O endereço exato pode esperar até a seleção.",
     jobRequestDraftGuidanceConfirmService: "Confirme o serviço antes de enviar.",
     jobRequestDraftGuidanceDescription: "Adicione alguns detalhes sobre o que está acontecendo.",
     jobRequestDraftGuidanceTiming: "Adicione o horário se ele for importante.",
@@ -12964,9 +13219,9 @@ const professionalLeadTruthLanguage = {
     professionalResponseSubmit: "Submit Response",
     professionalResponseSubmitting: "Submitting response…",
     professionalResponseSubmitted: "Response submitted",
-    professionalResponsePendingReview: "Pending homeowner review.",
+    professionalResponsePendingReview: "Waiting for requester review.",
     professionalResponsePreselectionBoundary:
-      "Submitting creates a pending response only. Messaging is not available before homeowner selection.",
+      "Submitting creates a pending response only. Messaging is not available before requester selection.",
     professionalResponseUnavailable:
       "Response unavailable. Meetro could not verify canonical participation state.",
     professionalResponseIntroductionRequired:
@@ -12988,9 +13243,9 @@ const professionalLeadTruthLanguage = {
     professionalResponseSubmit: "Enviar respuesta",
     professionalResponseSubmitting: "Enviando respuesta…",
     professionalResponseSubmitted: "Respuesta enviada",
-    professionalResponsePendingReview: "Pendiente de revisión del propietario.",
+    professionalResponsePendingReview: "En espera de la revisión del solicitante.",
     professionalResponsePreselectionBoundary:
-      "El envío crea solo una respuesta pendiente. Los mensajes no están disponibles antes de que el propietario seleccione a un profesional.",
+      "El envío crea solo una respuesta pendiente. Los mensajes no están disponibles antes de la selección del solicitante.",
     professionalResponseUnavailable:
       "Respuesta no disponible. Meetro no pudo verificar el estado canónico de participación.",
     professionalResponseIntroductionRequired:
@@ -13012,9 +13267,9 @@ const professionalLeadTruthLanguage = {
     professionalResponseSubmit: "Envoyer la réponse",
     professionalResponseSubmitting: "Envoi de la réponse…",
     professionalResponseSubmitted: "Réponse envoyée",
-    professionalResponsePendingReview: "En attente de l’examen du propriétaire.",
+    professionalResponsePendingReview: "En attente de l’examen du demandeur.",
     professionalResponsePreselectionBoundary:
-      "L’envoi crée uniquement une réponse en attente. La messagerie n’est pas disponible avant la sélection par le propriétaire.",
+      "L’envoi crée uniquement une réponse en attente. La messagerie n’est pas disponible avant la sélection par le demandeur.",
     professionalResponseUnavailable:
       "Réponse indisponible. Meetro n’a pas pu vérifier l’état canonique de participation.",
     professionalResponseIntroductionRequired:
@@ -13036,9 +13291,9 @@ const professionalLeadTruthLanguage = {
     professionalResponseSubmit: "Enviar resposta",
     professionalResponseSubmitting: "Enviando resposta…",
     professionalResponseSubmitted: "Resposta enviada",
-    professionalResponsePendingReview: "Aguardando análise do morador.",
+    professionalResponsePendingReview: "Aguardando análise do solicitante.",
     professionalResponsePreselectionBoundary:
-      "O envio cria apenas uma resposta pendente. As mensagens não ficam disponíveis antes da seleção pelo morador.",
+      "O envio cria apenas uma resposta pendente. As mensagens não ficam disponíveis antes da seleção pelo solicitante.",
     professionalResponseUnavailable:
       "Resposta indisponível. O Meetro não conseguiu verificar o estado canônico de participação.",
     professionalResponseIntroductionRequired:
@@ -13096,27 +13351,207 @@ const hiringTruthLanguage = {
 
 const completedHistoryTruthLanguage = {
   en: {
-    completedJobDetailsUnavailable: "Completed job details are not available.",
+    lifecycleUnavailableEyebrow: "Not available yet",
+    lifecycleReferenceDetails: "Reference details",
+    lifecycleLegacyReference: "Unverified reference",
+    lifecycleJobFallback: "Active job",
+    lifecycleProjectFallback: "Project",
+    returnToRequests: "Return to Requests",
+    jobUpdateUnavailableTitle: "Job updates are not available yet.",
+    jobUpdateUnavailableBody:
+      "You can review this job here, but progress updates cannot be recorded or sent from this page.",
+    jobUpdateNoDeliveryNotice:
+      "No update, completion status, or customer message will be created.",
+    changeOrderUnavailableTitle: "Change Order submission is not available yet.",
+    changeOrderUnavailableBody:
+      "Review the current request and return to your project while governed Change Orders are being prepared.",
+    changeOrderNoSubmissionNotice:
+      "No Change Order, customer message, notification, or commercial revision will be created.",
+    completionRecordingUnavailableTitle: "Completion recording is not available yet.",
+    completionRecordingUnavailableBody:
+      "Job completion, customer confirmation, and history creation cannot be recorded from this page.",
+    completionReadOnlySummaryTitle: "Completion summary",
+    completionReadOnlySummaryBody:
+      "Return to the Work Center to review the current job information. This page does not change its status.",
+    completionNoAuthorityNotice:
+      "No completion, closure, approval, customer message, or history record will be created.",
+    completedJobDetailsUnavailable: "Completed job records are not available yet.",
     completedJobDetailsUnavailableBody:
-      "This record could not be found or is no longer available.",
+      "Verified completion and closure history cannot currently be reviewed or changed from this page.",
+    completedHistoryLocalNotice:
+      "This reference is read-only and does not establish verified completion, closure, approval, or customer delivery.",
+    completedHistoryNoMutationNotice:
+      "No completion, resolution, closure, review, conversation, or history change can be made here.",
+    lifecycleDashboardActionUnavailable:
+      "Completion and closure actions are not available yet.",
+    lifecycleLegacyHistoryNotice:
+      "These device records are read-only references. They do not establish verified completion, closure, approval, or customer delivery.",
+    quoteDraftHelpTitle: "Proposal drafting help",
+    quoteDraftHelpBody:
+      "Organize the information entered on this page. Review every suggestion; nothing is saved, issued, or delivered.",
+    quoteDraftLineItems:
+      "Draft line items to review:\n- Evaluation and preparation for {scope}\n- Labor described in this draft\n- Materials to review\n- Cleanup and final review",
+    quoteDraftRecommendation:
+      "Draft wording for {scope}: review the described work, materials, labor, access, measurements, pricing, and conditions before using this preview.",
+    quoteDraftProblemContext: "Draft problem context: {problem}",
+    quoteProposalReviewHint:
+      "Turn your notes into draft wording for review. Confirm all details before using the preview.",
+    quotePricingPreviewHint:
+      "Organize materials, labor, deposit, and terms for this non-binding preview.",
+    addPricingBeforeSendingQuote: "Add pricing to complete this preview.",
     returnToWorkCenter: "Return to Work Center",
   },
   es: {
-    completedJobDetailsUnavailable: "Los detalles del trabajo completado no están disponibles.",
+    lifecycleUnavailableEyebrow: "Aún no disponible",
+    lifecycleReferenceDetails: "Detalles de referencia",
+    lifecycleLegacyReference: "Referencia no verificada",
+    lifecycleJobFallback: "Trabajo activo",
+    lifecycleProjectFallback: "Proyecto",
+    returnToRequests: "Volver a Solicitudes",
+    jobUpdateUnavailableTitle: "Las actualizaciones del trabajo aún no están disponibles.",
+    jobUpdateUnavailableBody:
+      "Puedes revisar este trabajo aquí, pero las actualizaciones de progreso no se pueden registrar ni enviar desde esta página.",
+    jobUpdateNoDeliveryNotice:
+      "No se creará ninguna actualización, estado de finalización ni mensaje para el cliente.",
+    changeOrderUnavailableTitle: "El envío de Órdenes de Cambio aún no está disponible.",
+    changeOrderUnavailableBody:
+      "Revisa la solicitud actual y vuelve al proyecto mientras se preparan las Órdenes de Cambio administradas.",
+    changeOrderNoSubmissionNotice:
+      "No se creará ninguna Orden de Cambio, mensaje al cliente, notificación ni revisión comercial.",
+    completionRecordingUnavailableTitle: "El registro de finalización aún no está disponible.",
+    completionRecordingUnavailableBody:
+      "La finalización del trabajo, la confirmación del cliente y la creación del historial no se pueden registrar desde esta página.",
+    completionReadOnlySummaryTitle: "Resumen de finalización",
+    completionReadOnlySummaryBody:
+      "Vuelve al Centro de Trabajo para revisar la información actual. Esta página no cambia su estado.",
+    completionNoAuthorityNotice:
+      "No se creará ninguna finalización, cierre, aprobación, mensaje al cliente ni registro de historial.",
+    completedJobDetailsUnavailable: "Los registros de trabajos completados aún no están disponibles.",
     completedJobDetailsUnavailableBody:
-      "No se pudo encontrar este registro o ya no está disponible.",
+      "El historial verificado de finalización y cierre no se puede revisar ni cambiar desde esta página.",
+    completedHistoryLocalNotice:
+      "Esta referencia es de solo lectura y no establece finalización, cierre, aprobación ni entrega al cliente verificados.",
+    completedHistoryNoMutationNotice:
+      "Aquí no se puede realizar ningún cambio de finalización, resolución, cierre, reseña, conversación o historial.",
+    lifecycleDashboardActionUnavailable:
+      "Las acciones de finalización y cierre aún no están disponibles.",
+    lifecycleLegacyHistoryNotice:
+      "Estos registros del dispositivo son referencias de solo lectura. No establecen finalización, cierre, aprobación ni entrega al cliente verificados.",
+    quoteDraftHelpTitle: "Ayuda para redactar la propuesta",
+    quoteDraftHelpBody:
+      "Organiza la información ingresada en esta página. Revisa cada sugerencia; nada se guarda, emite ni entrega.",
+    quoteDraftLineItems:
+      "Partidas preliminares para revisar:\n- Evaluación y preparación para {scope}\n- Mano de obra descrita en este borrador\n- Materiales para revisar\n- Limpieza y revisión final",
+    quoteDraftRecommendation:
+      "Texto preliminar para {scope}: revisa el trabajo descrito, los materiales, la mano de obra, el acceso, las medidas, el precio y las condiciones antes de usar esta vista previa.",
+    quoteDraftProblemContext: "Contexto preliminar del problema: {problem}",
+    quoteProposalReviewHint:
+      "Convierte tus notas en texto preliminar para revisar. Confirma todos los detalles antes de usar la vista previa.",
+    quotePricingPreviewHint:
+      "Organiza materiales, mano de obra, depósito y términos para esta vista previa no vinculante.",
+    addPricingBeforeSendingQuote: "Agrega precios para completar esta vista previa.",
     returnToWorkCenter: "Volver al Centro de Trabajo",
   },
   fr: {
-    completedJobDetailsUnavailable: "Les détails du travail terminé ne sont pas disponibles.",
+    lifecycleUnavailableEyebrow: "Pas encore disponible",
+    lifecycleReferenceDetails: "Détails de référence",
+    lifecycleLegacyReference: "Référence non vérifiée",
+    lifecycleJobFallback: "Travail actif",
+    lifecycleProjectFallback: "Projet",
+    returnToRequests: "Retour aux demandes",
+    jobUpdateUnavailableTitle: "Les mises à jour du travail ne sont pas encore disponibles.",
+    jobUpdateUnavailableBody:
+      "Vous pouvez consulter ce travail ici, mais aucune mise à jour ne peut être enregistrée ou envoyée depuis cette page.",
+    jobUpdateNoDeliveryNotice:
+      "Aucune mise à jour, fin de travail ou communication client ne sera créée.",
+    changeOrderUnavailableTitle: "L’envoi d’un ordre de modification n’est pas encore disponible.",
+    changeOrderUnavailableBody:
+      "Consultez la demande actuelle et revenez au projet pendant la préparation des ordres de modification gérés.",
+    changeOrderNoSubmissionNotice:
+      "Aucun ordre de modification, message client, avis ou changement commercial ne sera créé.",
+    completionRecordingUnavailableTitle: "L’enregistrement de la fin du travail n’est pas encore disponible.",
+    completionRecordingUnavailableBody:
+      "La fin du travail, la confirmation client et la création d’un historique ne peuvent pas être enregistrées ici.",
+    completionReadOnlySummaryTitle: "Résumé de fin de travail",
+    completionReadOnlySummaryBody:
+      "Retournez au Centre de travail pour consulter les informations actuelles. Cette page ne change aucun statut.",
+    completionNoAuthorityNotice:
+      "Aucune fin, clôture, approbation, communication client ou entrée d’historique ne sera créée.",
+    completedJobDetailsUnavailable: "Les dossiers de travaux terminés ne sont pas encore disponibles.",
     completedJobDetailsUnavailableBody:
-      "Ce dossier est introuvable ou n’est plus disponible.",
+      "L’historique vérifié de fin et de clôture ne peut pas être consulté ou modifié depuis cette page.",
+    completedHistoryLocalNotice:
+      "Cette référence est en lecture seule et n’établit aucune fin, clôture, approbation ou livraison client vérifiée.",
+    completedHistoryNoMutationNotice:
+      "Aucune modification de fin, résolution, clôture, avis, conversation ou historique ne peut être effectuée ici.",
+    lifecycleDashboardActionUnavailable:
+      "Les actions de fin et de clôture ne sont pas encore disponibles.",
+    lifecycleLegacyHistoryNotice:
+      "Ces dossiers de l’appareil sont des références en lecture seule. Ils n’établissent aucune fin, clôture, approbation ou livraison client vérifiée.",
+    quoteDraftHelpTitle: "Aide à la rédaction de la proposition",
+    quoteDraftHelpBody:
+      "Organisez les informations saisies sur cette page. Vérifiez chaque suggestion; rien n’est enregistré, émis ou livré.",
+    quoteDraftLineItems:
+      "Éléments provisoires à vérifier :\n- Évaluation et préparation pour {scope}\n- Main-d’œuvre décrite dans ce brouillon\n- Matériaux à vérifier\n- Nettoyage et vérification finale",
+    quoteDraftRecommendation:
+      "Texte provisoire pour {scope} : vérifiez les travaux, les matériaux, la main-d’œuvre, l’accès, les mesures, le prix et les conditions avant d’utiliser cet aperçu.",
+    quoteDraftProblemContext: "Contexte provisoire du problème : {problem}",
+    quoteProposalReviewHint:
+      "Transformez vos notes en texte provisoire à vérifier. Confirmez tous les détails avant d’utiliser l’aperçu.",
+    quotePricingPreviewHint:
+      "Organisez les matériaux, la main-d’œuvre, l’acompte et les conditions pour cet aperçu non contraignant.",
+    addPricingBeforeSendingQuote: "Ajoutez les prix pour compléter cet aperçu.",
     returnToWorkCenter: "Retourner au Centre de Travail",
   },
   "pt-BR": {
-    completedJobDetailsUnavailable: "Os detalhes do trabalho concluído não estão disponíveis.",
+    lifecycleUnavailableEyebrow: "Ainda não disponível",
+    lifecycleReferenceDetails: "Detalhes de referência",
+    lifecycleLegacyReference: "Referência não verificada",
+    lifecycleJobFallback: "Trabalho ativo",
+    lifecycleProjectFallback: "Projeto",
+    returnToRequests: "Voltar às solicitações",
+    jobUpdateUnavailableTitle: "As atualizações do trabalho ainda não estão disponíveis.",
+    jobUpdateUnavailableBody:
+      "Você pode revisar este trabalho aqui, mas as atualizações de progresso não podem ser registradas nem enviadas por esta página.",
+    jobUpdateNoDeliveryNotice:
+      "Nenhuma atualização, conclusão ou mensagem ao cliente será criada.",
+    changeOrderUnavailableTitle: "O envio de Ordem de Alteração ainda não está disponível.",
+    changeOrderUnavailableBody:
+      "Revise a solicitação atual e volte ao projeto enquanto as Ordens de Alteração administradas estão sendo preparadas.",
+    changeOrderNoSubmissionNotice:
+      "Nenhuma Ordem de Alteração, mensagem ao cliente, notificação ou revisão comercial será criada.",
+    completionRecordingUnavailableTitle: "O registro de conclusão ainda não está disponível.",
+    completionRecordingUnavailableBody:
+      "A conclusão do trabalho, a confirmação do cliente e a criação de histórico não podem ser registradas nesta página.",
+    completionReadOnlySummaryTitle: "Resumo da conclusão",
+    completionReadOnlySummaryBody:
+      "Volte ao Centro de Trabalho para revisar as informações atuais. Esta página não altera o status.",
+    completionNoAuthorityNotice:
+      "Nenhuma conclusão, encerramento, aprovação, mensagem ao cliente ou registro de histórico será criado.",
+    completedJobDetailsUnavailable: "Os registros de trabalhos concluídos ainda não estão disponíveis.",
     completedJobDetailsUnavailableBody:
-      "Este registro não foi encontrado ou não está mais disponível.",
+      "O histórico verificado de conclusão e encerramento não pode ser revisado nem alterado nesta página.",
+    completedHistoryLocalNotice:
+      "Esta referência é somente leitura e não estabelece conclusão, encerramento, aprovação ou entrega ao cliente verificados.",
+    completedHistoryNoMutationNotice:
+      "Nenhuma alteração de conclusão, resolução, encerramento, avaliação, conversa ou histórico pode ser feita aqui.",
+    lifecycleDashboardActionUnavailable:
+      "As ações de conclusão e encerramento ainda não estão disponíveis.",
+    lifecycleLegacyHistoryNotice:
+      "Estes registros do dispositivo são referências somente leitura. Eles não estabelecem conclusão, encerramento, aprovação ou entrega ao cliente verificados.",
+    quoteDraftHelpTitle: "Ajuda para redigir a proposta",
+    quoteDraftHelpBody:
+      "Organize as informações inseridas nesta página. Revise cada sugestão; nada é salvo, emitido ou entregue.",
+    quoteDraftLineItems:
+      "Itens preliminares para revisar:\n- Avaliação e preparação para {scope}\n- Mão de obra descrita neste rascunho\n- Materiais para revisar\n- Limpeza e revisão final",
+    quoteDraftRecommendation:
+      "Texto preliminar para {scope}: revise o trabalho descrito, os materiais, a mão de obra, o acesso, as medidas, o preço e as condições antes de usar esta visualização.",
+    quoteDraftProblemContext: "Contexto preliminar do problema: {problem}",
+    quoteProposalReviewHint:
+      "Transforme suas anotações em texto preliminar para revisão. Confirme todos os detalhes antes de usar a visualização.",
+    quotePricingPreviewHint:
+      "Organize materiais, mão de obra, entrada e termos para esta visualização não vinculante.",
+    addPricingBeforeSendingQuote: "Adicione preços para concluir esta visualização.",
     returnToWorkCenter: "Voltar ao Centro de Trabalho",
   },
 };
@@ -13353,6 +13788,13 @@ const personalProfileMediaLanguage = {
     profileImageTooLarge: "Choose an image smaller than 10 MB.",
     profileImageUploadFailed: "The profile photo could not be uploaded.",
     profileImageSaveFailed: "The uploaded photo could not be saved to your profile.",
+    adjustProfilePhoto: "Adjust photo",
+    profilePhotoAdjustTitle: "Adjust profile photo",
+    profilePhotoAdjustHelp: "Drag the photo to center it. Use zoom if you need more room to position it.",
+    profilePhotoZoom: "Zoom",
+    profilePhotoReset: "Reset",
+    profilePhotoPositionUpdated: "Photo position updated.",
+    profilePhotoPositionSaveFailed: "The photo position could not be saved.",
   },
   es: {
     changeProfilePhoto: "Cambiar foto de perfil",
@@ -13363,6 +13805,13 @@ const personalProfileMediaLanguage = {
     profileImageTooLarge: "Elige una imagen de menos de 10 MB.",
     profileImageUploadFailed: "No se pudo subir la foto de perfil.",
     profileImageSaveFailed: "No se pudo guardar la foto subida en tu perfil.",
+    adjustProfilePhoto: "Ajustar foto",
+    profilePhotoAdjustTitle: "Ajustar foto de perfil",
+    profilePhotoAdjustHelp: "Arrastra la foto para centrarla. Usa el zoom si necesitas más espacio para colocarla.",
+    profilePhotoZoom: "Zoom",
+    profilePhotoReset: "Restablecer",
+    profilePhotoPositionUpdated: "Posición de la foto actualizada.",
+    profilePhotoPositionSaveFailed: "No se pudo guardar la posición de la foto.",
   },
   fr: {
     changeProfilePhoto: "Modifier la photo de profil",
@@ -13373,6 +13822,13 @@ const personalProfileMediaLanguage = {
     profileImageTooLarge: "Choisissez une image de moins de 10 Mo.",
     profileImageUploadFailed: "La photo de profil n’a pas pu être téléversée.",
     profileImageSaveFailed: "La photo téléversée n’a pas pu être enregistrée dans votre profil.",
+    adjustProfilePhoto: "Ajuster la photo",
+    profilePhotoAdjustTitle: "Ajuster la photo de profil",
+    profilePhotoAdjustHelp: "Faites glisser la photo pour la centrer. Utilisez le zoom si vous avez besoin de plus d’espace pour la positionner.",
+    profilePhotoZoom: "Zoom",
+    profilePhotoReset: "Réinitialiser",
+    profilePhotoPositionUpdated: "Position de la photo mise à jour.",
+    profilePhotoPositionSaveFailed: "La position de la photo n’a pas pu être enregistrée.",
   },
   "pt-BR": {
     changeProfilePhoto: "Alterar foto do perfil",
@@ -13383,6 +13839,13 @@ const personalProfileMediaLanguage = {
     profileImageTooLarge: "Escolha uma imagem menor que 10 MB.",
     profileImageUploadFailed: "Não foi possível enviar a foto do perfil.",
     profileImageSaveFailed: "Não foi possível salvar a foto enviada no seu perfil.",
+    adjustProfilePhoto: "Ajustar foto",
+    profilePhotoAdjustTitle: "Ajustar foto do perfil",
+    profilePhotoAdjustHelp: "Arraste a foto para centralizá-la. Use o zoom se precisar de mais espaço para posicioná-la.",
+    profilePhotoZoom: "Zoom",
+    profilePhotoReset: "Redefinir",
+    profilePhotoPositionUpdated: "Posição da foto atualizada.",
+    profilePhotoPositionSaveFailed: "Não foi possível salvar a posição da foto.",
   },
 };
 
@@ -13405,7 +13868,17 @@ const sharedInterfaceLanguage = {
     navigationRecords: "Records",
     navigationRelationships: "Relationships",
     navigationCustomers: "Customers",
+    navigationHistoryRecords: "History & records",
     navigationProfileAccount: "Profile / Account",
+    desktopBusinessShortcuts: "Shortcuts",
+    desktopQuickQuote: "Quick Quote",
+    desktopQuickQuoteNote: "Create quote",
+    desktopQuickInvoice: "Quick Invoice",
+    desktopQuickInvoiceNote: "Create invoice",
+    desktopQuoteInvoice: "Quote & Invoice",
+    desktopQuoteInvoiceNote: "Business documents",
+    desktopBusinessLeads: "Leads",
+    desktopBusinessLeadsNote: "Opportunities",
     navigationPrimaryDesktop: "Primary desktop navigation",
     navigationPrimaryMobile: "Primary mobile navigation",
     navigationCloseProfileMenu: "Close profile menu",
@@ -13493,7 +13966,17 @@ const sharedInterfaceLanguage = {
     navigationRecords: "Registros",
     navigationRelationships: "Relaciones",
     navigationCustomers: "Clientes",
+    navigationHistoryRecords: "Historial y registros",
     navigationProfileAccount: "Perfil / Cuenta",
+    desktopBusinessShortcuts: "Accesos rápidos",
+    desktopQuickQuote: "Cotización rápida",
+    desktopQuickQuoteNote: "Crear cotización",
+    desktopQuickInvoice: "Factura rápida",
+    desktopQuickInvoiceNote: "Crear factura",
+    desktopQuoteInvoice: "Cotización y factura",
+    desktopQuoteInvoiceNote: "Documentos comerciales",
+    desktopBusinessLeads: "Clientes",
+    desktopBusinessLeadsNote: "Oportunidades",
     navigationPrimaryDesktop: "Navegación principal de escritorio",
     navigationPrimaryMobile: "Navegación principal móvil",
     navigationCloseProfileMenu: "Cerrar menú del perfil",
@@ -13581,7 +14064,17 @@ const sharedInterfaceLanguage = {
     navigationRecords: "Dossiers",
     navigationRelationships: "Relations",
     navigationCustomers: "Clients",
+    navigationHistoryRecords: "Historique et dossiers",
     navigationProfileAccount: "Profil / Compte",
+    desktopBusinessShortcuts: "Raccourcis",
+    desktopQuickQuote: "Devis rapide",
+    desktopQuickQuoteNote: "Créer un devis",
+    desktopQuickInvoice: "Facture rapide",
+    desktopQuickInvoiceNote: "Créer une facture",
+    desktopQuoteInvoice: "Devis et facture",
+    desktopQuoteInvoiceNote: "Documents commerciaux",
+    desktopBusinessLeads: "Prospects",
+    desktopBusinessLeadsNote: "Opportunités",
     navigationPrimaryDesktop: "Navigation principale sur ordinateur",
     navigationPrimaryMobile: "Navigation principale mobile",
     navigationCloseProfileMenu: "Fermer le menu du profil",
@@ -13669,7 +14162,17 @@ const sharedInterfaceLanguage = {
     navigationRecords: "Registros",
     navigationRelationships: "Relacionamentos",
     navigationCustomers: "Clientes",
+    navigationHistoryRecords: "Histórico e registros",
     navigationProfileAccount: "Perfil / Conta",
+    desktopBusinessShortcuts: "Atalhos",
+    desktopQuickQuote: "Orçamento rápido",
+    desktopQuickQuoteNote: "Criar orçamento",
+    desktopQuickInvoice: "Fatura rápida",
+    desktopQuickInvoiceNote: "Criar fatura",
+    desktopQuoteInvoice: "Orçamento e fatura",
+    desktopQuoteInvoiceNote: "Documentos comerciais",
+    desktopBusinessLeads: "Oportunidades",
+    desktopBusinessLeadsNote: "Oportunidades",
     navigationPrimaryDesktop: "Navegação principal no computador",
     navigationPrimaryMobile: "Navegação principal móvel",
     navigationCloseProfileMenu: "Fechar menu do perfil",
@@ -13765,6 +14268,8 @@ Object.entries(sharedInterfaceLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
 
+Object.entries(workCenterPresentationLanguage).forEach(([language, labels]) => { Object.assign(translations[language], labels); });
+
 Object.entries(coreWorkflowLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
@@ -13782,6 +14287,26 @@ Object.entries(coreRouteParityLanguage).forEach(([language, labels]) => {
 });
 
 Object.entries(dailyWorkflowLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(professionalScheduleLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(customerQuoteLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(businessDocumentCustomerLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(businessDocumentWorkflowLanguage).forEach(([language, labels]) => {
+  Object.assign(translations[language], labels);
+});
+
+Object.entries(fieldEmployeeLanguage).forEach(([language, labels]) => {
   Object.assign(translations[language], labels);
 });
 

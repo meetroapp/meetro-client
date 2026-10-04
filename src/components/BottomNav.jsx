@@ -1,10 +1,10 @@
+import { clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
 import { lazy, Suspense, useEffect, useRef, useState } from "react";
 import { Keyboard } from "@capacitor/keyboard";
 import { t } from "../utils/language";
 import useLanguage from "../hooks/useLanguage";
 import {
   getNotifications,
-  getUnreadNotificationCount,
   saveNotifications,
 } from "../utils/notifications";
 import { openActiveEmergencyConversation } from "../utils/emergencyLifecycle";
@@ -19,6 +19,7 @@ import {
 } from "../utils/dashboardMetrics";
 import { glassActionMenu } from "../styles/liquidGlass";
 import { canReadLegacyWorkflowStorage } from "../utils/clientWorkflowStoragePolicy";
+import { getPrimaryNavigationOwner } from "../utils/primaryNavigationOwnership";
 import {
   getAlertCountSnapshot,
   resetAlertCounts,
@@ -26,6 +27,16 @@ import {
   subscribeAlertCounts,
 } from "../utils/alertCountCoordinator";
 import MeetroIcon from "./MeetroIcon";
+import { authFetch } from "../utils/authFetch";
+import {
+  PROFILE_PHOTO_DISPLAY_DEFAULT,
+  getPersonalProfilePhotoDisplayStyle,
+  normalizePersonalProfilePhotoDisplay,
+} from "../utils/personalProfilePhoto";
+import { getCommunicationAttention } from "../utils/communicationAttention";
+import {
+  getWorkCenterTotalUnread,
+} from "../utils/workCenterAlertAttention.js";
 
 const EmbeddedProfile = lazy(() => import("../pages/Profile"));
 
@@ -113,6 +124,10 @@ function BottomNav({ setPage, currentPage = "" }) {
     )
   );
   const [notificationTick, setNotificationTick] = useState(0);
+  const [sidebarPersonalPhoto, setSidebarPersonalPhoto] = useState("");
+  const [sidebarPersonalPhotoDisplay, setSidebarPersonalPhotoDisplay] = useState(
+    () => ({ ...PROFILE_PHOTO_DISPLAY_DEFAULT })
+  );
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [profileContextCardOpen, setProfileContextCardOpen] = useState(false);
   const [profileContextCardPosition, setProfileContextCardPosition] = useState({
@@ -163,6 +178,71 @@ function BottomNav({ setPage, currentPage = "" }) {
   }, [currentPage]);
 
   useEffect(() => {
+    if (activeMode !== "personal") {
+      setSidebarPersonalPhoto("");
+      setSidebarPersonalPhotoDisplay({
+        ...PROFILE_PHOTO_DISPLAY_DEFAULT,
+      });
+      return undefined;
+    }
+
+    let cancelled = false;
+
+    const loadSidebarPersonalPhoto = async () => {
+      try {
+        const result = await authFetch(
+          "/auth/me",
+          { cache: "no-store" },
+          setPage
+        );
+
+        if (cancelled) return;
+
+        const photo =
+          result?.response?.ok === true
+            ? String(result?.data?.user?.profile_photo_url || "").trim()
+            : "";
+
+        const display =
+          result?.response?.ok === true
+            ? normalizePersonalProfilePhotoDisplay(
+                result?.data?.user?.profile_photo_display
+              )
+            : { ...PROFILE_PHOTO_DISPLAY_DEFAULT };
+
+        setSidebarPersonalPhoto(photo);
+        setSidebarPersonalPhotoDisplay(display);
+      } catch {
+        if (!cancelled) {
+          setSidebarPersonalPhoto("");
+          setSidebarPersonalPhotoDisplay({
+            ...PROFILE_PHOTO_DISPLAY_DEFAULT,
+          });
+        }
+      }
+    };
+
+    void loadSidebarPersonalPhoto();
+
+    const refreshPersonalPhoto = () => {
+      void loadSidebarPersonalPhoto();
+    };
+
+    window.addEventListener(
+      "meetro-profile-photo-updated",
+      refreshPersonalPhoto
+    );
+
+    return () => {
+      cancelled = true;
+      window.removeEventListener(
+        "meetro-profile-photo-updated",
+        refreshPersonalPhoto
+      );
+    };
+  }, [activeMode, setPage]);
+
+  useEffect(() => {
     setAlertCountIdentity(alertCountIdentity);
     const unsubscribe = subscribeAlertCounts(setAlertCountSnapshot);
     return unsubscribe;
@@ -171,6 +251,7 @@ function BottomNav({ setPage, currentPage = "" }) {
   useEffect(() => {
     let showListener;
     let hideListener;
+    let focusOutTimer = null;
 
     const isEditableTarget = (target) => {
       const tag = target?.tagName?.toLowerCase();
@@ -188,7 +269,14 @@ function BottomNav({ setPage, currentPage = "" }) {
     };
 
     const handleFocusOut = () => {
-      setTimeout(() => setKeyboardOpen(false), 220);
+      if (focusOutTimer !== null) {
+        clearTimeout(focusOutTimer);
+      }
+
+      focusOutTimer = setTimeout(() => {
+        focusOutTimer = null;
+        setKeyboardOpen(isEditableTarget(document.activeElement));
+      }, 220);
     };
 
     const handleViewportResize = () => {
@@ -196,9 +284,12 @@ function BottomNav({ setPage, currentPage = "" }) {
 
       const heightDifference =
         window.innerHeight - window.visualViewport.height;
+      const editableFocused = isEditableTarget(document.activeElement);
 
-      if (heightDifference > 100) {
+      if (editableFocused && heightDifference > 80) {
         setKeyboardOpen(true);
+      } else if (!editableFocused) {
+        setKeyboardOpen(false);
       }
     };
 
@@ -226,10 +317,40 @@ function BottomNav({ setPage, currentPage = "" }) {
       document.removeEventListener("focusin", handleFocusIn, true);
       document.removeEventListener("focusout", handleFocusOut, true);
       window.visualViewport?.removeEventListener("resize", handleViewportResize);
+
+      if (focusOutTimer !== null) {
+        clearTimeout(focusOutTimer);
+        focusOutTimer = null;
+      }
+
       showListener?.remove?.();
       hideListener?.remove?.();
     };
   }, []);
+
+  useEffect(() => {
+    const root = document.getElementById("root");
+    if (!root) return undefined;
+
+    root.dataset.appKeyboard = keyboardOpen ? "open" : "closed";
+    root.style.setProperty(
+      "--meetro-bottom-nav-height",
+      keyboardOpen
+        ? "0px"
+        : "calc(74px + env(safe-area-inset-bottom, 0px))"
+    );
+
+    return () => {
+      delete root.dataset.appKeyboard;
+      root.style.removeProperty("--meetro-bottom-nav-height");
+    };
+  }, [keyboardOpen]);
+
+  const askMeetroNavItem = {
+    action: "askMeetro",
+    label: "Ask Meetro",
+    sub: "Assistant",
+  };
 
   const personalMobileNavItems = [
     {
@@ -246,6 +367,7 @@ function BottomNav({ setPage, currentPage = "" }) {
       label: t("navigationWorkCenter", language),
       sub: t("navigationCurrentWork", language),
     },
+    askMeetroNavItem,
     {
       page: "messagesInbox",
       aliases: [
@@ -259,20 +381,6 @@ function BottomNav({ setPage, currentPage = "" }) {
       icon: "messages",
       label: t("navigationChat", language),
       sub: t("navigationCommunication", language),
-    },
-    {
-      page: "meetroMoments",
-      aliases: ["meetroMoments"],
-      icon: "history",
-      label: t("navigationMoments", language),
-      sub: t("navigationHistory", language),
-    },
-    {
-      page: "notifications",
-      aliases: ["notifications"],
-      icon: "notifications",
-      label: t("navigationAlerts", language),
-      sub: t("navigationAlertsSubtitle", language),
     },
     {
       page: "profile",
@@ -303,8 +411,8 @@ function BottomNav({ setPage, currentPage = "" }) {
       icon: "workCenter",
       label: t("navigationWorkCenter", language),
       sub: t("navigationOperations", language),
-      center: true,
     },
+    askMeetroNavItem,
     {
       page: "messagesInbox",
       aliases: [
@@ -318,20 +426,6 @@ function BottomNav({ setPage, currentPage = "" }) {
       icon: "messages",
       label: t("navigationChat", language),
       sub: t("navigationCommunication", language),
-    },
-    {
-      page: "meetroMoments",
-      aliases: ["meetroMoments"],
-      icon: "history",
-      label: t("navigationMoments", language),
-      sub: t("navigationHistory", language),
-    },
-    {
-      page: "notifications",
-      aliases: ["notifications"],
-      icon: "notifications",
-      label: t("navigationAlerts", language),
-      sub: t("navigationAlertsSubtitle", language),
     },
     {
       page: "profile",
@@ -357,6 +451,7 @@ function BottomNav({ setPage, currentPage = "" }) {
       label: t("navigationWorkCenter", language),
       sub: t("navigationCurrentWork", language),
     },
+    askMeetroNavItem,
     {
       page: "messagesInbox",
       aliases: [
@@ -372,6 +467,13 @@ function BottomNav({ setPage, currentPage = "" }) {
       sub: t("navigationChat", language),
     },
     {
+      page: "myProfessionals",
+      aliases: ["myProfessionals"],
+      icon: "people",
+      label: t("myProfessionals", language),
+      sub: t("relationshipResource", language),
+    },
+    {
       page: "meetroMoments",
       aliases: ["meetroMoments"],
       icon: "history",
@@ -384,13 +486,6 @@ function BottomNav({ setPage, currentPage = "" }) {
       icon: "discover",
       label: t("navigationCommunity", language),
       sub: t("navigationDiscover", language),
-    },
-    {
-      page: "notifications",
-      aliases: ["notifications"],
-      icon: "notifications",
-      label: t("navigationAlerts", language),
-      sub: t("navigationAlertsSubtitle", language),
     },
     {
       page: "profile",
@@ -421,8 +516,8 @@ function BottomNav({ setPage, currentPage = "" }) {
       icon: "workCenter",
       label: t("navigationWorkCenter", language),
       sub: t("operations"),
-      center: true,
     },
+    askMeetroNavItem,
     {
       page: "messagesInbox",
       aliases: [
@@ -455,8 +550,8 @@ function BottomNav({ setPage, currentPage = "" }) {
       page: "customerRelationshipsCenter",
       aliases: ["customerRelationshipsCenter"],
       icon: "people",
-      label: t("navigationRelationships", language),
-      sub: t("navigationCustomers", language),
+      label: t("navigationCustomers", language),
+      sub: t("navigationHistoryRecords", language),
     },
     {
       page: "discover",
@@ -466,18 +561,28 @@ function BottomNav({ setPage, currentPage = "" }) {
       sub: t("navigationDiscover", language),
     },
     {
-      page: "notifications",
-      aliases: ["notifications"],
-      icon: "notifications",
-      label: t("navigationAlerts", language),
-      sub: t("navigationAlertsSubtitle", language),
-    },
-    {
       page: "profile",
       aliases: ["profile", "businessProfile"],
       icon: "profile",
       label: t("navigationProfileAccount", language),
       sub: t("account"),
+    },
+  ];
+
+  const businessDesktopShortcutItems = [
+    {
+      page: "quoteBuilder",
+      shortcut: "quoteInvoice",
+      icon: "quickQuote",
+      label: t("desktopQuoteInvoice", language),
+      sub: t("desktopQuoteInvoiceNote", language),
+    },
+    {
+      page: "businessLeads",
+      shortcut: "businessLeads",
+      icon: "businessLeads",
+      label: t("desktopBusinessLeads", language),
+      sub: t("desktopBusinessLeadsNote", language),
     },
   ];
 
@@ -522,22 +627,59 @@ function BottomNav({ setPage, currentPage = "" }) {
   const mobileNavItems = activeMode === "business" ? businessMobileNavItems : personalMobileNavItems;
   const desktopNavItems = activeMode === "business" ? businessDesktopNavItems : personalDesktopNavItems;
   const normalizedPage = currentPage || "";
+  const primaryNavigationOwner = getPrimaryNavigationOwner(
+    normalizedPage,
+    activeMode
+  );
 
-  const operationsAlertCount =
+  const canonicalCategoryUnreadCount = (category) => {
+    if (alertCountSnapshot.identity !== alertCountIdentity) return 0;
+    const count = alertCountSnapshot.response?.counts?.byCategory?.[category]?.unread;
+    return Number.isSafeInteger(count) && count >= 0 ? count : 0;
+  };
+
+  const communicationAttention = getCommunicationAttention(
+    alertCountSnapshot,
+    alertCountIdentity
+  );
+  const communicationAlertCount = Math.max(
+    canonicalCategoryUnreadCount("communication") + communicationAttention.teamUnread,
+    canonicalCategoryUnreadCount("emergency"),
+    getUnreadMessageCount()
+  );
+  const legacyWorkCenterAlertCount = Math.max(
+    canonicalCategoryUnreadCount("evaluation"),
+    canonicalCategoryUnreadCount("proposal"),
+    canonicalCategoryUnreadCount("invoice"),
+    canonicalCategoryUnreadCount("payment"),
+    canonicalCategoryUnreadCount("schedule"),
+    Math.max(
+      0,
+      canonicalCategoryUnreadCount("work") -
+        communicationAttention.teamUnread
+    ),
+    canonicalCategoryUnreadCount("completion"),
+    canonicalCategoryUnreadCount("review"),
+    getAcceptedQuoteReadyCount(),
+    getActiveEmergencyAlertCount()
+  );
+
+  const canonicalWorkCenterAlertCount =
+    getWorkCenterTotalUnread(
+      alertCountSnapshot,
+      alertCountIdentity
+    );
+
+  const workCenterAlertCount =
+    canonicalWorkCenterAlertCount === null
+      ? legacyWorkCenterAlertCount
+      : canonicalWorkCenterAlertCount;
+  const leadsAlertCount =
+    activeMode === "business" ? canonicalCategoryUnreadCount("request") : 0;
+  const profileAlertCount =
     activeMode === "business"
-      ? Math.max(
-          getUnreadNotificationCount("professional"),
-          getAcceptedQuoteReadyCount(),
-          getActiveEmergencyAlertCount()
-        )
+      ? canonicalCategoryUnreadCount("business_verification")
       : 0;
-
-  const canonicalAlertUnreadCount =
-    alertCountSnapshot.identity === alertCountIdentity &&
-    Number.isSafeInteger(alertCountSnapshot.response?.counts?.unread) &&
-    alertCountSnapshot.response.counts.unread >= 0
-      ? alertCountSnapshot.response.counts.unread
-      : null;
 
   void notificationTick;
   const isLandscapeCompact =
@@ -545,41 +687,62 @@ function BottomNav({ setPage, currentPage = "" }) {
     window.matchMedia?.("(orientation: landscape) and (max-height: 500px)")?.matches;
 
   const isNavItemActive = (item) =>
-    item.page === normalizedPage ||
-    item.aliases?.includes(normalizedPage) ||
-    (item.page === "businessLeads" && normalizedPage === "businessLeads");
+    !item.action &&
+    (item.page === primaryNavigationOwner ||
+      item.page === normalizedPage ||
+      item.aliases?.includes(normalizedPage) ||
+      (item.page === "businessLeads" && normalizedPage === "businessLeads"));
 
   const getItemUnreadCount = (item) =>
-    item.page === "notifications"
-      ? canonicalAlertUnreadCount
+    item.shortcut === "businessLeads"
+      ? leadsAlertCount
       : item.page === "contractorDashboard"
-      ? operationsAlertCount
+      ? workCenterAlertCount
+      : item.page === "myRequests"
+      ? Math.max(workCenterAlertCount, canonicalCategoryUnreadCount("request"))
       : item.aliases?.some((alias) =>
           ["chat", "messages", "messagesInbox", "conversationThread"].includes(alias)
         )
-      ? getUnreadMessageCount()
+      ? communicationAlertCount
+      : item.page === "profile"
+      ? profileAlertCount
       : 0;
 
-  const getItemAccessibleLabel = (item, unread) => {
-    if (item.page !== "notifications" || !Number.isSafeInteger(unread) || unread < 1) {
-      return `${item.label}. ${item.sub}`;
+  const getItemAccessibleLabel = (item) => `${item.label}. ${item.sub}`;
+
+  const getItemBadgeText = (_item, unread) =>
+    unread > 99 ? "99+" : String(unread);
+
+  const shortcutReturnPage = [
+    "contractorDashboard",
+    "workCenter",
+    "workDashboard",
+    "schedule",
+    "activeJobs",
+  ].includes(normalizedPage)
+    ? "workCenter"
+    : normalizedPage || "businessDashboard";
+
+  const prepareBusinessShortcut = (item) => {
+    if (item.shortcut === "quoteInvoice") {
+      clearGenericNewQuoteContext();
+      localStorage.removeItem("selectedQuoteRequest");
+      localStorage.removeItem("selectedQuoteForEdit");
+      localStorage.removeItem("selectedWorkCenterRequest");
+      localStorage.removeItem("selectedHomeownerRequest");
+      localStorage.setItem("quoteBuilderSource", "desktop_sidebar_quote_invoice");
+      localStorage.setItem("quoteBuilderReturnPage", shortcutReturnPage);
+      localStorage.removeItem("invoiceBuilderSource");
+      localStorage.removeItem("invoiceBuilderReturnPage");
     }
-    if (unread > 99) {
-      return t("navigationAlertsUnreadOverflow", language);
-    }
-    return t(
-      unread === 1
-        ? "navigationAlertsUnreadSingular"
-        : "navigationAlertsUnreadPlural",
-      language,
-      { count: unread }
-    );
   };
 
-  const getItemBadgeText = (item, unread) =>
-    item.page === "notifications" && unread > 99 ? "99+" : String(unread);
-
   const handleNavPress = (item, variant = "bottom", event) => {
+    if (item.action === "askMeetro") {
+      window.dispatchEvent(new Event("meetro:assistant:open"));
+      return;
+    }
+
     if (item.page === "home") {
       window.dispatchEvent(new Event("meetroHomeResetToLanding"));
     }
@@ -606,6 +769,10 @@ function BottomNav({ setPage, currentPage = "" }) {
     }
 
     setProfileContextCardOpen(false);
+
+    if (variant === "sidebar" && item.shortcut) {
+      prepareBusinessShortcut(item);
+    }
 
     if (item.page === "contractorDashboard") {
       localStorage.removeItem("meetroWorkCenterTab");
@@ -637,6 +804,10 @@ function BottomNav({ setPage, currentPage = "" }) {
 
     setKeyboardOpen(false);
     document.activeElement?.blur?.();
+    if (variant === "sidebar" && item.shortcut === "quoteInvoice") {
+      setPage("quoteBuilder?new=1");
+      return;
+    }
     setPage(item.page);
   };
 
@@ -646,18 +817,18 @@ function BottomNav({ setPage, currentPage = "" }) {
       (variant === "sidebar" && item.page === "profile" && profileContextCardOpen);
     const unread = getItemUnreadCount(item);
     const badgeText = getItemBadgeText(item, unread);
-    const isCenterAction = activeMode === "business" && item.center;
+    const isCenterAction = item.action === "askMeetro";
 
     if (variant === "sidebar") {
       return (
         <button
-          key={item.page}
+          key={item.action || item.page}
           type="button"
           className={`desktop-sidebar-item${active ? " active" : ""}`}
           aria-current={active ? "page" : undefined}
           aria-haspopup={item.page === "profile" ? "dialog" : undefined}
           aria-expanded={item.page === "profile" ? profileContextCardOpen : undefined}
-          aria-label={getItemAccessibleLabel(item, unread)}
+          aria-label={isCenterAction ? "Ask Meetro" : getItemAccessibleLabel(item)}
           title={`${item.label} — ${item.sub}`}
           onClick={(event) => handleNavPress(item, "sidebar", event)}
           style={{
@@ -674,21 +845,17 @@ function BottomNav({ setPage, currentPage = "" }) {
             }}
             aria-hidden="true"
           >
-            <MeetroIcon
-              name={item.icon}
-              size={22}
-              decorative
-              style={active ? activeIconText : iconText}
-            />
-            {unread > 0 && (
-              item.page === "notifications" ? (
-                <span className="alert-navigation-badge alert-navigation-badge--sidebar" aria-hidden="true">
-                  {badgeText}
-                </span>
-              ) : (
-                <span style={sidebarBadge}>{unread}</span>
-              )
+            {isCenterAction ? (
+              <span style={sidebarAskMark}>M</span>
+            ) : (
+              <MeetroIcon
+                name={item.icon}
+                size={22}
+                decorative
+                style={active ? activeIconText : iconText}
+              />
             )}
+            {unread > 0 && <span style={sidebarBadge}>{badgeText}</span>}
           </span>
 
           <span style={sidebarLabelStack}>
@@ -705,11 +872,11 @@ function BottomNav({ setPage, currentPage = "" }) {
 
     return (
       <button
-        key={item.page}
+        key={item.action || item.page}
         type="button"
-        className={`bottom-nav-item${item.page === "notifications" ? " bottom-nav-item--alerts" : ""}${active ? " active" : ""}`}
+        className={`bottom-nav-item${active ? " active" : ""}${isCenterAction ? " bottom-nav-item--ask" : ""}`}
         aria-current={active ? "page" : undefined}
-        aria-label={getItemAccessibleLabel(item, unread)}
+        aria-label={isCenterAction ? "Ask Meetro" : getItemAccessibleLabel(item)}
         onPointerDown={(event) => {
           navTouchStartRef.current = {
             x: event.clientX || 0,
@@ -737,6 +904,7 @@ function BottomNav({ setPage, currentPage = "" }) {
         onClick={(event) => {
           event.preventDefault();
           event.stopPropagation();
+          if (event.detail === 0) handleNavPress(item);
         }}
         style={{
           ...navButton,
@@ -757,26 +925,21 @@ function BottomNav({ setPage, currentPage = "" }) {
             ...(active && !isCenterAction ? activeIconWrap : {}),
             ...(active && isCenterAction ? centerIconWrapActive : {}),
             ...(isCenterAction && unread > 0 ? centerIconWrapAlert : {}),
-            ...(isCenterAction && isLandscapeCompact ? centerIconWrapLandscape : {}),
-            position: "relative",
+            position: isCenterAction ? "absolute" : "relative",
           }}
         >
-          <MeetroIcon
-            name={item.icon}
-            size={isCenterAction ? 28 : 24}
-            decorative
-            style={active ? activeIconText : iconText}
-          />
-
-          {unread > 0 && (
-            item.page === "notifications" ? (
-              <span className="alert-navigation-badge alert-navigation-badge--mobile" aria-hidden="true">
-                {badgeText}
-              </span>
-            ) : (
-              <div style={badge}>{unread}</div>
-            )
+          {isCenterAction ? (
+            <span style={centerAskMark} aria-hidden="true">M</span>
+          ) : (
+            <MeetroIcon
+              name={item.icon}
+              size={24}
+              decorative
+              style={active ? activeIconText : iconText}
+            />
           )}
+
+          {unread > 0 && <div style={badge}>{badgeText}</div>}
         </div>
 
         <span
@@ -815,7 +978,30 @@ function BottomNav({ setPage, currentPage = "" }) {
         aria-label={t("navigationPrimaryDesktop", language)}
       >
         <div style={sidebarBrand}>
-          <div style={sidebarBrandMark} aria-hidden="true">M</div>
+          <div
+            style={{
+              ...sidebarBrandMark,
+              ...(activeMode === "personal" && sidebarPersonalPhoto
+                ? sidebarPersonalPhotoWrap
+                : {}),
+            }}
+            aria-hidden="true"
+          >
+            {activeMode === "personal" && sidebarPersonalPhoto ? (
+              <img
+                src={sidebarPersonalPhoto}
+                alt=""
+                style={{
+                  ...sidebarPersonalPhotoImage,
+                  ...getPersonalProfilePhotoDisplayStyle(
+                    sidebarPersonalPhotoDisplay
+                  ),
+                }}
+              />
+            ) : (
+              "M"
+            )}
+          </div>
           <div style={sidebarBrandCopy}>
             <strong style={sidebarBrandTitle}>Meetro</strong>
             <span style={sidebarBrandSubtitle}>
@@ -826,7 +1012,37 @@ function BottomNav({ setPage, currentPage = "" }) {
           </div>
         </div>
 
-        <div style={sidebarNavList}>{desktopNavItems.map((item) => renderNavItem(item, "sidebar"))}</div>
+        <div style={sidebarScrollArea}>
+          <div style={sidebarNavList}>
+            {desktopNavItems
+              .filter((item) => item.page !== "profile")
+              .map((item) => renderNavItem(item, "sidebar"))}
+          </div>
+
+          {activeMode === "business" && (
+            <section
+              style={sidebarShortcutGroup}
+              aria-label={t("desktopBusinessShortcuts", language)}
+            >
+              <div style={sidebarShortcutHeading}>
+                {t("desktopBusinessShortcuts", language)}
+              </div>
+              <div style={sidebarShortcutList}>
+                {businessDesktopShortcutItems.map((item) =>
+                  renderNavItem(item, "sidebar")
+                )}
+              </div>
+            </section>
+          )}
+
+          {desktopNavItems
+            .filter((item) => item.page === "profile")
+            .map((item) => (
+              <div key={`${item.page}-profile`} style={sidebarProfileGroup}>
+                {renderNavItem(item, "sidebar")}
+              </div>
+            ))}
+        </div>
       </nav>
 
       {profileContextCardOpen && (
@@ -839,19 +1055,39 @@ function BottomNav({ setPage, currentPage = "" }) {
       )}
 
       {!keyboardOpen && (
-        <div
-          className="bottom-nav-dock"
-          data-language={language}
-          style={navDock}
-          role="navigation"
-          aria-label={t("navigationPrimaryMobile", language)}
-        >
-          <div className="bottom-nav" style={isLandscapeCompact ? navWrapperLandscape : navWrapper}>
-            <div className="bottom-nav-container" style={isLandscapeCompact ? navContainerLandscape : navContainer}>
-              {mobileNavItems.map((item) => renderNavItem(item, "bottom"))}
+        <>
+          <div className="bottom-nav-content-spacer" aria-hidden="true" />
+          <div
+            className="bottom-nav-dock"
+            data-language={language}
+            style={navDock}
+            role="navigation"
+            aria-label={t("navigationPrimaryMobile", language)}
+          >
+            <div className="bottom-nav" style={isLandscapeCompact ? navWrapperLandscape : navWrapper}>
+              <div className="bottom-nav-surface" aria-hidden="true">
+                <span />
+                <svg width="104" height="100%" className="bottom-nav-cradle">
+                  <rect x="0" y="51" width="104" height="100%" fill="#fff" />
+                  <path
+                    d="M0 .5 C8 .5 16 4 16 15 C16 34.88 32.12 51 52 51 C71.88 51 88 34.88 88 15 C88 4 96 .5 104 .5 V52 H0 Z"
+                    fill="#fff"
+                  />
+                  <path
+                    d="M0 .5 C8 .5 16 4 16 15 C16 34.88 32.12 51 52 51 C71.88 51 88 34.88 88 15 C88 4 96 .5 104 .5"
+                    fill="none"
+                    stroke="#E5E7EB"
+                    strokeWidth="1"
+                  />
+                </svg>
+                <span />
+              </div>
+              <div className="bottom-nav-container" style={isLandscapeCompact ? navContainerLandscape : navContainer}>
+                {mobileNavItems.map((item) => renderNavItem(item, "bottom"))}
+              </div>
             </div>
           </div>
-      </div>
+        </>
       )}
     </>
   );
@@ -916,6 +1152,47 @@ function DesktopProfileCard({ currentPage, onClose, position, setPage }) {
 }
 
 const adaptiveNavigationStyles = `
+  #root .bottom-nav-dock,
+  #root .bottom-nav-dock .bottom-nav,
+  #root .bottom-nav-dock .bottom-nav-container {
+    overflow: visible !important;
+  }
+
+  #root .bottom-nav-dock .bottom-nav {
+    padding: 0 4px env(safe-area-inset-bottom, 0px) !important;
+  }
+
+  .bottom-nav-surface {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 104px minmax(0, 1fr);
+    pointer-events: none;
+  }
+
+  .bottom-nav-surface > span {
+    background: #fff;
+    border-top: 1px solid #E5E7EB;
+  }
+
+  .bottom-nav-cradle { display: block; }
+
+  #root .bottom-nav-item--ask .bottom-nav-icon {
+    width: 58px !important;
+    height: 58px !important;
+    border-radius: 50% !important;
+    box-shadow: 0 0 10px 2px rgba(16, 185, 129, 0.22), 0 0 18px rgba(8, 120, 72, 0.12) !important;
+    flex-shrink: 0;
+  }
+
+  #root .bottom-nav-item--ask .bottom-nav-label {
+    position: absolute;
+    top: 55px;
+    color: #087848;
+  }
+
+  #root .bottom-nav-item--ask .bottom-nav-subtitle { display: none; }
+
   .desktop-sidebar {
     display: none;
   }
@@ -925,10 +1202,12 @@ const adaptiveNavigationStyles = `
     display: none;
   }
 
+  #root[data-app-layout="tablet"] .desktop-sidebar,
   #root[data-app-layout="desktop"] .desktop-sidebar {
       display: flex;
   }
 
+  #root[data-app-layout="tablet"] .desktop-profile-context-backdrop,
   #root[data-app-layout="desktop"] .desktop-profile-context-backdrop {
       position: fixed;
       inset: 0;
@@ -942,14 +1221,22 @@ const adaptiveNavigationStyles = `
       cursor: default;
   }
 
+  #root[data-app-layout="tablet"] .desktop-profile-context-card,
   #root[data-app-layout="desktop"] .desktop-profile-context-card {
       display: block;
   }
 
+  #root[data-app-layout="tablet"] .bottom-nav-content-spacer,
+  #root[data-app-layout="desktop"] .bottom-nav-content-spacer,
+  #root[data-app-layout="tablet"] .bottom-nav-dock,
   #root[data-app-layout="desktop"] .bottom-nav-dock {
       display: none !important;
   }
 
+  #root[data-app-layout="tablet"] .app-page,
+  #root[data-app-layout="tablet"] .page-shell,
+  #root[data-app-layout="tablet"] .business-dashboard,
+  #root[data-app-layout="tablet"] .contractor-dashboard,
   #root[data-app-layout="desktop"] .app-page,
   #root[data-app-layout="desktop"] .page-shell,
   #root[data-app-layout="desktop"] .business-dashboard,
@@ -965,38 +1252,47 @@ const adaptiveNavigationStyles = `
       padding-bottom: max(32px, env(safe-area-inset-bottom, 0px)) !important;
   }
 
+  #root[data-app-layout="tablet"] .meetro-responsive-page,
   #root[data-app-layout="desktop"] .meetro-responsive-page {
       --meetro-page-max-width: var(--meetro-layout-content-max);
   }
 
+  #root[data-app-layout="tablet"] .meetro-readable-page,
   #root[data-app-layout="desktop"] .meetro-readable-page {
       --meetro-page-max-width: var(--meetro-layout-readable-max);
   }
 
+  #root[data-app-layout="tablet"] .meetro-form-page,
   #root[data-app-layout="desktop"] .meetro-form-page {
       --meetro-page-max-width: var(--meetro-layout-form-max);
   }
 
+  #root[data-app-layout="tablet"] .meetro-wide-page,
   #root[data-app-layout="desktop"] .meetro-wide-page {
       --meetro-page-max-width: var(--meetro-layout-wide-max);
   }
 
+  #root[data-app-layout="tablet"] .messages-inbox-page,
+  #root[data-app-layout="tablet"] .messages-relationship-identity-page,
   #root[data-app-layout="desktop"] .messages-inbox-page,
   #root[data-app-layout="desktop"] .messages-relationship-identity-page {
       --meetro-page-resolved-max-width: var(--meetro-page-available-width);
       --meetro-page-inline-extra: 0px;
   }
 
+  #root[data-app-layout="tablet"] .desktop-sidebar-item:focus-visible,
   #root[data-app-layout="desktop"] .desktop-sidebar-item:focus-visible {
       outline: 3px solid rgba(31, 77, 52, 0.34);
       outline-offset: 3px;
     }
 
+  #root[data-app-layout="tablet"] .desktop-profile-context-card button:focus-visible,
   #root[data-app-layout="desktop"] .desktop-profile-context-card button:focus-visible {
       outline: 3px solid rgba(31, 77, 52, 0.34);
       outline-offset: 3px;
     }
 
+  #root[data-app-layout="tablet"] .desktop-profile-card-scroll .profile-embedded-content,
   #root[data-app-layout="desktop"] .desktop-profile-card-scroll .profile-embedded-content {
       max-width: none !important;
       margin-left: 0 !important;
@@ -1005,24 +1301,21 @@ const adaptiveNavigationStyles = `
 `;
 
 const desktopSidebar = {
-  position: "fixed",
-  top: "18px",
-  left: "18px",
-  bottom: "18px",
-  width: "calc(var(--meetro-sidebar-width, 284px) - 36px)",
-  zIndex: 9998,
-  flexDirection: "column",
-  gap: "18px",
-  padding: "16px",
-  boxSizing: "border-box",
-  borderRadius: "28px",
-  background:
-    "linear-gradient(180deg, var(--meetro-surface-paper), var(--meetro-surface-warm))",
-  border: "1px solid var(--meetro-color-line)",
-  boxShadow: "var(--meetro-shadow-lifted)",
-  backdropFilter: "blur(22px)",
-  WebkitBackdropFilter: "blur(22px)",
+  position: "fixed", top: 0, left: 0, bottom: 0,
+  width: "var(--meetro-sidebar-width, 240px)", zIndex: 9998,
+  flexDirection: "column", gap: "18px", padding: "20px 14px",
+  boxSizing: "border-box", borderRadius: 0, background: "#F7F6F2",
+  borderRight: "1px solid #E5E7EB", boxShadow: "2px 0 8px rgba(17,24,39,0.025)",
   overflow: "hidden",
+};
+
+const sidebarScrollArea = {
+  flex: 1,
+  minHeight: 0,
+  minWidth: 0,
+  overflowY: "auto",
+  overflowX: "hidden",
+  paddingRight: "2px",
 };
 
 const sidebarBrand = {
@@ -1046,6 +1339,24 @@ const sidebarBrandMark = {
   boxShadow: "0 14px 30px rgba(31,77,52,0.22)",
 };
 
+const sidebarPersonalPhotoWrap = {
+  position: "relative",
+  borderRadius: "999px",
+  overflow: "hidden",
+  background: "#ffffff",
+  boxShadow: "0 10px 24px rgba(31,77,52,0.18)",
+};
+
+const sidebarPersonalPhotoImage = {
+  width: "100%",
+  height: "100%",
+  borderRadius: "999px",
+  objectFit: "cover",
+  display: "block",
+  userSelect: "none",
+  WebkitUserDrag: "none",
+};
+
 const sidebarBrandCopy = {
   display: "grid",
   gap: "2px",
@@ -1057,6 +1368,10 @@ const sidebarBrandTitle = {
   fontSize: "18px",
   lineHeight: 1,
   fontWeight: "950",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  hyphens: "none",
+  WebkitHyphens: "none",
 };
 
 const sidebarBrandSubtitle = {
@@ -1066,12 +1381,50 @@ const sidebarBrandSubtitle = {
   fontWeight: "850",
   textTransform: "uppercase",
   letterSpacing: "0.08em",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  hyphens: "none",
+  WebkitHyphens: "none",
 };
 
 const sidebarNavList = {
   display: "grid",
   gap: "8px",
   minWidth: 0,
+};
+
+const sidebarShortcutGroup = {
+  display: "grid",
+  gap: "8px",
+  marginTop: "14px",
+  paddingTop: "14px",
+  borderTop: "1px solid var(--meetro-color-line)",
+};
+
+const sidebarShortcutHeading = {
+  color: "var(--meetro-color-forest)",
+  fontSize: "11px",
+  lineHeight: 1.2,
+  fontWeight: "950",
+  letterSpacing: "0.08em",
+  textTransform: "uppercase",
+  padding: "0 10px",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  hyphens: "none",
+  WebkitHyphens: "none",
+};
+
+const sidebarShortcutList = {
+  display: "grid",
+  gap: "6px",
+  minWidth: 0,
+};
+
+const sidebarProfileGroup = {
+  marginTop: "14px",
+  paddingTop: "14px",
+  borderTop: "1px solid var(--meetro-color-line)",
 };
 
 const sidebarNavButton = {
@@ -1093,9 +1446,9 @@ const sidebarNavButton = {
 };
 
 const sidebarNavButtonActive = {
-  background: "var(--meetro-surface-sage)",
-  border: "1px solid rgba(31,77,52,0.18)",
-  boxShadow: "inset 0 1px 0 rgba(255,255,255,0.72), 0 10px 24px rgba(31,77,52,0.08)",
+  background: "#E8F5EE",
+  border: "1px solid transparent",
+  boxShadow: "none",
 };
 
 const sidebarIconWrap = {
@@ -1129,6 +1482,10 @@ const sidebarLabel = {
   whiteSpace: "normal",
   overflow: "visible",
   textOverflow: "clip",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  hyphens: "none",
+  WebkitHyphens: "none",
 };
 
 const sidebarLabelActive = {
@@ -1143,6 +1500,10 @@ const sidebarSubLabel = {
   whiteSpace: "normal",
   overflow: "visible",
   textOverflow: "clip",
+  overflowWrap: "normal",
+  wordBreak: "normal",
+  hyphens: "none",
+  WebkitHyphens: "none",
 };
 
 const sidebarSubLabelActive = {
@@ -1257,7 +1618,10 @@ const profileCardLoading = {
   fontWeight: "850",
 };
 
-const centerNavButton = {};
+const centerNavButton = {
+  overflow: "visible",
+  border: "none",
+};
 
 const centerNavButtonActive = {
   background: "var(--meetro-surface-sage)",
@@ -1270,27 +1634,42 @@ const centerNavButtonAlert = {
 };
 
 const centerIconWrap = {
-  width: "30px",
-  height: "30px",
-  borderRadius: "10px",
-  fontSize: "18px",
-  background: "transparent",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  border: "none",
-  boxShadow: "none",
+  width: "58px",
+  height: "58px",
+  boxSizing: "border-box",
+  top: "-14px",
+  left: "50%",
+  borderRadius: "50%",
+  background: "linear-gradient(145deg, #10B981, #087848)",
+  color: "#fff",
+  border: "2px solid #fff",
+  transform: "translateX(-50%)",
 };
 
-const centerIconWrapLandscape = {
-  width: "24px",
-  height: "24px",
-  borderRadius: "10px",
-  fontSize: "14px",
-  boxShadow: "none",
+const centerAskMark = {
+  color: "#fff",
+  fontSize: "30px",
+  fontWeight: 900,
+  lineHeight: 1,
+  fontFamily: "Poppins, system-ui, sans-serif",
+};
+
+const sidebarAskMark = {
+  width: "30px",
+  height: "30px",
+  display: "grid",
+  placeItems: "center",
+  borderRadius: "50%",
+  background: "#087848",
+  color: "#fff",
+  fontSize: "17px",
+  fontWeight: 900,
+  lineHeight: 1,
 };
 
 const centerIconWrapActive = {
   background: "transparent",
-  color: "#4f2df3",
+  color: "#0B5D3B",
   border: "none",
   boxShadow: "none",
 };
@@ -1311,12 +1690,13 @@ const navDock = {
   maxWidth: "100%",
   minWidth: 0,
   boxSizing: "border-box",
-  overflowX: "hidden",
+  overflow: "visible",
   zIndex: 9999,
   pointerEvents: "none",
 };
 
 const navWrapper = {
+  position: "relative",
   pointerEvents: "auto",
   width: "100%",
   maxWidth: "100%",
@@ -1326,10 +1706,11 @@ const navWrapper = {
   justifyContent: "space-around",
   padding: "5px 4px calc(5px + env(safe-area-inset-bottom))",
   boxSizing: "border-box",
-  background: "rgba(255,255,255,0.98)",
-  backdropFilter: "blur(16px)",
+  background: "transparent",
+  backdropFilter: "none",
+  border: "none",
   borderRadius: 0,
-  boxShadow: "0 -1px 8px rgba(15,23,42,0.10)",
+  boxShadow: "none",
 };
 
 const navWrapperLandscape = {
@@ -1339,6 +1720,7 @@ const navWrapperLandscape = {
 };
 
 const navContainer = {
+  height: "74px",
   touchAction: "manipulation",
   WebkitTransform: "translateZ(0)",
   transform: "translateZ(0)",
@@ -1397,7 +1779,7 @@ const activeButton = {
   padding: "3px 2px",
   transform: "none",
   background: "rgba(31,77,52,0.12)",
-  color: "#4f2df3",
+  color: "#0B5D3B",
   border: "1px solid transparent",
   boxShadow: "none",
 };
@@ -1431,7 +1813,7 @@ const iconWrapLandscape = {
 
 const activeIconWrap = {
   background: "transparent",
-  color: "#4f2df3",
+  color: "#0B5D3B",
   boxShadow: "none",
 };
 
@@ -1492,7 +1874,7 @@ const subLabelLandscape = {
 };
 
 const activeSubLabel = {
-  color: "#7c5cff",
+  color: "#0B5D3B",
   fontWeight: "800",
 };
 

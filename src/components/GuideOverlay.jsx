@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getLanguage, t } from "../utils/language";
 import { getGuideSteps, TOUR_TYPES } from "../utils/guideSteps";
+import { clearGenericNewQuoteContext, isGenericNewQuoteRoute } from "../utils/newQuoteCustomerSetup.js";
 
 function getAccountTourIdentity() {
   const accountId =
@@ -30,6 +31,7 @@ function getPromptStorageKey() {
 }
 
 function applyStepStorage(step = {}) {
+  if (isGenericNewQuoteRoute(step.route)) clearGenericNewQuoteContext();
   Object.entries(step.storage || {}).forEach(([key, value]) => {
     localStorage.setItem(key, value);
   });
@@ -83,7 +85,7 @@ function GuideOverlay({ currentPage = "", setPage }) {
 
   useEffect(() => {
     if (!activeStep?.route) return;
-    if (currentPage === activeStep.route) return;
+    if (currentPage === activeStep.route.split("?")[0]) return;
 
     applyStepStorage(activeStep);
     setPage(activeStep.route);

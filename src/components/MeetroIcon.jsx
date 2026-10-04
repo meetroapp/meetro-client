@@ -25,6 +25,7 @@ const ICON_ALIASES = {
   reviews: "reviewBubble",
   subscription: "creditCard",
   aiHelp: "sparkles",
+  assistant: "sparkles",
   opportunities: "target",
   currentJobs: "hammer",
   jobHistory: "historyClock",
@@ -76,6 +77,8 @@ const ICON_ALIASES = {
   legal: "docSearch",
   materials: "box",
   portfolio: "photos",
+  microphone: "microphone",
+  stopRecording: "stopRecording",
 };
 
 function SvgIcon({ type, titleId }) {
@@ -102,6 +105,20 @@ function SvgIcon({ type, titleId }) {
   };
 
   switch (type) {
+    case "microphone":
+      return (
+        <svg {...common}>
+          <rect x="8.2" y="3" width="7.6" height="12" rx="3.8" fill="currentColor" />
+          <path d="M5.8 11.5a6.2 6.2 0 0 0 12.4 0M12 17.7V21M8.8 21h6.4" {...stroke} />
+        </svg>
+      );
+    case "stopRecording":
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9.2" fill="currentColor" opacity="0.14" />
+          <rect x="7.7" y="7.7" width="8.6" height="8.6" rx="1.4" fill="currentColor" />
+        </svg>
+      );
     case "home":
       return (
         <svg {...common}>

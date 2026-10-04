@@ -1,0 +1,106 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+import { t } from "../src/utils/language.js";
+
+const dashboardSource = readFileSync(
+  new URL("../src/pages/ContractorDashboard.jsx", import.meta.url),
+  "utf8"
+);
+const backControlSource = readFileSync(
+  new URL("../src/components/WorkCenterBackButton.jsx", import.meta.url),
+  "utf8"
+);
+const invoiceSource = readFileSync(
+  new URL("../src/components/ProfessionalInvoiceWorkspace.jsx", import.meta.url),
+  "utf8"
+);
+const legacyPanelSource = readFileSync(
+  new URL("../src/components/LegacyWorkCenterReadOnlyPanel.jsx", import.meta.url),
+  "utf8"
+);
+const legacyAuthoritySource = readFileSync(
+  new URL("../src/utils/workCenterLegacyAuthority.js", import.meta.url),
+  "utf8"
+);
+
+test("Work Center child screens share one visible 44px Back control", () => {
+  assert.match(backControlSource, /className="work-center-back-control"/);
+  assert.match(backControlSource, /minHeight: "44px"/);
+  assert.match(backControlSource, /minWidth: "44px"/);
+  assert.match(backControlSource, /border: "1px solid/);
+  assert.match(backControlSource, /background: "var\(--meetro-surface-paper/);
+  assert.doesNotMatch(dashboardSource, /style=\{workCenterBackButton\}/);
+  assert.ok(
+    dashboardSource.match(/<WorkCenterBackButton/g)?.length >= 8,
+    "expected shared Back control across Work Center child workspaces"
+  );
+});
+
+test("Invoice Work Center header begins below the iOS safe area with status-bar breathing room", () => {
+  assert.match(invoiceSource, /className="work-center-invoice-safe-header"/);
+  assert.match(invoiceSource, /paddingTop: "max\(8px, calc\(env\(safe-area-inset-top, 0px\) \+ 8px\)\)"/);
+  assert.match(invoiceSource, /width: "100%"/);
+  assert.match(invoiceSource, /maxWidth: "100%"/);
+  assert.match(invoiceSource, /boxSizing: "border-box"/);
+
+  for (const viewportWidth of [390, 393, 430]) {
+    assert.ok(44 <= viewportWidth, `${viewportWidth}px keeps the full 44px Back target`);
+  }
+});
+
+test("ordinary workspaces return to Work Center while Job Overview returns to Current Jobs", () => {
+  assert.match(dashboardSource, /label=\{translate\("backToWorkCenter", activeLanguage\)\}[\s\S]*onClick=\{returnToWorkCenterDashboard\}/);
+  assert.match(dashboardSource, /translate\("workCenterBackToJobs", activeLanguage\)/);
+  assert.equal(t("workCenterBackToJobs", "en"), "Back to Current Jobs");
+  assert.equal(t("workCenterBackToJobs", "es"), "Volver a trabajos actuales");
+  assert.equal(t("workCenterBackToJobs", "fr"), "Retour aux travaux en cours");
+  assert.equal(t("workCenterBackToJobs", "pt-BR"), "Voltar aos trabalhos atuais");
+  assert.equal(t("backToWorkCenter", "en"), "Back to Work Center");
+  assert.match(
+    dashboardSource,
+    /const returnTab = isJobHistoryMode \? "jobHistory" : "currentJobs";[\s\S]*setJobMenuTab\(isJobHistoryMode \? "history" : "current"\)/
+  );
+  assert.match(dashboardSource, /openCanonicalWorkCenterConversation/);
+});
+
+test("legacy compatibility remains contained and uses the shared Back control", () => {
+  assert.match(legacyPanelSource, /<WorkCenterBackButton/);
+  assert.doesNotMatch(legacyPanelSource, /minHeight: "42px"/);
+  assert.match(legacyAuthoritySource, /"active"/);
+  assert.match(legacyAuthoritySource, /CONTAINED_LEGACY_SURFACES/);
+  assert.match(dashboardSource, /isLegacyWorkCenterCommandSurfaceContained\(activeTab\)/);
+});
+
+test("simplified Work Center copy is localized in every supported language", () => {
+  for (const language of ["en", "es", "fr", "pt-BR"]) {
+    for (const key of [
+      "workCenterNewRequestsThatNeedADecision",
+      "workCenterAcceptedWorkThatStillNeedsAction",
+      "workCenterUpcomingVisitsAndAppointments",
+      "workCenterProposalsThatNeedReviewOrResponse",
+      "workCenterClosedJobsAndSavedRecords",
+      "workCenterPaymentsBalancesAndClosedJobs",
+      "workCenterReview",
+      "workCenterContinue",
+    ]) {
+      assert.ok(t(key, language), `${key} missing for ${language}`);
+    }
+  }
+});
+
+test("Communication Center return stays governed and localized", () => {
+  assert.match(
+    dashboardSource,
+    /\["notifications", "customerRelationshipsCenter", "messagesInbox"\]\.includes\(workCenterJobReturnSurface\)/
+  );
+  assert.match(
+    dashboardSource,
+    /workCenterJobReturnSurface === "messagesInbox"[\s\S]*wc52backToCommunicationCenter/
+  );
+
+  assert.equal(t("wc52backToCommunicationCenter", "en"), "Back to Communication Center");
+  assert.equal(t("wc52backToCommunicationCenter", "es"), "Volver al Centro de Comunicación");
+  assert.equal(t("wc52backToCommunicationCenter", "fr"), "Retour au centre de communication");
+  assert.equal(t("wc52backToCommunicationCenter", "pt-BR"), "Voltar ao Centro de Comunicação");
+});

@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import {
+  getAppSidebarWidth,
   getCurrentAppLayoutMetrics,
   startAppLayoutCoordinator,
   subscribeAppLayoutMetrics,
@@ -52,7 +53,7 @@ function createCoordinatorEnvironment(width = 768, height = 1024) {
   const visualEvents = createEventTarget();
   const frames = new Map();
   let nextFrame = 1;
-  let sidebarRight = width >= 1180 ? 266 : Math.max(202, width * 0.27 - 18);
+  let renderedSidebarWidth = getAppSidebarWidth(width);
   const safeArea = { top: 0, right: 0, bottom: 0, left: 0 };
   const rootProperties = new Map();
   const root = {
@@ -61,7 +62,10 @@ function createCoordinatorEnvironment(width = 768, height = 1024) {
   };
   const documentElement = { clientWidth: width, clientHeight: height };
   const sidebar = {
-    getBoundingClientRect: () => ({ width: Math.max(0, sidebarRight - 18), right: sidebarRight }),
+    getBoundingClientRect: () => ({
+      width: renderedSidebarWidth,
+      right: renderedSidebarWidth,
+    }),
   };
   const documentObject = {
     documentElement,
@@ -146,7 +150,7 @@ function createCoordinatorEnvironment(width = 768, height = 1024) {
     windowObject.innerHeight = nextHeight;
     visualViewport.width = nextWidth;
     visualViewport.height = nextHeight;
-    sidebarRight = nextWidth >= 1180 ? 266 : Math.max(202, nextWidth * 0.27 - 18);
+    renderedSidebarWidth = getAppSidebarWidth(nextWidth);
   }
 
   return {
@@ -158,8 +162,8 @@ function createCoordinatorEnvironment(width = 768, height = 1024) {
     safeArea,
     flushFrames,
     resize,
-    setSidebarRight(value) {
-      sidebarRight = value;
+    setRenderedSidebarWidth(value) {
+      renderedSidebarWidth = value;
     },
     triggerResizeObserver() {
       resizeObserver.trigger();
@@ -183,10 +187,17 @@ test("central coordinator recomputes portrait landscape and repeated rotations",
 
   environment.flushFrames();
   assert.equal(getCurrentAppLayoutMetrics().layoutWidth, 768);
-  assert.equal(getCurrentAppLayoutMetrics().layoutMode, "mobile");
-  assert.equal(getCurrentAppLayoutMetrics().sidebarWidth, 0);
+  assert.equal(getCurrentAppLayoutMetrics().layoutMode, "tablet");
+  assert.equal(getCurrentAppLayoutMetrics().sidebarWidth, getAppSidebarWidth(768));
   assert.equal(getCommunicationLayout(getCurrentAppLayoutMetrics()).columns, 1);
-  assert.equal(environment.root.dataset.appLayout, "mobile");
+  assert.equal(environment.root.dataset.appLayout, "tablet");
+
+  environment.resize(1024, 768);
+  environment.windowObject.emit("orientationchange");
+  environment.flushFrames();
+  assert.equal(getCurrentAppLayoutMetrics().layoutMode, "tablet");
+  assert.equal(getCurrentAppLayoutMetrics().sidebarWidth, getAppSidebarWidth(1024));
+  assert.ok(getCurrentAppLayoutMetrics().contentWidth > 700);
 
   environment.resize(1180, 820);
   environment.windowObject.emit("orientationchange");
@@ -203,7 +214,8 @@ test("central coordinator recomputes portrait landscape and repeated rotations",
   environment.windowObject.emit("orientationchange");
   environment.flushFrames();
   assert.equal(getCurrentAppLayoutMetrics().layoutWidth, 768);
-  assert.equal(getCurrentAppLayoutMetrics().layoutMode, "mobile");
+  assert.equal(getCurrentAppLayoutMetrics().layoutMode, "tablet");
+  assert.equal(getCurrentAppLayoutMetrics().sidebarWidth, getAppSidebarWidth(768));
   assert.equal(getCommunicationLayout(getCurrentAppLayoutMetrics()).columns, 1);
   assert.ok(observed.length >= 4);
 
@@ -211,7 +223,7 @@ test("central coordinator recomputes portrait landscape and repeated rotations",
   unsubscribeMetrics();
 });
 
-test("Stage Manager Split View visual viewport safe area and sidebar changes republish metrics", () => {
+test("Stage Manager Split View republishes safe area changes without sidebar measurement feedback", () => {
   const environment = createCoordinatorEnvironment(1180, 820);
   const stop = startAppLayoutCoordinator({
     root: environment.root,
@@ -225,14 +237,14 @@ test("Stage Manager Split View visual viewport safe area and sidebar changes rep
   environment.resize(900, 820);
   environment.windowObject.emit("resize");
   environment.flushFrames();
-  assert.equal(getCurrentAppLayoutMetrics().layoutMode, "mobile");
-  assert.equal(getCurrentAppLayoutMetrics().tabletMode, false);
-  assert.equal(getCurrentAppLayoutMetrics().sidebarWidth, 0);
+  assert.equal(getCurrentAppLayoutMetrics().layoutMode, "tablet");
+  assert.equal(getCurrentAppLayoutMetrics().tabletMode, true);
+  assert.ok(getCurrentAppLayoutMetrics().sidebarWidth > 0);
 
   environment.windowObject.visualViewport.width = 760;
   environment.windowObject.visualViewport.emit("resize");
   environment.flushFrames();
-  assert.equal(getCurrentAppLayoutMetrics().contentWidth, 760);
+  assert.ok(getCurrentAppLayoutMetrics().contentWidth < 760);
 
   environment.safeArea.left = 12;
   environment.safeArea.right = 8;
@@ -244,17 +256,54 @@ test("Stage Manager Split View visual viewport safe area and sidebar changes rep
   assert.equal(getCurrentAppLayoutMetrics().safeAreaRight, 8);
   assert.equal(getCurrentAppLayoutMetrics().visualOffsetLeft, 4);
   assert.equal(getCurrentAppLayoutMetrics().visualOffsetTop, 6);
-  assert.equal(getCurrentAppLayoutMetrics().layoutMode, "mobile");
+  assert.equal(getCurrentAppLayoutMetrics().layoutMode, "tablet");
 
   environment.resize(1180, 820);
   environment.windowObject.emit("resize");
   environment.flushFrames();
-  const previousContentWidth = getCurrentAppLayoutMetrics().contentWidth;
-  environment.setSidebarRight(182);
-  environment.triggerResizeObserver();
-  environment.flushFrames();
-  assert.ok(getCurrentAppLayoutMetrics().contentWidth > previousContentWidth);
+  const expectedSidebarWidth = getAppSidebarWidth(1180);
+  const expectedContentWidth = getCurrentAppLayoutMetrics().contentWidth;
+  environment.setRenderedSidebarWidth(expectedSidebarWidth + 72);
+  for (let index = 0; index < 3; index += 1) {
+    environment.triggerResizeObserver();
+    environment.flushFrames();
+  }
+  assert.equal(getCurrentAppLayoutMetrics().sidebarWidth, expectedSidebarWidth);
+  assert.equal(getCurrentAppLayoutMetrics().contentWidth, expectedContentWidth);
   assert.equal(environment.root.dataset.appLayout, "desktop");
+
+  stop();
+});
+
+test("iPad sidebar and main canvas remain stable through both rotation directions", () => {
+  const environment = createCoordinatorEnvironment(1024, 1366);
+  const stop = startAppLayoutCoordinator({
+    root: environment.root,
+    windowObject: environment.windowObject,
+    documentObject: environment.documentObject,
+    capacitor: { isNativePlatform: () => true, getPlatform: () => "ios" },
+    ResizeObserverClass: environment.TestResizeObserver,
+  });
+
+  const assertLayout = (width, height) => {
+    environment.resize(width, height);
+    environment.windowObject.emit("orientationchange");
+    environment.flushFrames();
+    const metrics = getCurrentAppLayoutMetrics();
+    const expectedSidebarWidth = getAppSidebarWidth(width);
+    assert.equal(metrics.sidebarWidth, expectedSidebarWidth);
+    assert.equal(metrics.contentWidth, width - expectedSidebarWidth);
+    assert.ok(metrics.sidebarWidth <= 284);
+    assert.ok(metrics.contentWidth > metrics.sidebarWidth * 2);
+  };
+
+  environment.flushFrames();
+  assertLayout(1024, 1366);
+  assertLayout(1366, 1024);
+  assertLayout(1024, 1366);
+  assertLayout(1366, 1024);
+  assertLayout(1024, 1366);
+  assertLayout(1366, 1024);
 
   stop();
 });

@@ -1,0 +1,1213 @@
+import { t } from "../utils/language.js";
+import { proposeDepositInstruction } from "../utils/depositInstruction.js";
+import { useEffect, useMemo, useState } from "react";
+
+import BottomNav from "./BottomNav.jsx";
+import ProfessionalDepositCard from "./ProfessionalDepositCard.jsx";
+import {
+  createBusinessDocumentDraft,
+  createBusinessDocumentSaveKey,
+  deliverBusinessDocumentDraft,
+  getBusinessDocumentCustomerPdf,
+  listBusinessDocumentDeliveries,
+  listBusinessDocumentDrafts,
+  updateBusinessDocumentDraft,
+} from "../utils/businessDocumentDraftApi.js";
+import {
+  downloadBusinessDocumentPdfArtifact,
+  previewBusinessDocumentPdfArtifact,
+} from "../utils/businessDocumentDeviceShare.js";
+import {
+  assignBusinessContactRole,
+  createBusinessContact,
+  createBusinessContactCommandKey,
+  createDeterministicBusinessContactKey,
+  getBusinessContact,
+  getBusinessContactActiveRoles,
+  listBusinessContacts,
+  loadBusinessContactProfileId,
+} from "../utils/businessContactsApi.js";
+import {
+  createBusinessCustomerRelationshipCommandKey,
+  establishBusinessCustomerRelationship,
+  getBusinessCustomerRelationshipByContact,
+} from "../utils/businessCustomerRelationshipsApi.js";
+import {
+  applyBusinessContactToDocumentSnapshot,
+  businessContactDisplayName,
+  businessDocumentCustomerState,
+  filterBusinessDocumentCustomerContacts,
+  findBusinessContactDuplicateCandidates,
+  hasBusinessDocumentCustomerSnapshot,
+  normalizeBusinessDocumentCustomerParty,
+} from "../utils/businessDocumentCustomerParty.js";
+import {
+  fetchProfessionalPreWorkDeposit,
+  formatDepositMoney,
+} from "../utils/preWorkDepositApi.js";
+
+function today() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function initialContent(job, quote) {
+  return {
+    customerName: quote?.customerName || job?.customerName || "",
+    customerEmail: quote?.customerEmail || "",
+    customerPhone: quote?.customerPhone || "",
+    customerAddress: quote?.customerAddress || job?.customerAddress || "",
+    customerLocation: quote?.customerLocation || job?.location || "",
+    serviceLocation:
+      quote?.serviceLocation ||
+      quote?.customerLocation ||
+      job?.location ||
+      "",
+    projectTitle: quote?.projectTitle || job?.title || "",
+    projectDescription: quote?.projectDescription || "",
+    recommendedSolution:
+      quote?.recommendedSolution ||
+      quote?.projectDescription ||
+      "",
+    quoteReference: quote?.quoteNumber || "",
+    dueDate: "",
+    notes: "Thank you for approving the work.",
+    paymentInstructions: quote?.paymentTerms || quote?.terms || "",
+    customerMessage: "Please review this deposit request. Payment is required before scheduling can begin.",
+  };
+}
+
+function quoteCarryoverContent(current, job, quote) {
+  const source = initialContent(job, quote);
+
+  return {
+    ...current,
+    customerName: source.customerName,
+    customerEmail: source.customerEmail,
+    customerPhone: source.customerPhone,
+    customerAddress: source.customerAddress,
+    customerLocation: source.customerLocation,
+    serviceLocation: source.serviceLocation,
+    projectTitle: source.projectTitle,
+    projectDescription: source.projectDescription,
+    recommendedSolution: source.recommendedSolution,
+    quoteReference: source.quoteReference,
+    paymentInstructions:
+      String(current?.paymentInstructions || "").trim() ||
+      source.paymentInstructions,
+  };
+}
+
+function documentPayload({ jobId, paymentRequirementId, content, customerParty }) {
+  return {
+    documentType: "DEPOSIT_REQUEST",
+    jobId,
+    paymentRequirementId,
+    content,
+    workspace: {
+      activeDocument: "DEPOSIT_REQUEST",
+      instructions: [],
+      manualOverrides: {},
+      privateReminders: [],
+    },
+    photos: [],
+    customerParty: customerParty || null,
+  };
+}
+
+
+function deliveryLabel(deliveries) {
+  const latest = deliveries[0] || null;
+  const successful = deliveries.some((item) => ["SENT", "DELIVERY_REQUESTED"].includes(item.state));
+  if (latest?.state === "FAILED") return "Retry Send";
+  if (successful) return "Resend Deposit Request";
+  return "Send Deposit Request";
+}
+
+export default function DepositRequestWorkspace({ setPage, job = {}, quote = {}, onDocumentChange }) {
+  const [phase, setPhase] = useState("loading");
+  const [error, setError] = useState("");
+  const [notice, setNotice] = useState("");
+  const [deposit, setDeposit] = useState(null);
+  const [document, setDocument] = useState(null);
+  const [content, setContent] = useState(() => initialContent(job, quote));
+  const [baseline, setBaseline] = useState(() => initialContent(job, quote));
+  const [instruction, setInstruction] = useState("");
+  const [proposal, setProposal] = useState(null);
+  const [deliveries, setDeliveries] = useState([]);
+  const [busy, setBusy] = useState(false);
+  const [review, setReview] = useState(null);
+  const [mobilePane, setMobilePane] = useState("details");
+  const [customerParty, setCustomerParty] = useState(() =>
+    normalizeBusinessDocumentCustomerParty(quote?.customerParty)
+  );
+  const [linkedContact, setLinkedContact] = useState(null);
+  const [businessProfileId, setBusinessProfileId] = useState(null);
+  const [customerControl, setCustomerControl] = useState({
+    open: false,
+    mode: "choose",
+    search: "",
+    contacts: [],
+    selectedId: "",
+    busy: false,
+    error: "",
+    duplicateCandidates: [],
+    duplicateConfirmed: false,
+    partyType: "PERSON",
+  });
+
+  const jobId = job?.id || "";
+  const jobLinked = Boolean(job?.customerLinkedFromJob || job?.relationshipId);
+  const dirty = JSON.stringify(content) !== JSON.stringify(baseline);
+  const authority = deposit;
+  const eligible = Boolean(
+    authority && ["DUE", "PARTIALLY_SATISFIED"].includes(authority.state) &&
+      authority.remainingMinor > 0
+  );
+  const invoiceAllowed = Boolean(
+    !authority || ["NOT_REQUIRED", "SATISFIED"].includes(authority.state)
+  );
+  const depositGateCleared = Boolean(
+    authority && ["NOT_REQUIRED", "SATISFIED"].includes(authority.state)
+  );
+  const depositSatisfied = authority?.state === "SATISFIED";
+
+  useEffect(() => {
+    let active = true;
+    const readPromise = jobId
+      ? fetchProfessionalPreWorkDeposit({ jobId, setPage })
+      : Promise.resolve({
+          code: "PREPARATION_ONLY",
+          preparation: true,
+          preparationMessage: "Save and approve a Quote with a deposit requirement before sending this request.",
+          deposit: null,
+        });
+    const draftsPromise = listBusinessDocumentDrafts({ type: "DEPOSIT_REQUEST", setPage })
+      .catch(() => []);
+    void Promise.all([
+      readPromise,
+      draftsPromise,
+    ]).then(async ([read, documents]) => {
+      if (!active) return;
+      const exact = documents.find((candidate) =>
+        candidate.jobId === jobId &&
+        read.deposit?.obligationId &&
+        candidate.paymentRequirementId === read.deposit.obligationId
+      ) || null;
+      const nextContent = quoteCarryoverContent(
+        exact?.content || initialContent(job, quote),
+        job,
+        quote
+      );
+      const history = exact
+        ? await listBusinessDocumentDeliveries({ draftId: exact.id, setPage }).catch(() => [])
+        : [];
+      if (!active) return;
+      const nextParty = normalizeBusinessDocumentCustomerParty(
+        quote?.customerParty || exact?.customerParty
+      );
+      setDeposit(read.deposit || null);
+      setDocument(exact);
+      setCustomerParty(nextParty);
+      setContent(nextContent);
+      setBaseline(nextContent);
+      setDeliveries(history);
+      setPhase("ready");
+      if (nextParty) {
+        try {
+          setLinkedContact(await getBusinessContact({
+            contactId: nextParty.businessContactId,
+            setPage,
+          }));
+        } catch {
+          setLinkedContact(null);
+        }
+      }
+      if (read.preparation) {
+        setNotice(read.preparationMessage || "Approval is required before a Deposit Request can be sent.");
+      }
+    }).catch((reason) => {
+      if (!active) return;
+      setError(reason?.message || "The exact deposit requirement could not be loaded.");
+      setPhase("error");
+    });
+    return () => { active = false; };
+  }, [jobId, setPage]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const money = useMemo(() => {
+    if (!authority || !["DUE", "PARTIALLY_SATISFIED", "SATISFIED"].includes(authority.state)) return null;
+    return {
+      project: formatDepositMoney(authority.quoteTotalMinor, authority.currency),
+      requested: formatDepositMoney(authority.requiredMinor, authority.currency),
+      after: formatDepositMoney(authority.quoteTotalMinor - authority.requiredMinor, authority.currency),
+      received: formatDepositMoney(authority.appliedMinor, authority.currency),
+      needed: formatDepositMoney(authority.remainingMinor, authority.currency),
+    };
+  }, [authority]);
+
+  const depositPreviewStatus = depositSatisfied
+    ? {
+        label: "Deposit satisfied",
+        title: "Deposit already received",
+        detail: money
+          ? `${money.received} received · ${money.needed} still needed`
+          : "Payment has been recorded.",
+        guidance: "No Deposit Request needs to be sent.",
+      }
+    : authority?.state === "PARTIALLY_SATISFIED"
+      ? {
+          label: "Partially paid",
+          title: "Deposit partially received",
+          detail: money
+            ? `${money.received} received · ${money.needed} still needed`
+            : "A partial payment has been recorded.",
+          guidance:
+            "The remaining deposit is still required before the deposit gate clears.",
+        }
+      : authority?.state === "DUE"
+        ? {
+            label: "Payment needed",
+            title: "Deposit payment required",
+            detail: money
+              ? `${money.requested} requested · ${money.needed} still needed`
+              : "The approved Quote requires a deposit.",
+            guidance:
+              "Send the Deposit Request when you are ready to request payment.",
+          }
+        : authority?.state === "NOT_REQUIRED"
+          ? {
+              label: "No deposit required",
+              title: "No pre-work deposit required",
+              detail: "This approved Quote does not require a deposit.",
+              guidance: "No Deposit Request is needed for this Quote.",
+            }
+          : {
+              label: "Preparation only",
+              title: "Deposit Request not ready",
+              detail: t("wc52depositUnavailable"),
+              guidance:
+                "An approved Quote with an unpaid deposit requirement is required before sending.",
+            };
+
+  const customerState = businessDocumentCustomerState({
+    jobLinked,
+    customerParty,
+    linkedContact,
+  });
+  const visibleCustomerContacts = filterBusinessDocumentCustomerContacts(
+    customerControl.contacts,
+    customerControl.search
+  );
+  const selectedCustomer = customerControl.contacts.find(
+    (contact) => contact.id === customerControl.selectedId
+  );
+
+  function updateCustomerControl(patch) {
+    setCustomerControl((current) => ({ ...current, ...patch }));
+  }
+
+  async function resolveBusinessProfileId() {
+    if (businessProfileId) return businessProfileId;
+    const id = await loadBusinessContactProfileId({ setPage });
+    setBusinessProfileId(id);
+    return id;
+  }
+
+  async function openCustomerControl(mode) {
+    updateCustomerControl({
+      open: true,
+      mode,
+      search: "",
+      selectedId: "",
+      busy: true,
+      error: "",
+      duplicateCandidates: [],
+      duplicateConfirmed: false,
+    });
+    try {
+      const contractorProfileId = await resolveBusinessProfileId();
+      const contacts = await listBusinessContacts({
+        contractorProfileId,
+        status: "ACTIVE",
+        setPage,
+      });
+      updateCustomerControl({ contacts, busy: false });
+    } catch (reason) {
+      updateCustomerControl({
+        busy: false,
+        error: reason?.message || "Saved customer contacts are unavailable.",
+      });
+    }
+  }
+
+  async function resolveCustomerRelationship(contact) {
+    const existing = await getBusinessCustomerRelationshipByContact({
+      businessContactId: contact.id,
+      setPage,
+    });
+    if (existing) return existing;
+    return establishBusinessCustomerRelationship({
+      contractorProfileId: await resolveBusinessProfileId(),
+      businessContactId: contact.id,
+      idempotencyKey: createBusinessCustomerRelationshipCommandKey(),
+      setPage,
+    });
+  }
+
+  async function applyCustomer(contact) {
+    if (!contact) return;
+    updateCustomerControl({ busy: true, error: "" });
+    try {
+      const relationship = await resolveCustomerRelationship(contact);
+      const party = normalizeBusinessDocumentCustomerParty({
+        businessContactId: contact.id,
+        customerRelationshipId: relationship.id,
+      });
+      const nextContent = applyBusinessContactToDocumentSnapshot({
+        content,
+        contact,
+        replace: !hasBusinessDocumentCustomerSnapshot(content),
+      });
+      setContent(nextContent);
+      setCustomerParty(party);
+      setLinkedContact(contact);
+      if (eligible) {
+        await save({ contentOverride: nextContent, customerPartyOverride: party });
+      }
+      updateCustomerControl({ open: false, busy: false });
+      setNotice(eligible
+        ? "External customer linked to this Deposit Request."
+        : "External customer selected. It will be linked when the request becomes eligible to save.");
+    } catch (reason) {
+      updateCustomerControl({ busy: false, error: reason?.message || "The external customer could not be linked." });
+    }
+  }
+
+  async function createExternalCustomer({ bypassDuplicates = false } = {}) {
+    if (!String(content.customerName || "").trim()) {
+      updateCustomerControl({ error: "Enter a customer name before creating an external customer." });
+      return;
+    }
+    const duplicates = findBusinessContactDuplicateCandidates(customerControl.contacts, content);
+    if (duplicates.length && !bypassDuplicates && !customerControl.duplicateConfirmed) {
+      updateCustomerControl({ duplicateCandidates: duplicates, error: "A matching saved customer exists. Choose it or confirm creation." });
+      return;
+    }
+    updateCustomerControl({ busy: true, error: "", duplicateCandidates: [] });
+    const createKey = createBusinessContactCommandKey();
+    try {
+      const contractorProfileId = await resolveBusinessProfileId();
+      const created = await createBusinessContact({
+        contractorProfileId,
+        partyType: customerControl.partyType,
+        displayName: content.customerName,
+        companyName: customerControl.partyType === "ORGANIZATION" ? content.customerName : undefined,
+        email: content.customerEmail,
+        phone: content.customerPhone,
+        address: content.customerAddress || content.customerLocation,
+        idempotencyKey: createKey,
+        setPage,
+      });
+      let contact = created.contact;
+      if (!getBusinessContactActiveRoles(contact).includes("CUSTOMER")) {
+        contact = await assignBusinessContactRole({
+          contactId: contact.id,
+          expectedVersion: contact.version,
+          role: "CUSTOMER",
+          idempotencyKey: createDeterministicBusinessContactKey(`${createKey}:assign:CUSTOMER`),
+          setPage,
+        });
+      }
+      const relationship = await resolveCustomerRelationship(contact);
+      const party = normalizeBusinessDocumentCustomerParty({
+        businessContactId: contact.id,
+        customerRelationshipId: relationship.id,
+      });
+      setCustomerParty(party);
+      setLinkedContact(contact);
+      if (eligible) {
+        await save({ customerPartyOverride: party });
+      }
+      updateCustomerControl({ open: false, busy: false, duplicateConfirmed: false });
+      setNotice(eligible
+        ? "External customer created and linked to this Deposit Request."
+        : t("wc52depositCustomerCreated"));
+    } catch (reason) {
+      updateCustomerControl({ busy: false, error: reason?.message || "The external customer could not be created." });
+    }
+  }
+
+  async function save({ contentOverride = content, customerPartyOverride = customerParty } = {}) {
+    if (!deposit?.obligationId || !eligible) {
+      throw new Error("This Deposit Request is preparation-only until an approved Quote creates an unpaid deposit requirement. Nothing was sent.");
+    }
+    const payload = documentPayload({
+      jobId,
+      paymentRequirementId: deposit.obligationId,
+      content: contentOverride,
+      customerParty: customerPartyOverride,
+    });
+    const saved = document
+      ? await updateBusinessDocumentDraft({
+          draftId: document.id,
+          expectedVersion: document.version,
+          payload,
+          idempotencyKey: createBusinessDocumentSaveKey(),
+          setPage,
+        })
+      : await createBusinessDocumentDraft({
+          payload,
+          idempotencyKey: createBusinessDocumentSaveKey(),
+          setPage,
+        });
+    setDocument(saved);
+    setContent(saved.content);
+    setBaseline(saved.content);
+    setDeposit((current) => current || saved.depositRequestAuthority);
+    setNotice("Deposit Request draft saved. Nothing was sent and no payment was created.");
+    return saved;
+  }
+
+  async function saveClick() {
+    setBusy(true);
+    setError("");
+    try { await save(); } catch (reason) { setError(reason?.message || "The Deposit Request could not be saved."); }
+    finally { setBusy(false); }
+  }
+
+  function propose() {
+    const patch = proposeDepositInstruction(instruction);
+    if (!patch) return;
+    setProposal(patch);
+  }
+
+  async function beginDelivery() {
+    if (!eligible) {
+      setError(t("wc52depositSendLocked"));
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const saved = !document || dirty ? await save() : document;
+      setReview({
+        document: saved,
+        channel: saved.content.customerEmail ? "EMAIL" : "MEETRO_MESSAGE",
+        recipientEmail: saved.content.customerEmail || "",
+        subject: `Deposit Request ${saved.reference}`,
+        customerMessage: saved.content.customerMessage || "Please review this deposit request.",
+      });
+    } catch (reason) {
+      setError(reason?.message || "The exact saved request could not be prepared for review.");
+    } finally { setBusy(false); }
+  }
+
+  async function send() {
+    if (!eligible || !review?.document) return;
+    setBusy(true);
+    setError("");
+    try {
+      const delivery = await deliverBusinessDocumentDraft({
+        draftId: review.document.id,
+        expectedVersion: review.document.version,
+        channel: review.channel,
+        recipientEmail: review.recipientEmail,
+        subject: review.subject,
+        customerMessage: review.customerMessage,
+        idempotencyKey: createBusinessDocumentSaveKey(),
+        setPage,
+      });
+      const history = await listBusinessDocumentDeliveries({ draftId: review.document.id, setPage });
+      setDeliveries(history);
+      setReview(null);
+      setNotice(delivery.state === "FAILED"
+        ? "Delivery failed. The request remains saved and no payment was created."
+        : "Deposit Request sent. The requirement remains unpaid until real payment is verified.");
+    } catch (reason) {
+      if (document) {
+        try { setDeliveries(await listBusinessDocumentDeliveries({ draftId: document.id, setPage })); } catch { /* keep delivery error */ }
+      }
+      setError(reason?.message || "The Deposit Request was not sent.");
+      setReview(null);
+    } finally { setBusy(false); }
+  }
+
+  async function pdf(action) {
+    if (!eligible) {
+      setError(t("wc52depositPdfLocked"));
+      return;
+    }
+    if (!document || dirty) {
+      setError("Save the exact request version before opening its customer PDF.");
+      return;
+    }
+    setBusy(true);
+    try {
+      const artifact = await getBusinessDocumentCustomerPdf({
+        draftId: document.id,
+        expectedVersion: document.version,
+        documentType: document.documentType,
+        reference: document.reference,
+        setPage,
+      });
+      if (action === "preview") {
+        const opened =
+          await previewBusinessDocumentPdfArtifact(
+            artifact
+          );
+
+        if (!opened) {
+          setError(
+            "PDF preview is unavailable. Nothing was saved or sent."
+          );
+        }
+      } else {
+        downloadBusinessDocumentPdfArtifact(
+          artifact
+        );
+      }
+    } catch (reason) { setError(reason?.message || "The saved customer PDF is unavailable."); }
+    finally { setBusy(false); }
+  }
+
+  if (phase === "loading") return <div className="app-page meetro-form-page"><p role="status">Loading the exact deposit requirement…</p></div>;
+  if (phase === "error") {
+    return <div className="app-page meetro-form-page" role="alert"><h1>Deposit Request unavailable</h1><p>{error || "The Deposit Request workspace could not be loaded."}</p><button type="button" onClick={() => onDocumentChange("quote")}>Open Quote</button></div>;
+  }
+
+  return (
+    <div className="app-page meetro-wide-page business-document-workspace deposit-request-workspace">
+      <header className="business-document-header">
+        <span className="business-document-back" aria-hidden="true" style={{ visibility: "hidden", pointerEvents: "none" }} />
+        <div><div className="business-document-title-row"><h1>{content.projectTitle || "Deposit Request"}</h1><span>{depositSatisfied ? "Deposit satisfied" : authority?.state === "NOT_REQUIRED" ? "No deposit required" : eligible ? "Ready for review" : "Preparation only"}</span></div><p>{content.customerName ? `Customer: ${content.customerName}` : jobId ? "Customer carries forward from Quote" : "Quote not selected"}</p></div>
+        <div className="business-document-header-actions"><span>{document ? `Saved · v${document.version}` : "Not saved"}</span></div>
+      </header>
+
+      <nav className="business-document-tabs" aria-label="Business documents">
+        <button type="button" onClick={() => onDocumentChange("quote")}>Quote</button>
+        <button type="button" className="active" aria-current="page">Deposit Request</button>
+        <button
+          type="button"
+          disabled={!invoiceAllowed}
+          title={!invoiceAllowed ? "Record the required deposit before continuing to Invoice." : undefined}
+          onClick={() => onDocumentChange("invoice", {
+            depositGateCleared,
+            depositSatisfied,
+          })}
+        >
+          Invoice
+        </button>
+      </nav>
+
+      <div
+        className="business-document-mobile-switch deposit-request-mobile-switch"
+        role="tablist"
+        aria-label="Deposit Request view"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mobilePane === "details"}
+          onClick={() => setMobilePane("details")}
+        >
+          Details
+        </button>
+
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mobilePane === "preview"}
+          onClick={() => setMobilePane("preview")}
+        >
+          Preview
+        </button>
+      </div>
+
+      <main className="deposit-request-main">
+        <section
+          className={`deposit-request-panel deposit-request-editor ${
+            mobilePane === "details" ? "mobile-active" : ""
+          }`}
+          style={styles.assistant}
+          aria-label="Meetro-assisted Deposit Request review"
+        >
+          <div className="deposit-request-editor-scroll">
+          <h2>Prepare Deposit Request</h2>
+          <p>Review the Deposit Request created from the Quote. Customer, project, Quote reference, deposit amount, and payment terms carry forward automatically. Service address and approved scope are also included. This is a partial payment request toward the approved Quote, not a Final Invoice.</p>
+          <section
+            className="deposit-request-quote-source"
+            aria-label="Quote carryover"
+          >
+            <strong>Carried from Quote</strong>
+
+            <dl className="deposit-request-quote-source-summary">
+              <div>
+                <dt>Customer</dt>
+                <dd>{content.customerName || "Complete the Quote first"}</dd>
+              </div>
+
+              <div>
+                <dt>Project</dt>
+                <dd>{content.projectTitle || "Complete the Quote first"}</dd>
+              </div>
+
+              <div>
+                <dt>Quote</dt>
+                <dd>{content.quoteReference || "Approval pending"}</dd>
+              </div>
+
+              <div>
+                <dt>Quote version</dt>
+                <dd>{authority?.issuedQuoteVersion ? `Version ${authority.issuedQuoteVersion}` : "Approval pending"}</dd>
+              </div>
+
+              <div>
+                <dt>Service address</dt>
+                <dd>{content.serviceLocation || content.customerLocation || "Not confirmed"}</dd>
+              </div>
+
+              <div>
+                <dt>Approved scope</dt>
+                <dd>{content.recommendedSolution || content.projectDescription || "Not confirmed"}</dd>
+              </div>
+
+              <div>
+                <dt>Deposit terms</dt>
+                <dd>{
+                  authority?.depositRule?.type === "PERCENT" &&
+                  Number.isFinite(Number(authority.depositRule.percentBasisPoints))
+                    ? `${Number(authority.depositRule.percentBasisPoints) / 100}% of approved Quote`
+                    : authority?.depositRule?.type === "FIXED"
+                      ? "Fixed deposit amount"
+                      : "Pending approved Quote"
+                }</dd>
+              </div>
+
+              <div>
+                <dt>Deposit</dt>
+                <dd>{money?.requested || "Pending approved Quote"}</dd>
+              </div>
+            </dl>
+
+            <p>
+              Change the customer, project, or deposit terms on the Quote.
+              Deposit Request does not create a second customer or a second
+              deposit requirement.
+            </p>
+
+            {customerState === "DOCUMENT_ONLY_CUSTOMER" ? (
+              <small>
+                Use on this document only. No Contact, account, or relationship was created.
+              </small>
+            ) : null}
+          </section>
+
+          {jobId && authority?.quoteId ? (
+            <ProfessionalDepositCard
+              jobId={jobId}
+              quoteId={authority.quoteId}
+              setPage={setPage}
+              showRequestAction={false}
+              onCanonicalChange={(result) => {
+                setDeposit(result.deposit);
+                setError("");
+                setNotice(
+                  result.deposit.state === "SATISFIED"
+                    ? "Deposit payment recorded and satisfied. The governed deposit gate is cleared."
+                    : "Payment recorded. The remaining deposit is still required."
+                );
+              }}
+            />
+          ) : null}
+
+          {depositSatisfied ? (
+            <section
+              className="deposit-request-satisfied-editor-state"
+              data-satisfied={depositSatisfied}
+              aria-label="Satisfied deposit status"
+            >
+              <span>Payment status</span>
+              <strong>Deposit received in full</strong>
+              <p>
+                No additional Deposit Request is needed. The recorded payment
+                evidence above remains part of this Job history.
+              </p>
+            </section>
+          ) : (
+            <>
+              {proposal ? (
+                <div
+                  className="deposit-request-proposal"
+                  style={styles.proposal}
+                >
+                  <strong>Review proposed changes</strong>
+                  {Object.entries(proposal).map(([key, value]) => (
+                    <p key={key}>
+                      <b>{key.replace(/([A-Z])/g, " $1")}:</b> {value}
+                    </p>
+                  ))}
+                  <div style={styles.row}>
+                    <button
+                      type="button"
+                      onClick={() => setProposal(null)}
+                    >
+                      Dismiss
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setContent((current) => ({
+                          ...current,
+                          ...proposal,
+                        }));
+                        setProposal(null);
+                        setInstruction("");
+                      }}
+                    >
+                      Apply
+                    </button>
+                  </div>
+                </div>
+              ) : null}
+
+              <details className="deposit-request-customize">
+                <summary>Customize request wording</summary>
+
+                <div>
+                  <label>
+                    Due date
+                    <input
+                      type="date"
+                      min={today()}
+                      value={
+                        /^\d{4}-\d{2}-\d{2}$/.test(content.dueDate)
+                          ? content.dueDate
+                          : ""
+                      }
+                      onChange={(event) =>
+                        setContent({
+                          ...content,
+                          dueDate: event.target.value,
+                        })
+                      }
+                      style={styles.input}
+                    />
+                  </label>
+
+                  <label>
+                    Note
+                    <textarea
+                      rows={3}
+                      value={content.notes}
+                      onChange={(event) =>
+                        setContent({
+                          ...content,
+                          notes: event.target.value,
+                        })
+                      }
+                      style={styles.input}
+                    />
+                  </label>
+
+                  <label>
+                    Payment instructions
+                    <textarea
+                      rows={3}
+                      value={content.paymentInstructions}
+                      onChange={(event) =>
+                        setContent({
+                          ...content,
+                          paymentInstructions: event.target.value,
+                        })
+                      }
+                      style={styles.input}
+                    />
+                  </label>
+
+                  <label>
+                    Customer message
+                    <textarea
+                      rows={3}
+                      value={content.customerMessage}
+                      onChange={(event) =>
+                        setContent({
+                          ...content,
+                          customerMessage: event.target.value,
+                        })
+                      }
+                      style={styles.input}
+                    />
+                  </label>
+                </div>
+              </details>
+            </>
+          )}
+
+          {error ? <p role="alert" style={styles.error}>{error}</p> : null}
+          {notice ? <p role="status" style={styles.notice}>{notice}</p> : null}
+          </div>
+
+          {!depositSatisfied ? (
+            <div className="deposit-request-composer">
+              <textarea
+                rows={4}
+                value={instruction}
+                onChange={(event) => setInstruction(event.target.value)}
+                placeholder="Thank the customer and tell them how they can make the deposit."
+                style={styles.input}
+              />
+              <button
+                type="button"
+                onClick={propose}
+                disabled={!instruction.trim()}
+              >
+                Propose Change
+              </button>
+            </div>
+          ) : null}
+        </section>
+
+        <section
+          className={`deposit-request-panel deposit-request-preview ${
+            mobilePane === "preview" ? "mobile-active" : ""
+          }`}
+          style={styles.preview}
+          aria-label="Live Deposit Request Preview"
+        >
+          <header
+            className="deposit-request-preview-header"
+            style={styles.previewHeader}
+          >
+            <div>
+              <small>DEPOSIT REQUEST</small>
+              <h2>{document?.reference || "Draft"}</h2>
+            </div>
+            <span>Live preview</span>
+          </header>
+
+          <section
+            className="deposit-request-status-banner"
+            data-state={authority?.state || "PREPARATION"}
+            aria-label="Deposit status"
+          >
+            <div className="deposit-request-status-banner-heading">
+              <span>{depositPreviewStatus.label}</span>
+              <strong>{depositPreviewStatus.title}</strong>
+            </div>
+
+            <p className="deposit-request-status-amount">
+              {depositPreviewStatus.detail}
+            </p>
+
+            <p className="deposit-request-status-guidance">
+              {depositPreviewStatus.guidance}
+            </p>
+          </section>
+
+          <section className="deposit-request-preview-section deposit-request-preview-identity">
+            <header className="deposit-request-preview-section-heading">
+              <div>
+                <span>Request details</span>
+                <h3>Approved Quote</h3>
+              </div>
+            </header>
+
+            <dl className="deposit-request-document-summary">
+              <div>
+                <dt>Customer</dt>
+                <dd>{content.customerName || "Linked customer"}</dd>
+              </div>
+
+              <div>
+                <dt>Project</dt>
+                <dd>{content.projectTitle || "Linked Job"}</dd>
+              </div>
+
+              <div>
+                <dt>Approved Quote</dt>
+                <dd>
+                  {authority?.quoteReference ||
+                    content.quoteReference ||
+                    (authority ? "Verified approved Quote" : "Approval pending")}
+                </dd>
+              </div>
+
+              <div>
+                <dt>Quote version</dt>
+                <dd>
+                  {authority?.issuedQuoteVersion
+                    ? `Version ${authority.issuedQuoteVersion}`
+                    : "Approval pending"}
+                </dd>
+              </div>
+
+              <div>
+                <dt>Service address</dt>
+                <dd>
+                  {content.serviceLocation ||
+                    content.customerLocation ||
+                    "Not confirmed"}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          {money ? (
+            <section className="deposit-request-preview-section deposit-request-preview-financial">
+              <header className="deposit-request-preview-section-heading">
+                <div>
+                  <span>Financial snapshot</span>
+                  <h3>Deposit summary</h3>
+                </div>
+                <strong>{depositPreviewStatus.label}</strong>
+              </header>
+
+              <div className="deposit-request-money-grid">
+                <div className="deposit-request-money-card">
+                  <span>Project total</span>
+                  <strong>{money.project}</strong>
+                </div>
+
+                <div className="deposit-request-money-card">
+                  <span>Deposit requested</span>
+                  <strong>{money.requested}</strong>
+                </div>
+
+                <div className="deposit-request-money-card">
+                  <span>Received</span>
+                  <strong>{money.received}</strong>
+                </div>
+
+                <div className="deposit-request-money-card">
+                  <span>Still needed</span>
+                  <strong>{money.needed}</strong>
+                </div>
+
+                <div className="deposit-request-money-card deposit-request-money-card-wide">
+                  <span>Remaining project balance</span>
+                  <strong>{money.after}</strong>
+                </div>
+              </div>
+            </section>
+          ) : (
+            <section
+              className="deposit-request-preview-section deposit-request-preview-preparation"
+              role="status"
+            >
+              <header className="deposit-request-preview-section-heading">
+                <div>
+                  <span>Deposit status</span>
+                  <h3>
+                    {authority?.state === "NOT_REQUIRED"
+                      ? "No deposit required"
+                      : "Deposit not ready to send"}
+                  </h3>
+                </div>
+              </header>
+
+              <p>
+                {authority?.state === "NOT_REQUIRED"
+                  ? "This approved Quote has no pre-work deposit requirement."
+                  : "An approved Quote with an unpaid deposit requirement is required before sending a Deposit Request."}
+              </p>
+            </section>
+          )}
+
+          <section className="deposit-request-preview-section deposit-request-preview-scope">
+            <header className="deposit-request-preview-section-heading">
+              <div>
+                <span>Approved work</span>
+                <h3>Scope</h3>
+              </div>
+            </header>
+
+            <p>
+              {content.recommendedSolution ||
+                content.projectDescription ||
+                "Approved scope is not confirmed yet."}
+            </p>
+          </section>
+
+          <section className="deposit-request-preview-section deposit-request-preview-message">
+            <header className="deposit-request-preview-section-heading">
+              <div>
+                <span>Customer-facing details</span>
+                <h3>Request message</h3>
+              </div>
+            </header>
+
+            <dl className="deposit-request-message-list">
+              {depositSatisfied ? (
+                <>
+                  <div>
+                    <dt>Payment status</dt>
+                    <dd>Deposit received in full</dd>
+                  </div>
+
+                  {content.paymentInstructions ? (
+                    <div>
+                      <dt>Original payment instructions</dt>
+                      <dd>{content.paymentInstructions}</dd>
+                    </div>
+                  ) : null}
+
+                  {content.notes ? (
+                    <div>
+                      <dt>Note</dt>
+                      <dd>{content.notes}</dd>
+                    </div>
+                  ) : null}
+
+                  {content.customerMessage ? (
+                    <div className="deposit-request-historical-message">
+                      <dt>Original request message</dt>
+                      <dd>
+                        <span>{content.customerMessage}</span>
+                        <small>
+                          Historical wording · no longer active
+                        </small>
+                      </dd>
+                    </div>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  {content.dueDate ? (
+                    <div>
+                      <dt>Due date</dt>
+                      <dd>{content.dueDate}</dd>
+                    </div>
+                  ) : null}
+
+                  {content.paymentInstructions ? (
+                    <div>
+                      <dt>Payment instructions</dt>
+                      <dd>{content.paymentInstructions}</dd>
+                    </div>
+                  ) : null}
+
+                  {content.notes ? (
+                    <div>
+                      <dt>Note</dt>
+                      <dd>{content.notes}</dd>
+                    </div>
+                  ) : null}
+
+                  {content.customerMessage ? (
+                    <div>
+                      <dt>Customer message</dt>
+                      <dd>{content.customerMessage}</dd>
+                    </div>
+                  ) : null}
+                </>
+              )}
+            </dl>
+          </section>
+
+          {eligible ? (
+            <div className="deposit-request-actions">
+              <button
+                type="button"
+                onClick={saveClick}
+                disabled={busy || (document && !dirty)}
+              >
+                {busy ? "Working…" : "Save Draft"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void pdf("preview")}
+                disabled={!document || dirty || busy}
+              >
+                Preview PDF
+              </button>
+
+              <button
+                type="button"
+                onClick={() => void pdf("download")}
+                disabled={!document || dirty || busy}
+              >
+                Download PDF
+              </button>
+
+              <button
+                type="button"
+                onClick={beginDelivery}
+                disabled={busy}
+              >
+                {deliveryLabel(deliveries)}
+              </button>
+            </div>
+          ) : depositSatisfied ? (
+            <section
+              className="deposit-request-next-step"
+              aria-label="Deposit Request next step"
+            >
+              <span>Next step</span>
+              <strong>Deposit requirement is complete</strong>
+              <p>
+                {money
+                  ? `${money.after} remains on the approved project after the deposit.`
+                  : "The deposit requirement has been satisfied."}
+              </p>
+
+              <button
+                type="button"
+                onClick={() =>
+                  onDocumentChange("invoice", {
+                    depositGateCleared: true,
+                    depositSatisfied: true,
+                  })
+                }
+              >
+                Continue to Invoice
+              </button>
+            </section>
+          ) : (
+            <section
+              className="deposit-request-action-guidance"
+              aria-label="Deposit Request next step"
+            >
+              <strong>
+                {authority?.state === "NOT_REQUIRED"
+                  ? "No Deposit Request required"
+                  : "Deposit Request unavailable"}
+              </strong>
+
+              <p>
+                {authority?.state === "NOT_REQUIRED"
+                  ? "The approved Quote does not require a pre-work deposit."
+                  : "Complete the governed Quote and deposit requirement before saving or sending this request."}
+              </p>
+            </section>
+          )}
+
+          {deliveries.length ? <section><h3>Delivery history</h3><ul>{deliveries.map((item) => <li key={item.id}>{item.state === "FAILED" ? "Deposit request delivery failed" : item.channel === "EMAIL" ? "Deposit request emailed" : "Deposit request sent in Meetro"} · {new Date(item.requestedAt).toLocaleString()}</li>)}</ul></section> : null}
+        </section>
+      </main>
+
+      {review ? <div style={styles.overlay}><section role="dialog" aria-modal="true" aria-labelledby="deposit-send-review" style={styles.dialog}><h2 id="deposit-send-review">Review Deposit Request delivery</h2><p>This sends the exact saved request. It does not record payment or satisfy the deposit.</p><label>Channel<select value={review.channel} onChange={(event) => setReview({ ...review, channel: event.target.value })} style={styles.input}><option value="MEETRO_MESSAGE">Meetro Message</option><option value="EMAIL">Email with Meetro</option></select></label>{review.channel === "EMAIL" ? <label>Recipient email<input type="email" value={review.recipientEmail} onChange={(event) => setReview({ ...review, recipientEmail: event.target.value })} style={styles.input} /></label> : null}<label>Subject<input value={review.subject} onChange={(event) => setReview({ ...review, subject: event.target.value })} style={styles.input} /></label><label>Customer message<textarea rows={4} value={review.customerMessage} onChange={(event) => setReview({ ...review, customerMessage: event.target.value })} style={styles.input} /></label><div style={styles.row}><button type="button" onClick={() => setReview(null)} disabled={busy}>Cancel</button><button type="button" onClick={send} disabled={busy || (review.channel === "EMAIL" && !review.recipientEmail)}>{busy ? "Sending…" : deliveryLabel(deliveries)}</button></div></section></div> : null}
+      <BottomNav setPage={setPage} currentPage="quoteBuilder" />
+    </div>
+  );
+}
+
+const styles = {
+  assistant: { display: "grid", alignContent: "start", gap: 14, padding: 20, border: "1px solid #d9e4dc", borderRadius: 14, background: "#fff" },
+  preview: { display: "grid", alignContent: "start", gap: 18, padding: 28, border: "1px solid #cfdad2", borderRadius: 14, background: "#fff", boxShadow: "0 10px 32px rgba(20, 50, 32, .08)" },
+  previewHeader: { display: "flex", justifyContent: "space-between", borderBottom: "2px solid #173f2b", paddingBottom: 16 },
+  summary: { display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 10, margin: 0 },
+  money: { padding: 18, borderRadius: 12, background: "#f2f7f3" },
+  actions: { display: "flex", flexWrap: "wrap", gap: 8 },
+  customerSection: { display: "grid", gap: 8, padding: 14, border: "1px solid #d9e4dc", borderRadius: 10, background: "#f8fbf9" },
+  customerPanel: { display: "grid", gap: 10, padding: 12, border: "1px solid #b9c8bd", borderRadius: 8, background: "#fff" },
+  customerResults: { display: "grid", gap: 6, maxHeight: 180, overflow: "auto" },
+  preparation: { padding: 18, borderRadius: 12, background: "#fff7e6", border: "1px solid #e6c67a" },
+  row: { display: "flex", justifyContent: "flex-end", gap: 8 },
+  input: { width: "100%", boxSizing: "border-box", marginTop: 5, padding: 10, border: "1px solid #b9c8bd", borderRadius: 8 },
+  form: { display: "grid", gap: 12 },
+  proposal: { padding: 14, border: "1px solid #9dc9aa", borderRadius: 10, background: "#f1faf3" },
+  error: { color: "#9f1d20", fontWeight: 700 },
+  notice: { color: "#155d33", fontWeight: 700 },
+  overlay: { position: "fixed", inset: 0, zIndex: 8000, display: "grid", placeItems: "center", padding: 20, background: "rgba(7, 20, 12, .55)" },
+  dialog: { display: "grid", gap: 14, width: "min(100%, 540px)", maxHeight: "90vh", overflow: "auto", padding: 24, borderRadius: 14, background: "#fff" },
+};

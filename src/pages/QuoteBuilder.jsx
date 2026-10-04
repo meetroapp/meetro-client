@@ -1,6 +1,19 @@
-import { useEffect, useState } from "react";
+import { parseQuoteInvoiceSourceRoute, loadExactInvoiceSource, takeQuoteInvoiceInstruction } from "../utils/quoteToInvoice.js";
+import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
+import ContextualAskMeetro from "../components/ContextualAskMeetro";
 import MeetroIcon from "../components/MeetroIcon";
+import QuickQuoteConversation from "../components/QuickQuoteConversation.jsx";
+import UnifiedBusinessDocumentWorkspace from "../components/UnifiedBusinessDocumentWorkspace.jsx";
+import ProfessionalInvoiceWorkspace from "../components/ProfessionalInvoiceWorkspace.jsx";
+import { pickNativeJobPhoto } from "../utils/cameraPhotoPicker.js";
+import {
+  QUOTE_DRAFT_PHOTO_MAX_COUNT,
+  cleanupQuoteDraftPhoto,
+  isQuickQuoteDraftPhotoUploadEnabled,
+  uploadQuoteDraftPhotos,
+  validateQuoteDraftPhotoFile,
+} from "../utils/quoteDraftPhotoMedia.js";
 import { getLanguage, t } from "../utils/language";
 import { getWorkCenterContextReturnLabel } from "../utils/workCenterReturnLabels";
 import {
@@ -13,6 +26,84 @@ import {
   getConversationActionLabel,
 } from "../utils/conversationActionLanguage";
 import { getBusinessIdentityProjection } from "../utils/businessIdentity";
+import { getAskMeetroWorkflowCopy } from "../utils/askMeetroWorkflowLanguage";
+import {
+  INTELLIGENCE_OPERATION,
+  createIntelligenceKey,
+  recordQuoteCompositionReview,
+  recordWorkflowReview,
+  requestWorkflowIntelligence,
+} from "../utils/contextualIntelligence";
+import { applyConfirmedQuoteComposition } from "../utils/canonicalQuoteDraftCommands";
+import {
+  buildQuoteCompositionInput,
+  getSolutionReadyReviewElements,
+} from "../utils/quoteBuilderIntelligenceBoundary.js";
+import {
+  attachCustomerDocumentPhotoEvidence,
+  buildQuickQuoteDocumentModel,
+} from "../utils/customerDocumentModel";
+import {
+  downloadCustomerDocumentPdf,
+  getCustomerDocumentActionCopy,
+  previewCustomerDocumentPdfWithMedia,
+  shareCustomerDocumentPdf,
+} from "../utils/customerDocumentPdf";
+import { getQuickQuoteConversationCopy } from "../utils/quickQuoteConversationLanguage.js";
+import { getActiveJobSnapshot } from "../utils/workCenter.js";
+import { getQuickQuoteProfessionalContinuation } from "../utils/quickQuoteProfessionalContinuation.js";
+import {
+  buildQuickQuoteEstimateInput,
+  fetchAuthorizedProfessionalJobs,
+} from "../utils/professionalJobPicker.js";
+import {
+  buildJobLinkedQuotePrefill,
+  fetchJobLinkedQuoteContext,
+  jobLinkedQuoteHasExistingContent,
+  resolveJobLinkedSavedQuoteResume,
+} from "../utils/jobLinkedQuoteContext.js";
+import {
+  getBusinessDocumentDraft,
+  listBusinessDocumentDrafts,
+} from "../utils/businessDocumentDraftApi.js";
+import {
+  createCanonicalInvoice,
+  createInvoiceCommandKey,
+  fetchProfessionalJobInvoice,
+  fetchProfessionalInvoiceWorkspace,
+} from "../utils/invoicePaymentApi.js";
+import { resolveCompletedJobInvoiceHandoff } from "../utils/completedJobInvoiceHandoff.js";
+import {
+  fetchEffectiveApprovedInvoiceQuote,
+} from "../utils/invoiceReviewDraft.js";
+import { fetchCanonicalLiveJobProjection } from "../utils/canonicalLiveJobProjection.js";
+import {
+  bootstrapExactSavedQuote,
+  parseSavedQuoteRoute,
+  replaceSavedQuoteRoute,
+  resolveOwnedSavedQuotesForJob,
+} from "../utils/savedQuoteRoute.js";
+import { isGenericNewQuoteRoute, clearGenericNewQuoteContext } from "../utils/newQuoteCustomerSetup.js";
+import {
+  quoteCustomerPricingProjection,
+  quoteIndependentPaymentTerms,
+} from "../utils/quotePricingPresentation.js";
+import {
+  extractProfessionalCategoryCostCandidates,
+} from "../utils/quickQuoteProfessionalCategoryCosts.js";
+import {
+  analyzeQuickQuoteAnalysisSession,
+  appendQuickQuoteAnalysisEvidence,
+  applyQuickQuoteAnalysisExecutionToPresentationState,
+  createQuickQuoteAnalysisPresentationState,
+  createQuickQuoteAnalysisSession,
+  continueQuickQuoteAnalysisSession,
+  discardQuickQuoteAnalysisSession,
+  hydrateQuickQuoteAnalysisPresentationState,
+  loadQuickQuoteAnalysisReviewedResult,
+  loadQuickQuoteAnalysisSession,
+  markQuickQuoteAnalysisPresentationStale,
+} from "../utils/quickQuoteAnalysisSession.js";
 
 function safeJson(value, fallback = null) {
   try {
@@ -20,15 +111,6 @@ function safeJson(value, fallback = null) {
   } catch {
     return fallback;
   }
-}
-
-function parseCurrencyAmount(value) {
-  const text = String(value || "").trim();
-  if (!text) return "";
-
-  const cleaned = text.replace(/[$,\s]/g, "");
-  const amount = Number(cleaned);
-  return Number.isFinite(amount) && amount > 0 ? String(amount) : "";
 }
 
 function normalizeQuotePricingMethodLabel(value) {
@@ -59,64 +141,61 @@ function stringifySavedAmount(value) {
   return amount > 0 ? String(amount) : "";
 }
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-function findAmountNearLabels(text, labels) {
-  const source = String(text || "");
-  if (!source.trim()) return "";
-
-  const amountPattern = "(\\$?\\s*\\d[\\d,]*(?:\\.\\d{1,2})?)";
-
-  for (const label of labels) {
-    const safeLabel = escapeRegExp(label);
-    const afterLabel = new RegExp(
-      `(?:${safeLabel})[^\\d$]{0,50}${amountPattern}`,
-      "i"
-    );
-    const beforeLabel = new RegExp(
-      `${amountPattern}[^\\n\\r]{0,50}(?:${safeLabel})`,
-      "i"
-    );
-
-    const afterMatch = source.match(afterLabel);
-    if (afterMatch?.[1]) return parseCurrencyAmount(afterMatch[1]);
-
-    const beforeMatch = source.match(beforeLabel);
-    if (beforeMatch?.[1]) return parseCurrencyAmount(beforeMatch[1]);
-  }
-
-  return "";
-}
-
-function findTotalQuoteAmount(text) {
-  return findAmountNearLabels(text, [
-    "quote",
-    "total",
-    "estimate",
-    "price",
-    "bid",
-    "cotizacion",
-    "cotización",
-    "total",
-    "precio",
-    "estimado",
-    "presupuesto",
-  ]);
-}
-
-function findTimelineFromText(text) {
-  const source = String(text || "");
-  const match = source.match(
-    /\b(\d+\s*(?:-|to|a|–)?\s*\d*\s*(?:day|days|week|weeks|hour|hours|día|días|semana|semanas|hora|horas))\b/i
-  );
-
-  return match?.[1]?.trim() || "";
-}
-
 function cleanText(value) {
   return String(value || "").trim();
+}
+
+function createQuickQuoteDraftPhoto(file, media) {
+  if (!media?.public_id || !media?.secure_url) return null;
+
+  return {
+    id: media.public_id,
+    name: file?.name || "quote-photo",
+    previewUrl: media.secure_url,
+    media,
+    uploadState: "transient",
+  };
+}
+
+function todayLocalIsoDate(now = new Date()) {
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function formatQuickQuoteSharePricingLine({
+  description,
+  quantity,
+  unitPrice,
+  total,
+  unitLabel = "",
+  notes = "",
+}) {
+  const descriptionText = cleanText(description);
+  const totalAmount = parseOptionalQuoteAmount(total);
+
+  if (!descriptionText || totalAmount === null || totalAmount <= 0) return "";
+
+  const quantityAmount = parseOptionalQuoteAmount(quantity);
+  const unitAmount = parseOptionalQuoteAmount(unitPrice);
+  const hasArithmetic =
+    quantityAmount !== null &&
+    quantityAmount > 0 &&
+    unitAmount !== null &&
+    unitAmount > 0;
+
+  const pricingText = hasArithmetic
+    ? `${quantityAmount}${unitLabel ? ` ${unitLabel}` : ""} × $${unitAmount.toFixed(
+        2
+      )} = $${totalAmount.toFixed(2)}`
+    : `$${totalAmount.toFixed(2)}`;
+
+  const noteText = cleanText(notes);
+
+  return `- ${descriptionText}: ${pricingText}${
+    noteText ? ` (${noteText})` : ""
+  }`;
 }
 
 function isGenericQuoteText(value) {
@@ -376,38 +455,75 @@ const pricingMethodOptions = [
 
 const priorityOptions = ["Standard", "Urgent", "Emergency", "Flexible"];
 
-function QuoteBuilder({ setPage }) {
+function QuoteBuilder({ setPage, initialDocument = "quote" }) {
   const language = getLanguage();
   const isSpanish = language === "es";
   const quoteBuilderReturnPage =
     localStorage.getItem("quoteBuilderReturnPage") || "";
+  const quoteBuilderSource =
+    localStorage.getItem("quoteBuilderSource") || "";
+  const invoiceBuilderReturnPage =
+    localStorage.getItem("invoiceBuilderReturnPage") || "";
+  const invoiceBuilderSource =
+    localStorage.getItem("invoiceBuilderSource") || "";
+  const isUnifiedInvoiceEntry = initialDocument === "invoice";
+  const isUnifiedDepositRequestEntry = initialDocument === "depositRequest";
+  const sourceQuoteRouteRef = useRef(parseQuoteInvoiceSourceRoute(window.location.hash));
+  const sourceQuoteRoute = sourceQuoteRouteRef.current;
+  const [sourceQuoteState, setSourceQuoteState] = useState({ status: "loading", document: null, authority: null, instruction: "" });
+  useEffect(() => {
+    if (!sourceQuoteRoute) return;
+    let active = true;
+    void loadExactInvoiceSource(sourceQuoteRoute, { setPage }).then((result) => {
+      if (active) setSourceQuoteState({ ...result, status: "ready", instruction: takeQuoteInvoiceInstruction(window.location.hash.replace(/^#/, "")) });
+    }).catch((error) => {
+      if (active) setSourceQuoteState({ status: "unavailable", error: error.message });
+    });
+    return () => { active = false; };
+  }, [sourceQuoteRoute, setPage]);
+  const isGenericNewQuoteIntent =
+    initialDocument === "quote" && isGenericNewQuoteRoute(window.location.hash);
+  const activeJobSnapshot = isGenericNewQuoteIntent || sourceQuoteRoute ? {} : getActiveJobSnapshot();
+  useEffect(() => {
+    if (isGenericNewQuoteIntent) clearGenericNewQuoteContext();
+  }, [isGenericNewQuoteIntent]);
   const isWorkCenterReturn =
     quoteBuilderReturnPage === "workCenter" ||
     quoteBuilderReturnPage === "contractorDashboard";
   const isBusinessToolsReturn =
     quoteBuilderReturnPage === "businessCommandCenter";
   const isUniversalQuickQuote =
-    isBusinessToolsReturn &&
-    localStorage.getItem("quoteBuilderSource") === "business_tools_quick_quote";
+    (isBusinessToolsReturn && quoteBuilderSource === "business_tools_quick_quote") ||
+    quoteBuilderSource === "desktop_sidebar_quick_quote" ||
+    quoteBuilderSource === "desktop_sidebar_quote_invoice";
+  const isDesktopSidebarQuickQuote =
+    quoteBuilderSource === "desktop_sidebar_quick_quote";
   const workCenterReturnCustomer =
     localStorage.getItem("workCenterReturnCustomer") || "";
+  const initialSavedQuoteRouteRef = useRef(null);
+  if (!initialSavedQuoteRouteRef.current) {
+    initialSavedQuoteRouteRef.current = parseSavedQuoteRoute(window.location.hash);
+  }
+  const savedQuoteRoute = initialSavedQuoteRouteRef.current;
+  const routeCanonicalJobId = sourceQuoteRoute ? "" : savedQuoteRoute.jobId;
+  const routeSavedDocumentId = sourceQuoteRoute ? "" : savedQuoteRoute.draftId;
 
-  const revisedQuoteContext = safeJson(
+  const revisedQuoteContext = isGenericNewQuoteIntent || sourceQuoteRoute ? null : safeJson(
     localStorage.getItem("meetroRevisedQuoteContext")
   );
 
   const isRevisedQuoteFlow =
     revisedQuoteContext?.source === "workflow_change_request";
 
-  const selectedWorkCenterRequest = isUniversalQuickQuote
+  const selectedWorkCenterRequest = isUniversalQuickQuote || isGenericNewQuoteIntent || sourceQuoteRoute
     ? null
     : safeJson(localStorage.getItem("selectedWorkCenterRequest"));
 
-  const selectedQuoteRequest = isUniversalQuickQuote
+  const selectedQuoteRequest = isUniversalQuickQuote || isGenericNewQuoteIntent || sourceQuoteRoute
     ? null
     : safeJson(localStorage.getItem("selectedQuoteRequest"));
 
-  const selectedHomeownerRequest = isUniversalQuickQuote
+  const selectedHomeownerRequest = isUniversalQuickQuote || isGenericNewQuoteIntent || sourceQuoteRoute
     ? null
     : safeJson(localStorage.getItem("selectedHomeownerRequest"));
 
@@ -424,7 +540,7 @@ function QuoteBuilder({ setPage }) {
     selectedWorkCenterRequest?.id ||
     "";
 
-  const request = isUniversalQuickQuote
+  const request = routeCanonicalJobId || routeSavedDocumentId || isUniversalQuickQuote || isGenericNewQuoteIntent || sourceQuoteRoute
     ? {}
     : isRevisedQuoteFlow
     ? {
@@ -456,7 +572,7 @@ function QuoteBuilder({ setPage }) {
   const [quoteDate, setQuoteDate] = useState(
     selectedQuoteForEdit?.quoteDate ||
       selectedQuoteForEdit?.date ||
-      new Date().toISOString().slice(0, 10)
+      todayLocalIsoDate()
   );
   const [labor, setLabor] = useState(
     stringifySavedAmount(
@@ -632,7 +748,12 @@ function QuoteBuilder({ setPage }) {
       request.project_description,
       importedWorkItems[0]?.title,
       request.category
-    ) || (isUniversalQuickQuote ? "" : isSpanish ? "Visita programada" : "Scheduled Estimate Visit");
+    ) || (
+      !isGenericNewQuoteIntent && request.source === "schedule_evaluation" &&
+      (quoteContextPayload.scheduleId || quoteContextPayload.visitId || quoteContextPayload.evaluationId)
+        ? isSpanish ? "Visita programada" : "Scheduled Estimate Visit"
+        : ""
+    );
 
   const initialProjectDescription = isUniversalQuickQuote
     ? ""
@@ -674,6 +795,28 @@ function QuoteBuilder({ setPage }) {
       request.homeowner_email ||
       ""
   );
+  const [customerEmail, setCustomerEmail] = useState(
+    selectedQuoteForEdit?.customerEmail ||
+      request.customerEmail ||
+      request.homeowner_email ||
+      ""
+  );
+  const [customerPhone, setCustomerPhone] = useState(
+    selectedQuoteForEdit?.customerPhone ||
+      request.customerPhone ||
+      request.phone ||
+      ""
+  );
+  const [customerAddress, setCustomerAddress] = useState(
+    selectedQuoteForEdit?.customerAddress ||
+      selectedQuoteForEdit?.address ||
+      request.customerAddress ||
+      request.address ||
+      ""
+  );
+  const [agreement, setAgreement] = useState(
+    selectedQuoteForEdit?.agreement || {}
+  );
   const [customerLocation, setCustomerLocation] = useState(
     selectedQuoteForEdit?.location ||
       selectedQuoteForEdit?.address ||
@@ -690,7 +833,9 @@ function QuoteBuilder({ setPage }) {
       selectedQuoteForEdit?.proposalSummary ||
       request.recommendedSolution ||
       request.proposalSummary ||
-      (isUniversalQuickQuote ? "" : defaultRecommendedSolution)
+      ((isUniversalQuickQuote || isGenericNewQuoteIntent)
+        ? ""
+        : defaultRecommendedSolution)
   );
   const [proposalType, setProposalType] = useState(
     selectedQuoteForEdit?.proposalType || selectedQuoteForEdit?.quoteMetadata?.proposalType || "Repair"
@@ -731,6 +876,22 @@ function QuoteBuilder({ setPage }) {
   );
   const [depositAmount, setDepositAmount] = useState(
     stringifySavedAmount(selectedQuoteForEdit?.depositAmount || selectedQuoteForEdit?.quoteMetadata?.depositAmount)
+  );
+  const [pricingDisplayMode, setPricingDisplayMode] = useState(
+    selectedQuoteForEdit?.pricingDisplayMode || "DETAILED_LINE_ITEMS"
+  );
+  const [materialsDisplayMode, setMaterialsDisplayMode] = useState(
+    selectedQuoteForEdit?.materialsDisplayMode || "SHOW_SEPARATELY"
+  );
+  const [depositMode, setDepositMode] = useState(
+    selectedQuoteForEdit?.depositMode ||
+      (selectedQuoteForEdit?.depositRequired === "Yes" && selectedQuoteForEdit?.depositAmount ? "FIXED" : "NONE")
+  );
+  const [depositPercent, setDepositPercent] = useState(
+    stringifySavedAmount(selectedQuoteForEdit?.depositPercent)
+  );
+  const [depositFixedAmount, setDepositFixedAmount] = useState(
+    stringifySavedAmount(selectedQuoteForEdit?.depositFixedAmount || selectedQuoteForEdit?.depositAmount)
   );
   const [startDate, setStartDate] = useState(
     selectedQuoteForEdit?.startDate || selectedQuoteForEdit?.quoteMetadata?.startDate || ""
@@ -805,8 +966,86 @@ function QuoteBuilder({ setPage }) {
   );
   const [quotePreviewOpen, setQuotePreviewOpen] = useState(false);
   const [copiedNotice, setCopiedNotice] = useState("");
-  const [aiSuggestion, setAiSuggestion] = useState("");
-  const [aiSuggestionTarget, setAiSuggestionTarget] = useState("recommendedSolution");
+  const [assistant, setAssistant] = useState({ busy: false, error: "", notice: "", result: null, commandKeys: null });
+  const [quickQuoteView, setQuickQuoteView] = useState(
+    isUniversalQuickQuote ? "entry" : "details"
+  );
+  const [quickQuotePrompt, setQuickQuotePrompt] = useState("");
+  const [quickQuoteDraftPhotos, setQuickQuoteDraftPhotos] = useState([]);
+  const [quickQuotePhotoNotice, setQuickQuotePhotoNotice] = useState("");
+  const [quickQuoteContinuationNotice, setQuickQuoteContinuationNotice] =
+    useState("");
+  const [quickQuoteAttachedJob, setQuickQuoteAttachedJob] = useState(null);
+  const [jobLinkedQuoteContext, setJobLinkedQuoteContext] = useState(() => ({
+    status: routeCanonicalJobId && !isUnifiedInvoiceEntry
+      ? "loading"
+      : "standalone",
+    reason: "",
+    context: null,
+    existingQuoteProtected: false,
+    savedQuoteResume: null,
+    reopenDocumentId: null,
+  }));
+  const [
+    depositRequestSourceQuoteDocument,
+    setDepositRequestSourceQuoteDocument,
+  ] = useState(null);
+
+  const [invoicePreparation, setInvoicePreparation] = useState(() => ({
+    status: isUnifiedInvoiceEntry && routeCanonicalJobId ? "loading" : "standalone",
+    job: null,
+    resumeDocumentId: null,
+    error: "",
+  }));
+  const invoicePreparationRequestRef = useRef(null);
+  const setPageRef = useRef(setPage);
+  setPageRef.current = setPage;
+  const [savedRouteBootstrap, setSavedRouteBootstrap] = useState(() => ({
+    status: routeSavedDocumentId ? "loading" : "standalone",
+    reason: "",
+    document: null,
+  }));
+  const jobLinkedQuoteHydrationRef = useRef("");
+  const [quickQuoteJobConnection, setQuickQuoteJobConnection] = useState({
+    stage: "idle",
+    busy: false,
+    error: "",
+    jobs: [],
+    selectedJobId: "",
+  });
+  const [quickQuotePhotoBusy, setQuickQuotePhotoBusy] = useState(false);
+  const [quickQuotePhotoAssistant, setQuickQuotePhotoAssistant] = useState({
+    busy: false,
+    error: "",
+    proposal: null,
+    decisions: {},
+    reviewingId: "",
+  });
+  const [quickQuoteAnalysisState, setQuickQuoteAnalysisState] = useState({
+    available: false,
+    stale: false,
+    analyzedPrompt: "",
+  });
+  const [
+    quickQuoteAnalysisSessionState,
+    setQuickQuoteAnalysisSessionState,
+  ] = useState(() =>
+    createQuickQuoteAnalysisPresentationState()
+  );
+  const [
+    quickQuoteReviewedResult,
+    setQuickQuoteReviewedResult,
+  ] = useState(null);
+  const quickQuoteReviewedResultRequestRef =
+    useRef(0);
+  const quickQuotePhotoInputRef = useRef(null);
+  const quickQuoteDraftPhotosRef = useRef([]);
+  const quickQuotePersistedPhotoIdsRef = useRef(new Set());
+  const quickQuotePhotoDocumentRef = useRef(new Map());
+  const quickQuotePhotoTargetDocumentRef = useRef("quote");
+  const quickQuoteCopy = getQuickQuoteConversationCopy(language);
+  const quickQuotePhotoUploadEnabled =
+    isQuickQuoteDraftPhotoUploadEnabled();
 
   const lineItemsTotal = lineItems.reduce(
     (sum, item) => sum + getEditableRowTotal(item),
@@ -854,16 +1093,24 @@ function QuoteBuilder({ setPage }) {
   );
 
   useEffect(() => {
+    quickQuoteDraftPhotosRef.current = quickQuoteDraftPhotos;
+  }, [quickQuoteDraftPhotos]);
+
+  useEffect(() => {
+    const persistedPhotoIds = quickQuotePersistedPhotoIdsRef.current;
     document.body.classList.add("meetro-quote-builder-open");
 
     return () => {
       document.body.classList.remove("meetro-quote-builder-open");
+      quickQuoteDraftPhotosRef.current.forEach((photo) => {
+        if (photo.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(photo.previewUrl);
+        if (photo.media && !persistedPhotoIds.has(photo.id)) {
+          void cleanupQuoteDraftPhoto({ media: photo.media });
+        }
+      });
+      quickQuoteDraftPhotosRef.current = [];
     };
   }, []);
-
-  function generateAiDraft() {
-    runAiQuoteHelp("improve");
-  }
 
   function updateRow(setRows, rowId, field, value) {
     setRows((rows) =>
@@ -878,86 +1125,493 @@ function QuoteBuilder({ setPage }) {
     });
   }
 
-  function getMissingQuoteDetails() {
-    const hasLineItem = lineItems.some((item) => cleanText(item.description));
-    const hasMaterialsOrLabor =
-      materialRows.some((item) => cleanText(item.name) || getEditableRowTotal(item, "quantity", "cost") > 0) ||
-      laborRows.some((item) => cleanText(item.description) || getEditableRowTotal(item, "hours", "rate") > 0);
+  const requestedCanonicalJobId =
+    routeCanonicalJobId || cleanText(request.jobId || request.job_id);
+  const canonicalJobId =
+    quickQuoteAttachedJob?.jobId || requestedCanonicalJobId;
+  const savedQuoteContextJobId =
+    routeCanonicalJobId ||
+    (routeSavedDocumentId ? savedRouteBootstrap.document?.jobId || "" : "");
 
+  useEffect(() => {
+    if (!isUnifiedInvoiceEntry || !routeCanonicalJobId || routeSavedDocumentId) {
+      invoicePreparationRequestRef.current = null;
+      return undefined;
+    }
+    const requestKey = `job:${routeCanonicalJobId}`;
+    let active = true;
+    setInvoicePreparation({ status: "loading", job: null, resumeDocumentId: null, error: "" });
+    const existingRequest = invoicePreparationRequestRef.current;
+    const request = existingRequest?.key === requestKey
+      ? existingRequest.promise
+      : fetchProfessionalJobInvoice({
+          jobId: routeCanonicalJobId,
+          setPage: setPageRef.current,
+        }).then((invoice) => ({
+          handoff: resolveCompletedJobInvoiceHandoff({ invoices: [invoice] }, routeCanonicalJobId),
+        })).catch((error) => {
+          // A Job-only route may already have an Invoice, including one outside
+          // the workspace's bounded list. A 404 alone is not preparation authority.
+          if (error?.status !== 404 || error?.code !== "INVOICE_UNAVAILABLE") throw error;
+          return Promise.all([
+            fetchProfessionalInvoiceWorkspace({ limit: 50, setPage: setPageRef.current }),
+            listBusinessDocumentDrafts({ type: "INVOICE", setPage: setPageRef.current }),
+          ]).then(async ([workspace, documents]) => {
+            const handoff = resolveCompletedJobInvoiceHandoff(workspace, routeCanonicalJobId);
+            if (handoff.status !== "ready") return { handoff };
+            const prepared = handoff.job;
+            let sourceContext = null;
+            if (prepared.sourceType === "emergency_request") {
+              const live = await fetchCanonicalLiveJobProjection({
+                jobId: routeCanonicalJobId,
+                setPage: setPageRef.current,
+              });
+              if (live.status !== "ready" || live.projection?.sourceType !== "emergency_request") {
+                const error = new Error("The Emergency Job identity is unavailable for Invoice Quote review.");
+                error.code = "INVOICE_QUOTE_REFERENCE_READ_GAP";
+                throw error;
+              }
+              sourceContext = live.projection;
+            }
+            const quoteReference = await fetchEffectiveApprovedInvoiceQuote({
+              jobId: routeCanonicalJobId,
+              approvedTotalMinor: prepared.approvedAmount?.totalMinor,
+              sourceContext,
+              setPage: setPageRef.current,
+            });
+            return { handoff, documents, prepared, quoteReference };
+          });
+        });
+    invoicePreparationRequestRef.current = { key: requestKey, promise: request };
+    void request.then(({ handoff, documents, prepared, quoteReference }) => {
+      if (!active) return;
+      if (handoff.status === "existing") {
+        setInvoicePreparation({
+          status: "existing", invoiceId: handoff.invoice.invoiceId,
+          job: null, resumeDocumentId: null, error: "",
+        });
+        return;
+      }
+      if (!prepared) {
+        setInvoicePreparation({
+          status: "unavailable", job: null, resumeDocumentId: null,
+          error: "This completed Job is not ready for Invoice review.",
+        });
+        return;
+      }
+      const matches = documents.filter((document) =>
+        document.documentType === "INVOICE" &&
+        document.status === "WORKING_DRAFT" &&
+        document.jobId === routeCanonicalJobId
+      );
+      setQuickQuoteAttachedJob({
+        jobId: prepared.jobId,
+        title: prepared.serviceTitle,
+        customerLabel: prepared.customerName,
+        customerConcern: "",
+        evaluation: null,
+      });
+      setInvoicePreparation({
+        status: "ready",
+        job: {
+          ...prepared,
+          quoteReference: quoteReference.quoteId,
+          approvedQuoteVersion: quoteReference.quoteVersion,
+          approvedQuoteDocumentNumber: quoteReference.documentNumber,
+        },
+        resumeDocumentId: matches[0]?.id || null,
+        error: "",
+      });
+    }).catch((error) => {
+      if (!active) return;
+      setInvoicePreparation({
+        status: "unavailable", job: null, resumeDocumentId: null,
+        error: error?.code === "INVOICE_QUOTE_REFERENCE_READ_GAP"
+          ? "INVOICE_QUOTE_REFERENCE_READ_GAP: The effective approved Quote reference is unavailable."
+          : error?.message || "Invoice review is temporarily unavailable.",
+      });
+    });
+    return () => { active = false; };
+  }, [isUnifiedInvoiceEntry, routeCanonicalJobId, routeSavedDocumentId]);
+
+  useEffect(() => {
+    if (!routeSavedDocumentId || !savedQuoteRoute.valid) return undefined;
+    let active = true;
+    setSavedRouteBootstrap({ status: "loading", reason: "", document: null });
+    void bootstrapExactSavedQuote({
+      route: savedQuoteRoute,
+      getDocument: (draftId) => getBusinessDocumentDraft({ draftId, setPage }),
+    }).then((resolution) => {
+        if (!active) return;
+        if (resolution.status !== "ready") {
+          setSavedRouteBootstrap({
+            status: "unavailable",
+            reason: resolution.reason,
+            document: null,
+          });
+          return;
+        }
+        const document = resolution.document;
+        setQuickQuoteAttachedJob({
+          jobId: resolution.jobId || null,
+          title: cleanText(document.content?.projectTitle),
+          customerLabel: cleanText(document.content?.customerName),
+          customerConcern: "",
+          evaluation: null,
+        });
+        setSavedRouteBootstrap({ status: "ready", reason: "", document });
+      });
+    return () => {
+      active = false;
+    };
+  }, [routeCanonicalJobId, routeSavedDocumentId, savedQuoteRoute.valid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (isUnifiedInvoiceEntry || !savedQuoteContextJobId || !savedQuoteRoute.valid) {
+      return undefined;
+    }
+    let active = true;
+    setJobLinkedQuoteContext({
+      status: "loading",
+      reason: "",
+      context: null,
+      existingQuoteProtected: false,
+      savedQuoteResume: null,
+      reopenDocumentId: null,
+    });
+    void Promise.allSettled([
+      fetchJobLinkedQuoteContext({ jobId: savedQuoteContextJobId, setPage }),
+      listBusinessDocumentDrafts({ type: "QUOTE", setPage }),
+    ]).then(([contextResult, documentsResult]) => {
+        if (!active) return;
+        const result = contextResult.status === "fulfilled"
+          ? contextResult.value
+          : { status: "error", reason: "JOB_CONTEXT_FETCH_FAILED", context: null };
+        const savedProtection = documentsResult.status === "fulfilled"
+          ? resolveOwnedSavedQuotesForJob(documentsResult.value, savedQuoteContextJobId)
+          : { status: "unavailable", documents: [] };
+
+        if (isUnifiedDepositRequestEntry) {
+          setDepositRequestSourceQuoteDocument(
+            savedProtection.status === "exact"
+              ? savedProtection.documents[0]
+              : null
+          );
+        }
+        if (!routeSavedDocumentId && savedProtection.status === "ambiguous") {
+          setJobLinkedQuoteContext({
+            status: "ambiguous",
+            reason: "MULTIPLE_SAVED_QUOTES",
+            context: null,
+            existingQuoteProtected: false,
+            savedQuoteResume: null,
+            reopenDocumentId: null,
+          });
+          return;
+        }
+        if (result.status !== "ready" || !result.context) {
+          if (!routeSavedDocumentId && savedProtection.status === "exact") {
+            setJobLinkedQuoteContext({
+              status: "protected",
+              reason: "",
+              context: null,
+              existingQuoteProtected: true,
+              savedQuoteResume: savedProtection.resume,
+              reopenDocumentId: null,
+            });
+            return;
+          }
+          setJobLinkedQuoteContext({
+            status: result.status,
+            reason: result.reason,
+            context: null,
+            existingQuoteProtected: false,
+            savedQuoteResume: null,
+            reopenDocumentId: null,
+          });
+          return;
+        }
+        const context = result.context;
+        const existingQuoteProtected = jobLinkedQuoteHasExistingContent(context);
+        const savedQuoteResume = savedProtection.status === "exact"
+          ? savedProtection.resume
+          : resolveJobLinkedSavedQuoteResume(context);
+        setQuickQuoteAttachedJob({
+          jobId: context.job.jobId,
+          title: context.job.title,
+          customerLabel: context.customer.displayName,
+          customerConcern: context.project.customerConcern,
+          evaluation: context.evaluation,
+        });
+        if (
+          !existingQuoteProtected &&
+          jobLinkedQuoteHydrationRef.current !== context.job.jobId
+        ) {
+          const prefill = buildJobLinkedQuotePrefill(context);
+          if (prefill) {
+            jobLinkedQuoteHydrationRef.current = context.job.jobId;
+            setCustomerName(prefill.customerName);
+            setCustomerEmail(prefill.customerEmail);
+            setCustomerPhone(prefill.customerPhone);
+            setCustomerLocation(prefill.customerLocation);
+            setProjectTitle(prefill.projectTitle);
+            setProjectDescription(prefill.projectDescription);
+            setRecommendedSolution(prefill.recommendedSolution);
+          }
+        }
+        setJobLinkedQuoteContext({
+          status: existingQuoteProtected ? "protected" : "ready",
+          reason: "",
+          context,
+          existingQuoteProtected,
+          savedQuoteResume,
+          reopenDocumentId: null,
+        });
+      });
+    return () => {
+      active = false;
+    };
+  }, [isUnifiedInvoiceEntry, routeSavedDocumentId, savedQuoteContextJobId, savedQuoteRoute.valid]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function openProtectedJobLinkedQuote() {
+    const resume = jobLinkedQuoteContext.savedQuoteResume ||
+      resolveJobLinkedSavedQuoteResume(jobLinkedQuoteContext.context);
+    if (!resume || resume.jobId !== routeCanonicalJobId) return;
+    replaceSavedQuoteRoute({
+      jobId: resume.jobId,
+      draftId: resume.documentId,
+    });
+    setJobLinkedQuoteContext((current) => ({
+      ...current,
+      status: "ready",
+      existingQuoteProtected: false,
+      reopenDocumentId: resume.documentId,
+    }));
+  }
+
+  function inputKey(prefix, index) {
+    return `${prefix}_${index}`.replace(/[^a-z0-9_]/gi, "_").toLowerCase().slice(0, 80);
+  }
+
+  function persistOpenedQuoteRoute(document) {
+    if (document?.documentType === "INVOICE" && document?.id && document?.status === "WORKING_DRAFT") {
+      const params = new URLSearchParams({ draftId: document.id });
+      if (document.jobId) params.set("jobId", document.jobId);
+      window.history.replaceState(window.history.state, "", `${window.location.pathname}${window.location.search}#invoiceBuilder?${params}`);
+      return;
+    }
+    if (document?.documentType !== "QUOTE") {
+      replaceSavedQuoteRoute({});
+      return;
+    }
+    if (document?.status !== "WORKING_DRAFT") {
+      return;
+    }
+    replaceSavedQuoteRoute({
+      jobId: document.jobId || "",
+      draftId: document.id,
+    });
+  }
+
+  async function createReviewedCompletedJobInvoice({
+    extraWork, customerNotes, terms, due,
+  }) {
+    if (invoicePreparation.status !== "ready" || !invoicePreparation.job) {
+      throw new Error("This completed Job is not ready for Invoice review.");
+    }
+    return createCanonicalInvoice({
+      jobId: invoicePreparation.job.jobId,
+      expectedCompletionVersion: invoicePreparation.job.completionVersion,
+      due,
+      customerNotes,
+      terms,
+      extraWork,
+      idempotencyKey: createInvoiceCommandKey("invoice-create"),
+      setPage,
+    });
+  }
+
+  function estimateCostInputs() {
     return [
-      !cleanText(customerName) ? (isSpanish ? "nombre del cliente" : "customer name") : "",
-      !cleanText(problemFound) ? (isSpanish ? "problema encontrado" : "problem found") : "",
-      !cleanText(recommendedSolution) ? (isSpanish ? "solución recomendada" : "recommended solution") : "",
-      !hasLineItem ? (isSpanish ? "partidas de servicio" : "line items") : "",
-      !hasMaterialsOrLabor ? (isSpanish ? "mano de obra o materiales" : "labor or materials") : "",
-      calculatedTotal <= 0 ? (isSpanish ? "total del precio" : "price total") : "",
-      !cleanText(terms) ? (isSpanish ? "términos de pago" : "payment terms") : "",
-    ].filter(Boolean);
+      ...materialRows.flatMap((item, index) => {
+        const amount = Math.round(parseQuotePricingAmount(item.cost) * 100);
+        const quantity = parseQuotePricingAmount(item.quantity) || 1;
+        return cleanText(item.name) && amount >= 0 ? [{
+          key: inputKey("material", index), classification: "MATERIAL",
+          description: cleanText(item.name), quantity, unitCostMinor: amount,
+        }] : [];
+      }),
+      ...laborRows.flatMap((item, index) => {
+        const amount = Math.round(parseQuotePricingAmount(item.rate) * 100);
+        const quantity = parseQuotePricingAmount(item.hours) || 1;
+        return cleanText(item.description) && amount >= 0 ? [{
+          key: inputKey("labor", index), classification: "LABOR",
+          description: cleanText(item.description), quantity, unitCostMinor: amount,
+        }] : [];
+      }),
+      ...(disposalFeeAmount > 0 ? [{
+        key: "disposal_0", classification: "DISPOSAL", description: "Disposal",
+        quantity: 1, unitCostMinor: Math.round(disposalFeeAmount * 100),
+      }] : []),
+    ];
   }
 
-  function runAiQuoteHelp(action) {
-    const missingDetails = getMissingQuoteDetails();
-    const scopeName = cleanText(projectTitle) || (isSpanish ? "este servicio" : "this service");
-    const problemText = cleanText(problemFound || projectDescription);
-
-    if (action === "missing") {
-      setAiSuggestionTarget("notes");
-      setAiSuggestion(
-        missingDetails.length
-          ? isSpanish
-            ? `Esta cotización puede necesitar ${missingDetails.join(", ")} antes de compartirla.`
-            : `This quote may need ${missingDetails.join(", ")} before sharing.`
-          : isSpanish
-          ? "Esta cotización tiene los detalles principales. Revisa precios, alcance y términos antes de compartir."
-          : "This quote has the main details. Review pricing, scope, and terms before sharing."
-      );
-      return;
-    }
-
-    if (action === "lineItems") {
-      setAiSuggestionTarget("notes");
-      setAiSuggestion(
-        isSpanish
-          ? `Sugerencias de descripciones de partidas para revisar:\n- Evaluación y preparación para ${scopeName}\n- Mano de obra para completar el alcance aprobado\n- Materiales confirmados por el profesional\n- Limpieza y revisión final`
-          : `Line item wording to review:\n- Evaluation and preparation for ${scopeName}\n- Labor to complete the approved scope\n- Professional-confirmed materials\n- Cleanup and final review`
-      );
-      return;
-    }
-
-    if (action === "terms") {
-      setAiSuggestionTarget("terms");
-      setAiSuggestion(
-        isSpanish
-          ? "El precio final depende de condiciones accesibles al momento del trabajo. Los cambios de alcance, materiales no incluidos o condiciones ocultas pueden requerir aprobación adicional por escrito."
-          : "Final pricing depends on accessible conditions at the time of work. Scope changes, excluded materials, or hidden conditions may require additional written approval."
-      );
-      return;
-    }
-
-    setAiSuggestionTarget("recommendedSolution");
-    setAiSuggestion(
-      isSpanish
-        ? `Después de revisar ${scopeName}, recomendamos completar el alcance descrito con materiales confirmados y mano de obra profesional. ${problemText ? `El problema principal identificado fue: ${problemText}. ` : ""}Antes de comenzar, el profesional confirmará acceso, medidas y cualquier condición que afecte el trabajo.`
-        : `After reviewing ${scopeName}, we recommend completing the described scope with confirmed materials and professional labor. ${problemText ? `The main issue identified was: ${problemText}. ` : ""}Before work begins, the professional will confirm access, measurements, and any conditions that affect the job.`
-    );
+  function quoteCompositionInput(prompt, { estimateProposalId } = {}) {
+    return buildQuoteCompositionInput({
+      jobId: canonicalJobId,
+      professionalInstructions: [problemFound, recommendedSolution, notes, prompt].filter(Boolean).join("\n") || undefined,
+      lineItems,
+      materialRows,
+      materialProvider,
+      availability: estimatedDuration || timeline,
+      estimateProposalId,
+    });
   }
 
-  function applyAiSuggestion() {
-    if (!aiSuggestion.trim()) return;
-
-    if (aiSuggestionTarget === "terms") {
-      setTerms(aiSuggestion);
-      return;
+  async function requestEstimateHelp(action, prompt) {
+    if (!canonicalJobId) return;
+    const estimateIntents = {
+      materials: "ESTIMATE_MATERIALS",
+      prices: "CHECK_MATERIAL_PRICES",
+      labor: "ESTIMATE_LABOR",
+    };
+    const operation = action === "quote" ? INTELLIGENCE_OPERATION.QUOTE : INTELLIGENCE_OPERATION.ESTIMATE;
+    setAssistant({ busy: true, error: "", notice: "", result: null, commandKeys: null });
+    try {
+      const input = operation === INTELLIGENCE_OPERATION.QUOTE
+        ? quoteCompositionInput(prompt)
+        : {
+            jobId: canonicalJobId,
+            intent: estimateIntents[action],
+            professionalInstructions: [problemFound, recommendedSolution, notes, prompt].filter(Boolean).join("\n") || null,
+            measurements: [],
+            costInputs: estimateCostInputs(),
+            sellingPriceMinor: calculatedTotal > 0 ? Math.round(calculatedTotal * 100) : null,
+            retailerQuery: action === "prices"
+              ? [prompt, ...materialRows.map((item) => cleanText(item.name))].filter(Boolean).join(" ").slice(0, 500) || null
+              : null,
+          };
+      const result = await requestWorkflowIntelligence({
+        operation,
+        locale: language,
+        input,
+        expected: { jobId: canonicalJobId },
+        setPage,
+      });
+      const candidates = result.proposal.proposedScopeItems?.filter((item) => item.canonicalCandidate) || [];
+      setAssistant({
+        busy: false,
+        error: "",
+        notice: "",
+        result,
+        commandKeys: operation === INTELLIGENCE_OPERATION.QUOTE ? {
+          createKey: createIntelligenceKey(),
+          scopeKeys: candidates.map(() => createIntelligenceKey()),
+        } : null,
+      });
+    } catch (error) {
+      setAssistant({ busy: false, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable, notice: "", result: null, commandKeys: null });
     }
+  }
 
-    if (aiSuggestionTarget === "notes") {
-      setNotes((currentNotes) =>
-        [currentNotes, aiSuggestion].map(cleanText).filter(Boolean).join("\n\n")
-      );
-      return;
+  async function markEstimateSolutionReady() {
+    const proposal = assistant.result?.proposal;
+    if (!proposal || assistant.result.operation !== INTELLIGENCE_OPERATION.ESTIMATE) return;
+    const elements = getSolutionReadyReviewElements(proposal);
+    setAssistant((current) => ({ ...current, busy: true, error: "", notice: "" }));
+    try {
+      await Promise.all(elements.map((item) => recordWorkflowReview({
+        proposalId: proposal.proposalId,
+        elementId: item.id,
+        action: "ACCEPTED",
+        setPage,
+      })));
+      const result = await requestWorkflowIntelligence({
+        operation: INTELLIGENCE_OPERATION.QUOTE,
+        locale: language,
+        input: quoteCompositionInput("", {
+          estimateProposalId: proposal.proposalId,
+        }),
+        expected: { jobId: canonicalJobId },
+        setPage,
+      });
+      const candidates = result.proposal.proposedScopeItems?.filter((item) => item.canonicalCandidate) || [];
+      setAssistant({
+        busy: false,
+        error: "",
+        notice: getAskMeetroWorkflowCopy(language).solutionReady,
+        result,
+        commandKeys: {
+          createKey: createIntelligenceKey(),
+          scopeKeys: candidates.map(() => createIntelligenceKey()),
+        },
+      });
+    } catch (error) {
+      setAssistant((current) => ({
+        ...current,
+        busy: false,
+        error: error?.message || getAskMeetroWorkflowCopy(language).unavailable,
+      }));
     }
+  }
 
-    setRecommendedSolution(aiSuggestion);
+  async function handleUseQuoteComposition(editedCandidates = null) {
+    const result = assistant.result;
+    if (!result || result.operation !== INTELLIGENCE_OPERATION.QUOTE || !assistant.commandKeys) return;
+    const proposal = editedCandidates ? {
+      ...result.proposal,
+      proposedScopeItems: result.proposal.proposedScopeItems.map((item) =>
+        editedCandidates[item.id]
+          ? { ...item, canonicalCandidate: editedCandidates[item.id] }
+          : item
+      ),
+    } : result.proposal;
+    const candidates = proposal.proposedScopeItems.filter((item) => item.canonicalCandidate);
+    try {
+      await Promise.all(candidates.map((item) => recordQuoteCompositionReview({
+        proposalId: proposal.proposalId,
+        elementId: item.id,
+        action: editedCandidates?.[item.id] ? "EDITED" : "ACCEPTED",
+        editedValue: editedCandidates?.[item.id],
+        setPage,
+      })));
+      const quote = await applyConfirmedQuoteComposition({
+        jobId: canonicalJobId,
+        proposal,
+        createKey: assistant.commandKeys.createKey,
+        scopeKeys: assistant.commandKeys.scopeKeys,
+        setPage,
+      });
+      setAssistant((current) => ({ ...current, notice: `${getAskMeetroWorkflowCopy(language).createQuote} · ${quote.scopeItemCount}` }));
+    } catch (error) {
+      setAssistant((current) => ({ ...current, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable }));
+    }
+  }
+
+  async function dismissEstimateHelp() {
+    const result = assistant.result;
+    if (!result) return;
+    try {
+      if (result.operation === INTELLIGENCE_OPERATION.QUOTE) {
+        await Promise.all(result.proposal.proposedScopeItems.map((item) => recordQuoteCompositionReview({
+          proposalId: result.proposal.proposalId,
+          elementId: item.id,
+          action: "REJECTED",
+          setPage,
+        })));
+      } else {
+        await Promise.all([...result.proposal.materials, ...result.proposal.labor, result.proposal.customerQuoteDraft].map((item) => recordWorkflowReview({
+          proposalId: result.proposal.proposalId,
+          elementId: item.id,
+          action: "REJECTED",
+          reasonCategory: "PROFESSIONAL_DISMISSED",
+          setPage,
+        })));
+      }
+      setAssistant((current) => ({ ...current, result: null, notice: "" }));
+    } catch (error) {
+      setAssistant((current) => ({ ...current, error: error?.message || getAskMeetroWorkflowCopy(language).unavailable }));
+    }
   }
 
 
@@ -999,7 +1653,6 @@ function QuoteBuilder({ setPage }) {
 	      startDate,
 	      estimatedDuration,
 	      laborAmount: currentLaborAmount,
-	      laborPricingType,
 	      laborFee: laborPricingType === "flat_fee" ? currentLaborAmount : "",
 	      laborTotal: currentLaborAmount,
 	      materialsAmount: currentMaterialsAmount,
@@ -1126,26 +1779,68 @@ function QuoteBuilder({ setPage }) {
       fallbackName: "Meetro Professional",
     });
     const serviceLines = pricing.quoteLineItems
-      .filter((item) => cleanText(item.description))
-      .map(
-        (item) =>
-          `- ${item.description}: ${item.quantity || "—"} × ${item.unitPrice || "—"} = $${Number(item.total || 0).toFixed(2)}`
+      .map((item) =>
+        formatQuickQuoteSharePricingLine({
+          description: item.description,
+          quantity: item.quantity,
+          unitPrice: item.unitPrice,
+          total: item.total,
+        })
       )
+      .filter(Boolean)
       .join("\n");
+
     const materialLines = pricing.materialItems
-      .filter((item) => cleanText(item.name))
-      .map(
-        (item) =>
-          `- ${item.name}: ${item.quantity || "—"} × ${item.cost || "—"} = $${Number(item.total || 0).toFixed(2)}${item.notes ? ` (${item.notes})` : ""}`
-      )
+      .map((item) => {
+        const hasArithmetic =
+          Boolean(cleanText(item.quantity)) && Boolean(cleanText(item.cost));
+        const genericMaterial =
+          /^(?:materials?|materiales|matériaux|materiais)$/i.test(
+            cleanText(item.name)
+          );
+
+        if (!hasArithmetic && genericMaterial) return "";
+
+        return formatQuickQuoteSharePricingLine({
+          description: item.name,
+          quantity: item.quantity,
+          unitPrice: item.cost,
+          total: item.total,
+          notes: item.notes,
+        });
+      })
+      .filter(Boolean)
       .join("\n");
+
     const laborLines = pricing.laborItems
-      .filter((item) => cleanText(item.description))
-      .map(
-        (item) =>
-          `- ${item.description}: ${item.hours || "—"} hrs × ${item.rate || "—"} = $${Number(item.total || 0).toFixed(2)}`
-      )
+      .map((item) => {
+        const hasArithmetic =
+          Boolean(cleanText(item.hours)) && Boolean(cleanText(item.rate));
+        const genericLabor =
+          /^(?:labor|labour|mano de obra|main-d'œuvre|mão de obra)$/i.test(
+            cleanText(item.description)
+          );
+
+        if (!hasArithmetic && genericLabor) return "";
+
+        return formatQuickQuoteSharePricingLine({
+          description: item.description,
+          quantity: item.hours,
+          unitPrice: item.rate,
+          total: item.total,
+          unitLabel: isSpanish ? "h" : "hrs",
+        });
+      })
+      .filter(Boolean)
       .join("\n");
+
+    const laborShareBlock = laborLines
+      ? `${isSpanish ? "Mano de obra" : "Labor"}:\n${laborLines}`
+      : `${isSpanish ? "Mano de obra" : "Labor"}: $${pricing.laborAmount.toFixed(2)}`;
+
+    const materialShareBlock = materialLines
+      ? `${isSpanish ? "Materiales" : "Materials"}:\n${materialLines}`
+      : `${isSpanish ? "Materiales" : "Materials"}: $${pricing.materialsAmount.toFixed(2)}`;
 
     return `${isSpanish ? "Cotización" : "Quote"}: ${projectTitle}
 
@@ -1156,10 +1851,8 @@ ${isSpanish ? "Tipo / prioridad" : "Type / Priority"}: ${proposalType === "Custo
 ${isSpanish ? "Partidas" : "Line Items"}:
 ${serviceLines || "—"}
 
-${isSpanish ? "Mano de obra" : "Labor"}: $${pricing.laborAmount.toFixed(2)}
-${laborLines || ""}
-${isSpanish ? "Materiales" : "Materials"}: $${pricing.materialsAmount.toFixed(2)}
-${materialLines || ""}
+${laborShareBlock}
+${materialShareBlock}
 ${isSpanish ? "Tarifas" : "Fees"}: $${Number(pricing.feesAmount || 0).toFixed(2)}
 ${isSpanish ? "Tiempo estimado" : "Estimated timeline"}: ${timeline || "—"}
 ${isSpanish ? "Depósito" : "Deposit"}: ${depositRequired}${depositAmountValue ? ` · $${depositAmountValue.toFixed(2)}` : ""}
@@ -1176,6 +1869,80 @@ ${terms || "—"}
 
 ${businessIdentity.businessName}`;
   };
+
+  function buildQuickQuotePdfModel(photoEvidence = {}, workingDraftStatus = "UNSAVED") {
+    const pricing = getCurrentPricingPayload();
+    const customerPricing = quoteCustomerPricingProjection({
+      lineItems: pricing.quoteLineItems,
+      materialItems: pricing.materialItems,
+      laborItems: pricing.laborItems,
+      totalOverride,
+      discount: pricing.discountAmount,
+      tax: pricing.taxAmount,
+      fees: pricing.feesAmount,
+      pricingDisplayMode,
+      materialsDisplayMode,
+      depositMode,
+      depositPercent,
+      depositFixedAmount,
+    });
+    const businessIdentity = getBusinessIdentityProjection({}, {
+      fallbackName: "Meetro Professional",
+    });
+    return attachCustomerDocumentPhotoEvidence(buildQuickQuoteDocumentModel({
+      quoteNumber,
+      quoteDate,
+      customerName,
+      customerEmail,
+      customerLocation,
+      projectTitle,
+      problemFound,
+      recommendedSolution,
+      scopeSummary: recommendedSolution || projectDescription || problemFound,
+      fixedPrice: customerPricing.pricingDisplayMode === "TOTAL_ONLY" || Boolean(cleanText(totalOverride)) || pricingMethod === "Flat Fee",
+      lineItems: customerPricing.customerRows.map((item) => ({
+        description: item.description,
+        total: item.amount,
+        pricingPresentation: "flat",
+      })),
+      subtotal: customerPricing.pricingDisplayMode === "TOTAL_ONLY" ? undefined : customerPricing.total,
+      discount: pricing.discountAmount,
+      tax: pricing.taxAmount,
+      fees: pricing.feesAmount,
+      total: customerPricing.total,
+      paymentTerms: quoteIndependentPaymentTerms(terms, customerPricing),
+      pricingNote: customerPricing.inclusionNote,
+      depositDue: customerPricing.deposit.valid ? customerPricing.deposit.due : null,
+      remainingBalance: customerPricing.deposit.valid ? customerPricing.deposit.remaining : null,
+      depositLabel: customerPricing.deposit.mode === "PERCENT" ? `${customerPricing.deposit.percent}% due on approval` : customerPricing.deposit.mode === "FIXED" ? "Due on approval" : "",
+      estimatedDuration: estimatedDuration || timeline,
+      notes,
+      agreement,
+      currency: "USD",
+    }, { locale: language, branding: businessIdentity, workingDraftStatus }), photoEvidence);
+  }
+
+  async function exportQuickQuotePdf(photoEvidence = {}, workingDraftStatus = "UNSAVED") {
+    const copy = getCustomerDocumentActionCopy(language);
+    const exported = await downloadCustomerDocumentPdf(buildQuickQuotePdfModel(photoEvidence, workingDraftStatus));
+    setCopiedNotice(exported ? copy.pdfReady : copy.pdfUnavailable);
+  }
+
+  async function previewQuickQuotePdfWithPhotos(photoEvidence = {}, workingDraftStatus = "UNSAVED") {
+    const result = await previewCustomerDocumentPdfWithMedia(buildQuickQuotePdfModel(photoEvidence, workingDraftStatus));
+    if (!result.ok) setCopiedNotice(getCustomerDocumentActionCopy(language).pdfUnavailable);
+    return result;
+  }
+
+  async function shareQuickQuotePdf() {
+    const copy = getCustomerDocumentActionCopy(language);
+    const result = await shareCustomerDocumentPdf({
+      model: buildQuickQuotePdfModel(),
+      message: buildQuoteShareText(),
+    });
+    if (!result.ok && result.method !== "cancelled") setCopiedNotice(copy.pdfUnavailable);
+    if (result.ok) setCopiedNotice(copy.pdfReady);
+  }
 
   async function copyQuoteSummary() {
     const summary = buildQuoteShareText();
@@ -1200,30 +1967,1617 @@ ${businessIdentity.businessName}`;
     setQuotePreviewOpen(true);
   }
 
+  function invalidateQuickQuoteReviewedResult() {
+    /*
+     * Invalidate every in-flight reviewed-result GET before
+     * clearing presentation authority.
+     *
+     * A response started against an older browser evidence /
+     * proposal state must never repopulate Reviewed Solution
+     * or Materials List after that state becomes stale.
+     */
+    quickQuoteReviewedResultRequestRef.current += 1;
+
+    setQuickQuoteReviewedResult(
+      null
+    );
+  }
+
+  async function refreshQuickQuoteReviewedResult(
+    presentation,
+    proposal,
+    {
+      surfaceError = false,
+    } = {}
+  ) {
+    const sessionId =
+      presentation?.sessionId;
+
+    const evidenceVersion =
+      presentation
+        ?.latestEvidenceVersion;
+
+    const proposalId =
+      proposal?.proposalId;
+
+    if (
+      !sessionId ||
+      !Number.isInteger(
+        evidenceVersion
+      ) ||
+      evidenceVersion < 1 ||
+      presentation?.stale ||
+      !proposalId ||
+      presentation
+        ?.latestProposal
+        ?.proposalId !==
+        proposalId
+    ) {
+      invalidateQuickQuoteReviewedResult();
+      return null;
+    }
+
+    const requestGeneration =
+      quickQuoteReviewedResultRequestRef
+        .current + 1;
+
+    quickQuoteReviewedResultRequestRef.current =
+      requestGeneration;
+
+    try {
+      const loaded =
+        await loadQuickQuoteAnalysisReviewedResult({
+          sessionId,
+          expectedEvidenceVersion:
+            evidenceVersion,
+          expectedProposalId:
+            proposalId,
+          setPage,
+        });
+
+      if (
+        quickQuoteReviewedResultRequestRef.current !==
+        requestGeneration
+      ) {
+        return null;
+      }
+
+      setQuickQuoteReviewedResult(
+        loaded.reviewedResult
+      );
+
+      return loaded.reviewedResult;
+    } catch (error) {
+      if (
+        quickQuoteReviewedResultRequestRef.current !==
+        requestGeneration
+      ) {
+        return null;
+      }
+
+      /*
+       * R1-05:
+       * Never fall back to browser review decisions as
+       * durable Reviewed Solution / Materials authority.
+       */
+      setQuickQuoteReviewedResult(
+        null
+      );
+
+      if (surfaceError) {
+        setQuickQuotePhotoAssistant(
+          (current) => ({
+            ...current,
+            error:
+              error?.message ||
+              quickQuoteCopy
+                .reviewedResultLoadFailed,
+          })
+        );
+      }
+
+      return null;
+    }
+  }
+
+  async function prepareQuickQuoteConversation() {
+    const professionalInput =
+      String(
+        quickQuotePrompt ?? ""
+      );
+
+    const instruction =
+      cleanText(
+        professionalInput
+      );
+
+    const photos =
+      quickQuoteDraftPhotosRef.current;
+
+    if (
+      !instruction &&
+      photos.length === 0
+    ) {
+      return;
+    }
+
+    const governedPhotos =
+      photos.map(
+        (photo) =>
+          photo.media
+      );
+
+    setQuickQuotePhotoNotice("");
+    setQuickQuoteContinuationNotice("");
+    invalidateQuickQuoteReviewedResult();
+    setQuickQuoteView("working");
+
+    setQuickQuotePhotoAssistant(
+      (current) => ({
+        ...current,
+        busy: true,
+        error: "",
+        reviewingId: "",
+      })
+    );
+
+    try {
+      let presentation =
+        quickQuoteAnalysisSessionState;
+
+      let sessionId =
+        presentation.sessionId;
+
+      /*
+       * R1-04 SERVER AUTHORITY
+       *
+       * First analysis creates one private durable session.
+       * Later evidence changes append a new server evidence
+       * version to that SAME session.
+       *
+       * The browser never supplies actor, evidence version,
+       * role, provider, operation, or arbitrary turn payload.
+       */
+      if (!sessionId) {
+        const created =
+          await createQuickQuoteAnalysisSession({
+            professionalInput,
+            photos:
+              governedPhotos,
+            setPage,
+          });
+
+        presentation =
+          hydrateQuickQuoteAnalysisPresentationState(
+            created.session
+          );
+
+        sessionId =
+          presentation.sessionId;
+      } else {
+        await appendQuickQuoteAnalysisEvidence({
+          sessionId,
+          professionalInput,
+          photos:
+            governedPhotos,
+          setPage,
+        });
+
+        /*
+         * Reload the server projection after evidence append.
+         * This prevents an older Meetro turn from being treated
+         * as current when the evidence version has advanced.
+         */
+        const loaded =
+          await loadQuickQuoteAnalysisSession({
+            sessionId,
+            setPage,
+          });
+
+        presentation =
+          hydrateQuickQuoteAnalysisPresentationState(
+            loaded.session
+          );
+
+        if (
+          presentation.latestProposal &&
+          !presentation.stale
+        ) {
+          await refreshQuickQuoteReviewedResult(
+            presentation,
+            presentation.latestProposal
+          );
+        }
+      }
+
+      setQuickQuoteAnalysisSessionState(
+        presentation
+      );
+
+      const execution =
+        await analyzeQuickQuoteAnalysisSession({
+          sessionId,
+          locale:
+            language,
+          setPage,
+        });
+
+      const currentPresentation =
+        applyQuickQuoteAnalysisExecutionToPresentationState(
+          presentation,
+          execution
+        );
+
+      setQuickQuoteAnalysisSessionState(
+        currentPresentation
+      );
+
+      await refreshQuickQuoteReviewedResult(
+        currentPresentation,
+        execution.proposal
+      );
+
+      /*
+       * Preserve the exact professional input as presentation.
+       * No Quote, pricing, materials, labor, customer, deposit,
+       * lifecycle, or publication state is mutated here.
+       */
+      setQuickQuoteAnalysisState({
+        available: true,
+        stale: false,
+        analyzedPrompt:
+          professionalInput,
+      });
+
+      /*
+       * Reuse the existing R1-01 review presentation temporarily.
+       * R1-04C will replace it with the multi-turn workspace.
+       */
+      setQuickQuotePhotoAssistant({
+        busy: false,
+        error: "",
+        proposal:
+          execution.proposal,
+        decisions: {},
+        reviewingId: "",
+      });
+
+      setQuickQuoteView("review");
+    } catch (error) {
+      setQuickQuotePhotoAssistant(
+        (current) => ({
+          ...current,
+          busy: false,
+          error:
+            error?.message ||
+            quickQuoteCopy
+              .photoAnalysisFailed,
+          reviewingId: "",
+        })
+      );
+
+      setQuickQuoteView("entry");
+    }
+  }
+
+  async function requestQuickQuoteInternalEstimate({
+    job,
+    jobId,
+    professionalInput,
+    professionalCategoryCosts = [],
+  }) {
+    setQuickQuoteJobConnection((current) => ({
+      ...current,
+      busy: true,
+      error: "",
+      selectedJobId: jobId,
+    }));
+    setAssistant({
+      busy: true,
+      error: "",
+      notice: "",
+      result: null,
+      commandKeys: null,
+    });
+
+    try {
+      const input = buildQuickQuoteEstimateInput({
+        jobId,
+        professionalInput,
+        professionalCategoryCosts,
+      });
+      const result = await requestWorkflowIntelligence({
+        operation: INTELLIGENCE_OPERATION.ESTIMATE,
+        locale: language,
+        input,
+        expected: { jobId },
+        setPage,
+      });
+
+      setQuickQuoteAttachedJob(
+        job || {
+          jobId,
+          title: projectTitle || quickQuoteCopy.connectedJob,
+          customerLabel: customerName || quickQuoteCopy.customer,
+        }
+      );
+      setAssistant({
+        busy: false,
+        error: "",
+        notice: "",
+        result,
+        commandKeys: null,
+      });
+      setQuickQuoteJobConnection({
+        stage: "idle",
+        busy: false,
+        error: "",
+        jobs: [],
+        selectedJobId: "",
+      });
+      setQuickQuoteContinuationNotice("");
+      setQuickQuoteView("internalEstimate");
+      return true;
+    } catch (error) {
+      setAssistant({
+        busy: false,
+        error: "",
+        notice: "",
+        result: null,
+        commandKeys: null,
+      });
+      setQuickQuoteJobConnection((current) => ({
+        ...current,
+        stage: routeCanonicalJobId ? "decision" : "picker",
+        busy: false,
+        error:
+          error?.message || quickQuoteCopy.jobConnectionFailed,
+        selectedJobId: "",
+      }));
+      return false;
+    }
+  }
+
+  function prepareQuickQuoteInternalEstimate({
+    job,
+    jobId,
+    professionalInput,
+  }) {
+    const extracted = extractProfessionalCategoryCostCandidates(
+      professionalInput
+    );
+
+    if (extracted.costs.length || extracted.conflicts.length) {
+      setQuickQuoteJobConnection({
+        stage: "costConfirmation",
+        busy: false,
+        error: extracted.conflicts.length
+          ? quickQuoteCopy.categoryCostConflict
+          : "",
+        jobs: [],
+        selectedJobId: jobId,
+        pendingJob: job || null,
+        pendingJobId: jobId,
+        professionalInput,
+        professionalCategoryCosts: extracted.costs,
+        categoryCostConflicts: extracted.conflicts,
+      });
+      return true;
+    }
+
+    return requestQuickQuoteInternalEstimate({
+      job,
+      jobId,
+      professionalInput,
+      professionalCategoryCosts: [],
+    });
+  }
+
+  async function confirmQuickQuoteCategoryCosts() {
+    if (
+      quickQuoteJobConnection.stage !== "costConfirmation" ||
+      quickQuoteJobConnection.categoryCostConflicts?.length
+    ) {
+      return false;
+    }
+
+    return requestQuickQuoteInternalEstimate({
+      job: quickQuoteJobConnection.pendingJob,
+      jobId: quickQuoteJobConnection.pendingJobId,
+      professionalInput: quickQuoteJobConnection.professionalInput,
+      professionalCategoryCosts:
+        quickQuoteJobConnection.professionalCategoryCosts,
+    });
+  }
+
+  async function openQuickQuoteJobPicker() {
+    setQuickQuoteJobConnection((current) => ({
+      ...current,
+      stage: "picker",
+      busy: true,
+      error: "",
+      jobs: [],
+      selectedJobId: "",
+    }));
+    try {
+      const jobs = await fetchAuthorizedProfessionalJobs({ setPage });
+      setQuickQuoteJobConnection({
+        stage: "picker",
+        busy: false,
+        error: "",
+        jobs,
+        selectedJobId: "",
+      });
+    } catch (error) {
+      setQuickQuoteJobConnection({
+        stage: "picker",
+        busy: false,
+        error:
+          error?.message || quickQuoteCopy.jobListUnavailable,
+        jobs: [],
+        selectedJobId: "",
+      });
+    }
+  }
+
+  async function attachQuickQuoteToJob(job) {
+    const professionalInput =
+      quickQuoteAnalysisState.analyzedPrompt || quickQuotePrompt;
+    return prepareQuickQuoteInternalEstimate({
+      job,
+      jobId: job.jobId,
+      professionalInput,
+    });
+  }
+
+  async function continueQuickQuoteWithProfessionalDetails() {
+    if (quickQuoteJobConnection.stage !== "idle") {
+      return false;
+    }
+
+    const continuation = getQuickQuoteProfessionalContinuation({
+      professionalInput:
+        quickQuoteAnalysisState.analyzedPrompt || quickQuotePrompt,
+      canonicalJobId,
+    });
+
+    if (!continuation.canContinue) {
+      return false;
+    }
+
+    if (continuation.nextStep === "INTERNAL_ESTIMATE") {
+      return prepareQuickQuoteInternalEstimate({
+        job: quickQuoteAttachedJob,
+        jobId: continuation.canonicalJobId,
+        professionalInput: continuation.professionalInput,
+      });
+    }
+
+    setQuickQuoteContinuationNotice("");
+    setQuickQuoteJobConnection({
+      stage: "decision",
+      busy: false,
+      error: "",
+      jobs: [],
+      selectedJobId: "",
+    });
+
+    return true;
+  }
+
+  async function continueQuickQuoteConversation(
+    message
+  ) {
+    const normalizedMessage =
+      cleanText(message);
+
+    const presentation =
+      quickQuoteAnalysisSessionState;
+
+    const priorProposal =
+      presentation.latestProposal;
+
+    if (
+      !normalizedMessage ||
+      !presentation.sessionId ||
+      !priorProposal?.proposalId ||
+      presentation.stale ||
+      quickQuoteAnalysisState.stale ||
+      quickQuotePhotoAssistant.busy
+    ) {
+      return false;
+    }
+
+    setQuickQuotePhotoAssistant(
+      (current) => ({
+        ...current,
+        busy: true,
+        error: "",
+        reviewingId: "",
+      })
+    );
+
+    try {
+      const execution =
+        await continueQuickQuoteAnalysisSession({
+          sessionId:
+            presentation.sessionId,
+          priorProposalId:
+            priorProposal.proposalId,
+          message:
+            normalizedMessage,
+          locale:
+            language,
+          setPage,
+        });
+
+      const nextPresentation =
+        applyQuickQuoteAnalysisExecutionToPresentationState(
+          presentation,
+          execution
+        );
+
+      /*
+       * The continuation created a NEW latest proposal.
+       * Invalidate any in-flight projection for the prior one
+       * before publishing the new presentation.
+       */
+      invalidateQuickQuoteReviewedResult();
+
+      setQuickQuoteAnalysisSessionState(
+        nextPresentation
+      );
+
+      await refreshQuickQuoteReviewedResult(
+        nextPresentation,
+        execution.proposal
+      );
+
+      setQuickQuoteAnalysisState(
+        (current) => ({
+          ...current,
+          available: true,
+          stale: false,
+        })
+      );
+
+      /*
+       * Only the latest proposal remains review-active.
+       * Earlier proposals and their review decisions stay durable
+       * on the server and are available to governed continuation.
+       */
+      setQuickQuotePhotoAssistant({
+        busy: false,
+        error: "",
+        proposal:
+          execution.proposal,
+        decisions: {},
+        reviewingId: "",
+      });
+
+      return true;
+    } catch (error) {
+      setQuickQuotePhotoAssistant(
+        (current) => ({
+          ...current,
+          busy: false,
+          error:
+            error?.message ||
+            quickQuoteCopy
+              .photoAnalysisFailed,
+          reviewingId: "",
+        })
+      );
+
+      return false;
+    }
+  }
+
+  async function reviewQuickQuotePhotoSuggestion({
+    category,
+    item,
+    action,
+    editedText = "",
+  }) {
+    const proposal = quickQuotePhotoAssistant.proposal;
+    const normalizedAction =
+      String(action || "").trim().toUpperCase();
+
+    if (
+      !proposal?.proposalId ||
+      !item?.id ||
+      !["ACCEPTED", "EDITED", "REJECTED"].includes(
+        normalizedAction
+      ) ||
+      quickQuoteAnalysisState.stale ||
+      quickQuoteAnalysisSessionState.stale ||
+      quickQuotePhotoAssistant.busy ||
+      quickQuoteAnalysisSessionState
+        .latestProposal
+        ?.proposalId !==
+        proposal.proposalId ||
+      quickQuotePhotoAssistant.decisions[item.id]
+    ) {
+      return false;
+    }
+
+    const reviewedText =
+      normalizedAction === "EDITED"
+        ? cleanText(editedText)
+        : cleanText(item.text);
+
+    if (normalizedAction === "EDITED" && !reviewedText) {
+      return false;
+    }
+
+    setQuickQuotePhotoAssistant((current) => ({
+      ...current,
+      busy: true,
+      error: "",
+      reviewingId: item.id,
+    }));
+
+    try {
+      await recordWorkflowReview({
+        proposalId: proposal.proposalId,
+        elementId: item.id,
+        action: normalizedAction,
+        ...(normalizedAction === "EDITED"
+          ? {
+              editedValue: {
+                ...item,
+                text: reviewedText,
+              },
+            }
+          : {}),
+        setPage,
+      });
+
+      /*
+       * R1-01:
+       * Review decisions are recorded as governed evidence only.
+       *
+       * ACCEPTED and EDITED items must NOT yet write into:
+       * - problemFound
+       * - recommendedSolution
+       * - notes
+       * - materialRows
+       * - laborRows
+       * - pricing
+       * - customer fields
+       * - Quote state
+       *
+       * R1-05 will introduce Reviewed Solution / Materials List authority.
+       */
+      setQuickQuotePhotoAssistant((current) => ({
+        ...current,
+        decisions: {
+          ...current.decisions,
+          [item.id]: {
+            action: normalizedAction,
+            text: reviewedText,
+            category,
+          },
+        },
+      }));
+
+      /*
+       * The review POST is durable evidence.
+       * The first-class Reviewed Solution / Materials List
+       * is then re-read from the server projection.
+       *
+       * Browser photoDecisions remains presentation-only.
+       */
+      await refreshQuickQuoteReviewedResult(
+        quickQuoteAnalysisSessionState,
+        proposal,
+        {
+          surfaceError: true,
+        }
+      );
+
+      setQuickQuotePhotoAssistant((current) => ({
+        ...current,
+        busy: false,
+        reviewingId: "",
+      }));
+
+      return true;
+    } catch (error) {
+      setQuickQuotePhotoAssistant((current) => ({
+        ...current,
+        busy: false,
+        reviewingId: "",
+        error:
+          error?.message || quickQuoteCopy.photoReviewFailed,
+      }));
+
+      return false;
+    }
+  }
+
+  async function addQuickQuoteDraftPhotoFiles(files = []) {
+    if (!quickQuotePhotoUploadEnabled || quickQuotePhotoBusy) return;
+
+    const source = Array.from(files || []);
+    if (!source.length) return;
+
+    const existingCount = quickQuoteDraftPhotosRef.current.length;
+    const remaining =
+      QUOTE_DRAFT_PHOTO_MAX_COUNT - existingCount;
+
+    if (remaining <= 0) {
+      setQuickQuotePhotoNotice(quickQuoteCopy.photoLimit);
+      return;
+    }
+
+    const acceptedFiles = [];
+    let rejected = false;
+
+    for (const file of source.slice(0, remaining)) {
+      const validation = validateQuoteDraftPhotoFile(file);
+      if (validation.ok) acceptedFiles.push(file);
+      else rejected = true;
+    }
+
+    if (source.length > remaining) rejected = true;
+
+    if (!acceptedFiles.length) {
+      setQuickQuotePhotoNotice(
+        rejected
+          ? quickQuoteCopy.photoInvalid
+          : quickQuoteCopy.photoLimit
+      );
+      return;
+    }
+
+    setQuickQuotePhotoBusy(true);
+    setQuickQuotePhotoNotice(quickQuoteCopy.photoUploading);
+
+    try {
+      const upload = await uploadQuoteDraftPhotos({
+        files: acceptedFiles,
+        existingCount,
+        setPage,
+      });
+
+      if (!upload.ok) {
+        const pending = acceptedFiles.map((file) => {
+          const id = `pending-photo-${globalThis.crypto?.randomUUID?.() || `${Date.now()}-${file.name}`}`;
+          quickQuotePhotoDocumentRef.current.set(id, quickQuotePhotoTargetDocumentRef.current);
+          return {
+            id,
+            name: file.name || "quote-photo",
+            previewUrl: URL.createObjectURL(file),
+            media: null,
+            pendingFile: file,
+            uploadState: "pending",
+          };
+        });
+        setQuickQuoteDraftPhotos((current) => [...current, ...pending]);
+        setQuickQuotePhotoNotice(quickQuoteCopy.photoUploadFailed);
+        return;
+      }
+
+      const prepared = upload.photos
+        .map((media, index) =>
+          createQuickQuoteDraftPhoto(
+            acceptedFiles[index],
+            media
+          )
+        )
+        .filter(Boolean);
+
+      if (prepared.length !== upload.photos.length) {
+        await Promise.all(
+          upload.photos.map((media) =>
+            cleanupQuoteDraftPhoto({ media, setPage })
+          )
+        );
+        setQuickQuotePhotoNotice(quickQuoteCopy.photoUploadFailed);
+        return;
+      }
+
+      setQuickQuoteDraftPhotos((current) => [
+        ...current,
+        ...prepared.map((photo) => {
+          quickQuotePhotoDocumentRef.current.set(photo.id, quickQuotePhotoTargetDocumentRef.current);
+          return photo;
+        }),
+      ]);
+
+      const analysisWasAvailable =
+        quickQuoteAnalysisState.available;
+
+      if (analysisWasAvailable) {
+        markQuickQuoteAnalysisStale();
+        setQuickQuoteView("entry");
+      }
+
+      setQuickQuotePhotoNotice(
+        analysisWasAvailable
+          ? quickQuoteCopy.photoChangedNotice
+          : rejected
+          ? quickQuoteCopy.photoInvalid
+          : quickQuoteCopy.photoDraftNotice
+      );
+    } finally {
+      setQuickQuotePhotoBusy(false);
+    }
+  }
+
+  async function openQuickQuotePhotoPicker() {
+    if (!quickQuotePhotoUploadEnabled || quickQuotePhotoBusy) return;
+
+    setQuickQuotePhotoNotice("");
+
+    try {
+      const result = await pickNativeJobPhoto({
+        fileNamePrefix: "quick-quote-photo",
+        quality: 72,
+      });
+
+      if (result?.photos?.length) {
+        await addQuickQuoteDraftPhotoFiles(
+          result.photos.map((photo) => photo.file).filter(Boolean)
+        );
+        return;
+      }
+
+      if (result?.cancelled) return;
+    } catch {
+      // Fall through to the browser file picker.
+    }
+
+    quickQuotePhotoInputRef.current?.click();
+  }
+
+  function handleQuickQuotePhotoInput(event) {
+    const files = Array.from(event.target.files || []);
+    event.target.value = "";
+    void addQuickQuoteDraftPhotoFiles(files);
+  }
+
+  async function ensureWorkspacePhotosDurable(pendingPhotos = []) {
+    const pendingIds = new Set(pendingPhotos.map((photo) => photo.id));
+    const pending = quickQuoteDraftPhotosRef.current.filter((photo) => pendingIds.has(photo.id) && photo.pendingFile);
+    if (!pending.length) return { ok: true, photos: quickQuoteDraftPhotosRef.current, idMap: {} };
+    const upload = await uploadQuoteDraftPhotos({
+      files: pending.map((photo) => photo.pendingFile),
+      existingCount: quickQuoteDraftPhotosRef.current.length - pending.length,
+      setPage,
+    });
+    if (!upload.ok || upload.photos.length !== pending.length) return { ok: false };
+    const replacements = new Map();
+    const idMap = {};
+    pending.forEach((photo, index) => {
+      const replacement = createQuickQuoteDraftPhoto(photo.pendingFile, upload.photos[index]);
+      if (!replacement) return;
+      replacements.set(photo.id, replacement);
+      idMap[photo.id] = replacement.id;
+      const documentType = quickQuotePhotoDocumentRef.current.get(photo.id) || "quote";
+      quickQuotePhotoDocumentRef.current.delete(photo.id);
+      quickQuotePhotoDocumentRef.current.set(replacement.id, documentType);
+      if (photo.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(photo.previewUrl);
+    });
+    if (replacements.size !== pending.length) return { ok: false };
+    const next = quickQuoteDraftPhotosRef.current.map((photo) => replacements.get(photo.id) || photo);
+    quickQuoteDraftPhotosRef.current = next;
+    setQuickQuoteDraftPhotos(next);
+    return { ok: true, photos: next, idMap };
+  }
+
+  function restoreWorkspacePhotos(nextPhotos = [], options = {}) {
+    const prepared = nextPhotos.map((photo) => ({
+      ...photo,
+      previewUrl: photo.previewUrl || photo.media?.secure_url || (photo.pendingFile ? URL.createObjectURL(photo.pendingFile) : ""),
+    }));
+    let next;
+    if (options.replaceAll) {
+      next = prepared;
+      quickQuotePhotoDocumentRef.current.clear();
+    } else {
+      const type = options.documentType || "quote";
+      const retained = quickQuoteDraftPhotosRef.current.filter((photo) => quickQuotePhotoDocumentRef.current.get(photo.id) !== type);
+      next = [...retained, ...prepared];
+      [...quickQuotePhotoDocumentRef.current.entries()].forEach(([id, documentType]) => {
+        if (documentType === type) quickQuotePhotoDocumentRef.current.delete(id);
+      });
+    }
+    prepared.forEach((photo) => quickQuotePhotoDocumentRef.current.set(photo.id, options.documentType || "quote"));
+    if (options.persisted) prepared.forEach((photo) => quickQuotePersistedPhotoIdsRef.current.add(photo.id));
+    quickQuoteDraftPhotosRef.current = next;
+    setQuickQuoteDraftPhotos(next);
+  }
+
+  function markWorkspacePhotosPersisted(photoIds = []) {
+    photoIds.forEach((id) => quickQuotePersistedPhotoIdsRef.current.add(id));
+  }
+
+  function discardWorkspaceTransientPhotos() {
+    quickQuoteDraftPhotosRef.current.forEach((photo) => {
+      if (quickQuotePersistedPhotoIdsRef.current.has(photo.id)) return;
+      if (photo.previewUrl?.startsWith("blob:")) URL.revokeObjectURL(photo.previewUrl);
+      if (photo.media) void cleanupQuoteDraftPhoto({ media: photo.media, setPage });
+    });
+  }
+
+  function markQuickQuoteAnalysisStale() {
+    invalidateQuickQuoteReviewedResult();
+
+    setQuickQuoteAnalysisState((current) =>
+      current.available
+        ? {
+            ...current,
+            stale: true,
+          }
+        : current
+    );
+
+    setQuickQuoteAnalysisSessionState(
+      (current) =>
+        current.sessionId
+          ? markQuickQuoteAnalysisPresentationStale(
+              current
+            )
+          : current
+    );
+  }
+
+  function handleQuickQuotePromptChange(value) {
+    setQuickQuotePrompt(value);
+    setQuickQuoteContinuationNotice("");
+
+    /*
+     * R1-01 presentation-only stale state.
+     * This is not a durable evidence fingerprint or server authority.
+     * Any professional description change after analysis requires
+     * a new analysis before the previous result may be treated as current.
+     */
+    markQuickQuoteAnalysisStale();
+  }
+
+  function backToQuickQuoteJobDetails() {
+    /*
+     * Internal workflow navigation only.
+     * Do not clean media, clear analysis, or navigate out of QuoteBuilder.
+     */
+    setQuickQuoteView("entry");
+  }
+
+  function returnToQuickQuoteAnalysis() {
+    if (
+      !quickQuoteAnalysisState.available ||
+      quickQuoteAnalysisState.stale
+    ) {
+      return;
+    }
+
+    setQuickQuoteView("review");
+  }
+
+  async function removeQuickQuoteDraftPhoto(photoId) {
+    if (quickQuotePhotoBusy) return;
+
+    const photo = quickQuoteDraftPhotosRef.current.find(
+      (item) => item.id === photoId
+    );
+
+    if (!photo?.media) return;
+
+    setQuickQuotePhotoBusy(true);
+    setQuickQuotePhotoNotice("");
+
+    try {
+      const cleaned = await cleanupQuoteDraftPhoto({
+        media: photo.media,
+        setPage,
+      });
+
+      if (!cleaned) {
+        setQuickQuotePhotoNotice(
+          quickQuoteCopy.photoCleanupFailed
+        );
+        return;
+      }
+
+      setQuickQuoteDraftPhotos((current) =>
+        current.filter((item) => item.id !== photoId)
+      );
+
+      const analysisWasAvailable =
+        quickQuoteAnalysisState.available;
+
+      if (analysisWasAvailable) {
+        markQuickQuoteAnalysisStale();
+        setQuickQuoteView("entry");
+      }
+
+      setQuickQuotePhotoNotice(
+        analysisWasAvailable
+          ? quickQuoteCopy.photoChangedNotice
+          : quickQuoteCopy.photoDraftNotice
+      );
+    } finally {
+      setQuickQuotePhotoBusy(false);
+    }
+  }
+
+  function navigateFromQuoteBuilder() {
+    /*
+     * Preserve the existing destination-selection logic exactly.
+     * This function is called only after any required R1-01
+     * transient-media cleanup has completed.
+     */
+    if (restoreConversationOriginContext(setPage)) return;
+
+    if (isEditingExistingQuote) {
+      localStorage.removeItem("selectedQuoteForEdit");
+      localStorage.setItem("meetroWorkCenterTab", "quotes");
+      localStorage.setItem("activeWorkCenterTab", "quotes");
+      setPage("workCenter");
+    } else if (isRevisedQuoteFlow) {
+      setPage("conversationThread");
+    } else if (isBusinessToolsReturn) {
+      setPage("businessCommandCenter");
+    } else if (isDesktopSidebarQuickQuote && quoteBuilderReturnPage) {
+      localStorage.removeItem("quoteBuilderReturnPage");
+      localStorage.removeItem("quoteBuilderSource");
+      setPage(quoteBuilderReturnPage);
+    } else if (
+      ["business_dashboard_new_quote", "meetro_assistant_new_quote"].includes(quoteBuilderSource) &&
+      quoteBuilderReturnPage
+    ) {
+      localStorage.removeItem("quoteBuilderReturnPage");
+      localStorage.removeItem("quoteBuilderSource");
+      setPage(quoteBuilderReturnPage);
+    } else if (isWorkCenterReturn) {
+      localStorage.setItem("meetroWorkCenterTab", "quotes");
+      localStorage.setItem("activeWorkCenterTab", "quotes");
+      setPage("workCenter");
+    } else {
+      setPage("businessLeads");
+    }
+  }
+
+  async function exitQuickQuoteAnalysis() {
+    const currentPhotos = [
+      ...quickQuoteDraftPhotosRef.current,
+    ];
+
+    const hasPrivateAnalysis =
+      Boolean(cleanText(quickQuotePrompt)) ||
+      currentPhotos.length > 0 ||
+      quickQuoteAnalysisState.available ||
+      Boolean(
+        quickQuoteAnalysisSessionState.sessionId
+      ) ||
+      Boolean(quickQuotePhotoAssistant.proposal);
+
+    if (hasPrivateAnalysis) {
+      const confirmed = window.confirm(
+        `${quickQuoteCopy.discardTitle}\n\n${quickQuoteCopy.discardBody}`
+      );
+
+      if (!confirmed) {
+        return;
+      }
+    }
+
+    /*
+     * R1-04 full workflow discard.
+     *
+     * Internal Back never deletes the session.
+     * Explicit full exit does.
+     *
+     * Delete the durable private session first, then continue
+     * with governed transient-media cleanup. If session discard
+     * fails, do not navigate and do not start media cleanup.
+     */
+    const analysisSessionId =
+      quickQuoteAnalysisSessionState
+        .sessionId;
+
+    if (analysisSessionId) {
+      try {
+        await discardQuickQuoteAnalysisSession({
+          sessionId:
+            analysisSessionId,
+          setPage,
+        });
+      } catch (error) {
+        setQuickQuotePhotoNotice(
+          error?.message ||
+            quickQuoteCopy
+              .photoAnalysisFailed
+        );
+
+        setQuickQuoteView("entry");
+        return;
+      }
+
+      setQuickQuoteAnalysisSessionState(
+        createQuickQuoteAnalysisPresentationState()
+      );
+
+      invalidateQuickQuoteReviewedResult();
+
+      setQuickQuoteAnalysisState({
+        available: false,
+        stale: false,
+        analyzedPrompt: "",
+      });
+
+      setQuickQuotePhotoAssistant({
+        busy: false,
+        error: "",
+        proposal: null,
+        decisions: {},
+        reviewingId: "",
+      });
+
+      /*
+       * If Cloudinary cleanup below fails, the server session
+       * is already authoritatively discarded. Keep only the
+       * failed transient media refs so cleanup can be retried.
+       */
+      setQuickQuoteView("entry");
+    }
+
+    /*
+     * Full workflow exit is different from internal Back.
+     * Every governed transient photo must be explicitly cleaned
+     * before navigation is allowed.
+     */
+    const failedPhotoIds = new Set();
+
+    for (const photo of currentPhotos) {
+      if (!photo?.media) {
+        continue;
+      }
+
+      let cleaned;
+
+      try {
+        cleaned = await cleanupQuoteDraftPhoto({
+          media: photo.media,
+          setPage,
+        });
+      } catch {
+        cleaned = false;
+      }
+
+      if (!cleaned) {
+        failedPhotoIds.add(photo.id);
+      }
+    }
+
+    if (failedPhotoIds.size > 0) {
+      /*
+       * Successfully cleaned refs are removed immediately.
+       * Failed refs remain so cleanup can be retried.
+       * Do not navigate out of the workflow.
+       */
+      const failedPhotos = currentPhotos.filter(
+        (photo) => failedPhotoIds.has(photo.id)
+      );
+
+      quickQuoteDraftPhotosRef.current = failedPhotos;
+      setQuickQuoteDraftPhotos(failedPhotos);
+      setQuickQuotePhotoNotice(
+        quickQuoteCopy.photoCleanupFailed
+      );
+
+      return;
+    }
+
+    /*
+     * Clear the ref BEFORE setPage/navigating so the defensive
+     * unmount cleanup does not issue duplicate cleanup requests.
+     */
+    quickQuoteDraftPhotosRef.current = [];
+
+    setQuickQuoteDraftPhotos([]);
+    setQuickQuotePrompt("");
+    setQuickQuotePhotoNotice("");
+    setQuickQuotePhotoAssistant({
+      busy: false,
+      error: "",
+      proposal: null,
+      decisions: {},
+      reviewingId: "",
+    });
+    invalidateQuickQuoteReviewedResult();
+    setQuickQuoteAnalysisState({
+      available: false,
+      stale: false,
+      analyzedPrompt: "",
+    });
+    setQuickQuoteView("entry");
+
+    navigateFromQuoteBuilder();
+  }
+
+  function applyUnifiedQuotePatch(patch = {}) {
+    if (Object.hasOwn(patch, "customerName")) setCustomerName(patch.customerName);
+    if (Object.hasOwn(patch, "customerEmail")) setCustomerEmail(patch.customerEmail);
+    if (Object.hasOwn(patch, "customerPhone")) setCustomerPhone(patch.customerPhone);
+    if (Object.hasOwn(patch, "customerAddress")) setCustomerAddress(patch.customerAddress);
+    if (Object.hasOwn(patch, "agreement")) setAgreement(patch.agreement);
+    if (Object.hasOwn(patch, "customerLocation")) setCustomerLocation(patch.customerLocation);
+    if (Object.hasOwn(patch, "projectTitle")) setProjectTitle(patch.projectTitle);
+    if (Object.hasOwn(patch, "projectDescription")) setProjectDescription(patch.projectDescription);
+    if (Object.hasOwn(patch, "problemFound")) setProblemFound(patch.problemFound);
+    if (Object.hasOwn(patch, "recommendedSolution")) setRecommendedSolution(patch.recommendedSolution);
+    if (Object.hasOwn(patch, "timeline")) setTimeline(patch.timeline);
+    if (Object.hasOwn(patch, "labor")) setLabor(patch.labor);
+    if (Object.hasOwn(patch, "materials")) setMaterials(patch.materials);
+    if (Object.hasOwn(patch, "estimatedDuration")) setEstimatedDuration(patch.estimatedDuration);
+    if (Object.hasOwn(patch, "totalOverride")) setTotalOverride(patch.totalOverride);
+    if (Object.hasOwn(patch, "notes")) setNotes(patch.notes);
+    if (Object.hasOwn(patch, "terms")) setTerms(patch.terms);
+    if (Object.hasOwn(patch, "quoteNumber")) setQuoteNumber(patch.quoteNumber);
+    if (Object.hasOwn(patch, "quoteDate")) setQuoteDate(patch.quoteDate);
+    if (Object.hasOwn(patch, "depositRequired")) setDepositRequired(patch.depositRequired);
+    if (Object.hasOwn(patch, "depositAmount")) setDepositAmount(patch.depositAmount);
+    if (Object.hasOwn(patch, "pricingDisplayMode")) setPricingDisplayMode(patch.pricingDisplayMode);
+    if (Object.hasOwn(patch, "materialsDisplayMode")) setMaterialsDisplayMode(patch.materialsDisplayMode);
+    if (Object.hasOwn(patch, "depositMode")) setDepositMode(patch.depositMode);
+    if (Object.hasOwn(patch, "depositPercent")) setDepositPercent(patch.depositPercent);
+    if (Object.hasOwn(patch, "depositFixedAmount")) setDepositFixedAmount(patch.depositFixedAmount);
+    if (Object.hasOwn(patch, "discount")) setDiscount(patch.discount);
+    if (Object.hasOwn(patch, "tax")) setTax(patch.tax);
+    if (Object.hasOwn(patch, "travelFee")) setTravelFee(patch.travelFee);
+    if (Object.hasOwn(patch, "disposalFee")) setDisposalFee(patch.disposalFee);
+    if (Object.hasOwn(patch, "startDate")) setStartDate(patch.startDate);
+    if (patch.depositTerms) {
+      setTerms((current) => {
+        const existing = cleanText(current);
+        return existing.toLowerCase().includes(patch.depositTerms.toLowerCase())
+          ? existing
+          : [existing, patch.depositTerms].filter(Boolean).join(" · ");
+      });
+    }
+    if (patch.replaceCollections) {
+      setLineItems(
+        patch.lineItems?.length
+          ? patch.lineItems.map((item, index) => normalizeQuoteLineItem(item, index))
+          : [normalizeQuoteLineItem({}, 0)]
+      );
+      setMaterialRows(
+        patch.materialItems?.length
+          ? patch.materialItems.map((item, index) => normalizeQuoteMaterialItem(item, index))
+          : [normalizeQuoteMaterialItem({}, 0)]
+      );
+      setLaborRows(
+        patch.laborItems?.length
+          ? patch.laborItems.map((item, index) => normalizeQuoteLaborItem(item, index, isSpanish))
+          : [normalizeQuoteLaborItem({}, 0, isSpanish)]
+      );
+    } else if (patch.lineItemDescription) {
+      setLineItems((rows) => rows.map((row, index) =>
+        index === 0 && !cleanText(row.description)
+          ? { ...row, description: patch.lineItemDescription }
+          : row
+      ));
+    }
+    if (!patch.replaceCollections && patch.materialItems?.length) {
+      setMaterialRows((rows) => {
+        const next = [...rows];
+        patch.materialItems.forEach((item) => {
+          const index = next.findIndex((row) =>
+            cleanText(row.name).toLowerCase() === cleanText(item.name).toLowerCase()
+          );
+          const normalized = normalizeQuoteMaterialItem(item, index >= 0 ? index : next.length);
+          if (index >= 0) next[index] = { ...next[index], ...normalized, id: next[index].id };
+          else next.push(normalized);
+        });
+        return next.filter((row, index) => index > 0 || cleanText(row.name) || Number(row.total || 0) > 0);
+      });
+    } else if (!patch.replaceCollections && patch.materialAmount) {
+      setMaterialRows((rows) => rows.map((row, index) =>
+        index === 0 ? { ...row, name: row.name || "Materials", total: patch.materialAmount } : row
+      ));
+    }
+    if (!patch.replaceCollections && patch.laborItems?.length) {
+      setLaborRows((rows) => patch.laborItems.map((item, index) =>
+        normalizeQuoteLaborItem({ ...item, id: rows[index]?.id || item.id }, index, isSpanish)
+      ));
+    }
+  }
+
+  function leaveUnifiedBusinessWorkspace() {
+    if (isUnifiedDepositRequestEntry) {
+      setPage(routeCanonicalJobId
+        ? `workCenter?jobId=${encodeURIComponent(routeCanonicalJobId)}`
+        : "workCenter");
+      return;
+    }
+    if (isUnifiedInvoiceEntry) {
+      const destination = invoiceBuilderReturnPage || "conversationThread";
+      if (invoiceBuilderSource) localStorage.removeItem("invoiceBuilderSource");
+      if (invoiceBuilderReturnPage) localStorage.removeItem("invoiceBuilderReturnPage");
+      setPage(destination);
+      return;
+    }
+
+    if (isUniversalQuickQuote) {
+      void exitQuickQuoteAnalysis();
+      return;
+    }
+
+    navigateFromQuoteBuilder();
+  }
+
+  const unifiedQuoteDraft = {
+    customerName,
+    customerEmail,
+    customerPhone,
+    customerAddress,
+    customerLocation,
+    projectTitle,
+    projectDescription,
+    recommendedSolution,
+    quoteNumber,
+    quoteDate,
+    lineItems: lineItems.map((item) => ({ ...item, total: getEditableRowTotal(item) })),
+    materialItems: materialRows.map((item) => ({ ...item, total: getEditableRowTotal(item, "quantity", "cost") })),
+    laborItems: laborRows.map((item) => ({ ...item, total: getEditableRowTotal(item, "hours", "rate") })),
+    total: calculatedTotal,
+    totalOverride,
+    terms,
+    pricingDisplayMode,
+    materialsDisplayMode,
+    depositMode,
+    depositPercent,
+    depositFixedAmount,
+    depositRequired,
+    depositAmount,
+    discount,
+    tax,
+    fees: String(feesAmount || ""),
+    estimatedDuration,
+    notes,
+    agreement,
+    canonicalStatus: "DRAFT",
+  };
+
+  const unifiedDepositRequestQuote =
+    isUnifiedDepositRequestEntry && depositRequestSourceQuoteDocument
+      ? {
+          ...unifiedQuoteDraft,
+          ...depositRequestSourceQuoteDocument.content,
+          quoteNumber:
+            depositRequestSourceQuoteDocument.documentNumber ||
+            depositRequestSourceQuoteDocument.content?.quoteNumber ||
+            unifiedQuoteDraft.quoteNumber ||
+            "",
+          customerParty:
+            depositRequestSourceQuoteDocument.customerParty || null,
+        }
+      : unifiedQuoteDraft;
+
+  const unifiedWorkspaceEnabled = true;
+
+  if (unifiedWorkspaceEnabled) {
+    if (sourceQuoteRoute && sourceQuoteState.status !== "ready") {
+      return <div className="app-page business-document-context-gate" role={sourceQuoteState.status === "unavailable" ? "alert" : "status"}>
+        <h1>Prepare Invoice from Quote</h1>
+        <p>{sourceQuoteState.status === "unavailable" ? sourceQuoteState.error : "Verifying the exact source Quote…"}</p>
+        <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
+      </div>;
+    }
+
+    if (!savedQuoteRoute.valid) {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate" role="alert">
+          <h1>Saved Quote unavailable</h1>
+          <p>
+            Meetro could not verify this saved Quote route. No customer information
+            was shown and nothing was opened or changed.
+          </p>
+          <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
+        </div>
+      );
+    }
+    if (routeSavedDocumentId && savedRouteBootstrap.status === "loading") {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate">
+          <p role="status">Opening the exact authorized saved Quote…</p>
+        </div>
+      );
+    }
+    if (routeSavedDocumentId && savedRouteBootstrap.status !== "ready") {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate" role="alert">
+          <h1>Saved Quote unavailable</h1>
+          <p>
+            Meetro could not verify this exact saved Quote for the signed-in
+            professional. No customer information was shown and nothing was opened
+            or changed.
+          </p>
+          <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
+        </div>
+      );
+    }
+    if (isUnifiedInvoiceEntry && routeCanonicalJobId && invoicePreparation.status === "loading") {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate">
+          <p role="status">Preparing the completed Job for Invoice review…</p>
+        </div>
+      );
+    }
+    if (isUnifiedInvoiceEntry && routeCanonicalJobId && invoicePreparation.status === "existing") {
+      // App navigation tracks the page name, so a query-only redirect need not
+      // rerender InvoiceBuilder. Open the same exact-Invoice boundary directly.
+      return (
+        <ProfessionalInvoiceWorkspace
+          setPage={setPage}
+          initialInvoiceId={invoicePreparation.invoiceId}
+          expectedJobId={routeCanonicalJobId}
+          onBack={() => setPage(`workCenter?jobId=${encodeURIComponent(routeCanonicalJobId)}`)}
+        />
+      );
+    }
+    if (isUnifiedInvoiceEntry && routeCanonicalJobId && invoicePreparation.status !== "ready") {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate" role="alert">
+          <h1>Invoice review unavailable</h1>
+          <p>{invoicePreparation.error || "This completed Job is not ready for Invoice review."}</p>
+          <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
+        </div>
+      );
+    }
+    if (
+      !isUnifiedInvoiceEntry &&
+      savedQuoteContextJobId &&
+      ["loading", "standalone"].includes(jobLinkedQuoteContext.status)
+    ) {
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate">
+          <p role="status">Loading the authorized Job, customer, and Evaluation context…</p>
+        </div>
+      );
+    }
+    if (
+      !isUnifiedInvoiceEntry &&
+      savedQuoteContextJobId &&
+      !["ready", "protected"].includes(jobLinkedQuoteContext.status)
+    ) {
+      const multipleSavedQuotes = jobLinkedQuoteContext.status === "ambiguous";
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate" role="alert">
+          <h1>{multipleSavedQuotes ? "Choose a saved Quote" : "Job context unavailable"}</h1>
+          <p>
+            {multipleSavedQuotes
+              ? "More than one saved Quote is linked to this Job. Open Saved Files and choose the exact Quote; Meetro did not select or create one automatically."
+              : "Meetro could not verify this Job and its customer for the signed-in professional. No customer information was shown and no Quote was created."}
+          </p>
+          <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
+        </div>
+      );
+    }
+    if (!isUnifiedDepositRequestEntry && !routeSavedDocumentId && routeCanonicalJobId && jobLinkedQuoteContext.existingQuoteProtected) {
+      const savedQuoteResume = jobLinkedQuoteContext.savedQuoteResume ||
+        resolveJobLinkedSavedQuoteResume(jobLinkedQuoteContext.context);
+      return (
+        <div className="app-page meetro-form-page business-document-context-gate">
+          <h1>Existing Quote protected</h1>
+          <p>
+            This Job already has saved Quote work. Open the exact saved Quote so fresh
+            Job or Evaluation context does not replace professional-entered content.
+          </p>
+          <button
+            type="button"
+            disabled={!savedQuoteResume}
+            onClick={openProtectedJobLinkedQuote}
+          >
+            Open Saved Quote
+          </button>
+          {!savedQuoteResume ? (
+            <p role="alert">
+              The exact saved working Quote could not be verified. Nothing was
+              opened or changed.
+            </p>
+          ) : null}
+          <button type="button" onClick={leaveUnifiedBusinessWorkspace}>Go Back</button>
+        </div>
+      );
+    }
+    return (
+      <>
+        <input
+          ref={quickQuotePhotoInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          hidden
+          disabled={!quickQuotePhotoUploadEnabled || quickQuotePhotoBusy}
+          onChange={handleQuickQuotePhotoInput}
+        />
+        <UnifiedBusinessDocumentWorkspace
+          setPage={setPage}
+          language={language}
+          sourceQuoteDocument={sourceQuoteState.document}
+          sourceQuoteAuthority={sourceQuoteState.authority}
+          sourceQuotePaymentEvidence={sourceQuoteState.paymentEvidence}
+          sourceQuoteInstruction={sourceQuoteState.instruction}
+          initialDocument={initialDocument}
+          initialSavedDocumentId={
+            routeSavedDocumentId ||
+            jobLinkedQuoteContext.reopenDocumentId ||
+            (isUnifiedInvoiceEntry ? invoicePreparation.resumeDocumentId : null)
+          }
+          initialSavedDocument={savedRouteBootstrap.document}
+          genericNewQuoteIntent={isGenericNewQuoteIntent}
+          onDurableDocumentOpened={persistOpenedQuoteRoute}
+          job={{
+            id: canonicalJobId || null,
+            requestId: invoicePreparation.job?.requestId || jobLinkedQuoteContext.context?.job.requestId || null,
+            relationshipId:
+              invoicePreparation.job?.relationshipId || jobLinkedQuoteContext.context?.job.relationshipId || null,
+            title: invoicePreparation.job?.serviceTitle || quickQuoteAttachedJob?.title || activeJobSnapshot?.service || projectTitle,
+            customerName: invoicePreparation.job?.customerName || quickQuoteAttachedJob?.customerLabel || activeJobSnapshot?.customer || customerName,
+            location: routeCanonicalJobId
+              ? customerLocation
+              : activeJobSnapshot?.location || customerLocation,
+            customerConcern:
+              jobLinkedQuoteContext.context?.project.customerConcern || "",
+            evaluation: jobLinkedQuoteContext.context?.evaluation || null,
+            findings: jobLinkedQuoteContext.context?.findings || [],
+            recommendations:
+              jobLinkedQuoteContext.context?.recommendations || [],
+            customerLinkedFromJob:
+              invoicePreparation.status === "ready" || (
+                ["ready", "protected"].includes(jobLinkedQuoteContext.status) &&
+                Boolean(jobLinkedQuoteContext.context?.customer.displayName)
+              ),
+            canonical: Boolean(canonicalJobId),
+          }}
+          quote={
+            isUnifiedDepositRequestEntry
+              ? unifiedDepositRequestQuote
+              : unifiedQuoteDraft
+          }
+          depositRequestSourceQuoteDocument={
+            isUnifiedDepositRequestEntry
+              ? depositRequestSourceQuoteDocument
+              : null
+          }
+          invoicePreparation={invoicePreparation.status === "ready" ? invoicePreparation.job : null}
+          onCreateCanonicalInvoice={createReviewedCompletedJobInvoice}
+          onApplyQuotePatch={applyUnifiedQuotePatch}
+          onAddPhotos={(documentType = "quote") => {
+            quickQuotePhotoTargetDocumentRef.current = documentType;
+            void openQuickQuotePhotoPicker();
+          }}
+          canAddPhotos={quickQuotePhotoUploadEnabled}
+          photos={quickQuoteDraftPhotos}
+          photoBusy={quickQuotePhotoBusy}
+          photoNotice={quickQuotePhotoNotice}
+          onEnsurePhotosDurable={ensureWorkspacePhotosDurable}
+          onRestorePhotos={restoreWorkspacePhotos}
+          onPhotosPersisted={markWorkspacePhotosPersisted}
+          onDiscardTransientPhotos={discardWorkspaceTransientPhotos}
+          onDownloadQuote={(photoEvidence, workingDraftStatus) => void exportQuickQuotePdf(photoEvidence, workingDraftStatus)}
+          onPreviewQuote={(photoEvidence, workingDraftStatus) => previewQuickQuotePdfWithPhotos(photoEvidence, workingDraftStatus)}
+          onBack={leaveUnifiedBusinessWorkspace}
+        />
+      </>
+    );
+  }
 
   return (
     <div className="app-page meetro-form-page" style={page}>
       <button
         style={backButton}
         onClick={() => {
-          if (restoreConversationOriginContext(setPage)) return;
-
-          if (isEditingExistingQuote) {
-            localStorage.removeItem("selectedQuoteForEdit");
-            localStorage.setItem("meetroWorkCenterTab", "quotes");
-            localStorage.setItem("activeWorkCenterTab", "quotes");
-            setPage("workCenter");
-          } else if (isRevisedQuoteFlow) {
-            setPage("conversationThread");
-          } else if (isWorkCenterReturn) {
-            localStorage.setItem("meetroWorkCenterTab", "quotes");
-            localStorage.setItem("activeWorkCenterTab", "quotes");
-            setPage("workCenter");
-          } else if (isBusinessToolsReturn) {
-            setPage("businessCommandCenter");
-          } else {
-            setPage("businessLeads");
+          if (isUniversalQuickQuote) {
+            void exitQuickQuoteAnalysis();
+            return;
           }
+
+          navigateFromQuoteBuilder();
         }}
       >
         ←{" "}
@@ -1266,6 +3620,184 @@ ${businessIdentity.businessName}`;
         </button>
       )}
 
+      {isUniversalQuickQuote ? (
+        <>
+        <input
+          ref={quickQuotePhotoInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/webp"
+          multiple
+          hidden
+          disabled={
+            !quickQuotePhotoUploadEnabled ||
+            quickQuotePhotoBusy
+          }
+          onChange={handleQuickQuotePhotoInput}
+        />
+        {quickQuoteView === "internalEstimate" && assistant.result ? (
+          <main
+            className="quick-quote-internal-estimate"
+            aria-labelledby="quick-quote-internal-estimate-title"
+          >
+            <button
+              type="button"
+              className="quick-quote-analysis-back"
+              onClick={() => setQuickQuoteView("review")}
+            >
+              ← {quickQuoteCopy.backToJobAnalysis}
+            </button>
+            <header className="quick-quote-flow-header">
+              <p>{quickQuoteCopy.privateInternal}</p>
+              <h1 id="quick-quote-internal-estimate-title">
+                {assistant.result.operation === INTELLIGENCE_OPERATION.ESTIMATE
+                  ? quickQuoteCopy.internalEstimateTitle
+                  : quickQuoteCopy.quoteReviewTitle}
+              </h1>
+              <div className="quick-quote-guidance">
+                <strong>
+                  {assistant.result.operation === INTELLIGENCE_OPERATION.ESTIMATE
+                    ? quickQuoteCopy.internalEstimateHelp
+                    : quickQuoteCopy.quoteReviewHelp}
+                </strong>
+                <span>{quickQuoteCopy.noQuotePricingPromotion}</span>
+              </div>
+            </header>
+            <section className="quick-quote-connected-job">
+              <span>{quickQuoteCopy.connectedJob}</span>
+              <strong>{quickQuoteAttachedJob?.title}</strong>
+              {quickQuoteAttachedJob?.customerLabel ? (
+                <small>{quickQuoteAttachedJob.customerLabel}</small>
+              ) : null}
+            </section>
+            <EstimateAssistantResult
+              key={assistant.result.proposal.proposalId}
+              result={assistant.result}
+              language={language}
+              onSolutionReady={() => void markEstimateSolutionReady()}
+              onUseQuote={(edits) => void handleUseQuoteComposition(edits)}
+              onDismiss={() => void dismissEstimateHelp()}
+            />
+            {assistant.error ? (
+              <p className="quick-quote-action-notice" role="alert">
+                {assistant.error}
+              </p>
+            ) : null}
+          </main>
+        ) : (
+        <QuickQuoteConversation
+          language={language}
+          view={quickQuoteView}
+          prompt={quickQuotePrompt}
+          onPromptChange={handleQuickQuotePromptChange}
+          onPrepare={prepareQuickQuoteConversation}
+          onBackToDetails={backToQuickQuoteJobDetails}
+          onReturnToAnalysis={returnToQuickQuoteAnalysis}
+          analysisAvailable={
+            quickQuoteAnalysisState.available
+          }
+          analysisStale={
+            quickQuoteAnalysisState.stale
+          }
+          analysisBusy={
+            quickQuotePhotoAssistant.busy
+          }
+          analysisTurns={
+            quickQuoteAnalysisSessionState
+              .turns
+              .filter(
+                (turn) =>
+                  turn.evidenceVersion ===
+                  quickQuoteAnalysisSessionState
+                    .latestEvidenceVersion
+              )
+          }
+          onContinueAnalysis={
+            continueQuickQuoteConversation
+          }
+          onContinueWithMyDetails={continueQuickQuoteWithProfessionalDetails}
+          jobConnection={quickQuoteJobConnection}
+          onOpenJobPicker={() => void openQuickQuoteJobPicker()}
+          onSelectJob={(job) => void attachQuickQuoteToJob(job)}
+          onConfirmCategoryCosts={() =>
+            void confirmQuickQuoteCategoryCosts()
+          }
+          onCancelJobConnection={() =>
+            setQuickQuoteJobConnection({
+              stage: "idle",
+              busy: false,
+              error: "",
+              jobs: [],
+              selectedJobId: "",
+            })
+          }
+          onBackToJobConnection={() =>
+            setQuickQuoteJobConnection((current) => ({
+              ...current,
+              stage: "decision",
+              error: "",
+              selectedJobId: "",
+            }))
+          }
+          setPage={setPage}
+          photoCount={quickQuoteDraftPhotos.length}
+          photos={quickQuoteDraftPhotos}
+          canAddPhotos={quickQuotePhotoUploadEnabled}
+          photoBusy={quickQuotePhotoBusy}
+          onAddPhotos={() =>
+            void openQuickQuotePhotoPicker()
+          }
+          onRemovePhoto={(photoId) =>
+            void removeQuickQuoteDraftPhoto(photoId)
+          }
+          photoProposal={
+            quickQuotePhotoAssistant.proposal
+          }
+          reviewedResult={
+            !quickQuoteAnalysisState.stale &&
+            !quickQuoteAnalysisSessionState.stale &&
+            quickQuoteReviewedResult
+              ?.analysisSessionId ===
+              quickQuoteAnalysisSessionState
+                .sessionId &&
+            quickQuoteReviewedResult
+              ?.evidenceVersion ===
+              quickQuoteAnalysisSessionState
+                .latestEvidenceVersion &&
+            quickQuoteReviewedResult
+              ?.proposalId ===
+              quickQuotePhotoAssistant
+                .proposal
+                ?.proposalId
+              ? quickQuoteReviewedResult
+              : null
+          }
+          photoDecisions={
+            quickQuotePhotoAssistant.decisions
+          }
+          photoReviewBusyId={
+            quickQuotePhotoAssistant.reviewingId
+          }
+          onReviewPhotoSuggestion={
+            reviewQuickQuotePhotoSuggestion
+          }
+          notice={[
+            quickQuoteContinuationNotice,
+            quickQuotePhotoNotice,
+            quickQuotePhotoAssistant.error,
+          ]
+            .filter(Boolean)
+            .join(" ")}
+        />
+        )}
+        </>
+      ) : null}
+      {!isUniversalQuickQuote && (
+        <section
+          id={isUniversalQuickQuote ? "quick-quote-full-details" : undefined}
+          className={isUniversalQuickQuote ? "quick-quote-full-details" : undefined}
+          tabIndex={isUniversalQuickQuote ? -1 : undefined}
+          aria-label={isUniversalQuickQuote ? quickQuoteCopy.fullDetailsLabel : undefined}
+        >
       <div style={hero}>
         {isRevisedQuoteFlow && (
           <div style={revisionBanner}>
@@ -1420,9 +3952,7 @@ ${businessIdentity.businessName}`;
 	        </div>
 
         <div style={proposalCard}>
-          <p style={eyebrowDark}>
-            {isSpanish ? "Propuesta para el cliente" : "Customer Proposal"}
-          </p>
+          <p style={eyebrowDark}>{t("quoteDraftHelpTitle", language)}</p>
           <h2 style={sectionTitle}>
             {isSpanish ? "Problema encontrado" : "Problem Found"}
           </h2>
@@ -1439,11 +3969,7 @@ ${businessIdentity.businessName}`;
           <h2 style={sectionTitle}>
             {isSpanish ? "Solución recomendada" : "Recommended Solution"}
           </h2>
-          <p style={proposalHint}>
-            {isSpanish
-              ? "Transforma tus notas internas en una explicación clara para el cliente antes de enviar."
-              : "Turn your internal findings into a clear customer-ready recommendation before sending."}
-          </p>
+          <p style={proposalHint}>{t("quoteProposalReviewHint", language)}</p>
           <textarea
             style={proposalTextarea}
             value={recommendedSolution}
@@ -1539,61 +4065,38 @@ ${businessIdentity.businessName}`;
 
         <div style={card}>
           <h2 style={sectionTitle}>{isSpanish ? "Partidas, totales y vista previa" : "Line Items, Totals, and Preview"}</h2>
-          <p style={sectionHelperText}>
-            {isSpanish
-              ? "Organiza materiales, mano de obra, depósito y términos antes de compartir con el cliente."
-              : "Organize materials, labor, deposit, and terms before sharing with the customer."}
-          </p>
+          <p style={sectionHelperText}>{t("quotePricingPreviewHint", language)}</p>
 
-          <div style={aiQuoteHelpCard}>
-            <p style={eyebrowDark}>Meetro Proposal Help</p>
-            <p style={aiQuoteHelpSubtitle}>
-              Use Meetro to improve proposal wording, organize services, and check for missing details.
-            </p>
-            <div style={aiChipGrid}>
-              <button style={aiChip} onClick={() => runAiQuoteHelp("improve")}>
-                Improve wording
-              </button>
-              <button style={aiChip} onClick={() => runAiQuoteHelp("lineItems")}>
-                Suggest line items
-              </button>
-              <button style={aiChip} onClick={() => runAiQuoteHelp("missing")}>
-                Check missing details
-              </button>
-              <button style={aiChip} onClick={() => runAiQuoteHelp("friendly")}>
-                Make customer friendly
-              </button>
-              <button style={aiChip} onClick={() => runAiQuoteHelp("terms")}>
-                Add clear terms
-              </button>
-            </div>
-            {aiSuggestion && (
-              <div style={aiSuggestionBox}>
-                <label style={label}>
-                  {isSpanish ? "Sugerencia editable" : "Editable suggestion"}
-                </label>
-                <textarea
-                  style={textarea}
-                  value={aiSuggestion}
-                  onChange={(event) => setAiSuggestion(event.target.value)}
+          {canonicalJobId && (
+            <ContextualAskMeetro
+              language={language}
+              contextLabel="estimate-and-quote"
+              context={{ jobId: canonicalJobId }}
+              voiceContextLabel="estimate"
+              contextName={projectTitle || getAskMeetroWorkflowCopy(language).estimate}
+              actions={[
+                { id: "materials", label: getAskMeetroWorkflowCopy(language).estimateMaterials },
+                { id: "prices", label: getAskMeetroWorkflowCopy(language).checkPrices },
+                { id: "labor", label: getAskMeetroWorkflowCopy(language).estimateLabor },
+                { id: "quote", label: getAskMeetroWorkflowCopy(language).prepareQuote },
+              ]}
+              busy={assistant.busy}
+              error={assistant.error}
+              notice={assistant.notice}
+              onRequest={requestEstimateHelp}
+            >
+              {assistant.result && (
+                <EstimateAssistantResult
+                  key={assistant.result.proposal.proposalId}
+                  result={assistant.result}
+                  language={language}
+                  onSolutionReady={() => void markEstimateSolutionReady()}
+                  onUseQuote={(edits) => void handleUseQuoteComposition(edits)}
+                  onDismiss={() => void dismissEstimateHelp()}
                 />
-                <div style={inlineActionGrid}>
-                  <button style={secondaryActionButton} onClick={applyAiSuggestion}>
-                    {isSpanish ? "Usar sugerencia" : "Use Suggestion"}
-                  </button>
-                  <button
-                    style={quietActionButton}
-                    onClick={() => {
-                      setAiSuggestion("");
-                      setAiSuggestionTarget("recommendedSolution");
-                    }}
-                  >
-                    {isSpanish ? "Limpiar" : "Clear"}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </ContextualAskMeetro>
+          )}
 
           <div style={quoteBuilderSection}>
             <h3 style={quoteBuilderSectionTitle}>{isSpanish ? "Partidas" : "Line Items"}</h3>
@@ -1970,6 +4473,12 @@ ${businessIdentity.businessName}`;
             <button style={secondaryActionButton} onClick={copyQuoteSummary}>
               {isSpanish ? "Copiar resumen" : "Copy Summary"}
             </button>
+            <button style={secondaryActionButton} onClick={() => void exportQuickQuotePdf()}>
+              {getCustomerDocumentActionCopy(language).exportPdf}
+            </button>
+            <button style={secondaryActionButton} onClick={() => void shareQuickQuotePdf()}>
+              {getCustomerDocumentActionCopy(language).sharePdf}
+            </button>
           </div>
 
           {copiedNotice && <p style={externalShareHint}>{copiedNotice}</p>}
@@ -1978,36 +4487,164 @@ ${businessIdentity.businessName}`;
             <pre style={quotePreviewBox}>{buildQuoteShareText()}</pre>
           )}
 
-          <div style={deliveryChoiceBox} role="status">
-            <div>
-              <p style={deliveryEyebrow}>
-                {isSpanish ? "Disponibilidad" : "Availability"}
-              </p>
-              <h3 style={deliveryTitle}>
-                {isSpanish
-                  ? "Guardar y entregar cotizaciones aún no está disponible."
-                  : "Quote saving and delivery are not available yet."}
-              </h3>
-              <p style={deliveryText}>
-                {isSpanish
-                  ? "Puedes preparar y revisar esta cotización en esta página, pero no se guarda ni se entrega al cliente."
-                  : "You can prepare and review this quote on this page, but it is not saved or delivered to the customer."}
-              </p>
-            </div>
-          </div>
         </div>
       </div>
+        </section>
+      )}
 
       <BottomNav
         setPage={setPage}
         currentPage={
-          isWorkCenterReturn
+          isDesktopSidebarQuickQuote
+            ? "quoteBuilder"
+            : isWorkCenterReturn
             ? "workCenter"
             : isBusinessToolsReturn
             ? "businessDashboard"
             : "businessLeads"
         }
       />
+    </div>
+  );
+}
+
+function EstimateAssistantResult({ result, language, onSolutionReady, onUseQuote, onDismiss }) {
+  const copy = getAskMeetroWorkflowCopy(language);
+  const proposal = result.proposal;
+  const [editingQuote, setEditingQuote] = useState(false);
+  const [quoteEdits, setQuoteEdits] = useState({});
+  const formatMoney = (minor) => new Intl.NumberFormat(language, {
+    style: "currency", currency: "USD",
+  }).format((Number(minor) || 0) / 100);
+  if (result.operation === INTELLIGENCE_OPERATION.QUOTE) {
+    return (
+      <div style={assistantResultBox}>
+        <strong>{proposal.summary}</strong>
+        {proposal.proposedScopeItems.map((item) => {
+          const candidate = quoteEdits[item.id] || item.canonicalCandidate;
+          return (
+            <article key={item.id} style={assistantDraftItem}>
+              {editingQuote && candidate ? (
+                <>
+                  <label style={label}>{copy.suggested}
+                    <textarea style={textarea} value={candidate.description} onChange={(event) => setQuoteEdits((current) => ({
+                      ...current,
+                      [item.id]: { ...candidate, description: event.target.value },
+                    }))} />
+                  </label>
+                  <label style={label}>{copy.price}
+                    <input style={input} inputMode="decimal" value={candidate.unitAmountMinor / 100} onChange={(event) => {
+                      const minor = Math.round(parseQuotePricingAmount(event.target.value) * 100);
+                      setQuoteEdits((current) => ({ ...current, [item.id]: { ...candidate, unitAmountMinor: minor } }));
+                    }} />
+                  </label>
+                </>
+              ) : (
+                <strong>{item.description}</strong>
+              )}
+              <span>{item.scopeSemantic.replaceAll("_", " ")}</span>
+              <span>{candidate ? formatMoney(candidate.unitAmountMinor * candidate.quantity) : copy.needsVerification}</span>
+            </article>
+          );
+        })}
+        {proposal.commercialMissingInformation.map((item) => <p key={item.id} style={pricingReviewText}>{item.description}</p>)}
+        <div style={inlineActionGrid}>
+          <button type="button" style={secondaryActionButton} onClick={() => onUseQuote(editingQuote ? quoteEdits : null)}>{copy.createQuote}</button>
+          <button type="button" style={quietActionButton} onClick={() => setEditingQuote(true)}>{copy.edit}</button>
+          <button type="button" style={quietActionButton} onClick={onDismiss}>{copy.dismiss}</button>
+        </div>
+      </div>
+    );
+  }
+  const professionalCategoryCosts = proposal.professionalCategoryCosts || {};
+  const professionalMaterialsTotal = professionalCategoryCosts.materials;
+  const professionalLaborTotal = professionalCategoryCosts.labor;
+  const hasProfessionalCategoryCosts = Boolean(
+    professionalMaterialsTotal || professionalLaborTotal
+  );
+  return (
+    <div style={assistantResultBox}>
+      <strong>{proposal.summary}</strong>
+      {professionalMaterialsTotal ? (
+        <section style={assistantDraftItem}>
+          <strong>{copy.materials}</strong>
+          <span>{copy.professionalMaterialsTotal}</span>
+          <strong>{formatMoney(professionalMaterialsTotal.amountMinor)}</strong>
+          <small>{copy.materialsNotItemized}</small>
+        </section>
+      ) : null}
+      {professionalLaborTotal ? (
+        <section style={assistantDraftItem}>
+          <strong>{copy.labor}</strong>
+          <span>{copy.professionalLaborTotal}</span>
+          <strong>{formatMoney(professionalLaborTotal.amountMinor)}</strong>
+          <small>{copy.laborNotItemized}</small>
+        </section>
+      ) : null}
+      {!professionalMaterialsTotal && proposal.materials.map((item) => (
+        <article key={item.id} style={assistantDraftItem}>
+          <strong>{item.description}</strong>
+          <span>{item.quantity} {item.unit}</span>
+          <span>{item.effectiveUnitCostMinor == null ? copy.needsVerification : formatMoney(item.effectiveUnitCostMinor)}</span>
+          {item.retailerReference && <small>{copy.referencePrice} · {copy.notGuaranteed}</small>}
+        </article>
+      ))}
+      {professionalMaterialsTotal && proposal.materials.length ? (
+        <details style={assistantDraftItem}>
+          <summary>{copy.advisoryMaterialSuggestions}</summary>
+          {proposal.materials.map((item) => (
+            <p key={item.id} style={pricingReviewText}>{item.description}</p>
+          ))}
+        </details>
+      ) : null}
+      {!professionalLaborTotal && proposal.labor.map((item) => (
+        <article key={item.id} style={assistantDraftItem}>
+          <strong>{item.description}</strong>
+          <span>{item.crewCount} × {item.hoursPerWorker}</span>
+        </article>
+      ))}
+      {professionalLaborTotal && proposal.labor.length ? (
+        <details style={assistantDraftItem}>
+          <summary>{copy.advisoryLaborSuggestions}</summary>
+          {proposal.labor.map((item) => (
+            <p key={item.id} style={pricingReviewText}>{item.description}</p>
+          ))}
+        </details>
+      ) : null}
+      <section style={assistantDraftItem}>
+        <strong>{copy.internalCostSummary}</strong>
+        <div style={assistantCostGrid}>
+          <span>{copy.materials}</span>
+          <strong>{formatMoney(proposal.internalCost.materialsMinor)}</strong>
+          <span>{copy.labor}</span>
+          <strong>{formatMoney(proposal.internalCost.laborMinor)}</strong>
+          {hasProfessionalCategoryCosts ? (
+            <>
+              <span>{copy.internalBaseTotal}</span>
+              <strong>{formatMoney(proposal.internalCost.baseTotalMinor)}</strong>
+            </>
+          ) : null}
+          {proposal.internalCost.contingencyMinor > 0 ? (
+            <>
+              <span>{copy.advisoryContingency}</span>
+              <strong>{formatMoney(proposal.internalCost.contingencyMinor)}</strong>
+            </>
+          ) : null}
+          {!hasProfessionalCategoryCosts || proposal.internalCost.contingencyMinor > 0 ? (
+            <>
+              <span>{copy.total}</span>
+              <strong>{formatMoney(proposal.internalCost.totalMinor)}</strong>
+            </>
+          ) : null}
+        </div>
+        <small>{copy.internalOnly}</small>
+        <small>{copy.customerQuotePricingSeparate}</small>
+      </section>
+      <p style={pricingReviewText}>{proposal.customerQuoteDraft.customerWording}</p>
+      <div style={inlineActionGrid}>
+        <button type="button" style={secondaryActionButton} onClick={onSolutionReady}>{copy.solutionReady}</button>
+        <button type="button" style={quietActionButton} onClick={onDismiss}>{copy.dismiss}</button>
+      </div>
     </div>
   );
 }
@@ -2110,18 +4747,6 @@ const proposalHint = {
   color: "#64748b",
   fontSize: "14px",
   fontWeight: "750",
-  lineHeight: 1.45,
-};
-
-const proposalProblemText = {
-  margin: "0 0 18px",
-  color: "#334155",
-  background: "#ffffff",
-  border: "1px solid rgba(148,163,184,0.22)",
-  borderRadius: "16px",
-  padding: "12px",
-  fontSize: "14px",
-  fontWeight: "800",
   lineHeight: 1.45,
 };
 
@@ -2285,19 +4910,6 @@ const importedWorkItemTitle = {
   lineHeight: 1.15,
 };
 
-const importedFieldBlock = {
-  display: "grid",
-  gap: "5px",
-};
-
-const importedFieldLabel = {
-  color: "#334155",
-  fontSize: "12px",
-  fontWeight: "950",
-  textTransform: "uppercase",
-  letterSpacing: "0.06em",
-};
-
 const importedFieldText = {
   margin: 0,
   color: "#475569",
@@ -2315,12 +4927,6 @@ const cleanList = {
   lineHeight: 1.55,
 };
 
-const materialDetailLines = {
-  display: "grid",
-  gap: "3px",
-  marginTop: "4px",
-};
-
 const photoCountPill = {
   width: "fit-content",
   borderRadius: "999px",
@@ -2330,48 +4936,6 @@ const photoCountPill = {
   padding: "7px 10px",
   fontSize: "12px",
   fontWeight: "900",
-};
-
-const materialReviewBox = {
-  marginTop: "14px",
-  display: "grid",
-  gap: "10px",
-  padding: "14px",
-  borderRadius: "18px",
-  border: "1px solid rgba(31,77,52,0.16)",
-  background:
-    "linear-gradient(180deg, var(--meetro-surface-paper, rgba(255,253,248,0.98)), var(--meetro-surface-warm, rgba(251,246,237,0.92)))",
-};
-
-const materialReviewTitle = {
-  margin: 0,
-  color: "#111827",
-  fontSize: "17px",
-};
-
-const materialReviewHint = {
-  margin: 0,
-  color: "#64748b",
-  fontSize: "13px",
-  fontWeight: "750",
-  lineHeight: 1.4,
-};
-
-const materialReviewList = {
-  display: "grid",
-  gap: "9px",
-};
-
-const materialReviewItem = {
-  display: "grid",
-  gap: "4px",
-  padding: "12px",
-  borderRadius: "14px",
-  background: "#ffffff",
-  border: "1px solid #e2e8f0",
-  color: "#475569",
-  fontSize: "13px",
-  fontWeight: "750",
 };
 
 const input = {
@@ -2394,62 +4958,6 @@ const textarea = {
   ...input,
   minHeight: "110px",
   resize: "vertical",
-};
-
-const aiButton = {
-  width: "100%",
-  border: "none",
-  background: "#eef2ff",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  borderRadius: "16px",
-  padding: "14px",
-  fontWeight: "900",
-  cursor: "pointer",
-  marginBottom: "10px",
-};
-
-const aiQuoteHelpCard = {
-  display: "grid",
-  gap: "10px",
-  padding: "16px",
-  borderRadius: "18px",
-  background: "#f8fafc",
-  border: "1px solid #dbeafe",
-  marginBottom: "18px",
-  maxWidth: "100%",
-  boxSizing: "border-box",
-};
-
-const aiQuoteHelpSubtitle = {
-  margin: 0,
-  color: "#475569",
-  fontSize: "14px",
-  lineHeight: 1.45,
-  fontWeight: "750",
-};
-
-const aiChipGrid = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "8px",
-  maxWidth: "100%",
-};
-
-const aiChip = {
-  border: "1px solid rgba(31,77,52,0.2)",
-  background: "#ffffff",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  borderRadius: "999px",
-  padding: "10px 12px",
-  fontWeight: "900",
-  cursor: "pointer",
-  fontSize: "13px",
-};
-
-const aiSuggestionBox = {
-  display: "grid",
-  gap: "8px",
-  maxWidth: "100%",
 };
 
 const quoteBuilderSection = {
@@ -2529,6 +5037,7 @@ const inlineActionGrid = {
 };
 
 const secondaryActionButton = {
+  minHeight: "44px",
   border: "1px solid rgba(31,77,52,0.22)",
   background: "#ffffff",
   color: "var(--meetro-color-forest, #1f4d34)",
@@ -2542,6 +5051,34 @@ const quietActionButton = {
   ...secondaryActionButton,
   color: "#475569",
   border: "1px solid #cbd5e1",
+};
+
+const assistantResultBox = {
+  display: "grid",
+  gap: "12px",
+  minWidth: 0,
+};
+
+const assistantDraftItem = {
+  display: "grid",
+  gap: "5px",
+  minWidth: 0,
+  padding: "12px",
+  border: "1px solid #d7ded8",
+  borderRadius: "6px",
+  background: "#ffffff",
+  overflowWrap: "anywhere",
+};
+
+const assistantCostGrid = {
+  display: "flex",
+  flexWrap: "wrap",
+  justifyContent: "space-between",
+  gap: "10px",
+  padding: "12px",
+  border: "1px solid #8fa297",
+  borderRadius: "6px",
+  background: "#f5f8f5",
 };
 
 const rowRemoveButton = {
@@ -2566,37 +5103,6 @@ const quotePreviewBox = {
   lineHeight: 1.5,
   maxWidth: "100%",
   boxSizing: "border-box",
-};
-
-const deliveryChoiceBox = {
-  marginTop: "18px",
-  background:
-    "linear-gradient(180deg, var(--meetro-surface-warm, rgba(251,246,237,0.92)), var(--meetro-surface-paper, rgba(255,253,248,0.98)))",
-  border: "1px solid rgba(31,77,52,0.14)",
-  borderRadius: "20px",
-  padding: "16px",
-};
-
-const deliveryEyebrow = {
-  margin: "0 0 6px",
-  color: "var(--meetro-color-coffee, #4a3428)",
-  fontSize: "12px",
-  fontWeight: "900",
-  textTransform: "uppercase",
-  letterSpacing: "0.08em",
-};
-
-const deliveryTitle = {
-  margin: "0 0 6px",
-  color: "#111827",
-  fontSize: "17px",
-};
-
-const deliveryText = {
-  margin: 0,
-  color: "#64748b",
-  lineHeight: 1.45,
-  fontSize: "14px",
 };
 
 const externalShareHint = {

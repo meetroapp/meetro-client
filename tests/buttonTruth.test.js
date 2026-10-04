@@ -20,6 +20,10 @@ const contractorDashboardSource = readFileSync(
   new URL("../src/pages/ContractorDashboard.jsx", import.meta.url),
   "utf8"
 );
+const legacyWorkCenterSource = readFileSync(
+  new URL("../src/components/LegacyWorkCenterReadOnlyPanel.jsx", import.meta.url),
+  "utf8"
+);
 
 test("Home communication action truthfully opens the existing messages route", () => {
   assert.match(homeSource, /onClick=\{\(\) => setPage\("messagesInbox"\)\}/);
@@ -35,38 +39,14 @@ test("Home legacy Emergency cards fall back to the canonical request directory",
   assert.doesNotMatch(homeSource, /setPage\("emergencyComplete"\)/);
 });
 
-test("completed job Review Conversation opens the same project conversation", () => {
-  assert.match(completedJobDetailsSource, /CONVERSATION_ACTION_STAGE\.HISTORY/);
-  assert.match(completedJobDetailsSource, /onClick=\{\(\) => openProjectConversation\("completion_review"\)\}/);
-  assert.match(completedJobDetailsSource, /getCanonicalConversationActionTarget\(/);
-  assert.match(completedJobDetailsSource, /setPage\(target\.route\)/);
-  assert.doesNotMatch(
-    completedJobDetailsSource,
-    /CONVERSATION_ACTION_STAGE\.HISTORY[\s\S]{0,220}setPage\("messagesInbox"\)/
-  );
-});
-
-test("completion review actions stay tappable and do not treat reviews as closure approval", () => {
-  assert.match(completedJobDetailsSource, /const confirmCompletion = \(\) =>/);
-  assert.match(completedJobDetailsSource, /onClick=\{confirmCompletion\}/);
-  assert.match(completedJobDetailsSource, /const openResolveTogether = \(\) =>/);
-  assert.match(completedJobDetailsSource, /onClick=\{openResolveTogether\}/);
-  assert.match(completedJobDetailsSource, /id="completion-concern-flow"/);
-  assert.match(completedJobDetailsSource, /scrollIntoView\(\{ behavior: "smooth", block: "start" \}\)/);
-  assert.match(completedJobDetailsSource, /zIndex: 10001/);
-  assert.match(completedJobDetailsSource, /touchAction:"manipulation"/);
-  assert.doesNotMatch(
-    completedJobDetailsSource,
-    /completedProject\?\.completionApproved \|\|\s*completedProject\?\.homeownerCompletionApproved \|\|\s*completedProject\?\.reviewSubmitted/
-  );
-});
-
-test("completed job details guards malformed stored project data before rendering", () => {
-  assert.match(completedJobDetailsSource, /function safeArray\(value\)/);
+test("completed job details exposes only truthful unavailable navigation", () => {
   assert.match(completedJobDetailsSource, /normalizeCompletedJobRecord\(completedRecord\)/);
-  assert.doesNotMatch(completedJobDetailsSource, /localStorage\.getItem\("lastCompletedProject"\)/);
-  assert.match(completedJobDetailsSource, /safeArray\(completedProject\?\.completionPhotos\)/);
-  assert.doesNotMatch(completedJobDetailsSource, /localStorage\.getItem\("completedJobPhotos"\)/);
+  assert.match(completedJobDetailsSource, /completedJobDetailsUnavailable/);
+  assert.match(completedJobDetailsSource, /completedHistoryNoMutationNotice/);
+  assert.match(completedJobDetailsSource, /setPage\("contractorDashboard"\)/);
+  assert.match(completedJobDetailsSource, /setPage\("home"\)/);
+  assert.doesNotMatch(completedJobDetailsSource, /confirmCompletion|openResolveTogether|openProjectConversation/);
+  assert.doesNotMatch(completedJobDetailsSource, /localStorage\.(?:getItem|setItem|removeItem)/);
 });
 
 test("emergency back and chat actions match their destination", () => {
@@ -82,23 +62,25 @@ test("Work Center opportunity and emergency labels match their handlers", () => 
   assert.match(contractorDashboardSource, /\{translate\("openEmergencyChat"\)\}/);
 });
 
-test("Work Center landing copy stays responsibility-first and avoids duplicate count summaries", () => {
+test("Work Center landing copy follows the approved opportunities and active-jobs hierarchy", () => {
   assert.equal(
     t("workCenterPurposeStatement", "en"),
-    "See what needs attention, what happens next, and where each customer relationship moves forward."
+    "See what needs your attention and what to do next."
   );
   assert.equal(
     t("workCenterPurposeStatement", "es"),
-    "Ve qué necesita atención, qué ocurre después y cómo avanza cada relación con clientes."
+    "Ve qué necesita tu atención y qué hacer después."
   );
-  assert.match(contractorDashboardSource, /workCenterProfessionalPerspectiveLine/);
+  assert.match(contractorDashboardSource, /<h1>\{translate\("workCenter", activeLanguage\)\}<\/h1>/);
+  assert.match(contractorDashboardSource, /translate\("wc52subtitle", activeLanguage\)/);
+  assert.match(contractorDashboardSource, /className="work-center-opportunities-banner/);
+  assert.match(contractorDashboardSource, /<h2 id="work-center-active-jobs-title">\{translate\("wc52activeJobs", activeLanguage\)\}<\/h2>/);
   assert.match(contractorDashboardSource, /workCenterNewRequestsThatNeedADecision/);
-  assert.match(contractorDashboardSource, /workCenterAcceptedWorkThatStillNeedsAction/);
-  assert.match(contractorDashboardSource, /workCenterUpcomingVisitsAndAppointments/);
-  assert.match(contractorDashboardSource, /workCenterProposalsThatNeedReviewOrResponse/);
-  assert.match(contractorDashboardSource, /workCenterOnSiteWorkThatNeedsAnUpdate/);
-  assert.match(contractorDashboardSource, /workCenterClosedJobsAndSavedRecords/);
-  assert.match(contractorDashboardSource, /workCenterPaymentsBalancesAndClosedJobs/);
+  assert.match(contractorDashboardSource, /LegacyWorkCenterReadOnlyPanel/);
+  assert.match(legacyWorkCenterSource, /Read-only/);
+  assert.match(legacyWorkCenterSource, /Compatibility records/);
+  assert.match(legacyWorkCenterSource, /Browser-stored references remain visible here/);
+  assert.match(legacyWorkCenterSource, /cannot update or override canonical/);
   assert.doesNotMatch(
     contractorDashboardSource,
     /workCenterDashboardSummary[\s\S]{0,260}newOpportunity/

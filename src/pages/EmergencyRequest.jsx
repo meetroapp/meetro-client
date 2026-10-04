@@ -1,14 +1,21 @@
+import EmergencyFollowUpAction from "../components/EmergencyFollowUpAction.jsx";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import BottomNav from "../components/BottomNav";
+import MeetroIcon from "../components/MeetroIcon";
+import ContextualAskMeetro from "../components/ContextualAskMeetro";
 import EmergencyRelationshipDetail from "../components/EmergencyRelationshipDetail";
+import EmergencyAvailableNow from "../components/EmergencyAvailableNow";
+import EmergencyProfessionalResponses from "../components/EmergencyProfessionalResponses";
 import {
   cancelEmergencyRequest,
   createEmergencyDraft,
   getEmergencyRequest,
+  listHomeownerAvailableEmergencyProfessionals,
   listHomeownerEmergencyResponses,
   prepareEmergencyRequest,
   saveEmergencySafetyAssessment,
+  selectHomeownerAvailableEmergencyProfessional,
   selectHomeownerEmergencyResponse,
   updateEmergencyDraft,
 } from "../utils/emergencyApi";
@@ -27,6 +34,7 @@ import {
   isUnsupportedLegacyEmergencySpecialty,
   normalizeEmergencySpecialtyForDisplay,
 } from "../utils/emergencySpecialties";
+import { getSimplifiedEmergencyProgressStage } from "../utils/emergencySummary";
 import {
   buildCanonicalConversationRoute,
 } from "../utils/canonicalConversationMessaging";
@@ -40,9 +48,11 @@ import {
 } from "../utils/requestCommunication";
 import { getLanguage, t } from "../utils/language";
 import {
-  formatPersonalAddress,
-  resolveDefaultPersonalAddress,
-} from "../utils/personalAddresses";
+  applyEmergencyRequestInterpretation,
+  buildEmergencyGeneralArea,
+  confirmEmergencyRequestInterpretation,
+  requestEmergencyRequestInterpretation,
+} from "../utils/emergencyRequestInterpret";
 
 const INITIAL_SAFETY = Object.freeze({
   immediateDanger: false,
@@ -61,6 +71,65 @@ const INITIAL_SAFETY = Object.freeze({
 
 function clean(value) {
   return String(value ?? "").trim();
+}
+
+function createEmptyEmergencyIntake() {
+  return {
+    description: "",
+    service: { specialty: "" },
+    location: { city: "", region: "", postalCode: "" },
+  };
+}
+
+function buildAskMeetroDisplayMessage({
+  stage,
+  intake,
+  language,
+  copy,
+}) {
+  if (stage === "describe") {
+    const specialty =
+      clean(intake?.service?.specialty);
+
+    const service =
+      EMERGENCY_SERVICE_OPTIONS.find(
+        (option) =>
+          option.value === specialty
+      );
+
+    const serviceLabel = service
+      ? copy.serviceLabels?.[service.value] ||
+        service.label[
+          language === "es" ? "es" : "en"
+        ] ||
+        service.label.en
+      : "";
+
+    if (serviceLabel) {
+      return language === "es"
+        ? `Esto parece una emergencia que necesita ${serviceLabel}.`
+        : `This sounds like a match for ${serviceLabel}.`;
+    }
+
+    return language === "es"
+      ? "Necesito un detalle más para identificar el tipo de ayuda de emergencia."
+      : "I need one more detail to identify the right kind of emergency help.";
+  }
+
+  const area =
+    buildEmergencyGeneralArea(
+      intake?.location
+    );
+
+  if (area) {
+    return language === "es"
+      ? `Puedo usar ${area} como el área general de servicio.`
+      : `I can use ${area} as the general service area.`;
+  }
+
+  return language === "es"
+    ? "Necesito un detalle más del área general."
+    : "I need one more general-area detail.";
 }
 
 function getRequestId(record) {
@@ -85,7 +154,16 @@ function isEditableEmergencyDraft(record = {}) {
 }
 
 function canCancelEmergencyRequest(record = {}) {
-  return getRequestStatus(record) === "draft";
+  if (!getRequestId(record)) return false;
+
+  return [
+    "draft",
+    "ready_for_distribution",
+    "active",
+    "selection_pending",
+  ].includes(
+    getRequestStatus(record)
+  );
 }
 
 function getRecoveredPhase(record = {}) {
@@ -93,9 +171,21 @@ function getRecoveredPhase(record = {}) {
     return "lifecycle";
   }
 
-  return getCanonicalSafetyAssessment(record)
-    ? "complete"
-    : "details";
+  return getCanonicalSafetyAssessment(record) ? "safety" : "details";
+}
+
+function buildEmergencyRequestTitle(serviceLabel, description) {
+  const summary = clean(description).replace(/\s+/g, " ");
+  return `${clean(serviceLabel)}: ${summary}`.slice(0, 120);
+}
+
+function hasBackendSafetyPermissionToPrepare(record = {}) {
+  const assessment = getCanonicalSafetyAssessment(record);
+  const disposition = clean(
+    assessment?.disposition || assessment?.safetyDisposition
+  ).toLowerCase();
+
+  return getRequestStatus(record) === "draft" && disposition === "continue";
 }
 
 function buildDraftForm(record = {}, fallback = {}) {
@@ -215,6 +305,9 @@ function readCurrentEmergencyRoute() {
 
 function EmergencyRequest({ setPage }) {
   const safetyReviewHeadingRef = useRef(null);
+  const findHelpSectionRef = useRef(null);
+  const findHelpScrollKeyRef = useRef("");
+  const selectionDialogRef = useRef(null);
   const emergencyRefreshCoordinatorRef = useRef(null);
   const [routeSessionController] = useState(() =>
     createEmergencyRouteSessionController(
@@ -226,6 +319,9 @@ function EmergencyRequest({ setPage }) {
     () => routeSessionController.current()
   );
   const emergencyRoute = routeSession.route;
+  const detailReturnPage = emergencyRoute.returnPage === "notifications"
+    ? "notifications"
+    : "myRequests";
   const [language, setLanguage] = useState(getLanguage());
   const [ownedCanonicalRequest, setOwnedCanonicalRequest] =
     useState(null);
@@ -238,10 +334,18 @@ function EmergencyRequest({ setPage }) {
   const [errorMessage, setErrorMessage] = useState("");
   const [cancelConfirmationOpen, setCancelConfirmationOpen] =
     useState(false);
-  const [submissionConfirmationOpen, setSubmissionConfirmationOpen] =
-    useState(false);
   const [responsesPhase, setResponsesPhase] = useState("idle");
   const [responses, setResponses] = useState([]);
+  const [availableNowPhase, setAvailableNowPhase] =
+    useState("idle");
+  const [availableProfessionals, setAvailableProfessionals] =
+    useState([]);
+  const [availableNowError, setAvailableNowError] =
+    useState("");
+  const [
+    selectedAvailableProfessional,
+    setSelectedAvailableProfessional,
+  ] = useState(null);
   const [selectedResponse, setSelectedResponse] = useState(null);
   const [canonicalConversationId, setCanonicalConversationId] =
     useState(null);
@@ -268,19 +372,24 @@ function EmergencyRequest({ setPage }) {
       : "idle"
   );
 
-  const defaultAddress = useMemo(
-    () => formatPersonalAddress(resolveDefaultPersonalAddress() || {}),
-    []
-  );
-
   const [form, setForm] = useState(() => ({
     service: emergencyRoute.serviceSpecialty || "",
     title: "",
     description: "",
-    locationText: defaultAddress,
+    locationText: "",
     unitNumber: "",
     accessNotes: "",
   }));
+  const [intakeMode, setIntakeMode] = useState(() =>
+    emergencyRoute.hasRequestId ? "manual" : "ask"
+  );
+  const [askInput, setAskInput] = useState("");
+  const [askStage, setAskStage] = useState("describe");
+  const [askIntake, setAskIntake] = useState(createEmptyEmergencyIntake);
+  const [askMessages, setAskMessages] = useState([]);
+  const [askClarifications, setAskClarifications] = useState([]);
+  const [askPending, setAskPending] = useState(false);
+  const [askError, setAskError] = useState("");
 
   const [safety, setSafety] = useState({
     ...INITIAL_SAFETY,
@@ -336,9 +445,12 @@ function EmergencyRequest({ setPage }) {
       setMessage("");
       setErrorMessage("");
       setCancelConfirmationOpen(false);
-      setSubmissionConfirmationOpen(false);
       setResponsesPhase("idle");
       setResponses([]);
+      setAvailableNowPhase("idle");
+      setAvailableProfessionals([]);
+      setAvailableNowError("");
+      setSelectedAvailableProfessional(null);
       setSelectedResponse(null);
       setCanonicalConversationId(null);
       setSelectionPending(false);
@@ -348,12 +460,18 @@ function EmergencyRequest({ setPage }) {
         service: nextRoute.serviceSpecialty || "",
         title: "",
         description: "",
-        locationText: nextRoute.hasRequestId
-          ? ""
-          : defaultAddress,
+        locationText: "",
         unitNumber: "",
         accessNotes: "",
       });
+      setIntakeMode(nextRoute.hasRequestId ? "manual" : "ask");
+      setAskInput("");
+      setAskStage("describe");
+      setAskIntake(createEmptyEmergencyIntake());
+      setAskMessages([]);
+      setAskClarifications([]);
+      setAskPending(false);
+      setAskError("");
       setSafety({ ...INITIAL_SAFETY });
       setRecoveryState(
         nextRoute.hasRequestId
@@ -381,7 +499,7 @@ function EmergencyRequest({ setPage }) {
         handleEmergencyRouteChange
       );
     };
-  }, [defaultAddress, routeSessionController]);
+  }, [routeSessionController]);
 
   useEffect(() => {
     const controller = routeSessionController;
@@ -411,9 +529,12 @@ function EmergencyRequest({ setPage }) {
       setMessage("");
       setErrorMessage("");
       setCancelConfirmationOpen(false);
-      setSubmissionConfirmationOpen(false);
       setResponsesPhase("idle");
       setResponses([]);
+      setAvailableNowPhase("idle");
+      setAvailableProfessionals([]);
+      setAvailableNowError("");
+      setSelectedAvailableProfessional(null);
       setSelectedResponse(null);
       setCanonicalConversationId(null);
       setSelectionPending(false);
@@ -423,12 +544,18 @@ function EmergencyRequest({ setPage }) {
         service: emergencyRoute.serviceSpecialty || "",
         title: "",
         description: "",
-        locationText: emergencyRoute.hasRequestId
-          ? ""
-          : defaultAddress,
+        locationText: "",
         unitNumber: "",
         accessNotes: "",
       });
+      setIntakeMode(emergencyRoute.hasRequestId ? "manual" : "ask");
+      setAskInput("");
+      setAskStage("describe");
+      setAskIntake(createEmptyEmergencyIntake());
+      setAskMessages([]);
+      setAskClarifications([]);
+      setAskPending(false);
+      setAskError("");
       setSafety({
         ...INITIAL_SAFETY,
       });
@@ -529,7 +656,6 @@ function EmergencyRequest({ setPage }) {
       setSafety(buildSafetyForm(recoveredRequest));
       setPhase(getRecoveredPhase(recoveredRequest));
       setCancelConfirmationOpen(false);
-      setSubmissionConfirmationOpen(false);
       setRecoveryState("loaded");
     }
 
@@ -540,7 +666,6 @@ function EmergencyRequest({ setPage }) {
     };
   }, [
     canonicalRequest,
-    defaultAddress,
     emergencyRoute.hasRequestId,
     emergencyRoute.requestId,
     emergencyRoute.serviceSpecialty,
@@ -643,6 +768,40 @@ function EmergencyRequest({ setPage }) {
     "completed",
     "resolved",
   ].includes(canonicalRequestStatus);
+  const shouldLoadAvailableNow =
+    canonicalRequestStatus === "ready_for_distribution";
+
+  useEffect(() => {
+    if (!canonicalRequestId || !shouldLoadAvailableNow) {
+      findHelpScrollKeyRef.current = "";
+      return undefined;
+    }
+
+    const scrollKey =
+      `${canonicalRequestId}:ready_for_distribution`;
+
+    if (findHelpScrollKeyRef.current === scrollKey) {
+      return undefined;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      const section = findHelpSectionRef.current;
+      if (!section) return;
+
+      findHelpScrollKeyRef.current = scrollKey;
+
+      section.scrollIntoView({
+        behavior: window.matchMedia?.(
+          "(prefers-reduced-motion: reduce)"
+        ).matches
+          ? "auto"
+          : "smooth",
+        block: "start",
+      });
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [canonicalRequestId, shouldLoadAvailableNow]);
 
   useEffect(() => {
     if (phase !== "safety" || !canonicalRequestId) {
@@ -666,6 +825,27 @@ function EmergencyRequest({ setPage }) {
 
     return () => window.cancelAnimationFrame(frame);
   }, [canonicalRequestId, phase]);
+
+  useEffect(() => {
+    if (
+      !selectedResponse &&
+      !selectedAvailableProfessional
+    ) {
+      return undefined;
+    }
+
+    const frame = window.requestAnimationFrame(() => {
+      selectionDialogRef.current?.focus({
+        preventScroll: true,
+      });
+    });
+
+    return () =>
+      window.cancelAnimationFrame(frame);
+  }, [
+    selectedAvailableProfessional,
+    selectedResponse,
+  ]);
 
   useEffect(() => {
     const controller = routeSessionController;
@@ -776,40 +956,56 @@ function EmergencyRequest({ setPage }) {
 
   const text = {
     en: {
-      title: "Emergency Draft",
+      title: "Emergency Help",
       requestPageTitle: "Emergency Request",
       completedPageTitle: "Completed Emergency Request",
       cancelledPageTitle: "Cancelled Emergency Request",
       intro:
-        "Describe the urgent service need. Meetro will save a private draft before the safety review.",
+        "Tell us what is happening and the general area where you need help.",
       emergencyWarning:
         "If anyone is in immediate danger, call 911 or contact local emergency services now.",
       limitation:
-        "Saving this draft does not dispatch a professional or notify emergency responders.",
-      service: "Service needed",
-      chooseService: "Choose a service",
-      requestTitle: "Short title",
-      requestTitlePlaceholder: "Example: Active pipe leak",
-      description: "What is happening?",
+        "Meetro helps you connect with an available professional. It does not replace 911 or local emergency responders.",
+      fillManually: "Fill manually",
+      returnToAskMeetro: "Return to Ask Meetro",
+      askIntakeTitle: "Ask Meetro Emergency Help",
+      askIntakeIntro:
+        "Tell me what’s happening. I’ll help you understand the issue and find the right kind of help.",
+      askIntakePlaceholder: "Tell Ask Meetro what is happening…",
+      askFindHelpOffer:
+        "Would you like me to help you find available professionals serving your area?",
+      askFindHelpYes: "Yes, find help",
+      askFindHelpNotNow: "Not now",
+      askFindHelpDeclined:
+        "No problem. You can keep describing the issue or choose Fill manually.",
+      askLocationPrompt:
+        "What city or ZIP code should I use to find professionals serving your area?",
+      askLocationPlaceholder: "City or ZIP code",
+      askIntakeSend: "Send",
+      askIntakeThinking: "Preparing guidance…",
+      askIntakeReviewTitle: "Review Emergency details",
+      askIntakeReviewIntro:
+        "Confirm these details before Meetro creates your Emergency request.",
+      askIntakeAssistant: "Ask Meetro",
+      askIntakeHomeowner: "You",
+      askIntakeFailed:
+        "Ask Meetro could not safely prepare these details. You can try again or fill them manually.",
+      service: "Choose the type of help you need",
+      serviceLabels: {
+        emergency_plumbing: "Emergency Plumbing",
+        emergency_electrical_service: "Emergency Electrical",
+        roof_leak_repair: "Roof Leak Repair",
+        emergency_lockout: "Emergency Lockout",
+        handyman: "Other Urgent Property Issue",
+      },
+      description: "What’s happening?",
       descriptionPlaceholder:
         "Describe the problem, affected area, current conditions, and anything already attempted.",
-      location: "Service location",
-      locationPlaceholder: "Street address, city, state, ZIP",
-      unit: "Unit / Apt / Suite",
-      unitPlaceholder: "Optional",
-      access: "Access notes",
-      accessPlaceholder:
-        "Gate code, tenant instructions, pets, or safe access details",
-      saveDraft: "Save Emergency Draft",
-      updateDraft: "Save Draft Changes",
+      location: "General service area",
+      locationPlaceholder: "City, area, or ZIP",
+      continueToSafety: "Continue to Safety Check",
       saving: "Saving…",
-      draftSaved:
-        "Your Emergency draft is saved privately. Complete the safety review next.",
-      draftUpdated: "Your Emergency draft changes were saved.",
-      stepOneComplete: "Step 1 complete",
-      draftSavedShort: "Emergency draft saved.",
-      stepTwo: "Step 2",
-      safetyTitle: "Safety Review",
+      safetyTitle: "Safety Check",
       safetyIntro:
         "Select every listed hazard that is currently true. Select only what is true; do not select an item merely to continue.",
       noListedHazards:
@@ -836,41 +1032,23 @@ function EmergencyRequest({ setPage }) {
       additionalSafety: "Additional safety context",
       additionalSafetyPlaceholder:
         "Optional information about hazards or precautions",
-      saveSafety: "Save Safety Review",
-      safetySaving: "Saving Safety Review…",
-      safetySaved:
-        "Safety review saved. Submit when you are ready to notify compatible professionals.",
-      submissionTitle: "Submit Emergency Request",
-      submissionIntro:
-        "Your request and safety review are complete. Review the acknowledgment below before submitting.",
-      submissionAcknowledgment:
-        "I understand that submitting this request makes it read-only and shares its service summary with compatible professionals. My location and access notes remain private until I select a professional.",
-      openSubmissionConfirmation: "Submit Emergency Request",
-      submissionConfirmTitle: "Submit this Emergency request?",
-      submissionConfirmBody:
-        "After submission, this request becomes read-only and available to compatible professionals. No professional is assigned until you select one.",
-      confirmSubmission: "Yes, Submit Request",
-      keepEditing: "Keep Editing",
-      submitting: "Submitting…",
-      submissionFailed:
-        "The Emergency request could not be submitted. Try again.",
-      submittedTitle: "Emergency Request Submitted",
-      submittedBody:
-        "This Emergency request is active and available to compatible professionals. Select a response to create the canonical conversation and begin dispatch.",
-      editDetails: "Edit Draft Details",
-      continueDraft: "Continue Emergency Draft",
-      completeSafetyReview: "Complete Safety Review",
-      prepareRequest: "Prepare Request",
-      back: "Back to Emergency Help",
+      continueToFindHelp: "Continue to Find Help",
+      safetySaving: "Continuing…",
+      submitting: "Connecting…",
+      preparationFailed:
+        "Your Safety Check was saved, but Meetro could not open Find Help. Try again.",
+      editDetails: "Edit Details",
+      continueRequest: "Continue Emergency Request",
+      back: "Back Home",
       home: "Back Home",
       viewMyEmergencyRequests: "View My Emergency Requests",
       required:
-        "Service, title, description, and location are required.",
+        "Choose a service, describe what is happening, and enter a general service area.",
       requestFailed:
-        "The Emergency draft could not be saved. Try again.",
-      recoveryLoading: "Loading your Emergency draft…",
+        "The Emergency request could not be saved. Try again.",
+      recoveryLoading: "Loading your Emergency request…",
       recoveryFailed:
-        "This Emergency draft could not be loaded. It may be unavailable or you may not have access.",
+        "This Emergency request could not be loaded. It may be unavailable or you may not have access.",
       recoveryInvalid:
         "This Emergency request link is invalid. Return to My Requests and choose the request again.",
       recoveryUnauthorized:
@@ -880,15 +1058,17 @@ function EmergencyRequest({ setPage }) {
       recoveryUnavailable:
         "This Emergency request is temporarily unavailable. Try again from My Requests.",
       recovered:
-        "Your canonical Emergency draft was loaded from Meetro.",
+        "Your Emergency request was loaded from Meetro.",
       safetyFailed:
         "The safety review could not be saved. Try again.",
-      canonicalId: "Emergency draft",
-      status: "Status",
-      distributionUnavailable: "Matching compatible professionals",
-      completeTitle: "Draft and Safety Review Saved",
-      completeBody:
-        "Your information is stored as a private canonical Emergency draft. No professional can see it until you submit.",
+      askMeetroContext: "Emergency Help",
+      progress: "Emergency request progress",
+      stages: {
+        details: "What’s happening?",
+        safety: "Safety Check",
+        find: "Find Help",
+        connected: "Connected",
+      },
       cancelRequest: "Cancel Emergency Request",
       cancelConfirmTitle: "Cancel this Emergency request?",
       cancelConfirmBody:
@@ -902,40 +1082,56 @@ function EmergencyRequest({ setPage }) {
         "This canonical Emergency request can no longer be edited from this screen.",
     },
     es: {
-      title: "Borrador de Emergencia",
+      title: "Ayuda de Emergencia",
       requestPageTitle: "Solicitud de Emergencia",
       completedPageTitle: "Solicitud de Emergencia Completada",
       cancelledPageTitle: "Solicitud de Emergencia Cancelada",
       intro:
-        "Describe la necesidad urgente. Meetro guardará un borrador privado antes de la revisión de seguridad.",
+        "Cuéntanos qué está ocurriendo y el área general donde necesitas ayuda.",
       emergencyWarning:
         "Si alguien está en peligro inmediato, llama al 911 o comunícate ahora con los servicios de emergencia locales.",
       limitation:
-        "Guardar este borrador no despacha a un profesional ni notifica a los servicios de emergencia.",
-      service: "Servicio necesario",
-      chooseService: "Selecciona un servicio",
-      requestTitle: "Título corto",
-      requestTitlePlaceholder: "Ejemplo: Fuga activa de tubería",
+        "Meetro te ayuda a conectar con un profesional disponible. No reemplaza al 911 ni a los servicios de emergencia locales.",
+      fillManually: "Completar manualmente",
+      returnToAskMeetro: "Volver a Preguntar a Meetro",
+      askIntakeTitle: "Ayuda de Emergencia con Meetro",
+      askIntakeIntro:
+        "Cuéntame qué está ocurriendo. Te ayudaré a entender el problema y a encontrar el tipo de ayuda adecuado.",
+      askIntakePlaceholder: "Cuéntale a Meetro qué está ocurriendo…",
+      askFindHelpOffer:
+        "¿Quieres que te ayude a encontrar profesionales disponibles que atiendan tu área?",
+      askFindHelpYes: "Sí, buscar ayuda",
+      askFindHelpNotNow: "Ahora no",
+      askFindHelpDeclined:
+        "No hay problema. Puedes seguir describiendo el problema o elegir Completar manualmente.",
+      askLocationPrompt:
+        "¿Qué ciudad o código postal debo usar para buscar profesionales que atiendan tu área?",
+      askLocationPlaceholder: "Ciudad o código postal",
+      askIntakeSend: "Enviar",
+      askIntakeThinking: "Preparando orientación…",
+      askIntakeReviewTitle: "Revisa los detalles de Emergencia",
+      askIntakeReviewIntro:
+        "Confirma estos detalles antes de que Meetro cree tu solicitud de Emergencia.",
+      askIntakeAssistant: "Meetro",
+      askIntakeHomeowner: "Tú",
+      askIntakeFailed:
+        "Meetro no pudo preparar estos detalles de forma segura. Inténtalo de nuevo o complétalos manualmente.",
+      service: "Elige el tipo de ayuda que necesitas",
+      serviceLabels: {
+        emergency_plumbing: "Emergencia de plomería",
+        emergency_electrical_service: "Emergencia eléctrica",
+        roof_leak_repair: "Reparación de fuga en el techo",
+        emergency_lockout: "Cerrajería de emergencia",
+        handyman: "Otro problema urgente de la propiedad",
+      },
       description: "¿Qué está ocurriendo?",
       descriptionPlaceholder:
         "Describe el problema, el área afectada, las condiciones actuales y lo que ya intentaste.",
-      location: "Ubicación del servicio",
-      locationPlaceholder: "Dirección, ciudad, estado y código postal",
-      unit: "Unidad / Apartamento / Suite",
-      unitPlaceholder: "Opcional",
-      access: "Notas de acceso",
-      accessPlaceholder:
-        "Código de entrada, instrucciones, mascotas o detalles de acceso seguro",
-      saveDraft: "Guardar Borrador",
-      updateDraft: "Guardar Cambios",
+      location: "Área general de servicio",
+      locationPlaceholder: "Ciudad, área o código postal",
+      continueToSafety: "Continuar a Verificación de Seguridad",
       saving: "Guardando…",
-      draftSaved:
-        "Tu borrador de Emergencia se guardó de forma privada. Completa ahora la revisión de seguridad.",
-      draftUpdated: "Los cambios del borrador fueron guardados.",
-      stepOneComplete: "Paso 1 completado",
-      draftSavedShort: "Borrador de Emergencia guardado.",
-      stepTwo: "Paso 2",
-      safetyTitle: "Revisión de Seguridad",
+      safetyTitle: "Verificación de Seguridad",
       safetyIntro:
         "Selecciona cada peligro de la lista que sea verdadero en este momento. Selecciona solo lo que sea cierto; no marques una opción únicamente para continuar.",
       noListedHazards:
@@ -962,42 +1158,24 @@ function EmergencyRequest({ setPage }) {
       additionalSafety: "Contexto adicional de seguridad",
       additionalSafetyPlaceholder:
         "Información opcional sobre peligros o precauciones",
-      saveSafety: "Guardar Revisión",
-      safetySaving: "Guardando Revisión…",
-      safetySaved:
-        "Revisión guardada. Envía la solicitud cuando estés listo para notificar a profesionales compatibles.",
-      submissionTitle: "Enviar Solicitud de Emergencia",
-      submissionIntro:
-        "Tu solicitud y revisión de seguridad están completas. Revisa el reconocimiento antes de enviarla.",
-      submissionAcknowledgment:
-        "Entiendo que enviar esta solicitud la convierte en un registro de solo lectura y comparte el resumen del servicio con profesionales compatibles. Mi ubicación y notas de acceso permanecen privadas hasta que seleccione un profesional.",
-      openSubmissionConfirmation: "Enviar Solicitud de Emergencia",
-      submissionConfirmTitle: "¿Enviar esta solicitud de Emergencia?",
-      submissionConfirmBody:
-        "Después de enviarla, esta solicitud será de solo lectura y estará disponible para profesionales compatibles. Nadie será asignado hasta que selecciones un profesional.",
-      confirmSubmission: "Sí, Enviar Solicitud",
-      keepEditing: "Continuar Editando",
-      submitting: "Enviando…",
-      submissionFailed:
-        "No se pudo enviar la solicitud de Emergencia. Inténtalo nuevamente.",
-      submittedTitle: "Solicitud de Emergencia Enviada",
-      submittedBody:
-        "Esta solicitud de Emergencia está activa y disponible para profesionales compatibles. Selecciona una respuesta para crear la conversación canónica e iniciar el despacho.",
+      continueToFindHelp: "Continuar a Buscar Ayuda",
+      safetySaving: "Continuando…",
+      submitting: "Conectando…",
+      preparationFailed:
+        "Tu Verificación de Seguridad se guardó, pero Meetro no pudo abrir Buscar Ayuda. Inténtalo nuevamente.",
       editDetails: "Editar Detalles",
-      continueDraft: "Continuar Borrador de Emergencia",
-      completeSafetyReview: "Completar Revisión de Seguridad",
-      prepareRequest: "Preparar Solicitud",
-      back: "Regresar a Ayuda de Emergencia",
+      continueRequest: "Continuar Solicitud de Emergencia",
+      back: "Regresar al Inicio",
       home: "Regresar al Inicio",
       viewMyEmergencyRequests:
         "Ver Mis Solicitudes de Emergencia",
       required:
-        "El servicio, título, descripción y ubicación son obligatorios.",
+        "Elige un servicio, describe qué está ocurriendo e ingresa un área general de servicio.",
       requestFailed:
-        "No se pudo guardar el borrador. Inténtalo nuevamente.",
-      recoveryLoading: "Cargando tu borrador de Emergencia…",
+        "No se pudo guardar la solicitud. Inténtalo nuevamente.",
+      recoveryLoading: "Cargando tu solicitud de Emergencia…",
       recoveryFailed:
-        "No se pudo cargar este borrador de Emergencia. Puede no estar disponible o quizás no tengas acceso.",
+        "No se pudo cargar esta solicitud de Emergencia. Puede no estar disponible o quizás no tengas acceso.",
       recoveryInvalid:
         "Este enlace de solicitud de Emergencia no es válido. Vuelve a Mis Solicitudes y selecciona la solicitud otra vez.",
       recoveryUnauthorized:
@@ -1007,15 +1185,17 @@ function EmergencyRequest({ setPage }) {
       recoveryUnavailable:
         "Esta solicitud de Emergencia no está disponible temporalmente. Inténtalo de nuevo desde Mis Solicitudes.",
       recovered:
-        "Tu borrador canónico de Emergencia fue cargado desde Meetro.",
+        "Tu solicitud de Emergencia fue cargada desde Meetro.",
       safetyFailed:
         "No se pudo guardar la revisión. Inténtalo nuevamente.",
-      canonicalId: "Borrador de Emergencia",
-      status: "Estado",
-      distributionUnavailable: "Buscando profesionales compatibles",
-      completeTitle: "Borrador y Revisión Guardados",
-      completeBody:
-        "Tu información está guardada como un borrador canónico privado. Ningún profesional puede verla hasta que la envíes.",
+      askMeetroContext: "Ayuda de Emergencia",
+      progress: "Progreso de la solicitud de Emergencia",
+      stages: {
+        details: "¿Qué está ocurriendo?",
+        safety: "Verificación de Seguridad",
+        find: "Buscar Ayuda",
+        connected: "Conectado",
+      },
       cancelRequest: "Cancelar Solicitud de Emergencia",
       cancelConfirmTitle: "¿Cancelar esta solicitud de Emergencia?",
       cancelConfirmBody:
@@ -1047,6 +1227,128 @@ function EmergencyRequest({ setPage }) {
     EMERGENCY_SERVICE_OPTIONS.find(
       (option) => option.value === form.service
     );
+  const selectedServiceLabel = selectedService
+    ? copy.serviceLabels?.[selectedService.value] ||
+      selectedService.label[language] ||
+      selectedService.label.en
+    : "";
+  const askSelectedService = EMERGENCY_SERVICE_OPTIONS.find(
+    (option) => option.value === askIntake.service.specialty
+  );
+  const askSelectedServiceLabel = askSelectedService
+    ? copy.serviceLabels?.[askSelectedService.value] ||
+      askSelectedService.label[language] ||
+      askSelectedService.label.en
+    : "";
+  const askDescribeReady = Boolean(
+    askIntake.description && askIntake.service.specialty
+  );
+  const askGeneralArea = buildEmergencyGeneralArea(
+    askIntake.location
+  );
+  const askLocationReady = Boolean(
+    clean(askIntake.location?.city) ||
+      clean(askIntake.location?.postalCode)
+  );
+  const askIntakeReady = Boolean(
+    askDescribeReady && askLocationReady
+  );
+
+  useEffect(() => {
+    const controller = routeSessionController;
+    const discoveryOwnership =
+      captureEmergencyRouteOwnership(routeSession);
+
+    if (
+      !canonicalRequestId ||
+      !shouldLoadAvailableNow
+    ) {
+      let active = true;
+
+      Promise.resolve().then(() => {
+        if (
+          !active ||
+          !controller.owns(discoveryOwnership)
+        ) {
+          return;
+        }
+
+        setAvailableProfessionals([]);
+        setAvailableNowPhase("idle");
+        setAvailableNowError("");
+      });
+
+      return () => {
+        active = false;
+      };
+    }
+
+    let active = true;
+
+    async function loadAvailableNowProfessionals() {
+      await Promise.resolve();
+
+      if (
+        !active ||
+        !controller.owns(discoveryOwnership)
+      ) {
+        return;
+      }
+
+      setAvailableProfessionals([]);
+      setAvailableNowPhase("loading");
+      setAvailableNowError("");
+
+      const operation =
+        await settleEmergencyRouteOperation(
+          controller,
+          discoveryOwnership,
+          listHomeownerAvailableEmergencyProfessionals(
+            canonicalRequestId,
+            { setPage }
+          )
+        );
+
+      if (
+        !active ||
+        !controller.owns(discoveryOwnership) ||
+        operation.status === "stale"
+      ) {
+        return;
+      }
+
+      const result = operation.value;
+
+      if (
+        operation.status === "rejected" ||
+        !result?.ok
+      ) {
+        setAvailableProfessionals([]);
+        setAvailableNowPhase("error");
+        setAvailableNowError(
+          result?.message || ""
+        );
+        return;
+      }
+
+      setAvailableProfessionals(
+        result.professionals
+      );
+      setAvailableNowPhase("ready");
+    }
+
+    void loadAvailableNowProfessionals();
+
+    return () => {
+      active = false;
+    };
+  }, [
+    canonicalRequestId,
+    routeSession,
+    routeSessionController,
+    setPage,
+    shouldLoadAvailableNow,
+  ]);
 
   const canonicalStatus = getRequestStatus(canonicalRequest);
   const editableDraft = isEditableEmergencyDraft(canonicalRequest);
@@ -1058,11 +1360,7 @@ function EmergencyRequest({ setPage }) {
       )
   );
   const draftWorkflowActionLabel =
-    phase === "complete"
-      ? copy.prepareRequest
-      : phase === "safety"
-        ? copy.completeSafetyReview
-        : copy.continueDraft;
+    copy.continueRequest;
   const cancellationAvailable =
     canCancelEmergencyRequest(canonicalRequest);
   const pageTitle =
@@ -1072,11 +1370,13 @@ function EmergencyRequest({ setPage }) {
         ? copy.completedPageTitle
         : canonicalStatus === "safety_blocked"
           ? copy.safetyTitle
-          : !editableDraft
-            ? copy.requestPageTitle
-            : ["safety", "complete"].includes(phase)
-              ? copy.safetyTitle
-              : copy.title;
+          : editableDraft
+            ? copy.title
+            : copy.requestPageTitle;
+  const simplifiedStage = getSimplifiedEmergencyProgressStage(
+    canonicalStatus,
+    { phase, recoveryState }
+  );
   const showWorkCenterAction = [
     "ready_for_distribution",
     "active",
@@ -1139,6 +1439,210 @@ function EmergencyRequest({ setPage }) {
     if (errorMessage) {
       setErrorMessage("");
     }
+  }
+
+  async function submitAskMeetroIntake(event) {
+    event.preventDefault();
+    const homeownerText = clean(askInput);
+    const interpretationStage =
+      askStage === "describe" || askStage === "location"
+        ? askStage
+        : "";
+    if (
+      !homeownerText ||
+      !interpretationStage ||
+      askPending ||
+      canonicalRequest
+    ) return;
+
+    setAskPending(true);
+    setAskError("");
+    try {
+      const result = await requestEmergencyRequestInterpretation({
+        text: homeownerText,
+        stage: interpretationStage,
+        intake: askIntake,
+        locale: language === "es" ? "es-US" : "en-US",
+        setPage,
+      });
+      const applied = applyEmergencyRequestInterpretation(
+        askIntake,
+        result.interpretation,
+        { stage: interpretationStage }
+      );
+      const nextIntake = applied.intake;
+      const nextMessages = [
+        {
+          role: "homeowner",
+          text: homeownerText,
+        },
+        {
+          role: "assistant",
+          text: buildAskMeetroDisplayMessage({
+            stage: interpretationStage,
+            intake: nextIntake,
+            language,
+            copy,
+          }),
+        },
+      ];
+      let nextClarifications = result.interpretation.clarifications;
+
+      if (
+        interpretationStage === "describe" &&
+        nextIntake.description &&
+        nextIntake.service.specialty &&
+        nextClarifications.length === 0
+      ) {
+        nextMessages.push({
+          role: "assistant",
+          text: copy.askFindHelpOffer,
+        });
+        nextClarifications = [];
+        setAskStage("consent");
+      } else if (
+        interpretationStage === "location" &&
+        (
+          clean(nextIntake.location?.city) ||
+          clean(nextIntake.location?.postalCode)
+        )
+      ) {
+        nextClarifications = [];
+        setAskStage("review");
+      }
+
+      setAskIntake(nextIntake);
+      setAskMessages((current) => [
+        ...current,
+        ...nextMessages,
+      ]);
+      setAskClarifications(nextClarifications);
+      setAskInput("");
+    } catch {
+      setAskError(copy.askIntakeFailed);
+    } finally {
+      setAskPending(false);
+    }
+  }
+
+  function acceptAskMeetroFindHelp() {
+    if (
+      askStage !== "consent" ||
+      askPending ||
+      pending ||
+      canonicalRequest
+    ) return;
+
+    setAskStage("location");
+    setAskClarifications([]);
+    setAskInput("");
+    setAskError("");
+    setAskMessages((current) => [
+      ...current,
+      { role: "homeowner", text: copy.askFindHelpYes },
+      { role: "assistant", text: copy.askLocationPrompt },
+    ]);
+  }
+
+  function declineAskMeetroFindHelp() {
+    if (
+      askStage !== "consent" ||
+      askPending ||
+      pending ||
+      canonicalRequest
+    ) return;
+
+    setAskStage("describe");
+    setAskClarifications([]);
+    setAskInput("");
+    setAskError("");
+    setAskMessages((current) => [
+      ...current,
+      { role: "homeowner", text: copy.askFindHelpNotNow },
+      { role: "assistant", text: copy.askFindHelpDeclined },
+    ]);
+  }
+
+  async function confirmAskMeetroIntake() {
+    if (!askIntakeReady || pending || canonicalRequest) return;
+
+    let confirmed;
+    try {
+      confirmed = confirmEmergencyRequestInterpretation(askIntake);
+    } catch {
+      setAskError(copy.askIntakeFailed);
+      return;
+    }
+
+    const service = EMERGENCY_SERVICE_OPTIONS.find(
+      (option) => option.value === confirmed.serviceSpecialty
+    );
+    const serviceLabel = service
+      ? copy.serviceLabels?.[service.value] || service.label.en
+      : "";
+    const payload = {
+      category: "home_repair",
+      serviceDomain: service?.domain || "",
+      serviceSpecialty: confirmed.serviceSpecialty,
+      title: buildEmergencyRequestTitle(
+        serviceLabel,
+        confirmed.description
+      ),
+      description: confirmed.description,
+      locationText: confirmed.locationText,
+      unitNumber: "",
+      accessNotes: "",
+    };
+    const controller = routeSessionController;
+    const mutationOwnership = controller.capture();
+
+    setPending(true);
+    setAskError("");
+    setErrorMessage("");
+    const operation = await settleEmergencyRouteOperation(
+      controller,
+      mutationOwnership,
+      createEmergencyDraft(payload, { setPage })
+    );
+    if (operation.status === "stale") return;
+    setPending(false);
+    if (
+      operation.status === "rejected" ||
+      !operation.value?.ok ||
+      !operation.value.emergencyRequest
+    ) {
+      setAskError(operation.value?.message || copy.requestFailed);
+      return;
+    }
+
+    const canonicalRequestId = getRequestId(
+      operation.value.emergencyRequest
+    );
+    const owningSession = synchronizeCreatedEmergencyRequest(
+      canonicalRequestId
+    );
+    const nextOwnedRequest = owningSession
+      ? ownCanonicalRequestForSession(
+          operation.value.emergencyRequest,
+          owningSession
+        )
+      : null;
+    if (!nextOwnedRequest) {
+      setAskError(copy.requestFailed);
+      return;
+    }
+
+    setOwnedCanonicalRequest(nextOwnedRequest);
+    setForm(buildDraftForm(operation.value.emergencyRequest, {
+      service: confirmed.serviceSpecialty,
+      description: confirmed.description,
+      locationText: confirmed.locationText,
+      unitNumber: "",
+      accessNotes: "",
+    }));
+    setRecoveryState("loaded");
+    setMessage("");
+    setPhase("safety");
   }
 
   function synchronizeCreatedEmergencyRequest(requestId) {
@@ -1204,16 +1708,18 @@ function EmergencyRequest({ setPage }) {
       category: "home_repair",
       serviceDomain: selectedService?.domain || "",
       serviceSpecialty: selectedService?.value || "",
-      title: clean(form.title),
+      title: buildEmergencyRequestTitle(
+        selectedServiceLabel,
+        form.description
+      ),
       description: clean(form.description),
       locationText: clean(form.locationText),
-      unitNumber: clean(form.unitNumber),
-      accessNotes: clean(form.accessNotes),
+      unitNumber: "",
+      accessNotes: "",
     };
 
     if (
       !payload.serviceSpecialty ||
-      !payload.title ||
       !payload.description ||
       !payload.locationText
     ) {
@@ -1293,7 +1799,7 @@ function EmergencyRequest({ setPage }) {
     }
 
     setRecoveryState("loaded");
-    setMessage(requestId ? copy.draftUpdated : copy.draftSaved);
+    setMessage("");
     setPhase("safety");
   }
 
@@ -1341,32 +1847,86 @@ function EmergencyRequest({ setPage }) {
       return;
     }
 
-    setPending(false);
-
     if (operation.status === "rejected") {
+      setPending(false);
       setErrorMessage(copy.safetyFailed);
       return;
     }
 
-    const result = operation.value;
+    const safetyResult = operation.value;
 
-    if (!result.ok || !result.emergencyRequest) {
-      setErrorMessage(result.message || copy.safetyFailed);
+    if (!safetyResult.ok || !safetyResult.emergencyRequest) {
+      setPending(false);
+      setErrorMessage(safetyResult.message || copy.safetyFailed);
       return;
     }
 
-    const nextOwnedRequest = ownCanonicalRequestForSession(
-      result.emergencyRequest
+    const safetyOwnedRequest = ownCanonicalRequestForSession(
+      safetyResult.emergencyRequest
     );
 
-    if (!nextOwnedRequest) {
+    if (!safetyOwnedRequest) {
+      setPending(false);
       setErrorMessage(copy.safetyFailed);
       return;
     }
 
-    setOwnedCanonicalRequest(nextOwnedRequest);
-    setMessage(copy.safetySaved);
-    setPhase("complete");
+    setOwnedCanonicalRequest(safetyOwnedRequest);
+
+    if (!hasBackendSafetyPermissionToPrepare(safetyResult.emergencyRequest)) {
+      setPending(false);
+      setPhase("lifecycle");
+      setDraftWorkflowOpen(false);
+      setRecoveryState("loaded");
+      return;
+    }
+
+    const prepareOperation = await settleEmergencyRouteOperation(
+      controller,
+      mutationOwnership,
+      prepareEmergencyRequest(requestId, { setPage })
+    );
+
+    if (prepareOperation.status === "stale") {
+      return;
+    }
+
+    setPending(false);
+
+    if (prepareOperation.status === "rejected") {
+      setErrorMessage(copy.preparationFailed);
+      return;
+    }
+
+    const prepareResult = prepareOperation.value;
+
+    if (
+      !prepareResult.ok ||
+      !prepareResult.emergencyRequest ||
+      getRequestStatus(prepareResult.emergencyRequest) !==
+        "ready_for_distribution"
+    ) {
+      setErrorMessage(
+        prepareResult.message || copy.preparationFailed
+      );
+      return;
+    }
+
+    const preparedOwnedRequest = ownCanonicalRequestForSession(
+      prepareResult.emergencyRequest
+    );
+
+    if (!preparedOwnedRequest) {
+      setErrorMessage(copy.preparationFailed);
+      return;
+    }
+
+    setOwnedCanonicalRequest(preparedOwnedRequest);
+    setPhase("lifecycle");
+    setDraftWorkflowOpen(false);
+    setCancelConfirmationOpen(false);
+    setRecoveryState("loaded");
+    await refreshCanonicalRequestAfterMutation();
   }
 
   function editDetails() {
@@ -1389,91 +1949,6 @@ function EmergencyRequest({ setPage }) {
     setMessage("");
     setErrorMessage("");
     setCancelConfirmationOpen(false);
-    setSubmissionConfirmationOpen(false);
-  }
-
-
-  function requestSubmission() {
-    if (
-      !editableDraft ||
-      phase !== "complete" ||
-      pending ||
-      !getRequestId(canonicalRequest)
-    ) {
-      return;
-    }
-
-    setSubmissionConfirmationOpen(true);
-    setCancelConfirmationOpen(false);
-    setMessage("");
-    setErrorMessage("");
-  }
-
-  function keepEditingEmergencyRequest() {
-    if (pending) return;
-
-    setSubmissionConfirmationOpen(false);
-    setErrorMessage("");
-  }
-
-  async function confirmSubmission() {
-    const requestId = getRequestId(canonicalRequest);
-
-    if (
-      !requestId ||
-      !editableDraft ||
-      phase !== "complete" ||
-      pending
-    ) {
-      return;
-    }
-
-    const controller = routeSessionController;
-    const mutationOwnership = controller.capture();
-
-    setPending(true);
-    setMessage("");
-    setErrorMessage("");
-
-    const operation = await settleEmergencyRouteOperation(
-      controller,
-      mutationOwnership,
-      prepareEmergencyRequest(requestId, { setPage })
-    );
-
-    if (operation.status === "stale") {
-      return;
-    }
-
-    setPending(false);
-
-    if (operation.status === "rejected") {
-      setErrorMessage(copy.submissionFailed);
-      return;
-    }
-
-    const result = operation.value;
-
-    if (!result.ok || !result.emergencyRequest) {
-      setErrorMessage(result.message || copy.submissionFailed);
-      return;
-    }
-
-    const nextOwnedRequest = ownCanonicalRequestForSession(
-      result.emergencyRequest
-    );
-
-    if (!nextOwnedRequest) {
-      setErrorMessage(copy.submissionFailed);
-      return;
-    }
-
-    setOwnedCanonicalRequest(nextOwnedRequest);
-    setPhase("lifecycle");
-    setSubmissionConfirmationOpen(false);
-    setCancelConfirmationOpen(false);
-    setRecoveryState("loaded");
-    await refreshCanonicalRequestAfterMutation();
   }
 
   function requestCancellation() {
@@ -1482,7 +1957,6 @@ function EmergencyRequest({ setPage }) {
     }
 
     setCancelConfirmationOpen(true);
-    setSubmissionConfirmationOpen(false);
     setMessage("");
     setErrorMessage("");
   }
@@ -1550,6 +2024,155 @@ function EmergencyRequest({ setPage }) {
     await refreshCanonicalRequestAfterMutation();
   }
 
+  function openAvailableProfessionalProfile(
+    contractorProfileId
+  ) {
+    if (
+      !canonicalRequestId ||
+      selectionPending
+    ) {
+      return;
+    }
+
+    const professional =
+      availableProfessionals.find(
+        (candidate) =>
+          candidate.contractorProfileId ===
+          contractorProfileId
+      );
+
+    if (!professional) return;
+
+    const returnRoute =
+      buildEmergencyRequestRoute(
+        canonicalRequestId
+      );
+
+    setPage(
+      `contractorDetails?profileId=${encodeURIComponent(
+        String(
+          professional.contractorProfileId
+        )
+      )}&returnPage=${encodeURIComponent(
+        returnRoute
+      )}`
+    );
+  }
+
+  function requestAvailableProfessionalSelectionById(
+    contractorProfileId
+  ) {
+    if (selectionPending) return;
+
+    const professional =
+      availableProfessionals.find(
+        (candidate) =>
+          candidate.contractorProfileId ===
+          contractorProfileId
+      );
+
+    if (!professional) return;
+
+    setSelectedResponse(null);
+    setSelectedAvailableProfessional(
+      professional
+    );
+    setSelectionError("");
+  }
+
+  async function confirmAvailableProfessionalSelection() {
+    if (
+      !canonicalRequestId ||
+      !selectedAvailableProfessional?.contractorProfileId ||
+      selectionPending
+    ) {
+      return;
+    }
+
+    const controller = routeSessionController;
+    const mutationOwnership = controller.capture();
+
+    setSelectionPending(true);
+    setSelectionError("");
+
+    const operation =
+      await settleEmergencyRouteOperation(
+        controller,
+        mutationOwnership,
+        selectHomeownerAvailableEmergencyProfessional(
+          canonicalRequestId,
+          selectedAvailableProfessional.contractorProfileId,
+          {
+            setPage,
+          }
+        )
+      );
+
+    if (operation.status === "stale") {
+      return;
+    }
+
+    setSelectionPending(false);
+
+    if (operation.status === "rejected") {
+      setSelectionError(
+        t("emergencySelectionFailed", language)
+      );
+      return;
+    }
+
+    const result = operation.value;
+
+    if (
+      !result.ok ||
+      !result.emergencyRequest ||
+      !result.conversation?.id
+    ) {
+      setSelectionError(
+        result.message ||
+          t(
+            "emergencySelectionFailed",
+            language
+          )
+      );
+      return;
+    }
+
+    const nextOwnedRequest =
+      ownCanonicalRequestForSession({
+        ...(canonicalRequest || {}),
+        ...result.emergencyRequest,
+      });
+
+    if (!nextOwnedRequest) {
+      setSelectionError(
+        t("emergencySelectionFailed", language)
+      );
+      return;
+    }
+
+    setOwnedCanonicalRequest(nextOwnedRequest);
+    setResponses((current) =>
+      current.map((response) =>
+        response.status === "pending"
+          ? {
+              ...response,
+              status: "declined",
+            }
+          : response
+      )
+    );
+    setAvailableProfessionals([]);
+    setAvailableNowPhase("idle");
+    setAvailableNowError("");
+    setCanonicalConversationId(
+      result.conversation.id
+    );
+    setSelectedAvailableProfessional(null);
+
+    await refreshCanonicalRequestAfterMutation();
+  }
+
   function requestProfessionalSelection(response) {
     if (
       selectionPending ||
@@ -1558,6 +2181,7 @@ function EmergencyRequest({ setPage }) {
       return;
     }
 
+    setSelectedAvailableProfessional(null);
     setSelectedResponse(response);
     setSelectionError("");
   }
@@ -1575,6 +2199,7 @@ function EmergencyRequest({ setPage }) {
   function keepWaitingForProfessional() {
     if (selectionPending) return;
     setSelectedResponse(null);
+    setSelectedAvailableProfessional(null);
     setSelectionError("");
   }
 
@@ -1584,7 +2209,10 @@ function EmergencyRequest({ setPage }) {
     setPage(
       buildCanonicalConversationRoute(
         canonicalConversationId,
-        buildEmergencyRequestRoute(canonicalRequestId)
+        buildEmergencyRequestRoute(canonicalRequestId),
+        {
+          shell: "communicationCenter",
+        }
       )
     );
   }
@@ -1672,17 +2300,23 @@ function EmergencyRequest({ setPage }) {
     setCanonicalConversationId(result.conversation.id);
     setSelectedResponse(null);
     await refreshCanonicalRequestAfterMutation();
-    setPage(
-      buildCanonicalConversationRoute(
-        result.conversation.id,
-        buildEmergencyRequestRoute(canonicalRequestId)
-      )
-    );
   }
 
   return (
-    <div className="app-page meetro-form-page" style={page}>
+    <div
+      className={
+        canonicalRequest && !showDraftWorkflow
+          ? "app-page meetro-wide-page emergency-page emergency-find-help-page"
+          : "app-page meetro-form-page"
+      }
+      style={page}
+    >
       <main
+        className={
+          canonicalRequest && !showDraftWorkflow
+            ? "emergency-find-help-main"
+            : undefined
+        }
         style={card}
         aria-labelledby={
           !canonicalRequest || showDraftWorkflow
@@ -1700,7 +2334,13 @@ function EmergencyRequest({ setPage }) {
             <button
               type="button"
               style={backMini}
-              onClick={() => setPage("emergency")}
+              onClick={() => setPage(
+                emergencyRoute.returnPage === "notifications"
+                  ? "notifications"
+                  : emergencyRoute.hasRequestId
+                    ? "myRequests"
+                    : "home"
+              )}
               aria-label={copy.back}
               disabled={pending}
             >
@@ -1720,18 +2360,43 @@ function EmergencyRequest({ setPage }) {
             <div style={limitationNotice} role="status">
               {copy.limitation}
             </div>
+
+            {phase === "details" &&
+              !canonicalRequest &&
+              !emergencyRoute.hasRequestId && (
+              <button
+                type="button"
+                style={secondaryEntryButton}
+                disabled={pending || askPending}
+                onClick={() => {
+                  setIntakeMode((current) =>
+                    current === "ask" ? "manual" : "ask"
+                  );
+                  setAskError("");
+                  setErrorMessage("");
+                }}
+              >
+                {intakeMode === "ask"
+                  ? copy.fillManually
+                  : copy.returnToAskMeetro}
+              </button>
+            )}
+
+            {phase !== "details" && canonicalRequest && (
+              <ContextualAskMeetro
+                language={language}
+                context={{ page: "emergencyRequest" }}
+                contextName={copy.askMeetroContext}
+              />
+            )}
           </>
         )}
 
-        {canonicalRequest && showDraftWorkflow && (
-          <section style={canonicalCard} aria-label={copy.canonicalId}>
-            <div>
-              <span style={canonicalLabel}>{copy.status}</span>
-              <strong style={canonicalValue}>
-                {canonicalRequest.status || "draft"}
-              </strong>
-            </div>
-          </section>
+        {simplifiedStage && (
+          <EmergencyProgress
+            copy={copy}
+            currentStage={simplifiedStage}
+          />
         )}
 
         {message && (
@@ -1780,55 +2445,181 @@ function EmergencyRequest({ setPage }) {
           !message && (
             <div style={successNotice} role="status">
               {copy.recovered}
-            </div>
-          )}
+          </div>
+        )}
 
         {recoveryState !== "loading" &&
           recoveryState !== "failed" &&
           showDraftWorkflow &&
           editableDraft &&
-          phase === "details" && (
+          phase === "details" &&
+          !canonicalRequest &&
+          !emergencyRoute.hasRequestId &&
+          intakeMode === "ask" && (
+          <section style={askIntakeCard} aria-labelledby="emergency-ask-intake-title">
+            <h2 id="emergency-ask-intake-title" style={sectionTitle}>
+              {copy.askIntakeTitle}
+            </h2>
+            <p style={askIntakeIntro}>{copy.askIntakeIntro}</p>
+
+            {askMessages.length > 0 && (
+              <div style={askTranscript} aria-live="polite">
+                {askMessages.map((entry, index) => (
+                  <div
+                    key={`${entry.role}-${index}`}
+                    style={entry.role === "assistant" ? askAssistantMessage : askHomeownerMessage}
+                  >
+                    <strong>
+                      {entry.role === "assistant"
+                        ? copy.askIntakeAssistant
+                        : copy.askIntakeHomeowner}
+                    </strong>
+                    <span>{entry.text}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {askClarifications.map((clarification) => (
+              <p key={`${clarification.fieldPath || "general"}-${clarification.question}`} style={askClarification}>
+                {clarification.question}
+              </p>
+            ))}
+
+            {askError && (
+              <div style={errorNotice} role="alert">
+                {askError}
+              </div>
+            )}
+
+            {askStage === "consent" && (
+              <div style={askConsentActions}>
+                <button
+                  type="button"
+                  style={askConsentPrimaryButton}
+                  disabled={askPending || pending}
+                  onClick={acceptAskMeetroFindHelp}
+                >
+                  {copy.askFindHelpYes}
+                </button>
+                <button
+                  type="button"
+                  style={askConsentSecondaryButton}
+                  disabled={askPending || pending}
+                  onClick={declineAskMeetroFindHelp}
+                >
+                  {copy.askFindHelpNotNow}
+                </button>
+              </div>
+            )}
+
+            {(askStage === "describe" || askStage === "location") && (
+              <form onSubmit={submitAskMeetroIntake}>
+                <FieldLabel
+                  htmlFor="emergency-ask-input"
+                  label={
+                    askStage === "location"
+                      ? copy.location
+                      : copy.description
+                  }
+                />
+                <textarea
+                  id="emergency-ask-input"
+                  style={textarea}
+                  rows={askStage === "location" ? 2 : 4}
+                  value={askInput}
+                  placeholder={
+                    askStage === "location"
+                      ? copy.askLocationPlaceholder
+                      : copy.askIntakePlaceholder
+                  }
+                  disabled={askPending || pending}
+                  onChange={(event) => {
+                    setAskInput(event.target.value);
+                    if (askError) setAskError("");
+                  }}
+                />
+                <div style={askComposerActions}>
+                  <button
+                    type="submit"
+                    style={{
+                      ...primaryButton,
+                      ...((askPending || !clean(askInput)) ? disabledButton : {}),
+                    }}
+                    disabled={askPending || pending || !clean(askInput)}
+                  >
+                    {askPending ? copy.askIntakeThinking : copy.askIntakeSend}
+                  </button>
+                </div>
+              </form>
+            )}
+
+            {askStage === "review" && askIntakeReady && (
+              <section style={askReviewCard} aria-labelledby="emergency-ask-review-title">
+                <h3 id="emergency-ask-review-title" style={askReviewTitle}>
+                  {copy.askIntakeReviewTitle}
+                </h3>
+                <p style={askReviewIntro}>{copy.askIntakeReviewIntro}</p>
+                <dl style={askReviewList}>
+                  <div>
+                    <dt style={askReviewLabel}>{copy.service}</dt>
+                    <dd style={askReviewValue}>{askSelectedServiceLabel}</dd>
+                  </div>
+                  <div>
+                    <dt style={askReviewLabel}>{copy.location}</dt>
+                    <dd style={askReviewValue}>{askGeneralArea}</dd>
+                  </div>
+                  <div>
+                    <dt style={askReviewLabel}>{copy.description}</dt>
+                    <dd style={askReviewValue}>{askIntake.description}</dd>
+                  </div>
+                </dl>
+                <button
+                  type="button"
+                  style={{
+                    ...primaryButton,
+                    ...(pending ? disabledButton : {}),
+                  }}
+                  disabled={pending}
+                  onClick={() => void confirmAskMeetroIntake()}
+                >
+                  {pending ? copy.saving : copy.continueToSafety}
+                </button>
+              </section>
+            )}
+          </section>
+        )}
+
+        {recoveryState !== "loading" &&
+          recoveryState !== "failed" &&
+          showDraftWorkflow &&
+          editableDraft &&
+          phase === "details" &&
+          (canonicalRequest || emergencyRoute.hasRequestId || intakeMode === "manual") && (
           <form style={formCard} onSubmit={submitDetails} noValidate>
-            <FieldLabel
-              htmlFor="emergency-service"
-              label={copy.service}
-            />
-
-            <select
-              id="emergency-service"
-              style={input}
-              value={form.service}
-              disabled={pending}
-              onChange={(event) =>
-                updateForm("service", event.target.value)
-              }
-            >
-              <option value="" disabled>
-                {copy.chooseService}
-              </option>
-
-              {EMERGENCY_SERVICE_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>
-                  {option.label[language] || option.label.en}
-                </option>
-              ))}
-            </select>
-
-            <FieldLabel
-              htmlFor="emergency-title"
-              label={copy.requestTitle}
-            />
-
-            <input
-              id="emergency-title"
-              style={input}
-              value={form.title}
-              placeholder={copy.requestTitlePlaceholder}
-              disabled={pending}
-              onChange={(event) =>
-                updateForm("title", event.target.value)
-              }
-            />
+            <fieldset style={serviceChoices}>
+              <legend style={serviceChoicesLegend}>{copy.service}</legend>
+              <div style={serviceChoiceGrid}>
+                {EMERGENCY_SERVICE_OPTIONS.map((option) => {
+                  const selected = form.service === option.value;
+                  return (
+                    <button
+                      key={option.value}
+                      type="button"
+                      style={{
+                        ...serviceChoice,
+                        ...(selected ? selectedServiceChoice : {}),
+                      }}
+                      aria-pressed={selected}
+                      disabled={pending}
+                      onClick={() => updateForm("service", option.value)}
+                    >
+                      {copy.serviceLabels[option.value]}
+                    </button>
+                  );
+                })}
+              </div>
+            </fieldset>
 
             <FieldLabel
               htmlFor="emergency-description"
@@ -1838,7 +2629,7 @@ function EmergencyRequest({ setPage }) {
             <textarea
               id="emergency-description"
               style={textarea}
-              rows={6}
+              rows={5}
               value={form.description}
               placeholder={copy.descriptionPlaceholder}
               disabled={pending}
@@ -1855,45 +2646,12 @@ function EmergencyRequest({ setPage }) {
             <textarea
               id="emergency-location"
               style={textarea}
-              rows={3}
+              rows={2}
               value={form.locationText}
               placeholder={copy.locationPlaceholder}
               disabled={pending}
               onChange={(event) =>
                 updateForm("locationText", event.target.value)
-              }
-            />
-
-            <FieldLabel
-              htmlFor="emergency-unit"
-              label={copy.unit}
-            />
-
-            <input
-              id="emergency-unit"
-              style={input}
-              value={form.unitNumber}
-              placeholder={copy.unitPlaceholder}
-              disabled={pending}
-              onChange={(event) =>
-                updateForm("unitNumber", event.target.value)
-              }
-            />
-
-            <FieldLabel
-              htmlFor="emergency-access"
-              label={copy.access}
-            />
-
-            <textarea
-              id="emergency-access"
-              style={textarea}
-              rows={4}
-              value={form.accessNotes}
-              placeholder={copy.accessPlaceholder}
-              disabled={pending}
-              onChange={(event) =>
-                updateForm("accessNotes", event.target.value)
               }
             />
 
@@ -1905,11 +2663,7 @@ function EmergencyRequest({ setPage }) {
               }}
               disabled={pending}
             >
-              {pending
-                ? copy.saving
-                : canonicalRequest
-                  ? copy.updateDraft
-                  : copy.saveDraft}
+              {pending ? copy.saving : copy.continueToSafety}
             </button>
           </form>
         )}
@@ -1920,16 +2674,6 @@ function EmergencyRequest({ setPage }) {
           editableDraft &&
           phase === "safety" && (
           <form style={formCard} onSubmit={submitSafety} noValidate>
-            <div style={stepStatus} role="status" aria-live="polite">
-              <span style={stepEyebrow}>{copy.stepOneComplete}</span>
-              <strong style={stepConfirmation}>
-                {copy.draftSavedShort}
-              </strong>
-              <span style={stepNext}>
-                {copy.stepTwo} · {copy.safetyTitle}
-              </span>
-            </div>
-
             <h2
               ref={safetyReviewHeadingRef}
               tabIndex={-1}
@@ -2088,7 +2832,9 @@ function EmergencyRequest({ setPage }) {
               }}
               disabled={pending}
             >
-              {pending ? copy.safetySaving : copy.saveSafety}
+              {pending
+                ? copy.safetySaving
+                : copy.continueToFindHelp}
             </button>
 
             <button
@@ -2104,61 +2850,72 @@ function EmergencyRequest({ setPage }) {
 
         {recoveryState !== "loading" &&
           recoveryState !== "failed" &&
-          showDraftWorkflow &&
-          editableDraft &&
-          phase === "complete" && (
-          <section style={completeCard}>
-            <h2 style={sectionTitle}>{copy.submissionTitle}</h2>
-            <p style={completeBody}>{copy.submissionIntro}</p>
-
-            <div style={acknowledgmentNotice}>
-              {copy.submissionAcknowledgment}
-            </div>
-
-            <div style={distributionPill}>
-              {copy.distributionUnavailable}
-            </div>
-
-            <button
-              type="button"
-              style={{
-                ...primaryButton,
-                ...(pending ? disabledButton : {}),
-              }}
-              onClick={requestSubmission}
-              disabled={pending}
-            >
-              {copy.openSubmissionConfirmation}
-            </button>
-
-            <button
-              type="button"
-              style={secondaryButton}
-              onClick={editDetails}
-              disabled={pending}
-            >
-              {copy.editDetails}
-            </button>
-
-            {cancellationAvailable && (
-              <button
-                type="button"
-                style={dangerButton}
-                onClick={requestCancellation}
-                disabled={pending}
-              >
-                {copy.cancelRequest}
-              </button>
-            )}
-          </section>
-        )}
-
-        {recoveryState !== "loading" &&
-          recoveryState !== "failed" &&
           canonicalRequest &&
           !showDraftWorkflow && (
             emergencyRelationshipDetail ? (
-              <EmergencyRelationshipDetail
+              <div className="emergency-find-help-layout">
+                <div className="emergency-find-help-left-column">
+                  <div
+                    ref={
+                      canonicalStatus ===
+                      "ready_for_distribution"
+                        ? findHelpSectionRef
+                        : null
+                    }
+                    style={findHelpAnchor}
+                  >
+                    <EmergencyAvailableNow
+                    visible={
+                      canonicalStatus ===
+                      "ready_for_distribution"
+                    }
+                    phase={availableNowPhase}
+                    professionals={
+                      availableProfessionals
+                    }
+                    selectionPending={
+                      selectionPending
+                    }
+                    errorMessage={
+                      availableNowError
+                    }
+                    language={language}
+                    onViewProfile={
+                      openAvailableProfessionalProfile
+                    }
+                    onChooseProfessional={
+                      requestAvailableProfessionalSelectionById
+                    }
+                    />
+                  </div>
+
+                  <EmergencyProfessionalResponses
+                    phase={
+                      shouldLoadResponses
+                        ? responsesPhase
+                        : "idle"
+                    }
+                    responses={
+                      emergencyRelationshipDetail.responseCards
+                    }
+                    selectionPending={
+                      selectionPending
+                    }
+                    language={language}
+                    onSelectResponse={
+                      requestProfessionalSelectionById
+                    }
+                    onKeepWaiting={
+                      canonicalStatus ===
+                      "ready_for_distribution"
+                        ? () =>
+                            setPage(detailReturnPage)
+                        : undefined
+                    }
+                  />
+                </div>
+
+                <EmergencyRelationshipDetail
                 detail={emergencyRelationshipDetail}
                 language={language}
                 responsesPhase={
@@ -2166,10 +2923,11 @@ function EmergencyRequest({ setPage }) {
                     ? responsesPhase
                     : "idle"
                 }
+                responsesPresentation="external"
                 selectionPending={selectionPending}
                 cancellationAvailable={cancellationAvailable}
                 mutationPending={pending}
-                onBack={() => setPage("myRequests")}
+                onBack={() => setPage(detailReturnPage)}
                 onOpenConversation={
                   openCanonicalEmergencyConversation
                 }
@@ -2186,6 +2944,7 @@ function EmergencyRequest({ setPage }) {
                     : null
                 }
               />
+              </div>
             ) : (
               <section style={formCard} role="alert">
                 <p style={recoveryMessage}>
@@ -2195,7 +2954,7 @@ function EmergencyRequest({ setPage }) {
                   <button
                     type="button"
                     style={secondaryButton}
-                    onClick={() => setPage("myRequests")}
+                    onClick={() => setPage(detailReturnPage)}
                   >
                     {copy.viewMyEmergencyRequests}
                   </button>
@@ -2204,9 +2963,11 @@ function EmergencyRequest({ setPage }) {
             )
           )}
 
-        {showDraftWorkflow &&
-          phase !== "complete" &&
-          cancellationAvailable && (
+        {recoveryState !== "loading" && recoveryState !== "failed" && canonicalRequest && (
+          <EmergencyFollowUpAction key={canonicalRequest.id} emergencyRequest={canonicalRequest} language={language} setPage={setPage} />
+        )}
+
+        {showDraftWorkflow && cancellationAvailable && (
             <button
               type="button"
               style={dangerButton}
@@ -2217,100 +2978,154 @@ function EmergencyRequest({ setPage }) {
             </button>
           )}
 
-        {submissionConfirmationOpen && (
-          <section
-            style={submissionConfirmationCard}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="emergency-submission-title"
-          >
-            <h2
-              id="emergency-submission-title"
-              style={sectionTitle}
+        {selectedResponse && (
+          <div style={selectionDialogBackdrop}>
+            <section
+              ref={selectionDialogRef}
+              tabIndex={-1}
+              style={selectionConfirmationCard}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="emergency-selection-title"
             >
-              {copy.submissionConfirmTitle}
-            </h2>
+              <h2
+                id="emergency-selection-title"
+                style={sectionTitle}
+              >
+                {t(
+                  "emergencySelectConfirmTitle",
+                  language
+                )}
+              </h2>
 
-            <p style={completeBody}>
-              {copy.submissionConfirmBody}
-            </p>
+              <p style={completeBody}>
+                {t(
+                  "emergencySelectConfirmBody",
+                  language,
+                  {
+                    business:
+                      selectedResponse.professional
+                        .businessName ||
+                      t(
+                        "messagesOwnerProfessional",
+                        language
+                      ),
+                  }
+                )}
+              </p>
 
-            <button
-              type="button"
-              style={{
-                ...primaryButton,
-                ...(pending ? disabledButton : {}),
-              }}
-              onClick={confirmSubmission}
-              disabled={pending}
-            >
-              {pending
-                ? copy.submitting
-                : copy.confirmSubmission}
-            </button>
+              {selectionError && (
+                <div
+                  style={errorNotice}
+                  role="alert"
+                >
+                  {selectionError}
+                </div>
+              )}
 
-            <button
-              type="button"
-              style={secondaryButton}
-              onClick={keepEditingEmergencyRequest}
-              disabled={pending}
-            >
-              {copy.keepEditing}
-            </button>
-          </section>
+              <button
+                type="button"
+                style={{
+                  ...primaryButton,
+                  ...(selectionPending
+                    ? disabledButton
+                    : {}),
+                }}
+                onClick={
+                  confirmProfessionalSelection
+                }
+                disabled={selectionPending}
+              >
+                {selectionPending
+                  ? copy.submitting
+                  : t(
+                      "emergencySelectConfirm",
+                      language
+                    )}
+              </button>
+
+              <button
+                type="button"
+                style={secondaryButton}
+                onClick={keepWaitingForProfessional}
+                disabled={selectionPending}
+              >
+                {t(
+                  "emergencyKeepWaiting",
+                  language
+                )}
+              </button>
+            </section>
+          </div>
         )}
 
-        {selectedResponse && (
-          <section
-            style={submissionConfirmationCard}
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="emergency-selection-title"
-          >
-            <h2
-              id="emergency-selection-title"
-              style={sectionTitle}
+        {selectedAvailableProfessional && (
+          <div style={selectionDialogBackdrop}>
+            <section
+              ref={selectionDialogRef}
+              tabIndex={-1}
+              style={selectionConfirmationCard}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="emergency-available-selection-title"
             >
-              {t("emergencySelectConfirmTitle", language)}
-            </h2>
+              <h2
+                id="emergency-available-selection-title"
+                style={sectionTitle}
+              >
+                {language === "es"
+                  ? "¿Elegir este profesional?"
+                  : "Choose this professional?"}
+              </h2>
 
-            <p style={completeBody}>
-              {t("emergencySelectConfirmBody", language, {
-                business:
-                  selectedResponse.professional.businessName ||
-                  t("messagesOwnerProfessional", language),
-              })}
-            </p>
+              <p style={completeBody}>
+                {language === "es"
+                  ? `${selectedAvailableProfessional.businessName} está Disponible Ahora y habilitó la selección directa de Emergencia. Meetro te conectará si todavía está disponible. Esto no significa que el profesional ya esté en camino.`
+                  : `${selectedAvailableProfessional.businessName} is Available Now and has enabled direct Emergency selection. Meetro will connect you if the selection is still available. This does not mean the professional is already on the way.`}
+              </p>
 
-            {selectionError && (
-              <div style={errorNotice} role="alert">
-                {selectionError}
-              </div>
-            )}
+              {selectionError && (
+                <div
+                  style={errorNotice}
+                  role="alert"
+                >
+                  {selectionError}
+                </div>
+              )}
 
-            <button
-              type="button"
-              style={{
-                ...primaryButton,
-                ...(selectionPending ? disabledButton : {}),
-              }}
-              onClick={confirmProfessionalSelection}
-              disabled={selectionPending}
-            >
-              {selectionPending
-                ? copy.submitting
-                : t("emergencySelectConfirm", language)}
-            </button>
+              <button
+                type="button"
+                style={{
+                  ...primaryButton,
+                  ...(selectionPending
+                    ? disabledButton
+                    : {}),
+                }}
+                onClick={
+                  confirmAvailableProfessionalSelection
+                }
+                disabled={selectionPending}
+              >
+                {selectionPending
+                  ? copy.submitting
+                  : language === "es"
+                    ? "Elegir Profesional"
+                    : "Choose Professional"}
+              </button>
 
-            <button
-              type="button"
-              style={secondaryButton}
-              onClick={keepWaitingForProfessional}
-              disabled={selectionPending}
-            >
-              {t("emergencyKeepWaiting", language)}
-            </button>
-          </section>
+              <button
+                type="button"
+                style={secondaryButton}
+                onClick={keepWaitingForProfessional}
+                disabled={selectionPending}
+              >
+                {t(
+                  "emergencyKeepWaiting",
+                  language
+                )}
+              </button>
+            </section>
+          </div>
         )}
 
         {cancelConfirmationOpen && (
@@ -2360,15 +3175,6 @@ function EmergencyRequest({ setPage }) {
           <>
             <button
               type="button"
-              style={navigationButton}
-              onClick={() => setPage("emergency")}
-              disabled={pending}
-            >
-              {copy.back}
-            </button>
-
-            <button
-              type="button"
               style={homeButton}
               onClick={() => setPage("home")}
               disabled={pending}
@@ -2381,6 +3187,44 @@ function EmergencyRequest({ setPage }) {
 
       <BottomNav currentPage="emergency" setPage={setPage} />
     </div>
+  );
+}
+
+function EmergencyProgress({ copy, currentStage }) {
+  const stages = ["details", "safety", "find", "connected"];
+  const stageIcons = {
+    details: "messages",
+    safety: "trust",
+    find: "availableNow",
+    connected: "fastResponse",
+  };
+
+  return (
+    <ol style={progressList} aria-label={copy.progress}>
+      {stages.map((stage) => (
+        <li
+          key={stage}
+          style={{
+            ...progressItem,
+            ...(stage === currentStage
+              ? progressItemCurrent
+              : {}),
+          }}
+          aria-current={
+            stage === currentStage ? "step" : undefined
+          }
+        >
+          <span style={progressIcon} aria-hidden="true">
+            <MeetroIcon
+              name={stageIcons[stage]}
+              size={16}
+              decorative
+            />
+          </span>
+          <span>{copy.stages[stage]}</span>
+        </li>
+      ))}
+    </ol>
   );
 }
 
@@ -2414,9 +3258,10 @@ function SafetyCheck({
 
 const page = {
   minHeight: "100dvh",
-  background: "#f5f7fb",
+  background:
+    "var(--meetro-color-background, #FAFAFC)",
   padding:
-    "calc(env(safe-area-inset-top, 0px) + 24px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
+    "calc(env(safe-area-inset-top, 0px) + 16px) max(16px, env(safe-area-inset-right, 0px)) calc(96px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
 };
 
@@ -2428,6 +3273,13 @@ const card = {
   paddingTop: "24px",
   paddingBottom: "90px",
   boxSizing: "border-box",
+};
+
+const findHelpAnchor = {
+  width: "100%",
+  minWidth: 0,
+  scrollMarginTop:
+    "calc(env(safe-area-inset-top, 0px) + 16px)",
 };
 
 const backMini = {
@@ -2481,32 +3333,135 @@ const limitationNotice = {
   lineHeight: 1.5,
 };
 
-const canonicalCard = {
-  display: "grid",
-  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
-  gap: "12px",
-  marginBottom: "16px",
-  padding: "16px",
-  border: "1px solid #d1fae5",
-  borderRadius: "16px",
-  background: "#ecfdf5",
+const secondaryEntryButton = {
+  minHeight: "40px",
+  marginBottom: "14px",
+  padding: "8px 12px",
+  border: "1px solid #a7b8aa",
+  borderRadius: "12px",
+  background: "white",
+  color: "#174b2c",
+  font: "inherit",
+  fontSize: "14px",
+  fontWeight: "800",
+  cursor: "pointer",
 };
 
-const canonicalLabel = {
-  display: "block",
-  marginBottom: "4px",
-  color: "#047857",
+const askIntakeCard = {
+  minWidth: 0,
+  padding: "22px",
+  border: "1px solid #bbd5c2",
+  borderRadius: "22px",
+  borderColor: "#bbd5c2",
+  background: "#f8fcf8",
+  boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
+};
+
+const askIntakeIntro = {
+  margin: "0 0 16px",
+  color: "#4b5563",
+  lineHeight: 1.55,
+};
+
+const askTranscript = {
+  display: "grid",
+  gap: "10px",
+  marginBottom: "14px",
+};
+
+const askMessage = {
+  display: "grid",
+  gap: "4px",
+  maxWidth: "92%",
+  padding: "11px 13px",
+  borderRadius: "14px",
+  lineHeight: 1.45,
+};
+
+const askAssistantMessage = {
+  ...askMessage,
+  background: "#e8f4ea",
+  color: "#174b2c",
+};
+
+const askHomeownerMessage = {
+  ...askMessage,
+  justifySelf: "end",
+  background: "#eef2f7",
+  color: "#1f2937",
+};
+
+const askClarification = {
+  margin: "0 0 12px",
+  padding: "10px 12px",
+  borderLeft: "3px solid #4f7d5b",
+  background: "white",
+  color: "#274d31",
+  lineHeight: 1.5,
+};
+
+const askComposerActions = {
+  display: "flex",
+  alignItems: "center",
+  justifyContent: "flex-end",
+  flexWrap: "wrap",
+  gap: "10px",
+  marginTop: "12px",
+};
+
+const askConsentActions = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))",
+  gap: "10px",
+  marginTop: "16px",
+};
+
+const askConsentSecondaryButton = {
+  ...secondaryEntryButton,
+  width: "100%",
+  minHeight: "50px",
+  marginBottom: 0,
+};
+
+const askReviewCard = {
+  marginTop: "18px",
+  padding: "18px",
+  border: "1px solid #86b391",
+  borderRadius: "16px",
+  background: "white",
+};
+
+const askReviewTitle = {
+  margin: "0 0 6px",
+  color: "#174b2c",
+  fontSize: "19px",
+};
+
+const askReviewIntro = {
+  margin: "0 0 14px",
+  color: "#4b5563",
+  lineHeight: 1.5,
+};
+
+const askReviewList = {
+  display: "grid",
+  gap: "12px",
+  margin: "0 0 18px",
+};
+
+const askReviewLabel = {
+  marginBottom: "3px",
+  color: "#64748b",
   fontSize: "12px",
   fontWeight: "800",
   textTransform: "uppercase",
-  letterSpacing: "0.04em",
 };
 
-const canonicalValue = {
-  display: "block",
-  overflowWrap: "anywhere",
-  color: "#064e3b",
-  fontSize: "15px",
+const askReviewValue = {
+  margin: 0,
+  color: "#111827",
+  fontWeight: "700",
+  lineHeight: 1.45,
 };
 
 const formCard = {
@@ -2516,6 +3471,94 @@ const formCard = {
   borderRadius: "22px",
   background: "white",
   boxShadow: "0 10px 24px rgba(0,0,0,0.05)",
+};
+
+const progressList = {
+  display: "grid",
+  gridTemplateColumns: "repeat(4, minmax(0, 1fr))",
+  gap: "6px",
+  margin: "8px 0 12px",
+  padding: 0,
+  listStyle: "none",
+};
+
+const progressItem = {
+  display: "grid",
+  placeItems: "center",
+  alignContent: "center",
+  gap: "3px",
+  minWidth: 0,
+  minHeight: "44px",
+  padding: "5px 4px",
+  border:
+    "1px solid var(--meetro-color-line, #E5E7EB)",
+  borderRadius: "12px",
+  background:
+    "var(--meetro-surface-muted, #F3F4F6)",
+  color:
+    "var(--meetro-color-muted, #6B7280)",
+  fontSize: "10.5px",
+  fontWeight: "800",
+  lineHeight: 1.15,
+  textAlign: "center",
+};
+
+const progressIcon = {
+  width: "16px",
+  height: "16px",
+  display: "grid",
+  placeItems: "center",
+};
+
+const progressItemCurrent = {
+  border:
+    "1px solid rgba(11, 93, 59, 0.35)",
+  background:
+    "var(--meetro-color-sage, #E8F5EE)",
+  color:
+    "var(--meetro-color-forest, #0B5D3B)",
+  boxShadow: "none",
+};
+
+const serviceChoices = {
+  minWidth: 0,
+  margin: 0,
+  padding: 0,
+  border: 0,
+};
+
+const serviceChoicesLegend = {
+  width: "100%",
+  marginBottom: "10px",
+  padding: 0,
+  color: "#111827",
+  fontSize: "14px",
+  fontWeight: "800",
+};
+
+const serviceChoiceGrid = {
+  display: "grid",
+  gridTemplateColumns: "repeat(auto-fit, minmax(150px, 1fr))",
+  gap: "10px",
+};
+
+const serviceChoice = {
+  minHeight: "52px",
+  padding: "12px",
+  border: "1px solid #cbd5e1",
+  borderRadius: "14px",
+  background: "#fff",
+  color: "#1f2937",
+  font: "inherit",
+  fontWeight: "800",
+  cursor: "pointer",
+};
+
+const selectedServiceChoice = {
+  borderColor: "#166534",
+  background: "#ecfdf5",
+  color: "#166534",
+  boxShadow: "0 0 0 2px rgba(22, 101, 52, 0.12)",
 };
 
 const fieldLabel = {
@@ -2575,35 +3618,6 @@ const sectionIntro = {
   lineHeight: 1.55,
 };
 
-const stepStatus = {
-  display: "grid",
-  gap: "4px",
-  marginBottom: "20px",
-  padding: "16px",
-  border: "1px solid #a7f3d0",
-  borderRadius: "16px",
-  background: "#ecfdf5",
-  color: "#065f46",
-};
-
-const stepEyebrow = {
-  fontSize: "12px",
-  fontWeight: "900",
-  letterSpacing: "0.04em",
-  textTransform: "uppercase",
-};
-
-const stepConfirmation = {
-  fontSize: "17px",
-  lineHeight: 1.35,
-};
-
-const stepNext = {
-  color: "#047857",
-  fontSize: "14px",
-  fontWeight: "800",
-};
-
 const noHazardsNotice = {
   margin: "0 0 18px",
   padding: "14px 16px",
@@ -2651,6 +3665,11 @@ const primaryButton = {
   fontSize: "16px",
   fontWeight: "900",
   cursor: "pointer",
+};
+
+const askConsentPrimaryButton = {
+  ...primaryButton,
+  marginTop: 0,
 };
 
 const secondaryButton = {
@@ -2727,23 +3746,34 @@ const confirmationCard = {
   background: "#fffafa",
 };
 
-const submissionConfirmationCard = {
-  ...completeCard,
-  marginTop: "16px",
-  border: "2px solid #bfdbfe",
-  background: "#f8fbff",
+const selectionDialogBackdrop = {
+  position: "fixed",
+  inset: 0,
+  zIndex: 1200,
+  display: "grid",
+  placeItems: "center",
+  paddingTop:
+    "max(16px, env(safe-area-inset-top))",
+  paddingRight: "16px",
+  paddingBottom:
+    "max(16px, env(safe-area-inset-bottom))",
+  paddingLeft: "16px",
+  background: "rgba(15, 23, 42, 0.48)",
+  overflowY: "auto",
+  overscrollBehavior: "contain",
 };
 
-const acknowledgmentNotice = {
-  marginBottom: "16px",
-  padding: "16px",
-  border: "1px solid #bfdbfe",
-  borderRadius: "14px",
-  background: "#eff6ff",
-  color: "#1e3a8a",
-  fontSize: "14px",
-  lineHeight: 1.55,
-  fontWeight: "700",
+const selectionConfirmationCard = {
+  ...completeCard,
+  width: "min(100%, 520px)",
+  maxHeight: "calc(100dvh - 32px)",
+  overflowY: "auto",
+  boxSizing: "border-box",
+  border: "2px solid #bfdbfe",
+  background: "#f8fbff",
+  boxShadow:
+    "0 24px 70px rgba(15, 23, 42, 0.28)",
+  outline: "none",
 };
 
 const completeBody = {
@@ -2751,21 +3781,6 @@ const completeBody = {
   color: "#4b5563",
   fontSize: "15px",
   lineHeight: 1.6,
-};
-
-const distributionPill = {
-  display: "inline-flex",
-  padding: "9px 12px",
-  borderRadius: "999px",
-  background: "#fff7ed",
-  color: "#9a3412",
-  fontSize: "13px",
-  fontWeight: "900",
-};
-
-const navigationButton = {
-  ...secondaryButton,
-  marginTop: "20px",
 };
 
 const homeButton = {

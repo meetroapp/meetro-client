@@ -422,8 +422,19 @@ function matchesRelationshipView(relationship = {}, view = "all") {
     relationship?.counts && typeof relationship.counts === "object"
       ? relationship.counts
       : {};
+  const durableRoles = relationship?.primaryContactRecord?.businessContactRoles || [];
+  const durableRoleMatches = {
+    customer: "CUSTOMER",
+    professional: "PROFESSIONAL_VENDOR",
+    employee: "EMPLOYEE",
+    tenant: "TENANT",
+    propertyManager: "PROPERTY_MANAGER",
+  };
 
   if (view === "all") return !relationship.isArchivedOnly;
+  if (durableRoleMatches[view] && durableRoles.includes(durableRoleMatches[view])) {
+    return !relationship.isArchivedOnly;
+  }
   if (view === "professional") {
     return ["professional", "vendor"].includes(relationship.type) && !relationship.isArchivedOnly;
   }
@@ -632,14 +643,17 @@ export function createRelationshipLayerModel(conversations = [], options = {}) {
         participants: (relationship.participants || []).length,
         unread: relationship.conversations.filter((item) => item.unread).length,
         drafts: relationship.conversations.filter((item) => item.draft).length,
-        archived: relationship.conversations.filter((item) => item.archived).length,
+        archived:
+          relationship.conversations.filter((item) => item.archived).length +
+          (relationship.contactRecord?.archived ? 1 : 0),
       },
       openTickets: relationship.openTickets || [],
       forwardedTickets: relationship.forwardedTickets || [],
       participants: relationship.participants || [],
       isArchivedOnly:
-        relationship.conversations.length > 0 &&
-        relationship.conversations.every((item) => item.archived),
+        (relationship.conversations.length > 0 &&
+          relationship.conversations.every((item) => item.archived)) ||
+        Boolean(relationship.contactRecord?.archived),
     }))
     .sort((left, right) => {
       const typeDelta =

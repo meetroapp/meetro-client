@@ -1,3 +1,4 @@
+import { matchesOpportunityFilter, parseOpportunityFilter, opportunityFilterRoute } from "../utils/opportunityPresentationFilters.js";
 import { useEffect, useRef, useState } from "react";
 import BottomNav from "../components/BottomNav";
 import SafeBackBar from "../components/SafeBackBar";
@@ -10,24 +11,16 @@ import {
 import {
   getCanonicalConversationActionTarget,
 } from "../utils/conversationActionRouting";
-import { buildCanonicalEvaluationRoute } from "../utils/canonicalEvaluation";
 import {
   listProfessionalEmergencyOpportunities,
   respondToEmergencyOpportunity,
 } from "../utils/emergencyApi";
 import { createEmergencyRefreshCoordinator } from "../utils/emergencyRefreshCoordinator";
-import {
-  fetchCanonicalConversations,
-} from "../utils/requestCommunication";
 import { isProfessionalSession } from "../utils/session";
 import { PROFESSIONAL_OPPORTUNITY_STATUS } from "../utils/professionalOpportunityState";
 import {
   resolveProfessionalEmergencyResponsePresentation,
 } from "../utils/professionalEmergencyParticipation";
-import {
-  CONVERSATION_ACTION_STAGE,
-  getConversationActionLabel,
-} from "../utils/conversationActionLanguage";
 import {
   PROFESSIONAL_OPPORTUNITY_PHASE,
   requestProfessionalOpportunities,
@@ -37,15 +30,20 @@ import {
   prepareProfessionalResponseCommand,
   submitProfessionalResponse,
 } from "../utils/professionalResponseApi";
+import { parseBusinessLeadAlertRoute } from "../utils/alertWorkflowRoutes.js";
 
 function BusinessLeads({ setPage }) {
+  const [presentationFilter, setPresentationFilter] = useState(() => parseOpportunityFilter(window.location.hash));
+  useEffect(() => {
+    const update = () => setPresentationFilter(parseOpportunityFilter(window.location.hash));
+    window.addEventListener("hashchange", update);
+    return () => window.removeEventListener("hashchange", update);
+  }, []);
   const emergencyRefreshCoordinatorRef = useRef(null);
   const [language, setLanguage] = useState(getLanguage());
   const [status, setStatus] = useState("loading");
   const [opportunities, setOpportunities] = useState([]);
   const [emergencyOpportunities, setEmergencyOpportunities] =
-    useState([]);
-  const [activeEmergencyConversations, setActiveEmergencyConversations] =
     useState([]);
   const [emergencyStatus, setEmergencyStatus] =
     useState("loading");
@@ -55,6 +53,24 @@ function BusinessLeads({ setPage }) {
     useState({});
   const [reloadKey, setReloadKey] = useState(0);
   const isProfessional = isProfessionalSession();
+  const visibleOpportunities = opportunities.filter((record) => matchesOpportunityFilter(record, presentationFilter));
+  const alertRoute = parseBusinessLeadAlertRoute(
+    typeof window === "undefined" ? "" : window.location.hash
+  );
+  const alertFocusAppliedRef = useRef(false);
+
+  useEffect(() => {
+    if (!alertRoute || alertFocusAppliedRef.current) return;
+    const focusId = alertRoute.requestId || alertRoute.emergencyRequestId;
+    const selector = alertRoute.requestId
+      ? `[data-lead-request-id="${focusId}"]`
+      : `[data-emergency-request-id="${focusId}"]`;
+    const element = document.querySelector(selector);
+    if (!element) return;
+    alertFocusAppliedRef.current = true;
+    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    element.focus({ preventScroll: true });
+  }, [alertRoute, emergencyOpportunities, opportunities]);
 
   function openOpportunityConversation(opportunity) {
     const context = stageBusinessLeadConversation(opportunity);
@@ -70,27 +86,6 @@ function BusinessLeads({ setPage }) {
     if (!target.ok) return;
 
     setPage(target.route);
-  }
-
-  function openCanonicalEmergencyConversation(conversation) {
-    const target = getCanonicalConversationActionTarget(
-      conversation,
-      {
-        returnPage: "businessLeads",
-        preferCommunicationCenterShell: true,
-      }
-    );
-
-    if (!target.ok) return;
-
-    setPage(target.route);
-  }
-
-  function openCanonicalEmergencyEvaluation(conversation) {
-    const route = buildCanonicalEvaluationRoute(
-      conversation?.emergencyRequestId
-    );
-    if (route) setPage(route);
   }
 
   async function respondToEmergency(opportunity) {
@@ -260,32 +255,23 @@ function BusinessLeads({ setPage }) {
     if (!isProfessional) return undefined;
 
     let hasConfirmedOpportunities = false;
-    let hasConfirmedConversations = false;
     const refreshCoordinator =
       createEmergencyRefreshCoordinator({
         load: async () => {
-          const [opportunityResult, conversationResult] =
-            await Promise.all([
-              listProfessionalEmergencyOpportunities({
-                setPage,
-              }),
-              fetchCanonicalConversations("business", {
-                setPage,
-              }),
-            ]);
+          const opportunityResult =
+            await listProfessionalEmergencyOpportunities({
+              setPage,
+            });
 
-          if (!opportunityResult.ok && !conversationResult.ok) {
+          if (!opportunityResult.ok) {
             throw new Error(
               "Emergency professional work could not be refreshed."
             );
           }
 
-          return { opportunityResult, conversationResult };
+          return opportunityResult;
         },
-        onSuccess: ({
-          opportunityResult,
-          conversationResult,
-        }) => {
+        onSuccess: (opportunityResult) => {
           if (opportunityResult.ok) {
             hasConfirmedOpportunities = true;
             setEmergencyOpportunities(
@@ -294,18 +280,6 @@ function BusinessLeads({ setPage }) {
             setEmergencyStatus("ready");
           } else if (!hasConfirmedOpportunities) {
             setEmergencyStatus("unavailable");
-          }
-
-          if (conversationResult.ok) {
-            hasConfirmedConversations = true;
-            setActiveEmergencyConversations(
-              conversationResult.conversations.filter(
-                (conversation) =>
-                  conversation.sourceType === "emergency"
-              )
-            );
-          } else if (!hasConfirmedConversations) {
-            setActiveEmergencyConversations([]);
           }
         },
         onError: (_error, { hasConfirmedData }) => {
@@ -354,7 +328,7 @@ function BusinessLeads({ setPage }) {
           </button>
         </div>
 
-        <SafeBackBar setPage={setPage} fallback="businessDashboard" />
+        <SafeBackBar setPage={setPage} fallback={alertRoute?.returnPage || "businessDashboard"} />
         <BottomNav setPage={setPage} currentPage="businessLeads" />
       </div>
     );
@@ -373,7 +347,12 @@ function BusinessLeads({ setPage }) {
         </p>
       </div>
 
-      <section
+      <nav className="opportunity-presentation-filters" aria-label="Opportunity filter">
+        {[["all", "All Opportunities"], ["new", "New"], ["awaiting-response", "Awaiting Response"]].map(([filter, label]) => (
+          <button key={filter} type="button" aria-pressed={presentationFilter === filter} onClick={() => { setPresentationFilter(filter); setPage(opportunityFilterRoute(filter)); }}>{label}</button>
+        ))}
+      </nav>
+      {presentationFilter === "all" && <section
         style={leadSection}
         aria-labelledby="emergency-opportunities-title"
       >
@@ -383,62 +362,6 @@ function BusinessLeads({ setPage }) {
         >
           {t("professionalEmergencyOpportunities", language)}
         </h2>
-
-        {activeEmergencyConversations.length > 0 && (
-          <div style={leadList}>
-            <h3 style={sectionSubheading}>
-              {t("professionalEmergencyActive", language)}
-            </h3>
-            {activeEmergencyConversations.map((conversation) => (
-              <article
-                key={`active-emergency-${conversation.conversationId}`}
-                style={emergencyLeadCard}
-              >
-                <span style={emergencyLeadStatus}>
-                  {t("messagesActiveEmergency", language)}
-                </span>
-                <h3 style={stateTitle}>
-                  {conversation.project_title}
-                </h3>
-                <p style={leadMeta}>
-                  {conversation.workflow?.status ||
-                    conversation.status}
-                </p>
-                <button
-                  type="button"
-                  style={leadActionButton}
-                  onClick={() =>
-                    openCanonicalEmergencyConversation(conversation)
-                  }
-                >
-                  {getConversationActionLabel(
-                    ["completed", "resolved"].includes(
-                      conversation.workflow?.status
-                    )
-                      ? CONVERSATION_ACTION_STAGE.HISTORY
-                      : CONVERSATION_ACTION_STAGE.ACTIVE,
-                    language
-                  )}
-                </button>
-                {[
-                  "professional_arrived",
-                  "work_in_progress",
-                  "completed",
-                ].includes(conversation.workflow?.status) && (
-                  <button
-                    type="button"
-                    style={leadActionButton}
-                    onClick={() =>
-                      openCanonicalEmergencyEvaluation(conversation)
-                    }
-                  >
-                    Open Evaluation
-                  </button>
-                )}
-              </article>
-            ))}
-          </div>
-        )}
 
         {emergencyStatus === "loading" ? (
           <div style={compactStateCard} role="status">
@@ -478,6 +401,8 @@ function BusinessLeads({ setPage }) {
                 <article
                   key={`emergency-${opportunity.id}`}
                   style={emergencyLeadCard}
+                  data-emergency-request-id={opportunity.id}
+                  tabIndex={-1}
                 >
                   <span style={emergencyLeadStatus}>
                     {t("emergency", language)}
@@ -526,7 +451,7 @@ function BusinessLeads({ setPage }) {
             })}
           </div>
         )}
-      </section>
+      </section>}
 
       {status === PROFESSIONAL_OPPORTUNITY_STATUS.LOADING ? (
         <section style={unavailableCard} role="status">Loading request opportunities…</section>
@@ -537,7 +462,7 @@ function BusinessLeads({ setPage }) {
           <p style={stateText}>Meetro could not verify eligible requests. Try again.</p>
           <button style={primaryButton} onClick={() => setReloadKey((value) => value + 1)}>Try Again</button>
         </section>
-      ) : status === PROFESSIONAL_OPPORTUNITY_STATUS.EMPTY ? (
+      ) : status === PROFESSIONAL_OPPORTUNITY_STATUS.EMPTY || visibleOpportunities.length === 0 ? (
         <section style={unavailableCard} role="status">
           <div style={stateIcon}>LEAD</div>
           <h2 style={stateTitle}>No matching requests are available right now.</h2>
@@ -545,7 +470,7 @@ function BusinessLeads({ setPage }) {
         </section>
       ) : (
         <section style={leadList} aria-label="Eligible request opportunities">
-          {opportunities.map((opportunity) => {
+          {visibleOpportunities.map((opportunity) => {
             const conversationContext =
               getBusinessLeadConversationContext(opportunity);
             const cardKey = conversationContext
@@ -559,7 +484,12 @@ function BusinessLeads({ setPage }) {
               responseState.phase === "confirmed";
 
             return (
-              <article key={cardKey} style={leadCard}>
+              <article
+                key={cardKey}
+                style={leadCard}
+                data-lead-request-id={requestId}
+                tabIndex={-1}
+              >
                 <span style={leadStatus}>Open request</span>
                 <h2 style={stateTitle}>{opportunity.project_title}</h2>
                 <p style={stateText}>{opportunity.project_description}</p>
@@ -636,7 +566,7 @@ function BusinessLeads({ setPage }) {
         </section>
       )}
 
-      <SafeBackBar setPage={setPage} fallback="businessDashboard" />
+      <SafeBackBar setPage={setPage} fallback={alertRoute?.returnPage || "businessDashboard"} />
       <BottomNav setPage={setPage} currentPage="businessLeads" />
     </div>
   );
@@ -704,13 +634,6 @@ const sectionHeading = {
   margin: 0,
   color: "#111827",
   fontSize: "21px",
-};
-
-const sectionSubheading = {
-  margin: "2px 0 0",
-  color: "#475569",
-  fontSize: "14px",
-  fontWeight: "900",
 };
 
 const compactStateCard = {

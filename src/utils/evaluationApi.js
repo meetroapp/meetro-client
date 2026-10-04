@@ -68,11 +68,47 @@ export function createEvaluation({ sourceContext, content, idempotencyKey, setPa
   );
 }
 
+export function createOrdinaryJobEvaluation({
+  jobId,
+  visitId,
+  content,
+  idempotencyKey,
+  setPage,
+}) {
+  return requestEvaluation(
+    `/jobs/${encodeURIComponent(jobId)}/evaluations`,
+    {
+      method: "POST",
+      headers: mutationHeaders(idempotencyKey),
+      body: JSON.stringify({ visitId, content, expectedVersion: 0 }),
+    },
+    setPage
+  );
+}
+
 export function updateEvaluationDraft({ evaluationId, expectedVersion, content, idempotencyKey, setPage }) {
   return requestEvaluation(
     `/evaluations/${encodeURIComponent(evaluationId)}`,
     {
       method: "PATCH",
+      headers: mutationHeaders(idempotencyKey),
+      body: JSON.stringify({ expectedVersion, content }),
+    },
+    setPage
+  );
+}
+
+export function reviseEvaluation({
+  evaluationId,
+  expectedVersion,
+  content,
+  idempotencyKey,
+  setPage,
+}) {
+  return requestEvaluation(
+    `/evaluations/${encodeURIComponent(evaluationId)}/revisions`,
+    {
+      method: "POST",
       headers: mutationHeaders(idempotencyKey),
       body: JSON.stringify({ expectedVersion, content }),
     },
@@ -101,11 +137,14 @@ export function getEvaluation({ evaluationId, setPage }) {
 }
 
 export async function listEvaluationsForEmergencyRequest({ emergencyRequestId, setPage }) {
-  const { response, data } = await authFetch(
+  return listEvaluations(
     `/emergency-requests/${encodeURIComponent(emergencyRequestId)}/evaluations`,
-    { method: "GET" },
     setPage
   );
+}
+
+async function listEvaluations(endpoint, setPage) {
+  const { response, data } = await authFetch(endpoint, { method: "GET" }, setPage);
   if (!response.ok || data?.success !== true || !Array.isArray(data.evaluations)) {
     throw new EvaluationApiError({
       status: response.status,
@@ -122,4 +161,11 @@ export async function listEvaluationsForEmergencyRequest({ emergencyRequestId, s
     });
   }
   return evaluations;
+}
+
+export async function listEvaluationsForJob({ jobId, setPage }) {
+  return listEvaluations(
+    `/jobs/${encodeURIComponent(jobId)}/evaluations`,
+    setPage
+  );
 }

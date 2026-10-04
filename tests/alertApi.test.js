@@ -143,7 +143,12 @@ test("GET alert counts sends no body and no query", async () => {
   const transport = createTransport([successResponse({
     success: true,
     code: "ALERT_COUNTS_RETRIEVED",
-    counts: { active: 2, unread: 1, byCategory: {} },
+    counts: {
+      active: 2,
+      unread: 1,
+      byCategory: {},
+      communication: { unread: 0, customerUnread: 0, teamUnread: 0, byJob: [], byConversation: [] },
+    },
   })]);
   await fetchAlertCounts({ authFetchImpl: transport.authFetchImpl });
   assert.deepEqual(transport.calls[0], {

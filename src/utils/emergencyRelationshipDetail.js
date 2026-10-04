@@ -91,6 +91,8 @@ function normalizeResponseCard(response, emergencyRequestId) {
       cleanText(professional.businessLogoUrl) ||
       cleanText(professional.profileImageUrl) ||
       "",
+    respondedAt:
+      normalizeTimestamp(response.respondedAt),
     conversationAvailable:
       response.status === "active" &&
       response.conversationAvailable === true,
@@ -177,13 +179,29 @@ export function normalizeEmergencyRelationshipDetail({
   const activeResponse = responseCards.find(
     (response) => response.status === "active"
   );
+  const selectedProfessionalBusinessName =
+    cleanText(
+      emergencyRequest.selectedProfessionalBusinessName ||
+        emergencyRequest.selected_professional_business_name
+    );
+  const hasCanonicalSelectedProfessional =
+    emergencyRequest.hasSelectedProfessional === true ||
+    emergencyRequest.has_selected_professional === true;
+  const hasDirectSelectedProfessional = Boolean(
+    hasCanonicalSelectedProfessional &&
+      !activeResponse &&
+      selectedProfessionalBusinessName
+  );
   const normalizedConversationId = normalizePositiveInteger(
     conversationId
   );
   const conversationAvailable = Boolean(
     hasSelectedProfessional &&
-      activeResponse?.conversationAvailable === true &&
-      normalizedConversationId
+      normalizedConversationId &&
+      (
+        activeResponse?.conversationAvailable === true ||
+        hasDirectSelectedProfessional
+      )
   );
   const normalizedTimestamps = Object.fromEntries(
     TIMESTAMP_FIELDS.map((field) => [
@@ -223,12 +241,20 @@ export function normalizeEmergencyRelationshipDetail({
       ? {
           displayName:
             activeResponse?.businessName ||
+            (
+              hasDirectSelectedProfessional
+                ? selectedProfessionalBusinessName
+                : ""
+            ) ||
             (language === "es"
               ? "Profesional Seleccionado"
               : "Selected Professional"),
           category: activeResponse?.category || "",
           logoUrl: activeResponse?.logoUrl || "",
-          verifiedFromActiveRelationship: Boolean(activeResponse),
+          verifiedFromActiveRelationship: Boolean(
+            activeResponse ||
+              hasDirectSelectedProfessional
+          ),
         }
       : null,
     conversation: {

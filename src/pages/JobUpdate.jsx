@@ -1,143 +1,46 @@
-import { useState } from "react";
 import BottomNav from "../components/BottomNav";
 import FloatingBackButton from "../components/FloatingBackButton";
+import { getLanguage, t } from "../utils/language";
 import { getActiveJobSnapshot } from "../utils/workCenter";
 
 function JobUpdate({ setPage }) {
+  const language = getLanguage();
   const activeJobSnapshot = getActiveJobSnapshot();
-
   const returnPage = localStorage.getItem("returnPage") || "contractorDashboard";
-
   const jobName =
     activeJobSnapshot?.service ||
     localStorage.getItem("activeJobService") ||
-    "Active Job";
-
+    t("lifecycleJobFallback", language);
   const customer =
     activeJobSnapshot?.customer ||
     localStorage.getItem("activeJobCustomer") ||
-    "Customer";
-
-  const [status, setStatus] = useState("Work update");
-  const [note, setNote] = useState("");
-
-  function saveUpdate() {
-    const updates = JSON.parse(localStorage.getItem("jobUpdates") || "[]");
-
-    updates.unshift({
-      id: Date.now(),
-      jobName,
-      customer,
-      status,
-      note,
-      createdAt: new Date().toISOString(),
-    });
-
-    localStorage.setItem("jobUpdates", JSON.stringify(updates));
-    localStorage.setItem("lastJobUpdate", note || status);
-
-    window.dispatchEvent(new Event("meetroJobUpdated"));
-
-    setPage(returnPage);
-  }
+    t("customer", language);
 
   return (
-    <div style={page}>
+    <div className="app-page meetro-form-page" style={page}>
       <FloatingBackButton onClick={() => setPage(returnPage)} />
 
-      <div style={card}>
-        <div style={icon}></div>
+      <main style={card} aria-labelledby="job-update-unavailable-title">
+        <p style={eyebrow}>{t("lifecycleUnavailableEyebrow", language)}</p>
+        <h1 id="job-update-unavailable-title" style={title}>
+          {t("jobUpdateUnavailableTitle", language)}
+        </h1>
+        <p style={subtitle}>{t("jobUpdateUnavailableBody", language)}</p>
 
-        <h1 style={title}>Send Job Update</h1>
-        <p style={subtitle}>
-          Send a clear progress update to the customer.
-        </p>
-
-        <div style={jobBox}>
+        <section style={contextBox} aria-label={t("lifecycleReferenceDetails", language)}>
+          <span style={contextLabel}>{t("lifecycleReferenceDetails", language)}</span>
           <strong>{jobName}</strong>
           <span>{customer}</span>
-        </div>
+        </section>
 
-        <label style={label}>Quick Update</label>
-
-        <div style={quickChipGrid}>
-          <button
-            style={status === "Running late" ? quickChipActive : quickChip}
-            onClick={() => {
-              setStatus("Running late");
-              setNote("I’m running a little behind schedule and will update you again shortly.");
-            }}
-          >
-             Running late
-          </button>
-
-          <button
-            style={status === "On the way" ? quickChipActive : quickChip}
-            onClick={() => {
-              setStatus("On the way");
-              setNote("I’m on the way to your location now.");
-            }}
-          >
-             On the way
-          </button>
-
-          <button
-            style={status === "Arrived" ? quickChipActive : quickChip}
-            onClick={() => {
-              setStatus("Arrived");
-              setNote("I have arrived at the job location.");
-            }}
-          >
-             Arrived
-          </button>
-
-          <button
-            style={status === "Work started" ? quickChipActive : quickChip}
-            onClick={() => {
-              setStatus("Work started");
-              setNote("Work has started. I’ll keep you updated as progress continues.");
-            }}
-          >
-             Work started
-          </button>
-
-          <button
-            style={status === "Need approval" ? quickChipActive : quickChip}
-            onClick={() => {
-              setStatus("Need approval");
-              setNote("I need your approval before continuing with the next step.");
-            }}
-          >
-             Need approval
-          </button>
-
-          <button
-            style={status === "Work completed" ? quickChipActive : quickChip}
-            onClick={() => {
-              setStatus("Work completed");
-              setNote("The work has been completed. Please review when you have a chance.");
-            }}
-          >
-             Completed
-          </button>
-        </div>
-
-        <label style={label}>Message</label>
-        <textarea
-          value={note}
-          onChange={(e) => setNote(e.target.value)}
-          placeholder="Example: I started the repair and will send photos shortly..."
-          style={textarea}
-        />
-
-        <p style={notifyText}>
-          The customer will receive this progress update.
+        <p role="status" style={notice}>
+          {t("jobUpdateNoDeliveryNotice", language)}
         </p>
 
-        <button style={primaryButton} onClick={saveUpdate}>
-          Send Update
+        <button type="button" style={primaryButton} onClick={() => setPage(returnPage)}>
+          {t("returnToWorkCenter", language)}
         </button>
-      </div>
+      </main>
 
       <BottomNav setPage={setPage} currentPage="businessDashboard" />
     </div>
@@ -146,7 +49,7 @@ function JobUpdate({ setPage }) {
 
 const page = {
   minHeight: "100vh",
-  background: "linear-gradient(180deg, #f8fafc 0%, var(--meetro-surface-sage, #eef4ea) 100%)",
+  background: "var(--meetro-surface-sage, #eef4ea)",
   padding:
     "calc(env(safe-area-inset-top, 0px) + 28px) max(20px, env(safe-area-inset-right, 0px)) calc(88px + env(safe-area-inset-bottom, 0px)) max(20px, env(safe-area-inset-left, 0px))",
   boxSizing: "border-box",
@@ -156,119 +59,66 @@ const card = {
   maxWidth: "520px",
   margin: "70px auto 0",
   background: "white",
-  borderRadius: "28px",
+  border: "1px solid var(--meetro-color-line, #d9e1d5)",
+  borderRadius: "8px",
   padding: "24px",
-  boxShadow: "0 18px 44px rgba(15,23,42,0.08)",
+  boxShadow: "0 18px 44px rgba(15, 23, 42, 0.08)",
 };
 
-const icon = {
-  width: "70px",
-  height: "70px",
-  borderRadius: "24px",
-  background: "var(--meetro-surface-sage, #eef4ea)",
-  display: "flex",
-  alignItems: "center",
-  justifyContent: "center",
-  fontSize: "32px",
-  margin: "0 auto 14px",
+const eyebrow = {
+  margin: "0 0 8px",
+  color: "var(--meetro-color-forest, #1f4d34)",
+  fontSize: "13px",
+  fontWeight: "900",
+  textTransform: "uppercase",
 };
 
 const title = {
-  textAlign: "center",
-  fontSize: "30px",
-  fontWeight: "900",
-  margin: "0 0 8px",
+  fontSize: "28px",
+  lineHeight: 1.15,
+  margin: "0 0 10px",
   color: "#111827",
 };
 
 const subtitle = {
-  textAlign: "center",
-  color: "#667085",
+  color: "#475569",
   fontWeight: "700",
-  marginBottom: "18px",
+  lineHeight: 1.55,
+  margin: "0 0 20px",
 };
 
-const jobBox = {
+const contextBox = {
   background: "#f8fafc",
-  borderRadius: "18px",
+  border: "1px solid #e2e8f0",
+  borderRadius: "8px",
   padding: "14px",
   display: "flex",
   flexDirection: "column",
   gap: "4px",
-  marginBottom: "18px",
-};
-
-const label = {
-  display: "block",
-  fontWeight: "900",
-  marginBottom: "8px",
-};
-
-const input = {
-  width: "100%",
-  padding: "14px",
-  borderRadius: "16px",
-  border: "1px solid #e5e7eb",
-  marginBottom: "16px",
-  fontWeight: "800",
-  fontSize: "16px",
-  boxSizing: "border-box",
-};
-
-
-const quickChipGrid = {
-  display: "grid",
-  gridTemplateColumns: "1fr 1fr",
-  gap: "10px",
   marginBottom: "16px",
 };
 
-const quickChip = {
-  border: "1px solid #e5e7eb",
-  background: "#f8fafc",
-  borderRadius: "14px",
-  padding: "11px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-
-const quickChipActive = {
-  border: "1px solid var(--meetro-color-forest, #1f4d34)",
-  background: "var(--meetro-surface-sage, #eef4ea)",
-  color: "var(--meetro-color-forest, #1f4d34)",
-  borderRadius: "14px",
-  padding: "11px",
-  fontWeight: "900",
-  cursor: "pointer",
-};
-
-
-const notifyText = {
-  textAlign: "center",
-  color: "#667085",
-  fontSize: "13px",
+const contextLabel = {
+  color: "#64748b",
+  fontSize: "12px",
   fontWeight: "800",
-  margin: "0 0 14px",
 };
 
-
-const textarea = {
-  width: "100%",
-  minHeight: "140px",
-  padding: "14px",
-  borderRadius: "16px",
-  border: "1px solid #e5e7eb",
-  marginBottom: "18px",
-  fontWeight: "700",
-  fontSize: "16px",
-  boxSizing: "border-box",
+const notice = {
+  background: "#fff7ed",
+  border: "1px solid #fed7aa",
+  borderRadius: "8px",
+  color: "#7c2d12",
+  lineHeight: 1.5,
+  padding: "12px",
+  margin: "0 0 16px",
 };
 
 const primaryButton = {
   width: "100%",
-  padding: "16px",
-  borderRadius: "18px",
+  minHeight: "48px",
+  padding: "12px 16px",
+  borderRadius: "8px",
   border: "none",
   background: "var(--meetro-color-forest, #1f4d34)",
   color: "white",

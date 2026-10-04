@@ -4,44 +4,65 @@ import test from "node:test";
 import { t } from "../src/utils/language.js";
 
 const source = fs.readFileSync("src/pages/BusinessDashboard.jsx", "utf8");
+const presentation = fs.readFileSync("src/styles/homeDashboard.css", "utf8");
 
-test("business dashboard desktop quick access routes to existing destinations only", () => {
+test("business dashboard desktop quick access uses explicit generic-new Quote intent", () => {
   const quickAccessStart = source.indexOf("const dashboardQuickAccessItems");
   const quickAccessEnd = source.indexOf("return (", quickAccessStart);
   const quickAccessBlock = source.slice(quickAccessStart, quickAccessEnd);
 
   assert.match(quickAccessBlock, /setPage\("hiringCenter"\)/);
-  assert.match(quickAccessBlock, /setPage\("messagesInbox"\)/);
-  assert.match(quickAccessBlock, /setPage\("quoteBuilder"\)/);
+  assert.doesNotMatch(quickAccessBlock, /setPage\("messagesInbox"\)/);
+  assert.match(quickAccessBlock, /setPage\("quoteBuilder\?new=1"\)/);
   assert.match(quickAccessBlock, /setPage\("invoiceBuilder"\)/);
-  assert.match(quickAccessBlock, /openWorkCenterSection\("schedule", \{ filter: "today" \}\)/);
-  assert.match(quickAccessBlock, /onClick: openBusinessProfile/);
+  assert.doesNotMatch(quickAccessBlock, /key: "schedule"/);
+  assert.doesNotMatch(quickAccessBlock, /onClick: openBusinessProfile/);
   assert.match(source, /const openBusinessProfile = \(\) => \{[\s\S]*setPage\("contractorProfile"\);/);
   assert.doesNotMatch(quickAccessBlock, /businessCommandCenter/);
 });
 
-test("business dashboard desktop presentation begins at the stable tablet breakpoint", () => {
-  assert.match(source, /\.business-dashboard-quick-access \{\s*display: none;\s*\}/);
+test("business dashboard tablet and desktop presentation reflows the shared iPhone sections", () => {
+  assert.match(source, /\.business-dashboard-quick-access \{\s*display: grid;\s*\}/);
   assert.match(source, /\.business-dashboard-community-entry \{\s*display: block;\s*\}/);
-  assert.match(source, /@media \(min-width: 1100px\)/);
-  assert.match(source, /#root\[data-app-layout="desktop"\]/);
-  assert.match(
-    source,
-    /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*--meetro-dashboard-workspace-max: min\(var\(--meetro-layout-wide-mid-max\), var\(--meetro-workspace-max-width\)\);/
-  );
-  assert.match(
-    source,
-    /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*width: min\(calc\(100vw - var\(--meetro-sidebar-width\)\), var\(--meetro-dashboard-workspace-max\)\) !important;/
-  );
-  assert.match(
-    source,
-    /\.app-page\.business-dashboard\.meetro-wide-page[\s\S]*margin-left: calc\(var\(--meetro-sidebar-width\) \+ var\(--meetro-dashboard-workspace-extra\)\) !important;/
-  );
-  assert.match(source, /\.business-dashboard-community-entry \{\s*display: none !important;/);
-  assert.match(source, /\.business-dashboard-content-lane[\s\S]*max-width: 1180px;/);
-  assert.match(source, /\.business-dashboard-content-lane[\s\S]*margin: 0;/);
+  assert.doesNotMatch(source, /@media \(min-width: 1100px\)/);
+  assert.match(presentation, /Tablet and desktop are a reflow of the approved Professional iPhone Home/);
+  assert.match(presentation, /#root\[data-app-layout="tablet"\] \.business-dashboard/);
+  assert.match(presentation, /#root\[data-app-layout="desktop"\] \.business-dashboard/);
+  assert.match(presentation, /business-dashboard-content-lane[\s\S]*max-width: 1120px/);
+  assert.match(presentation, /business-dashboard-glance-grid[\s\S]*repeat\(3, minmax\(0, 1fr\)\)/);
+  assert.match(presentation, /business-dashboard-quick-access-grid[\s\S]*repeat\(4, minmax\(0, 1fr\)\)/);
   assert.match(source, /const dashboardContentLane = \{\s*display: "contents",\s*\}/);
   assert.match(source, /const dashboardDesktopFlow = \{\s*display: "contents",\s*\}/);
+});
+
+test("business dashboard iPad glance cards use a readable two-column layout without splitting value words", () => {
+  assert.match(
+    presentation,
+    /#root\[data-app-layout="tablet"\] \.business-dashboard \.business-dashboard-glance-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\) !important;/
+  );
+
+  assert.match(
+    presentation,
+    /#root\[data-app-layout="desktop"\] \.business-dashboard \.business-dashboard-glance-grid\s*\{[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\) !important;/
+  );
+
+  assert.match(
+    presentation,
+    /business-dashboard-glance-grid button > strong,[\s\S]*?white-space:\s*normal;[\s\S]*?overflow-wrap:\s*normal;[\s\S]*?word-break:\s*normal;[\s\S]*?hyphens:\s*none;/
+  );
+
+  assert.match(
+    source,
+    /value=\{t\("wc52viewRevenue", language\)\}/
+  );
+});
+
+test("business dashboard Quick Access uses the four approved tools at every size", () => {
+  const block = source.slice(source.indexOf("const dashboardQuickAccessItems"), source.indexOf("  return (", source.indexOf("const dashboardQuickAccessItems")));
+  for (const key of ["hiring", "quote-builder", "invoice-builder", "timesheet"]) assert.ok(block.includes(`key: "${key}"`));
+  for (const key of ["schedule", "messages", "business-profile"]) assert.ok(!block.includes(`key: "${key}"`));
+  assert.doesNotMatch(block, /desktopDuplicate: true/);
+  assert.match(block, /teamOperations\?view=timesheets/);
 });
 
 test("business dashboard renders a professional mobile Community entry to the shared destination", () => {
@@ -59,12 +80,14 @@ test("business dashboard renders a professional mobile Community entry to the sh
   assert.doesNotMatch(source, /setActiveAccountMode\("personal"\)/);
 });
 
-test("business dashboard hero keeps desktop orientation context separate from mobile", () => {
-  assert.match(source, /\.business-dashboard-hero-context,[\s\S]*\.business-dashboard-primary-action \{\s*display: flex !important;/);
+test("business dashboard hero reuses the approved greeting and action hierarchy across breakpoints", () => {
+  assert.match(presentation, /business-dashboard-desktop-intro[\s\S]*display: none !important/);
+  assert.match(presentation, /business-dashboard-mobile-intro[\s\S]*display: block/);
+  assert.match(presentation, /business-dashboard-hero-actions[\s\S]*display: grid/);
   assert.match(source, /const heroDesktopContext = \{\s*display: "none"/);
   assert.match(source, /const primaryActionPanel = \{\s*display: "none"/);
   assert.match(source, /dashboardNextAction/);
-  assert.match(source, /text\.openNextAction/);
+  assert.match(source, /onClick=\{dashboardNextAction\.onClick\}/);
 });
 
 test("business dashboard quick access language preserves supported locales", () => {
