@@ -14,6 +14,7 @@ const APPLICATION_HASH_ROUTES = new Set([
   "aiDisclaimer",
   "businessAnalytics",
   "businessAvailability",
+  "connectedServices",
   "businessCommandCenter",
   "businessDashboard",
   "businessIntelligence",
