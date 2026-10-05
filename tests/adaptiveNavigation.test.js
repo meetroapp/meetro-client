@@ -354,7 +354,7 @@ test("desktop profile context card hosts the existing Profile experience instead
 test("hosted Profile actions still route to existing destinations instead of embedding them", () => {
   assert.match(
     bottomNavSource,
-    /const openFromProfileCard = \(pageName\) => \{\s*onClose\(\);\s*setPage\(pageName\);/
+    /const openFromProfileCard = \(pageName\) => \{[\s\S]{0,520}onClose\(\);\s*setPage\(pageName\);/
   );
   assert.match(profileSource, /onClick=\{\(\) => setPage\("notifications"\)\}/);
   assert.match(profileSource, /setPage\("contractorProfile"\)/);

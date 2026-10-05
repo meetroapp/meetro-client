@@ -2,6 +2,12 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { isRecognizedApplicationHash } from "../src/utils/appEntryRouting.js";
+import {
+  clearHostedProfileReturn,
+  consumeHostedProfileReopen,
+  prepareHostedProfileReturn,
+  stageHostedProfileReturn,
+} from "../src/utils/hostedProfileReturn.js";
 
 const readSource = (path) =>
   readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
@@ -13,6 +19,8 @@ const profileSource = readSource("src/pages/Profile.jsx");
 const sessionSource = readSource("src/utils/session.js");
 const appEntrySource = readSource("src/utils/appEntryRouting.js");
 const ownershipSource = readSource("src/utils/primaryNavigationOwnership.js");
+const bottomNavSource = readSource("src/components/BottomNav.jsx");
+const languageSource = readSource("src/utils/language.js");
 
 test("Connected Services uses a provider-neutral status and capability contract", () => {
   for (const marker of [
@@ -135,4 +143,44 @@ test("Profile opens Connected Services Preview instead of disabled Future", () =
   );
   assert.doesNotMatch(rowWindow, /value=\{t\("future"\)\}/);
   assert.doesNotMatch(rowWindow, /\bdisabled\b/);
+});
+
+test("Connected Services staging polish preserves hosted Profile return and presentation", () => {
+  clearHostedProfileReturn();
+
+  assert.equal(stageHostedProfileReturn("businessDashboard"), true);
+  assert.equal(prepareHostedProfileReturn(), "businessDashboard");
+  assert.equal(consumeHostedProfileReopen("businessDashboard"), true);
+  assert.equal(prepareHostedProfileReturn(), "");
+
+  assert.equal(stageHostedProfileReturn("profile"), false);
+  assert.equal(stageHostedProfileReturn("connectedServices"), false);
+
+  assert.match(
+    bottomNavSource,
+    /pageName === "connectedServices"[\s\S]{0,180}stageHostedProfileReturn\(currentPage\)/
+  );
+  assert.match(
+    bottomNavSource,
+    /consumeHostedProfileReopen\(normalizedPage\)/
+  );
+  assert.match(
+    workspaceSource,
+    /const hostedReturnPage = prepareHostedProfileReturn\(\);/
+  );
+  assert.match(
+    workspaceSource,
+    /STRIPE_PAYMENTS: "revenue"/
+  );
+  assert.match(
+    languageSource,
+    /connectedServices:\s*"Connected Services"/
+  );
+
+  assert.doesNotMatch(
+    readSource("src/utils/hostedProfileReturn.js"),
+    /\b(?:localStorage|sessionStorage)\s*\.|authFetch\s*\(|\bfetch\s*\(/
+  );
+
+  clearHostedProfileReturn();
 });

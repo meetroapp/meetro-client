@@ -35,6 +35,11 @@ import {
 } from "../utils/personalProfilePhoto";
 import { getCommunicationAttention } from "../utils/communicationAttention";
 import {
+  clearHostedProfileReturn,
+  consumeHostedProfileReopen,
+  stageHostedProfileReturn,
+} from "../utils/hostedProfileReturn.js";
+import {
   getWorkCenterTotalUnread,
 } from "../utils/workCenterAlertAttention.js";
 
@@ -625,6 +630,17 @@ function BottomNav({ setPage, currentPage = "" }) {
     activeMode
   );
 
+  useEffect(() => {
+    if (consumeHostedProfileReopen(normalizedPage)) {
+      setProfileContextCardOpen(true);
+      return;
+    }
+
+    if (normalizedPage !== "connectedServices") {
+      clearHostedProfileReturn();
+    }
+  }, [normalizedPage]);
+
   const canonicalCategoryUnreadCount = (category) => {
     if (alertCountSnapshot.identity !== alertCountIdentity) return 0;
     const count = alertCountSnapshot.response?.counts?.byCategory?.[category]?.unread;
@@ -1089,6 +1105,12 @@ function BottomNav({ setPage, currentPage = "" }) {
 function DesktopProfileCard({ currentPage, onClose, position, setPage }) {
   const language = useLanguage();
   const openFromProfileCard = (pageName) => {
+    if (pageName === "connectedServices") {
+      stageHostedProfileReturn(currentPage);
+    } else {
+      clearHostedProfileReturn();
+    }
+
     onClose();
     setPage(pageName);
   };

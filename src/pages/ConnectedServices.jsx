@@ -1,6 +1,7 @@
 import BottomNav from "../components/BottomNav";
 import MeetroIcon from "../components/MeetroIcon";
 import useLanguage from "../hooks/useLanguage";
+import { prepareHostedProfileReturn } from "../utils/hostedProfileReturn.js";
 import {
   CONNECTED_SERVICE_CAPABILITY,
   CONNECTED_SERVICE_STATUS,
@@ -144,7 +145,7 @@ const statusCopyKey = Object.freeze({
 });
 
 const providerIcon = Object.freeze({
-  STRIPE_PAYMENTS: "payment",
+  STRIPE_PAYMENTS: "revenue",
   QUICKBOOKS: "businessTools",
   GOOGLE_CALENDAR: "schedule",
   MICROSOFT_OUTLOOK_CALENDAR: "schedule",
@@ -154,6 +155,11 @@ export default function ConnectedServices({ setPage }) {
   const language = useLanguage();
   const copy = COPY[language] || COPY.en;
   const providers = getConnectedServiceProviders();
+
+  const backToProfile = () => {
+    const hostedReturnPage = prepareHostedProfileReturn();
+    setPage(hostedReturnPage || "profile");
+  };
 
   return (
     <div
@@ -165,7 +171,7 @@ export default function ConnectedServices({ setPage }) {
         <button
           type="button"
           style={styles.back}
-          onClick={() => setPage("profile")}
+          onClick={backToProfile}
         >
           ← {copy.back}
         </button>
