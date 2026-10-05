@@ -23,8 +23,6 @@ import {
   saveProfessionalReview,
 } from "../utils/reviewStorage";
 import {
-  canProfessionalReceiveRequest,
-  inferRequestCategory,
   inferServiceDomain,
 } from "../utils/professionalRequestMatching";
 import { getBusinessIdentityProjection } from "../utils/businessIdentity";
@@ -721,38 +719,6 @@ function ContractorDetails({ setPage, currentPage }) {
     });
   const hasMorePortfolioPreviewImages =
     publicPortfolioMediaUrls.length > PORTFOLIO_PREVIEW_MAX_IMAGES;
-  const profileReturnPage =
-    getLinkedReturnPage() ||
-    localStorage.getItem("contractorDetailsReturnPage") ||
-    "";
-  const isGeneralProfileBrowse =
-    ["discover", "home", "myProfessionals"].includes(profileReturnPage);
-  const allowedForHomeownerContext =
-    isGeneralProfileBrowse || isProfileAllowedForHomeownerContext(profile);
-
-  if (!allowedForHomeownerContext) {
-    return (
-      <div className="app-page meetro-readable-page meetro-visual-page" style={pageWrapper}>
-        <button onClick={returnToBusinessDirectory} style={backButton}>
-          ← {t("backToContractors")}
-        </button>
-
-        <div className="meetro-visual-surface" style={cardStyle}>
-          <h2 style={sectionTitle}>
-            {isSpanish ? "Perfil no disponible" : "Profile unavailable"}
-          </h2>
-          <p style={mutedText}>
-            {isSpanish
-              ? "Este profesional no coincide con el tipo de servicio de esta solicitud."
-              : "This professional does not match the service type for this request."}
-          </p>
-        </div>
-
-        <BottomNav setPage={setPage} currentPage="home" />
-      </div>
-    );
-  }
-
   if (selectedPortfolioProject) {
     return (
       <div className="app-page meetro-readable-page meetro-visual-page" style={pageWrapper}>
@@ -1195,86 +1161,6 @@ function ContractorDetails({ setPage, currentPage }) {
       <BottomNav setPage={setPage} currentPage={currentPage} />
     </div>
   );
-}
-
-function isProfileAllowedForHomeownerContext(profile = {}) {
-  const contexts = getHomeownerRequestContexts();
-  const profileCategory =
-    profile.category ||
-    profile.business_category ||
-    profile.serviceCategory ||
-    "";
-  const profileDomain =
-    profile.serviceDomain ||
-    profile.service_domain ||
-    inferServiceDomain(profileCategory);
-
-  if (!profileDomain) return false;
-  if (contexts.length === 0) return true;
-
-  return contexts.some((requestContext) =>
-    canProfessionalReceiveRequest(
-      {
-        ...profile,
-        businessCategory: profileCategory,
-        category: profileCategory,
-        serviceCategories:
-          profile.serviceCategories ||
-          profile.service_categories ||
-          profile.services ||
-          [profileCategory],
-      },
-      requestContext
-    )
-  );
-}
-
-function getHomeownerRequestContexts() {
-  if (!canReadLegacyWorkflowStorage()) return [];
-  let requests;
-
-  try {
-    requests = JSON.parse(localStorage.getItem("homeownerRequests") || "[]");
-  } catch {
-    requests = [];
-  }
-
-  const selectedRequestId = String(
-    localStorage.getItem("selectedHomeownerRequestId") || ""
-  );
-
-  const activeRequests = requests.filter((request) => {
-    const status = String(request?.status || "open").toLowerCase();
-    return !["closed", "cancelled"].includes(status);
-  });
-
-  const prioritizedRequests = selectedRequestId
-    ? [
-        ...activeRequests.filter(
-          (request) =>
-            String(request.id || request.requestId || "") === selectedRequestId
-        ),
-        ...activeRequests.filter(
-          (request) =>
-            String(request.id || request.requestId || "") !== selectedRequestId
-        ),
-      ]
-    : activeRequests;
-
-  return prioritizedRequests
-    .map((request) => {
-      const category = inferRequestCategory(request);
-      if (!category) return null;
-
-      return {
-        category,
-        serviceDomain: request.serviceDomain || request.service_domain || "",
-        city: request.city || "",
-        zipCode: request.zipCode || request.zip || "",
-      };
-    })
-    .filter(Boolean)
-    .slice(0, 5);
 }
 
 function getServicesOffered(profile = {}, fallbackCategory = "", isSpanish = false) {

@@ -268,35 +268,30 @@ test("Community discovery keeps one destination and supports Companion handoff",
   assert.doesNotMatch(discoverSource, /setPage\("jobsHiring"\)/);
 });
 
-test("general Community profile browsing is independent of unrelated homeowner request matching", () => {
+test("public business profile visibility is independent of request eligibility", () => {
   assert.match(
     discoverSource,
     /function viewBusinessProfile\(business\)[\s\S]*contractorDetailsReturnPage", "discover"[\s\S]*setPage\("contractorDetails"\)/
   );
 
-  assert.match(
+  assert.doesNotMatch(
     contractorDetailsSource,
-    /const profileReturnPage =[\s\S]*getLinkedReturnPage\(\)[\s\S]*contractorDetailsReturnPage/
+    /isProfileAllowedForHomeownerContext|getHomeownerRequestContexts/
+  );
+
+  assert.doesNotMatch(
+    contractorDetailsSource,
+    /canProfessionalReceiveRequest|inferRequestCategory/
+  );
+
+  assert.doesNotMatch(
+    contractorDetailsSource,
+    /Profile unavailable|Perfil no disponible|does not match the service type for this request/
   );
 
   assert.match(
     contractorDetailsSource,
-    /\["discover", "home", "myProfessionals"\]\.includes\(profileReturnPage\)/
-  );
-
-  assert.match(
-    contractorDetailsSource,
-    /isGeneralProfileBrowse \|\| isProfileAllowedForHomeownerContext\(profile\)/
-  );
-
-  assert.match(
-    contractorDetailsSource,
-    /if \(!allowedForHomeownerContext\)/
-  );
-
-  assert.match(
-    contractorDetailsSource,
-    /canProfessionalReceiveRequest/
+    /inferServiceDomain/
   );
 
   assert.match(
