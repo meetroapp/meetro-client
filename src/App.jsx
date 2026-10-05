@@ -96,6 +96,7 @@ import BusinessCommandCenter from "./pages/BusinessCommandCenter";
 import ProfessionalSubscription from "./pages/ProfessionalSubscription";
 const ProfessionalOnboarding = lazy(() => import("./pages/ProfessionalOnboarding"));
 import BusinessAvailability from "./pages/BusinessAvailability";
+import ConnectedServices from "./pages/ConnectedServices";
 import CustomerRelationshipsCenter from "./pages/CustomerRelationshipsCenter";
 import HiringCenter from "./pages/HiringCenter";
 import TeamMembers from "./pages/TeamMembers";
@@ -261,6 +262,7 @@ const assistantEnabledPages = new Set([
   "changeOrderRequest",
   "businessCommandCenter",
   "businessAvailability",
+  "connectedServices",
   "hiringCenter",
   "teamMembers",
   "serviceTypesEvaluations",
@@ -406,6 +408,7 @@ function App() {
  const professionalOnlyPages = [
   "businessAnalytics",
   "businessAvailability",
+  "connectedServices",
   "businessCommandCenter",
   "businessDashboard",
   "businessIntelligence",
@@ -1563,6 +1566,17 @@ if (page === "professionalSubscription") {
 if (page === "businessAvailability") {
   return withStartupChrome(
     withAssistantAccessOnly(<BusinessAvailability setPage={setPage} />, page, setPage),
+    updateNotice
+  );
+}
+
+if (page === "connectedServices") {
+  return withStartupChrome(
+    withAssistantAccessOnly(
+      <ConnectedServices setPage={setPage} />,
+      page,
+      setPage
+    ),
     updateNotice
   );
 }

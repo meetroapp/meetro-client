@@ -3,6 +3,9 @@ const primaryNavigationOwners = Object.freeze({
     personal: "myRequests",
     business: "contractorDashboard",
   }),
+  connectedServices: Object.freeze({
+    business: "profile",
+  }),
 });
 
 export function getPrimaryNavigationOwner(

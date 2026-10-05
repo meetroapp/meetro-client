@@ -482,6 +482,7 @@ const businessModePages = new Set([
   "contractorProfile",
   "businessCommandCenter",
   "businessAvailability",
+  "connectedServices",
   "customerRelationshipsCenter",
   "serviceTypesEvaluations",
   "materialsLibrary",

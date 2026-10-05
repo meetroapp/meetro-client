@@ -7393,7 +7393,7 @@ const settingsArchitectureLabels = {
     future: "Future",
     availabilityShortcut: "Availability shortcut",
     emergencyReadiness: "Emergency readiness",
-    connectedServices: "Connected services",
+    connectedServices: "Connected Services",
     support: "Support",
     help: "Help",
     aiBusinessHelp: "Ask Meetro",

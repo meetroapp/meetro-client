@@ -1974,8 +1974,8 @@ function Profile({ setPage, currentPage, embedded = false }) {
         <SettingRow
           icon="businessTools"
           label={t("connectedServices")}
-          value={t("future")}
-          disabled
+          value={t("preview")}
+          onClick={() => openProfessionalPage("connectedServices")}
         />
       </SettingsSection>
 
