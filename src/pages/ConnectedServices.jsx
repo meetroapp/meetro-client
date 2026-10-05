@@ -35,7 +35,7 @@ const COPY = Object.freeze({
       "Synchronize confirmed Meetro visits and schedule events.",
     microsoft:
       "Synchronize confirmed Meetro visits and schedule events.",
-    back: "Back to Profile",
+    back: "Back",
   }),
   es: Object.freeze({
     eyebrow: "Configuración del negocio",
@@ -63,7 +63,7 @@ const COPY = Object.freeze({
       "Sincroniza visitas confirmadas de Meetro y eventos del calendario.",
     microsoft:
       "Sincroniza visitas confirmadas de Meetro y eventos del calendario.",
-    back: "Volver al perfil",
+    back: "Volver",
   }),
   fr: Object.freeze({
     eyebrow: "Paramètres professionnels",
@@ -91,7 +91,7 @@ const COPY = Object.freeze({
       "Synchronisez les visites Meetro confirmées et les événements du calendrier.",
     microsoft:
       "Synchronisez les visites Meetro confirmées et les événements du calendrier.",
-    back: "Retour au profil",
+    back: "Retour",
   }),
   "pt-BR": Object.freeze({
     eyebrow: "Configurações do negócio",
@@ -119,7 +119,7 @@ const COPY = Object.freeze({
       "Sincronize visitas confirmadas da Meetro e eventos do calendário.",
     microsoft:
       "Sincronize visitas confirmadas da Meetro e eventos do calendário.",
-    back: "Voltar ao perfil",
+    back: "Voltar",
   }),
 });
 

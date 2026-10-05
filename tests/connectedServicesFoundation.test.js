@@ -172,6 +172,14 @@ test("Connected Services staging polish preserves hosted Profile return and pres
     workspaceSource,
     /STRIPE_PAYMENTS: "revenue"/
   );
+  assert.match(workspaceSource, /back:\s*"Back"/);
+  assert.match(workspaceSource, /back:\s*"Volver"/);
+  assert.match(workspaceSource, /back:\s*"Retour"/);
+  assert.match(workspaceSource, /back:\s*"Voltar"/);
+  assert.doesNotMatch(
+    workspaceSource,
+    /Back to Profile|Volver al perfil|Retour au profil|Voltar ao perfil/
+  );
   assert.match(
     languageSource,
     /connectedServices:\s*"Connected Services"/
