@@ -503,7 +503,6 @@ const businessModePages = new Set([
 
 const personalModePages = new Set([
   "home",
-  "upload",
   "myRequests",
   "assistant",
   "emergency",

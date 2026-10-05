@@ -78,6 +78,45 @@ test("professional Community navigation does not switch to standard mode", () =>
   assert.equal(localStorage.getItem("userRole"), "handyman");
 });
 
+test("Community Request Service preserves the account mode that opened Community", () => {
+  installStorage();
+  localStorage.setItem("isProfessional", "true");
+  localStorage.setItem("accountType", "professional");
+  localStorage.setItem("userRole", "handyman");
+  localStorage.setItem("businessCategory", "handyman");
+  localStorage.setItem("activeAccountMode", "business");
+
+  assert.equal(
+    getAccountModeForPage("upload", "business"),
+    "business"
+  );
+  assert.equal(syncAccountModeForPage("upload"), true);
+  assert.equal(
+    localStorage.getItem("activeAccountMode"),
+    "business"
+  );
+
+  installStorage();
+  localStorage.setItem("accountType", "homeowner");
+  localStorage.setItem("userRole", "homeowner");
+  localStorage.setItem("activeAccountMode", "personal");
+
+  assert.equal(
+    getAccountModeForPage("upload", "personal"),
+    "personal"
+  );
+  assert.equal(syncAccountModeForPage("upload"), true);
+  assert.equal(
+    localStorage.getItem("activeAccountMode"),
+    "personal"
+  );
+
+  assert.match(
+    discoverSource,
+    /function requestServiceFromBusiness\(event, business\)[\s\S]*selectedRequestProfessionalContext[\s\S]*setPage\("upload"\)/
+  );
+});
+
 test("standard Community navigation remains standard", () => {
   installStorage();
   localStorage.setItem("accountType", "homeowner");
