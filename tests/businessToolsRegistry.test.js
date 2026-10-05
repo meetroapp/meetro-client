@@ -19,7 +19,6 @@ test("Business Tools audit registry includes every visible MVP card", () => {
     "customers",
     "portfolio",
     "hiringCenter",
-    "assetCenter",
     "serviceEvaluations",
     "findingsLibrary",
     "knowledgeBase",
@@ -74,6 +73,7 @@ test("Business Tools status labels are clear in English and Spanish", () => {
 
 test("Business Tools lookup fails safely for unknown cards", () => {
   assert.equal(getBusinessToolById("not_real"), null);
+  assert.equal(getBusinessToolById("assetCenter"), null);
   assert.equal(getBusinessToolById("quickInvoice").route, "invoiceBuilder");
 });
 

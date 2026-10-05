@@ -70,7 +70,7 @@ test("portfolio preview thumbnails preserve aspect ratio cover clipping", () => 
 test("portfolio preview preserves canonical order and caps the row at five images", () => {
   const previewDataBlock = sourceBetween(
     "const portfolioPreviewProjectByUrl = new Map();",
-    "const allowedForHomeownerContext ="
+    "if (selectedPortfolioProject) {"
   );
 
   assert.match(

@@ -144,15 +144,6 @@ function BusinessCommandCenter({ setPage }) {
         : "View agreement types and included sections.",
       badge: statusLabel("contractTemplates"),
     },
-    assetCenter: {
-      id: "assetCenter",
-      icon: "assetCenter",
-      title: "Asset Center",
-      desc: isSpanish
-        ? "Consulta continuidad, historial y documentos de activos."
-        : "View asset continuity, history, and documents.",
-      badge: statusLabel("assetCenter"),
-    },
     hiringCenter: {
       id: "hiringCenter",
       icon: "hiringCenter",
@@ -307,7 +298,6 @@ function BusinessCommandCenter({ setPage }) {
         "materialsLibrary",
         "pricingLibrary",
         "contractTemplates",
-        "assetCenter",
       ],
     }),
     createToolGroup({
@@ -427,11 +417,6 @@ function BusinessCommandCenter({ setPage }) {
 
     if (toolId === "subscription") {
       setPage("professionalSubscription");
-      return;
-    }
-
-    if (toolId === "assetCenter") {
-      setPage("assetCenter");
       return;
     }
 

@@ -137,6 +137,44 @@ test("Professional lead priority, useful zero schedule and exact approved shortc
   assert.equal(localStorage.getItem("quoteStatusFilter"), null);
   assert.equal(workCenterLandingResets, 1);
 
+  localStorage.setItem("meetroWorkCenterTab", "active");
+  localStorage.setItem("activeWorkCenterTab", "active");
+  localStorage.setItem("workCenterScheduleFilter", "today");
+  localStorage.setItem("conversationReturnSection", "active");
+  localStorage.setItem("quoteStatusFilter", "accepted");
+
+  let workCenterViewAllResets = 0;
+  const onWorkCenterViewAllReset = () => {
+    workCenterViewAllResets += 1;
+  };
+
+  window.addEventListener(
+    "meetroWorkCenterResetToLanding",
+    onWorkCenterViewAllReset
+  );
+
+  const workCenterViewAll = document.querySelector(
+    ".home-dashboard-glance .business-dashboard-section-heading button"
+  );
+
+  assert.ok(workCenterViewAll);
+  assert.match(workCenterViewAll.textContent, /View All/);
+
+  await act(async () => workCenterViewAll.click());
+
+  window.removeEventListener(
+    "meetroWorkCenterResetToLanding",
+    onWorkCenterViewAllReset
+  );
+
+  assert.equal(w.routes.at(-1), "contractorDashboard");
+  assert.equal(localStorage.getItem("meetroWorkCenterTab"), null);
+  assert.equal(localStorage.getItem("activeWorkCenterTab"), null);
+  assert.equal(localStorage.getItem("workCenterScheduleFilter"), null);
+  assert.equal(localStorage.getItem("conversationReturnSection"), null);
+  assert.equal(localStorage.getItem("quoteStatusFilter"), null);
+  assert.equal(workCenterViewAllResets, 1);
+
   const pendingQuotes = [...document.querySelectorAll(".business-dashboard-glance-grid button")]
     .find((button) => button.textContent.includes("Pending Quotes"));
   assert.ok(pendingQuotes);

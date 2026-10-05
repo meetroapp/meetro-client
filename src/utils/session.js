@@ -483,7 +483,6 @@ const businessModePages = new Set([
   "businessCommandCenter",
   "businessAvailability",
   "customerRelationshipsCenter",
-  "assetCenter",
   "serviceTypesEvaluations",
   "materialsLibrary",
   "pricingLibrary",
@@ -504,7 +503,6 @@ const businessModePages = new Set([
 
 const personalModePages = new Set([
   "home",
-  "upload",
   "myRequests",
   "assistant",
   "emergency",

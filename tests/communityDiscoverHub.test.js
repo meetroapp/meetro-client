@@ -32,6 +32,10 @@ const businessDashboardSource = readFileSync(
   new URL("../src/pages/BusinessDashboard.jsx", import.meta.url),
   "utf8"
 );
+const contractorDetailsSource = readFileSync(
+  new URL("../src/pages/ContractorDetails.jsx", import.meta.url),
+  "utf8"
+);
 const duplicateCommunityPageUrl = new URL(
   "../src/pages/Community.jsx",
   import.meta.url
@@ -72,6 +76,45 @@ test("professional Community navigation does not switch to standard mode", () =>
   assert.equal(localStorage.getItem("activeAccountMode"), "business");
   assert.equal(localStorage.getItem("accountType"), "professional");
   assert.equal(localStorage.getItem("userRole"), "handyman");
+});
+
+test("Community Request Service preserves the account mode that opened Community", () => {
+  installStorage();
+  localStorage.setItem("isProfessional", "true");
+  localStorage.setItem("accountType", "professional");
+  localStorage.setItem("userRole", "handyman");
+  localStorage.setItem("businessCategory", "handyman");
+  localStorage.setItem("activeAccountMode", "business");
+
+  assert.equal(
+    getAccountModeForPage("upload", "business"),
+    "business"
+  );
+  assert.equal(syncAccountModeForPage("upload"), true);
+  assert.equal(
+    localStorage.getItem("activeAccountMode"),
+    "business"
+  );
+
+  installStorage();
+  localStorage.setItem("accountType", "homeowner");
+  localStorage.setItem("userRole", "homeowner");
+  localStorage.setItem("activeAccountMode", "personal");
+
+  assert.equal(
+    getAccountModeForPage("upload", "personal"),
+    "personal"
+  );
+  assert.equal(syncAccountModeForPage("upload"), true);
+  assert.equal(
+    localStorage.getItem("activeAccountMode"),
+    "personal"
+  );
+
+  assert.match(
+    discoverSource,
+    /function requestServiceFromBusiness\(event, business\)[\s\S]*selectedRequestProfessionalContext[\s\S]*setPage\("upload"\)/
+  );
 });
 
 test("standard Community navigation remains standard", () => {
@@ -262,6 +305,38 @@ test("Community discovery keeps one destination and supports Companion handoff",
   assert.match(discoverSource, /discoverMode === "communityHub"/);
   assert.match(discoverSource, /renderCommunityHub\(\)/);
   assert.doesNotMatch(discoverSource, /setPage\("jobsHiring"\)/);
+});
+
+test("public business profile visibility is independent of request eligibility", () => {
+  assert.match(
+    discoverSource,
+    /function viewBusinessProfile\(business\)[\s\S]*contractorDetailsReturnPage", "discover"[\s\S]*setPage\("contractorDetails"\)/
+  );
+
+  assert.doesNotMatch(
+    contractorDetailsSource,
+    /isProfileAllowedForHomeownerContext|getHomeownerRequestContexts/
+  );
+
+  assert.doesNotMatch(
+    contractorDetailsSource,
+    /canProfessionalReceiveRequest|inferRequestCategory/
+  );
+
+  assert.doesNotMatch(
+    contractorDetailsSource,
+    /Profile unavailable|Perfil no disponible|does not match the service type for this request/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /inferServiceDomain/
+  );
+
+  assert.match(
+    discoverSource,
+    /function requestServiceFromBusiness\(event, business\)[\s\S]*selectedRequestProfessionalContext[\s\S]*setPage\("upload"\)/
+  );
 });
 
 test("Businesses preview reuses existing business cards and full Businesses page remains unchanged", () => {

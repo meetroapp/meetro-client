@@ -26,10 +26,6 @@ const businessDashboardSource = readFileSync(
   new URL("../src/pages/BusinessDashboard.jsx", import.meta.url),
   "utf8"
 );
-const assetCenterSource = readFileSync(
-  new URL("../src/pages/AssetCenter.jsx", import.meta.url),
-  "utf8"
-);
 const customerRelationshipsCenterSource = readFileSync(
   new URL("../src/pages/CustomerRelationshipsCenter.jsx", import.meta.url),
   "utf8"
@@ -87,7 +83,6 @@ test("adaptive desktop navigation reuses the existing role-based destinations wi
     "contractorDashboard",
     "messagesInbox",
     "meetroMoments",
-    "assetCenter",
     "customerRelationshipsCenter",
     "discover",
     "profile",
@@ -228,31 +223,33 @@ test("Ask Meetro is an action in both global shells and does not navigate", () =
   assert.match(askHostSource, /showLauncher=\{showLauncher\}/);
 });
 
-test("desktop Property and Relationships actions report their own active page state", () => {
+test("desktop Customers history is the single durable customer-record destination", () => {
   const businessDesktopBlock = bottomNavSource.slice(
     bottomNavSource.indexOf("const businessDesktopNavItems = ["),
     bottomNavSource.indexOf("const businessDesktopShortcutItems = [")
   );
 
-  assert.match(
+  assert.doesNotMatch(
     businessDesktopBlock,
-    /page: "assetCenter"[\s\S]*aliases: \["assetCenter"\][\s\S]*label: t\("navigationProperties", language\)/
+    /page: "assetCenter"|navigationProperties|navigationRecords/
   );
+
   assert.match(
     businessDesktopBlock,
     /page: "customerRelationshipsCenter"[\s\S]*aliases: \["customerRelationshipsCenter"\][\s\S]*label: t\("navigationCustomers", language\)[\s\S]*sub: t\("navigationHistoryRecords", language\)/
   );
-  assert.match(assetCenterSource, /<BottomNav setPage=\{setPage\} currentPage="assetCenter" \/>/);
+
   assert.match(
     customerRelationshipsCenterSource,
     /<BottomNav setPage=\{setPage\} currentPage="customerRelationshipsCenter" \/>/
   );
-  assert.doesNotMatch(assetCenterSource, /<BottomNav setPage=\{setPage\} currentPage="businessDashboard" \/>/);
+
   assert.doesNotMatch(
     customerRelationshipsCenterSource,
     /<BottomNav setPage=\{setPage\} currentPage="businessDashboard" \/>/
   );
-  assert.match(appSource, /if \(page === "assetCenter"\) \{/);
+
+  assert.doesNotMatch(appSource, /if \(page === "assetCenter"\) \{/);
   assert.match(appSource, /if \(page === "customerRelationshipsCenter"\) \{/);
 });
 
