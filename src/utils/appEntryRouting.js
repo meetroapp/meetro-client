@@ -10,7 +10,6 @@ export const PUBLIC_WEBSITE_FRAGMENTS = new Set([
 // These are existing App.jsx destinations that may be used as browser hash
 // entries. Matching is exact so arbitrary or lookalike fragments stay public.
 const APPLICATION_HASH_ROUTES = new Set([
-  "assetCenter",
   "assistant",
   "aiDisclaimer",
   "businessAnalytics",

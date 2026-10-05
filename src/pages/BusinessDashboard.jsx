@@ -1430,7 +1430,7 @@ function BusinessDashboard({ setPage }) {
           <div className="business-dashboard-section-heading">
             <h2 id="dashboard-glance-title">At a Glance</h2>
             <p>Your business at a glance.</p>
-            <button type="button" onClick={() => openWorkCenterSection("active")}>View All →</button>
+            <button type="button" onClick={openWorkCenterLanding}>View All →</button>
           </div>
             <div className="business-dashboard-glance-grid" style={glanceGrid}>
               <GlanceItem

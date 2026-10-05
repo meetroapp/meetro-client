@@ -34,7 +34,6 @@ const sources = {
   profile: readSource("src/pages/ContractorProfile.jsx"),
   portfolio: readSource("src/pages/ProjectGallery.jsx"),
   serviceTypes: readSource("src/pages/ServiceTypesEvaluations.jsx"),
-  assetCenter: readSource("src/pages/AssetCenter.jsx"),
   doc: readSource("docs/KnowledgeBase/BUSINESS_OPERATIONS_DISTRICT_WONDER_PASS.md"),
 };
 

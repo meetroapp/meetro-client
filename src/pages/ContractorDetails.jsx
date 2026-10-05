@@ -721,7 +721,14 @@ function ContractorDetails({ setPage, currentPage }) {
     });
   const hasMorePortfolioPreviewImages =
     publicPortfolioMediaUrls.length > PORTFOLIO_PREVIEW_MAX_IMAGES;
-  const allowedForHomeownerContext = isProfileAllowedForHomeownerContext(profile);
+  const profileReturnPage =
+    getLinkedReturnPage() ||
+    localStorage.getItem("contractorDetailsReturnPage") ||
+    "";
+  const isGeneralProfileBrowse =
+    ["discover", "home", "myProfessionals"].includes(profileReturnPage);
+  const allowedForHomeownerContext =
+    isGeneralProfileBrowse || isProfileAllowedForHomeownerContext(profile);
 
   if (!allowedForHomeownerContext) {
     return (

@@ -64,6 +64,8 @@ test("native Capacitor entry remains App-only", () => {
 });
 
 test("unknown and malformed hashes fail safely on the public root", () => {
+  assert.equal(entry("/", "#assetCenter"), true);
+  assert.equal(isRecognizedApplicationHash("#assetCenter"), false);
   assert.equal(entry("/", "#workCenterLookalike?jobId=unsafe"), true);
   assert.equal(entry("/", "#workCenter#notifications"), true);
   assert.equal(entry("/", "workCenter"), true);

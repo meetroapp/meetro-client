@@ -540,13 +540,6 @@ function BottomNav({ setPage, currentPage = "" }) {
       sub: t("navigationBusinessHistory", language),
     },
     {
-      page: "assetCenter",
-      aliases: ["assetCenter"],
-      icon: "assetHome",
-      label: t("navigationProperties", language),
-      sub: t("navigationRecords", language),
-    },
-    {
       page: "customerRelationshipsCenter",
       aliases: ["customerRelationshipsCenter"],
       icon: "people",

@@ -104,7 +104,6 @@ import TeamOperations from "./pages/TeamOperations";
 import EmployeePortal from "./pages/EmployeePortal";
 import BookkeeperProfile from "./pages/BookkeeperProfile";
 import EmployeeShell from "./components/EmployeeShell";
-import AssetCenter from "./pages/AssetCenter";
 import ServiceTypesEvaluations from "./pages/ServiceTypesEvaluations";
 import MaterialsLibrary from "./pages/MaterialsLibrary";
 import PricingLibrary from "./pages/PricingLibrary";
@@ -264,7 +263,6 @@ const assistantEnabledPages = new Set([
   "businessAvailability",
   "hiringCenter",
   "teamMembers",
-  "assetCenter",
   "serviceTypesEvaluations",
   "materialsLibrary",
   "pricingLibrary",
@@ -406,7 +404,6 @@ function App() {
   }, []);
 
  const professionalOnlyPages = [
-  "assetCenter",
   "businessAnalytics",
   "businessAvailability",
   "businessCommandCenter",
@@ -1648,13 +1645,6 @@ if (page === "bookkeeperProfile") {
   }
   return withStartupChrome(
     <BookkeeperProfile membership={bookkeeperMembership} setPage={setPage} />,
-    updateNotice
-  );
-}
-
-if (page === "assetCenter") {
-  return withStartupChrome(
-    withAssistantAccessOnly(<AssetCenter setPage={setPage} />, page, setPage),
     updateNotice
   );
 }

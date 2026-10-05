@@ -483,7 +483,6 @@ const businessModePages = new Set([
   "businessCommandCenter",
   "businessAvailability",
   "customerRelationshipsCenter",
-  "assetCenter",
   "serviceTypesEvaluations",
   "materialsLibrary",
   "pricingLibrary",

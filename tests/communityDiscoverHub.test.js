@@ -32,6 +32,10 @@ const businessDashboardSource = readFileSync(
   new URL("../src/pages/BusinessDashboard.jsx", import.meta.url),
   "utf8"
 );
+const contractorDetailsSource = readFileSync(
+  new URL("../src/pages/ContractorDetails.jsx", import.meta.url),
+  "utf8"
+);
 const duplicateCommunityPageUrl = new URL(
   "../src/pages/Community.jsx",
   import.meta.url
@@ -262,6 +266,43 @@ test("Community discovery keeps one destination and supports Companion handoff",
   assert.match(discoverSource, /discoverMode === "communityHub"/);
   assert.match(discoverSource, /renderCommunityHub\(\)/);
   assert.doesNotMatch(discoverSource, /setPage\("jobsHiring"\)/);
+});
+
+test("general Community profile browsing is independent of unrelated homeowner request matching", () => {
+  assert.match(
+    discoverSource,
+    /function viewBusinessProfile\(business\)[\s\S]*contractorDetailsReturnPage", "discover"[\s\S]*setPage\("contractorDetails"\)/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /const profileReturnPage =[\s\S]*getLinkedReturnPage\(\)[\s\S]*contractorDetailsReturnPage/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /\["discover", "home", "myProfessionals"\]\.includes\(profileReturnPage\)/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /isGeneralProfileBrowse \|\| isProfileAllowedForHomeownerContext\(profile\)/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /if \(!allowedForHomeownerContext\)/
+  );
+
+  assert.match(
+    contractorDetailsSource,
+    /canProfessionalReceiveRequest/
+  );
+
+  assert.match(
+    discoverSource,
+    /function requestServiceFromBusiness\(event, business\)[\s\S]*selectedRequestProfessionalContext[\s\S]*setPage\("upload"\)/
+  );
 });
 
 test("Businesses preview reuses existing business cards and full Businesses page remains unchanged", () => {
